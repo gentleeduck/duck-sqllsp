@@ -1,0 +1,44 @@
+//! Indexed views over [`Catalog`](crate::model::Catalog).
+//!
+//! These are the hot lookups used by completion / hover / analysis. Kept
+//! as inherent methods on `Catalog` for ergonomic call sites:
+//! `catalog.find_table(Some("public"), "users")`.
+
+use crate::model::{Catalog, Column, Table, Type};
+
+impl Catalog {
+    pub fn tables(&self) -> impl Iterator<Item = &Table> {
+        self.schemas.iter().flat_map(|s| s.tables.iter())
+    }
+
+    /// User-defined types (enum / domain / composite). Consumed by
+    /// completion and hover to surface custom types alongside built-ins.
+    pub fn types(&self) -> impl Iterator<Item = &Type> {
+        self.types.iter()
+    }
+
+    pub fn find_table(&self, schema: Option<&str>, name: &str) -> Option<&Table> {
+        self.tables().find(|t| {
+            t.name == name && schema.is_none_or(|s| t.schema == s)
+        })
+    }
+
+    /// Find every (table, column) pair where the column has the given name.
+    /// Multiple results indicate ambiguity (rule sql003).
+    pub fn columns_named(&self, name: &str) -> Vec<(&Table, &Column)> {
+        let mut out = Vec::new();
+        for t in self.tables() {
+            for c in &t.columns {
+                if c.name == name {
+                    out.push((t, c));
+                }
+            }
+        }
+        out
+    }
+
+    pub fn column_in(&self, schema: Option<&str>, table: &str, column: &str) -> Option<&Column> {
+        let t = self.find_table(schema, table)?;
+        t.columns.iter().find(|c| c.name == column)
+    }
+}
