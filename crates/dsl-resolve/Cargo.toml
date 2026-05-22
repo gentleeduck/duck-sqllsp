@@ -1,0 +1,19 @@
+[package]
+name = "dsl-resolve"
+description = "Name resolution: aliases, scopes, FROM/JOIN binding for duck-sqllsp."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+dsl-parse = { workspace = true }
+indexmap = { workspace = true }
+serde = { workspace = true }
