@@ -1,0 +1,87 @@
+[workspace]
+resolver = "3"
+members = [
+  "crates/dsl-knowledge",
+  "crates/dsl-parse",
+  "crates/dsl-resolve",
+  "crates/dsl-catalog",
+  "crates/dsl-completion",
+  "crates/dsl-hover",
+  "crates/dsl-conn",
+  "crates/dsl-analysis",
+  "crates/dsl-format",
+  "crates/dsl-server",
+  "crates/dsl-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "MIT"
+authors = ["gentleduck"]
+repository = "https://github.com/gentleeduck/duck-sqllsp"
+homepage = "https://gentleduck.org/duck-sqllsp"
+documentation = "https://docs.rs/duck-sqllsp"
+readme = "README.md"
+keywords = ["sql", "lsp", "language-server", "postgres", "completion"]
+categories = ["development-tools", "database"]
+
+[workspace.dependencies]
+# Workspace path entries
+dsl-knowledge  = { version = "0.1.0", path = "crates/dsl-knowledge" }
+dsl-parse      = { version = "0.1.0", path = "crates/dsl-parse" }
+dsl-resolve    = { version = "0.1.0", path = "crates/dsl-resolve" }
+dsl-catalog    = { version = "0.1.0", path = "crates/dsl-catalog" }
+dsl-conn       = { version = "0.1.0", path = "crates/dsl-conn" }
+dsl-analysis   = { version = "0.1.0", path = "crates/dsl-analysis" }
+dsl-completion = { version = "0.1.0", path = "crates/dsl-completion" }
+dsl-hover      = { version = "0.1.0", path = "crates/dsl-hover" }
+dsl-format     = { version = "0.1.0", path = "crates/dsl-format" }
+dsl-server     = { version = "0.1.0", path = "crates/dsl-server" }
+
+# Async + LSP wire
+tokio          = { version = "1", features = ["full"] }
+tower-lsp      = "0.20"
+async-trait    = "0.1"
+
+# Existing SQL parsers
+sqlparser      = { version = "0.52", features = ["visitor"] }
+# Real Postgres parser (libpg_query FFI) -- gets us PG18-complete syntax
+# coverage (ON DELETE SET NULL (col), MERGE, FETCH FIRST, ...).
+pg_query       = { version = "6" }
+
+# Drivers
+sqlx           = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "macros"] }
+
+# Serde + config
+serde          = { version = "1", features = ["derive"] }
+serde_json     = "1"
+toml           = "0.8"
+
+# Spans + text
+text-size      = { version = "1", features = ["serde"] }
+ropey          = "1"
+
+# Concurrency
+dashmap        = "6"
+parking_lot    = "0.12"
+arcstr         = "1"
+indexmap       = { version = "2", features = ["serde"] }
+once_cell      = "1"
+
+# CLI + tracing
+clap           = { version = "4", features = ["derive", "env"] }
+tracing        = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow         = "1"
+thiserror      = "2"
+
+# Dirs / XDG paths
+directories    = "5"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+opt-level = 3
