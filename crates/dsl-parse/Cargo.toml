@@ -1,0 +1,29 @@
+[package]
+name = "dsl-parse"
+description = "Facade over sqlparser / pg_query producing a unified SQL Statement representation for duck-sqllsp."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[features]
+# pg_query is the canonical Postgres parser (FFI to libpg_query) and
+# the default. `sqlparser` stays available behind a feature flag as a
+# pure-Rust fallback for environments without a C toolchain.
+default = ["pg_query_backend", "sqlparser"]
+sqlparser = ["dep:sqlparser"]
+pg_query_backend = ["dep:pg_query"]
+
+[dependencies]
+sqlparser = { workspace = true, optional = true }
+pg_query = { workspace = true, optional = true }
+thiserror = { workspace = true }
+text-size = { workspace = true }
+serde = { workspace = true }
