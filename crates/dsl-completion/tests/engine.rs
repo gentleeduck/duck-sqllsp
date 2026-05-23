@@ -1,0 +1,385 @@
+use dsl_catalog::{Catalog, Column, Schema, Table, TableKind, CATALOG_VERSION};
+use dsl_completion::{complete, ItemKind};
+use dsl_parse::{parse, Dialect};
+use dsl_resolve::resolve;
+use text_size::TextSize;
+
+fn catalog_with_users_and_orders() -> Catalog {
+    let users = Table {
+        schema: "public".into(),
+        name: "users".into(),
+        kind: TableKind::Table,
+        columns: vec![
+            Column { name: "id".into(),    data_type: "uuid".into(), nullable: false, default: None, comment: None },
+            Column { name: "email".into(), data_type: "text".into(), nullable: false, default: None, comment: None },
+            Column { name: "name".into(),  data_type: "text".into(), nullable: true,  default: None, comment: None },
+        ],
+        constraints: vec![],
+        indexes: vec![], triggers: vec![], policies: vec![],
+        comment: None,
+    };
+    let orders = Table {
+        schema: "public".into(),
+        name: "orders".into(),
+        kind: TableKind::Table,
+        columns: vec![
+            Column { name: "id".into(),       data_type: "uuid".into(), nullable: false, default: None, comment: None },
+            Column { name: "user_id".into(),  data_type: "uuid".into(), nullable: false, default: None, comment: None },
+        ],
+        constraints: vec![],
+        indexes: vec![], triggers: vec![], policies: vec![],
+        comment: None,
+    };
+    Catalog {
+        version: CATALOG_VERSION,
+        connection_id: "test".into(),
+        schemas: vec![Schema { name: "public".into(), tables: vec![users, orders] }],
+        functions: vec![],
+        types: vec![],
+    }
+}
+
+#[test]
+fn start_of_statement_emits_keywords_only() {
+    // Phase-based engine: at the start of a statement we surface
+    // top-level statement keywords (SELECT, INSERT INTO, CREATE TABLE,
+    // ...). Tables are intentionally omitted because the user has not
+    // chosen a verb yet.
+    let cat = catalog_with_users_and_orders();
+    let src = "SEL";
+    let file = parse(src, Dialect::Postgres);
+    let scopes = resolve(&file.statements);
+    let items = complete(src, &file, &scopes, &cat, TextSize::from(3));
+    assert!(items.iter().any(|i| i.label == "SELECT" && i.kind == ItemKind::Keyword));
+    assert!(!items.iter().any(|i| i.kind == ItemKind::Table));
+}
+
+#[test]
+fn table_context_emits_only_tables() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT * FROM ";
+    let file = parse(src, Dialect::Postgres);
+    let scopes = resolve(&file.statements);
+    let items = complete(src, &file, &scopes, &cat, TextSize::from(src.len() as u32));
+    assert!(items.iter().any(|i| i.label == "users"));
+    assert!(items.iter().any(|i| i.label == "orders"));
+    assert!(!items.iter().any(|i| i.kind == ItemKind::Keyword));
+}
+
+#[test]
+fn dot_context_emits_columns_of_alias() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT u. FROM users u";
+    let file = parse(src, Dialect::Postgres);
+    let scopes = resolve(&file.statements);
+    // Cursor sits just after the dot.
+    let offset = TextSize::from("SELECT u.".len() as u32);
+    let items = complete(src, &file, &scopes, &cat, offset);
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert_eq!(items.len(), 3, "expected exactly 3 columns of users, got {:?}", labels);
+    assert!(labels.contains(&"id"));
+    assert!(labels.contains(&"email"));
+    assert!(labels.contains(&"name"));
+    assert!(items.iter().all(|i| i.kind == ItemKind::Column));
+}
+
+#[test]
+fn dot_context_with_unknown_alias_returns_empty() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT zzz. FROM users u";
+    let file = parse(src, Dialect::Postgres);
+    let scopes = resolve(&file.statements);
+    let offset = TextSize::from("SELECT zzz.".len() as u32);
+    let items = complete(src, &file, &scopes, &cat, offset);
+    assert!(items.is_empty());
+}
+
+#[test]
+fn items_carry_documentation_for_keywords() {
+    let cat = Catalog::default();
+    let src = "SEL";
+    let file = parse(src, Dialect::Postgres);
+    let scopes = resolve(&file.statements);
+    let items = complete(src, &file, &scopes, &cat, TextSize::from(3));
+    let select = items.iter().find(|i| i.label == "SELECT").unwrap();
+    let doc = select.documentation_md.as_ref().expect("doc set");
+    assert!(doc.contains("Retrieve"));
+    // Match the new render header (capital P).
+    assert!(doc.contains("[Postgres docs]"));
+}
+
+// ============================================================================
+// Alias completion -- aliases declared in the current statement must
+// appear in EVERY context where the user could legally reference them.
+// ============================================================================
+
+fn complete_at(src: &str, cursor: usize, cat: &Catalog) -> Vec<dsl_completion::Item> {
+    let file = parse(src, Dialect::Postgres);
+    let scopes = resolve(&file.statements);
+    complete(src, &file, &scopes, cat, TextSize::from(cursor as u32))
+}
+
+fn has_alias(items: &[dsl_completion::Item], alias: &str) -> bool {
+    items.iter().any(|i| i.label == alias && i.kind == ItemKind::Table)
+}
+
+#[test]
+fn alias_visible_in_select_projection() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT  FROM users u";
+    let cur = "SELECT ".len();
+    let items = complete_at(src, cur, &cat);
+    assert!(has_alias(&items, "u"), "labels = {:?}", items.iter().map(|i| &i.label).collect::<Vec<_>>());
+}
+
+#[test]
+fn alias_visible_in_where() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT * FROM users u WHERE ";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    assert!(has_alias(&items, "u"));
+}
+
+#[test]
+fn alias_visible_in_on_clause() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT * FROM users u JOIN orders o ON ";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    assert!(has_alias(&items, "u"));
+    assert!(has_alias(&items, "o"));
+}
+
+#[test]
+fn alias_visible_in_group_by() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT * FROM users u GROUP BY ";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    assert!(has_alias(&items, "u"));
+}
+
+#[test]
+fn alias_visible_in_order_by() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT * FROM users u ORDER BY ";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    assert!(has_alias(&items, "u"));
+}
+
+#[test]
+fn alias_visible_in_having() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT * FROM users u GROUP BY u.id HAVING ";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    assert!(has_alias(&items, "u"));
+}
+
+#[test]
+fn alias_visible_in_update_assignment() {
+    let cat = catalog_with_users_and_orders();
+    let src = "UPDATE users u SET name = ";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    assert!(has_alias(&items, "u"));
+}
+
+#[test]
+fn alias_keyword_aliased_too() {
+    // `AS` keyword shouldn't matter -- both `FROM users u` and
+    // `FROM users AS u` produce the same scope binding.
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT * FROM users AS u WHERE ";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    assert!(has_alias(&items, "u"));
+}
+
+#[test]
+fn multiple_aliases_all_visible() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT * FROM users u, orders o WHERE ";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    assert!(has_alias(&items, "u"));
+    assert!(has_alias(&items, "o"));
+}
+
+#[test]
+fn aliased_table_hides_bare_column_completion() {
+    // FROM users AS u -- bare `id` should NOT appear; user must type
+    // `u.id` (dot context handles that path). Only the alias `u` is
+    // surfaced so the menu stays clean.
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT  FROM users AS u";
+    let cur = "SELECT ".len();
+    let items = complete_at(src, cur, &cat);
+    let bare_cols: Vec<&str> = items.iter()
+        .filter(|i| i.kind == ItemKind::Column)
+        .map(|i| i.label.as_str())
+        .collect();
+    assert!(!bare_cols.contains(&"id"), "id leaked: {bare_cols:?}");
+    assert!(!bare_cols.contains(&"email"), "email leaked: {bare_cols:?}");
+    assert!(has_alias(&items, "u"));
+}
+
+#[test]
+fn unaliased_table_still_shows_columns() {
+    // FROM users (no alias) -- bare columns must still appear.
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT  FROM users";
+    let cur = "SELECT ".len();
+    let items = complete_at(src, cur, &cat);
+    let bare_cols: Vec<&str> = items.iter()
+        .filter(|i| i.kind == ItemKind::Column)
+        .map(|i| i.label.as_str())
+        .collect();
+    assert!(bare_cols.contains(&"id"));
+    assert!(bare_cols.contains(&"email"));
+}
+
+#[test]
+fn mixed_aliased_and_bare_only_bare_columns_show() {
+    // FROM users AS u, orders -- expect `u` alias visible, expect
+    // orders columns (id, user_id) visible, but NOT users columns
+    // (since users has alias u).
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT  FROM users AS u, orders";
+    let cur = "SELECT ".len();
+    let items = complete_at(src, cur, &cat);
+    let bare_cols: Vec<&str> = items.iter()
+        .filter(|i| i.kind == ItemKind::Column)
+        .map(|i| i.label.as_str())
+        .collect();
+    assert!(has_alias(&items, "u"));
+    // orders columns visible (unaliased)
+    assert!(bare_cols.contains(&"user_id"));
+    // users column `email` should NOT appear (table is aliased)
+    assert!(!bare_cols.contains(&"email"), "email leaked: {bare_cols:?}");
+}
+
+#[test]
+fn dotted_alias_still_resolves_after_hide() {
+    // Confirm the dot-context path still works for `u.` -- hiding bare
+    // column completion shouldn't break alias-qualified resolution.
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT u. FROM users u";
+    let cur = "SELECT u.".len();
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(labels.contains(&"id"));
+    assert!(labels.contains(&"email"));
+    assert!(items.iter().all(|i| i.kind == ItemKind::Column));
+}
+
+#[test]
+fn plpgsql_function_parameter_completes_in_body() {
+    let cat = catalog_with_users_and_orders();
+    let src = "\
+CREATE OR REPLACE FUNCTION foo(p_user UUID)
+    RETURNS INT
+    LANGUAGE plpgsql
+AS
+$$
+BEGIN
+    RETURN ;
+END;
+$$;";
+    // Cursor sits right after RETURN inside the dollar-quoted body.
+    let cur = src.find("RETURN ").unwrap() + "RETURN ".len();
+    let items = complete_at(src, cur, &cat);
+    assert!(
+        items.iter().any(|i| i.label == "p_user" && i.kind == ItemKind::Parameter),
+        "p_user missing from plpgsql body completion: {:?}",
+        items.iter().take(20).map(|i| (&i.label, i.kind)).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn plpgsql_local_typed_as_table_dot_completes_columns() {
+    let cat = catalog_with_users_and_orders();
+    let src = "\
+CREATE OR REPLACE FUNCTION foo()
+    RETURNS INT
+    LANGUAGE plpgsql
+AS
+$$
+DECLARE
+    r users;
+BEGIN
+    SELECT r. ;
+END;
+$$;";
+    let cur = src.find("r. ").unwrap() + 2;
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(labels.contains(&"id"), "id missing: {labels:?}");
+    assert!(labels.contains(&"email"), "email missing: {labels:?}");
+    assert!(items.iter().all(|i| i.kind == ItemKind::Column));
+}
+
+#[test]
+fn plpgsql_local_typed_as_int_no_table_completion() {
+    let cat = catalog_with_users_and_orders();
+    let src = "\
+CREATE OR REPLACE FUNCTION foo()
+    RETURNS INT
+    LANGUAGE plpgsql
+AS
+$$
+DECLARE
+    n INT;
+BEGIN
+    SELECT n. ;
+END;
+$$;";
+    let cur = src.find("n. ").unwrap() + 2;
+    let items = complete_at(src, cur, &cat);
+    // Bare INT has no fields -- completion is empty (no `id`, no `email`).
+    assert!(!items.iter().any(|i| i.label == "id" && i.kind == ItemKind::Column),
+        "INT-typed local leaked columns: {:?}",
+        items.iter().map(|i| &i.label).collect::<Vec<_>>());
+}
+
+#[test]
+fn plpgsql_declared_local_completes_in_body() {
+    let cat = catalog_with_users_and_orders();
+    let src = "\
+CREATE OR REPLACE FUNCTION foo()
+    RETURNS INT
+    LANGUAGE plpgsql
+AS
+$$
+DECLARE
+    v_count INT;
+    v_total NUMERIC;
+BEGIN
+    RETURN ;
+END;
+$$;";
+    let cur = src.find("RETURN ").unwrap() + "RETURN ".len();
+    let items = complete_at(src, cur, &cat);
+    assert!(
+        items.iter().any(|i| i.label == "v_count" && i.kind == ItemKind::Variable),
+        "v_count missing: {:?}", items.iter().take(20).map(|i| &i.label).collect::<Vec<_>>()
+    );
+    assert!(items.iter().any(|i| i.label == "v_total"));
+}
+
+#[test]
+fn bare_table_name_is_not_listed_as_alias() {
+    // When the user wrote `FROM users` (no alias), the synthetic
+    // self-binding shouldn't surface as if it were a typed alias -- the
+    // `tables` source already lists the table itself.
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT * FROM users WHERE ";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    assert!(!has_alias(&items, "users"),
+        "bare table name should not appear as Table-kind alias: {:?}",
+        items.iter().filter(|i| i.label == "users").collect::<Vec<_>>()
+    );
+}
