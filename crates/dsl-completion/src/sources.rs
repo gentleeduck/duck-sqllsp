@@ -1,0 +1,424 @@
+//! Item producers, one per kind of source data.
+//!
+//! Each emitter pushes onto an output vector; the engine decides which
+//! emitters to call based on the detected [`Context`](crate::context::Context).
+
+use crate::item::{Item, ItemKind};
+use crate::render;
+use dsl_catalog::{Catalog, Column, Table, TableKind};
+use dsl_knowledge::{self as kb, Entry, Kind};
+use dsl_resolve::Scope;
+
+pub fn keywords(out: &mut Vec<Item>) {
+    for (label, e) in kb::keywords() {
+        out.push(from_entry(label, e, ItemKind::Keyword));
+    }
+}
+
+pub fn types(out: &mut Vec<Item>) {
+    for (label, e) in kb::types() {
+        out.push(from_entry(label, e, ItemKind::Type));
+    }
+}
+
+pub fn functions(out: &mut Vec<Item>) {
+    for (label, e) in kb::functions() {
+        out.push(from_entry(label, e, ItemKind::Function));
+    }
+}
+
+/// User-defined functions from the catalog. Surfaced alongside the
+/// built-ins so completion shows app code next to standard SQL.
+/// User-defined types from the live catalog (enum / domain / composite).
+/// Emitted after `sources::types()` in CastType phase so built-in PG
+/// types still sort first.
+pub fn db_types(cat: &Catalog, out: &mut Vec<Item>) {
+    for t in &cat.types {
+        let kind_label = match t.kind {
+            dsl_catalog::TypeKind::Enum => "enum",
+            dsl_catalog::TypeKind::Domain => "domain",
+            dsl_catalog::TypeKind::Composite => "composite",
+        };
+        let doc = format!(
+            "**User-defined {kind_label}** `{}.{}`\n\n_From catalog._\n",
+            t.schema, t.name
+        );
+        out.push(Item {
+            label: t.name.clone(),
+            kind: ItemKind::Type,
+            detail: Some(format!("{kind_label} type")),
+            description: Some(format!("{} (db)", t.schema)),
+            documentation_md: Some(doc),
+            insert_text: t.name.clone(),
+            sort_priority: 5,
+        });
+    }
+}
+
+pub fn db_functions(cat: &Catalog, out: &mut Vec<Item>) {
+    for f in &cat.functions {
+        let args = f
+            .arguments
+            .iter()
+            .map(|a| match &a.name {
+                Some(n) => format!("{n} {}", a.data_type),
+                None => a.data_type.clone(),
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let signature = format!("{}({}) -> {}", f.name, args, f.return_type);
+        let doc = format!(
+            "**DB function** `{}.{}`\n\n```sql\n{}\n```\n",
+            f.schema, f.name, signature
+        );
+        out.push(Item {
+            label: f.name.clone(),
+            kind: ItemKind::Function,
+            detail: Some(signature),
+            description: Some(format!("{} (db)", f.schema)),
+            documentation_md: Some(doc),
+            insert_text: f.name.clone(),
+            sort_priority: 5,
+        });
+    }
+}
+
+/// Subset of [`functions`] safe inside a SELECT projection / expression:
+/// aggregates, common scalar helpers, conditionals, window functions.
+/// Excludes the long tail (JSON/array helpers) that would be noise.
+pub fn projection_functions(out: &mut Vec<Item>) {
+    const KEEP: &[&str] = &[
+        "count", "sum", "avg", "min", "max",
+        "array_agg", "string_agg", "json_agg", "jsonb_agg",
+        "coalesce", "nullif", "greatest", "least",
+        "lower", "upper", "length", "substring", "trim", "concat",
+        "replace", "split_part",
+        "now", "current_date", "age", "date_trunc", "extract", "to_char",
+        "abs", "round",
+        "gen_random_uuid",
+        "row_number", "rank", "dense_rank", "lag", "lead",
+    ];
+    let table = kb::functions();
+    for name in KEEP {
+        if let Some(e) = table.get(*name) {
+            out.push(from_entry(name, e, ItemKind::Function));
+        }
+    }
+}
+
+/// Keywords valid inside expression position. Excludes DDL/DML statement
+/// keywords so SELECT projection doesn't get polluted with CREATE TABLE etc.
+pub fn expression_keywords(out: &mut Vec<Item>) {
+    const KEEP: &[&str] = &[
+        "AS", "DISTINCT", "ALL",
+        "CASE", "WHEN", "THEN", "ELSE", "END",
+        "AND", "OR", "NOT",
+        "IS NULL", "IS NOT NULL", "NULL", "IS",
+        "IN", "EXISTS", "BETWEEN", "LIKE", "ILIKE",
+        "OVER", "PARTITION BY",
+    ];
+    emit_keyword_subset(out, KEEP);
+}
+
+/// Keywords valid at the start of a statement.
+pub fn statement_keywords(out: &mut Vec<Item>) {
+    const KEEP: &[&str] = &[
+        "SELECT", "WITH", "INSERT INTO", "UPDATE", "DELETE FROM",
+        "CREATE TABLE", "CREATE INDEX", "CREATE UNIQUE INDEX", "CREATE VIEW",
+        "CREATE SCHEMA", "CREATE SEQUENCE",
+        "ALTER TABLE", "DROP TABLE",
+        "TRUNCATE", "EXPLAIN", "EXPLAIN ANALYZE",
+        "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT",
+        "GRANT", "REVOKE", "MERGE", "REFRESH", "REINDEX", "VACUUM", "ANALYZE",
+        "SET", "SHOW", "COMMENT", "COPY", "CALL",
+    ];
+    emit_keyword_subset(out, KEEP);
+}
+
+/// Keywords expected after a finished table reference: JOIN / WHERE /
+/// GROUP BY / HAVING / ORDER BY / LIMIT / set ops.
+pub fn after_table_keywords(out: &mut Vec<Item>) {
+    const KEEP: &[&str] = &[
+        "INNER JOIN", "LEFT JOIN", "RIGHT JOIN", "FULL OUTER JOIN", "CROSS JOIN",
+        "JOIN", "ON", "USING", "AS", "LATERAL",
+        "WHERE", "GROUP BY", "HAVING", "ORDER BY", "LIMIT", "OFFSET",
+        "UNION", "INTERSECT", "EXCEPT",
+    ];
+    emit_keyword_subset(out, KEEP);
+}
+
+/// Keywords valid at the end of a projection item (between SELECT and FROM).
+pub fn after_projection_keywords(out: &mut Vec<Item>) {
+    const KEEP: &[&str] = &["FROM", "AS", "INTO"];
+    emit_keyword_subset(out, KEEP);
+}
+
+/// Sort modifiers used inside ORDER BY.
+pub fn order_modifiers(out: &mut Vec<Item>) {
+    const KEEP: &[&str] = &["ASC", "DESC", "NULLS FIRST", "NULLS LAST"];
+    emit_keyword_subset(out, KEEP);
+}
+
+/// Column-constraint keywords valid right after a column type inside a
+/// CREATE TABLE definition.
+pub fn column_constraint_keywords(out: &mut Vec<Item>) {
+    const KEEP: &[&str] = &[
+        "NOT NULL", "NULL", "DEFAULT", "PRIMARY KEY", "UNIQUE", "CHECK",
+        "REFERENCES", "GENERATED", "COLLATE",
+    ];
+    emit_keyword_subset(out, KEEP);
+}
+
+/// Starter keywords that may begin an entry inside a CREATE TABLE body
+/// in lieu of a fresh column name.
+pub fn create_table_entry_starters(out: &mut Vec<Item>) {
+    const KEEP: &[&str] = &[
+        "CONSTRAINT", "PRIMARY KEY", "FOREIGN KEY", "UNIQUE", "CHECK", "LIKE",
+    ];
+    emit_keyword_subset(out, KEEP);
+}
+
+/// Constraint-kind keywords that follow `CONSTRAINT <name>`.
+pub fn constraint_kinds(out: &mut Vec<Item>) {
+    const KEEP: &[&str] = &["PRIMARY KEY", "FOREIGN KEY", "UNIQUE", "CHECK"];
+    emit_keyword_subset(out, KEEP);
+}
+
+/// All known SQL types -- used inside CREATE TABLE column-type position.
+pub fn types_only(out: &mut Vec<Item>) {
+    for (label, e) in kb::types() {
+        out.push(from_entry(label, e, ItemKind::Type));
+    }
+}
+
+/// Columns of a specific catalog table only.
+pub fn columns_of_table(
+    cat: &Catalog, schema: Option<&str>, table_name: &str, out: &mut Vec<Item>,
+) {
+    if let Some(t) = cat.find_table(schema, table_name) {
+        for c in &t.columns {
+            out.push(column_item(t, c));
+        }
+    }
+}
+
+/// PL/pgSQL flow-control + body essentials.
+pub fn plpgsql_keywords(out: &mut Vec<Item>) {
+    const KEEP: &[&str] = &[
+        // Control flow + block structure.
+        "DECLARE", "BEGIN", "END", "IF", "ELSIF", "ELSE", "THEN",
+        "LOOP", "WHILE", "FOR", "EXIT", "CONTINUE", "PERFORM",
+        // Return + exception handling.
+        "RETURN", "RETURNS", "RAISE", "NOTICE", "WARNING", "EXCEPTION",
+        "FOUND", "STRICT", "INTO STRICT",
+        // SQL inside the body.
+        "EXECUTE", "SELECT", "INSERT INTO", "UPDATE", "DELETE FROM",
+        "WHERE", "AND", "OR", "NOT", "IS NULL", "IS NOT NULL",
+        "AS", "FROM", "JOIN", "ON", "GROUP BY", "ORDER BY", "LIMIT",
+        "VALUES", "SET", "RETURNING", "USING", "IN", "EXISTS",
+    ];
+    emit_keyword_subset(out, KEEP);
+}
+
+/// NEW and OLD virtual row aliases for trigger function bodies.
+pub fn new_old_aliases(out: &mut Vec<Item>) {
+    out.push(Item {
+        label: "NEW".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("trigger row (post-change)".into()),
+        description: Some("trigger".into()),
+        documentation_md: Some(
+            "**NEW**\n\nTrigger row variable: the row being inserted or updated. \
+             Use `NEW.<column>` to access its fields."
+                .into(),
+        ),
+        insert_text: "NEW".into(),
+            sort_priority: 5,
+    });
+    out.push(Item {
+        label: "OLD".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("trigger row (pre-change)".into()),
+        description: Some("trigger".into()),
+        documentation_md: Some(
+            "**OLD**\n\nTrigger row variable: the row before UPDATE / DELETE. \
+             Use `OLD.<column>` to access its fields."
+                .into(),
+        ),
+        insert_text: "OLD".into(),
+            sort_priority: 5,
+    });
+}
+
+fn emit_keyword_subset(out: &mut Vec<Item>, names: &[&str]) {
+    let table = kb::keywords();
+    for name in names {
+        if let Some(e) = table.get(*name) {
+            out.push(from_entry(name, e, ItemKind::Keyword));
+        }
+    }
+}
+
+pub fn tables(cat: &Catalog, out: &mut Vec<Item>) {
+    for t in cat.tables() {
+        out.push(table_item(t));
+    }
+}
+
+/// In-scope FROM/JOIN aliases declared in the current statement. Lets
+/// the user complete `u` after writing `FROM users AS u, orders o ...`
+/// without having to remember every alias. Each alias item carries the
+/// resolved table in its `description`. Items get a high priority bump
+/// (1) by the engine so they appear right under in-scope columns.
+pub fn aliases_in_scope(scope: &Scope, out: &mut Vec<Item>) {
+    for b in scope.tables() {
+        // Skip auto-bindings keyed by the bare table name; they aren't
+        // really aliases the user typed.
+        if b.alias.eq_ignore_ascii_case(&b.table.name) { continue; }
+        out.push(Item {
+            label: b.alias.clone(),
+            kind: ItemKind::Table,
+            detail: Some(format!("alias of {}", b.table.name)),
+            description: Some(format!("→ {}", b.table.name)),
+            documentation_md: Some(format!(
+                "**Alias** `{}` → table `{}`\n",
+                b.alias, b.table.name,
+            )),
+            insert_text: b.alias.clone(),
+            sort_priority: 1,
+        });
+    }
+}
+
+/// Emit each column NAME exactly once -- even when the same column
+/// (`updated_at`, `created_at`, `id`) appears in many tables, the user
+/// only sees one suggestion. The detail field still names the originating
+/// table so they can tell where the type came from.
+pub fn columns(cat: &Catalog, out: &mut Vec<Item>) {
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for t in cat.tables() {
+        for c in &t.columns {
+            if !seen.insert(c.name.to_ascii_lowercase()) { continue; }
+            out.push(column_item(t, c));
+        }
+    }
+}
+
+/// Catalog-wide columns when the user has no FROM yet. Dedups by column
+/// name -- a column that appears in N tables produces one item whose
+/// `detail` lists every owner so the user still sees the origins.
+pub fn columns_all(cat: &Catalog, out: &mut Vec<Item>) {
+    use std::collections::BTreeMap;
+    let mut by_name: BTreeMap<String, (Vec<(&Table, &Column)>, &Table, &Column)> = BTreeMap::new();
+    for t in cat.tables() {
+        for c in &t.columns {
+            let key = c.name.to_ascii_lowercase();
+            by_name
+                .entry(key)
+                .and_modify(|e| e.0.push((t, c)))
+                .or_insert_with(|| (vec![(t, c)], t, c));
+        }
+    }
+    for (_, (all_owners, first_t, first_c)) in by_name {
+        let owners: Vec<String> = all_owners.iter().map(|(t, _)| t.name.clone()).collect();
+        let detail = if owners.len() == 1 {
+            format!("{}  {}", first_c.data_type, owners[0])
+        } else {
+            format!("{}  in {} tables: {}", first_c.data_type, owners.len(),
+                    owners.join(", "))
+        };
+        let mut item = column_item(first_t, first_c);
+        item.detail = Some(detail);
+        out.push(item);
+    }
+}
+
+pub fn schemas(cat: &Catalog, out: &mut Vec<Item>) {
+    for s in &cat.schemas {
+        out.push(Item {
+            label: s.name.clone(),
+            kind: ItemKind::Schema,
+            detail: Some("schema".into()),
+            description: Some("schema".into()),
+            documentation_md: None,
+            insert_text: s.name.clone(),
+            sort_priority: 5,
+        });
+    }
+}
+
+/// Emit columns of the table resolved by `alias` in `scope`, if any.
+/// Returns the number of items emitted so callers can detect "no match".
+pub fn columns_of_alias(
+    cat: &Catalog,
+    scope: &Scope,
+    alias: &str,
+    out: &mut Vec<Item>,
+) -> usize {
+    let Some(b) = scope.get(alias) else { return 0; };
+    let table = match cat.find_table(b.table.schema.as_deref(), &b.table.name) {
+        Some(t) => t,
+        None => return 0,
+    };
+    let start = out.len();
+    for c in &table.columns {
+        out.push(column_item(table, c));
+    }
+    out.len() - start
+}
+
+fn table_item(t: &Table) -> Item {
+    let detail = format!(
+        "{}  {}.{}",
+        match t.kind {
+            TableKind::View => "view",
+            TableKind::MaterializedView => "matview",
+            _ => "table",
+        },
+        t.schema, t.name
+    );
+    Item {
+        label: t.name.clone(),
+        kind: if matches!(t.kind, TableKind::View) { ItemKind::View } else { ItemKind::Table },
+        detail: Some(detail),
+        description: Some(t.schema.clone()),
+        documentation_md: Some(render::table(t)),
+        insert_text: t.name.clone(),
+            sort_priority: 5,
+    }
+}
+
+pub fn column_item(t: &Table, c: &Column) -> Item {
+    Item {
+        label: c.name.clone(),
+        kind: ItemKind::Column,
+        detail: Some(format!("{}  {}", c.data_type, t.name)),
+        description: Some(t.name.clone()),
+        documentation_md: Some(render::column(t, c)),
+        insert_text: c.name.clone(),
+            sort_priority: 5,
+    }
+}
+
+fn from_entry(label: &str, e: &Entry, kind: ItemKind) -> Item {
+    // For functions, `detail` is the signature (highly informative). For
+    // keywords / types the signature is None -- fall back to a short doc
+    // excerpt so detail isn't blank. The kind icon already conveys what
+    // kind of item this is, so we don't repeat it in `description`.
+    let detail = e
+        .signature
+        .map(|s| s.to_string())
+        .or_else(|| {
+            let first_line = e.doc.lines().next().unwrap_or("").trim();
+            if first_line.is_empty() { None } else { Some(first_line.to_string()) }
+        });
+    Item {
+        label: label.to_string(),
+        kind,
+        detail,
+        description: None,
+        documentation_md: Some(kb::render_markdown(e)),
+        insert_text: label.to_string(),
+            sort_priority: 5,
+    }
+}
