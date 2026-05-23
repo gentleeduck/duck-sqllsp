@@ -1,0 +1,83 @@
+//! Publish diagnostics to the LSP client.
+//!
+//! Runs the analysis engine on the current document's text and pushes
+//! the result through `textDocument/publishDiagnostics`. Called from
+//! `did_open`, `did_change`, and after a successful catalog refresh
+//! (the catalog change can flip an unresolved-table diagnostic).
+
+use crate::state::ServerState;
+use ropey::Rope;
+use text_size::TextRange;
+use tower_lsp::lsp_types::{
+    Diagnostic, DiagnosticSeverity, Position, Range, Url,
+};
+use tower_lsp::Client;
+
+pub async fn publish_for(client: &Client, state: &ServerState, uri: &Url) {
+    let Some(doc) = state.documents.get(uri) else { return; };
+    let text = doc.text;
+    let rope = doc.rope;
+
+    let parsed = dsl_parse::parse(&text, dsl_parse::Dialect::Postgres);
+    let scopes = dsl_resolve::resolve(&parsed.statements);
+    // Clone the catalog snapshot so the read guard does not cross the
+    // upcoming .await; parking_lot guards are not Send.
+    let cat = state.catalog.read().clone();
+    let raw = dsl_analysis::run(&text, &parsed, &scopes, &cat);
+
+    let diagnostics = raw
+        .into_iter()
+        .map(|d| Diagnostic {
+            range: to_lsp_range(&rope, d.range),
+            severity: Some(map_severity(d.severity)),
+            code: Some(tower_lsp::lsp_types::NumberOrString::String(
+                d.code.to_string(),
+            )),
+            source: Some("duck-sqllsp".into()),
+            message: d.message,
+            ..Default::default()
+        })
+        .collect::<Vec<_>>();
+
+    client
+        .publish_diagnostics(uri.clone(), diagnostics, Some(doc.version))
+        .await;
+}
+
+fn map_severity(s: dsl_analysis::Severity) -> DiagnosticSeverity {
+    match s {
+        dsl_analysis::Severity::Error => DiagnosticSeverity::ERROR,
+        dsl_analysis::Severity::Warning => DiagnosticSeverity::WARNING,
+        dsl_analysis::Severity::Info => DiagnosticSeverity::INFORMATION,
+        dsl_analysis::Severity::Hint => DiagnosticSeverity::HINT,
+    }
+}
+
+fn to_lsp_range(rope: &Rope, range: TextRange) -> Range {
+    let start: u32 = range.start().into();
+    let end: u32 = range.end().into();
+    Range {
+        start: byte_to_position(rope, start as usize),
+        end: byte_to_position(rope, (end as usize).min(rope.len_bytes())),
+    }
+}
+
+fn byte_to_position(rope: &Rope, byte: usize) -> Position {
+    let byte = byte.min(rope.len_bytes());
+    let line_idx = rope.byte_to_line(byte);
+    let line_start_byte = rope.line_to_byte(line_idx);
+    let line_slice = rope.line(line_idx);
+    let bytes_in_line = byte.saturating_sub(line_start_byte);
+    // Walk the line counting utf-16 code units per char up to the byte.
+    let mut char_utf16 = 0u32;
+    let mut bytes_seen = 0usize;
+    for c in line_slice.chars() {
+        if bytes_seen >= bytes_in_line { break; }
+        char_utf16 += c.len_utf16() as u32;
+        bytes_seen += c.len_utf8();
+    }
+    Position {
+        line: line_idx as u32,
+        character: char_utf16,
+    }
+}
