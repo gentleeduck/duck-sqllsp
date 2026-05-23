@@ -1,0 +1,79 @@
+//! sql014: implicit cross join.
+//!
+//! `FROM a, b WHERE ...` without a join predicate between `a` and `b`
+//! produces a Cartesian product. Usually a missing `ON` clause.
+
+use crate::{Diagnostic, LintRule, Severity};
+use dsl_catalog::Catalog;
+use dsl_parse::{Expr, Statement, StatementKind};
+use dsl_resolve::Scope;
+
+pub struct Rule;
+
+impl LintRule for Rule {
+    fn code(&self) -> &'static str { "sql014" }
+    fn default_severity(&self) -> Severity { Severity::Warning }
+
+    fn check(
+        &self,
+        _source: &str,
+        stmt: &Statement,
+        _scope: &Scope,
+        _catalog: &Catalog,
+        out: &mut Vec<Diagnostic>,
+    ) {
+        let StatementKind::Select(s) = &stmt.kind else { return; };
+        if s.from.len() <= 1 { return; }
+
+        // Collect FROM-side table names + aliases.
+        let names: Vec<String> = s
+            .from
+            .iter()
+            .flat_map(|t| {
+                let mut v = vec![t.name.clone()];
+                if let Some(a) = &t.alias { v.push(a.clone()); }
+                v
+            })
+            .collect();
+
+        // Walk WHERE expression for any qualifier that names two
+        // different FROM tables in the same predicate. Heuristic: if at
+        // least one column ref is qualified with each table name, treat
+        // as a join.
+        let mut qualifiers: Vec<String> = Vec::new();
+        if let Some(w) = &s.where_clause {
+            collect_qualifiers(w, &mut qualifiers);
+        }
+
+        let mut covered = 0;
+        for t in &s.from {
+            let alias = t.alias.clone().unwrap_or_else(|| t.name.clone());
+            if qualifiers.iter().any(|q| q == &alias || q == &t.name) {
+                covered += 1;
+            }
+        }
+
+        if covered < s.from.len() {
+            let _ = names; // kept for future richer message
+            out.push(Diagnostic {
+                code: "sql014",
+                severity: Severity::Warning,
+                message: format!(
+                    "implicit cross join: {} tables in FROM but no predicate joins them all -- use explicit JOIN ... ON",
+                    s.from.len()
+                ),
+                range: stmt.range,
+            });
+        }
+    }
+}
+
+fn collect_qualifiers(e: &Expr, out: &mut Vec<String>) {
+    match e {
+        Expr::Column { qualifier: Some(q), .. } => out.push(q.clone()),
+        Expr::Column { .. } => {}
+        Expr::BinaryOp { left, right, .. } => { collect_qualifiers(left, out); collect_qualifiers(right, out); }
+        Expr::Call { args, .. } => { for a in args { collect_qualifiers(a, out); } }
+        _ => {}
+    }
+}
