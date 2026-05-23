@@ -1,0 +1,28 @@
+[package]
+name = "dsl-conn"
+description = "DB connection layer for duck-sqllsp. Wraps sqlx behind a per-driver trait."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[features]
+default = ["postgres", "mysql", "sqlite"]
+postgres = ["sqlx/postgres", "sqlx/runtime-tokio", "sqlx/tls-rustls"]
+mysql = ["sqlx/mysql", "sqlx/runtime-tokio", "sqlx/tls-rustls"]
+sqlite = ["sqlx/sqlite", "sqlx/runtime-tokio"]
+
+[dependencies]
+dsl-catalog = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
