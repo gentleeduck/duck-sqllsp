@@ -1,0 +1,40 @@
+[package]
+name = "dsl-server"
+description = "LSP wire layer for duck-sqllsp (tower-lsp)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+dsl-analysis   = { workspace = true }
+dsl-catalog    = { workspace = true }
+dsl-completion = { workspace = true }
+dsl-conn       = { workspace = true }
+dsl-format     = { workspace = true }
+dsl-hover      = { workspace = true }
+dsl-knowledge  = { workspace = true }
+dsl-parse      = { workspace = true }
+dsl-resolve    = { workspace = true }
+
+tokio          = { workspace = true }
+tower-lsp      = { workspace = true }
+async-trait    = { workspace = true }
+serde          = { workspace = true }
+serde_json     = { workspace = true }
+toml           = { workspace = true }
+text-size      = { workspace = true }
+ropey          = { workspace = true }
+dashmap        = { workspace = true }
+parking_lot    = { workspace = true }
+tracing        = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow         = { workspace = true }
+thiserror      = { workspace = true }
