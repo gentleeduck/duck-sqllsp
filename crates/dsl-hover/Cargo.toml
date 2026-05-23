@@ -1,0 +1,22 @@
+[package]
+name = "dsl-hover"
+description = "Rich hover markdown for duck-sqllsp."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+dsl-knowledge = { workspace = true }
+dsl-catalog = { workspace = true }
+dsl-parse = { workspace = true }
+dsl-resolve = { workspace = true }
+dsl-completion = { workspace = true }
+text-size = { workspace = true }
