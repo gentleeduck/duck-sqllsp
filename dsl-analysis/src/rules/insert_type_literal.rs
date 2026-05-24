@@ -147,7 +147,11 @@ fn kind_name(k: LitKind) -> &'static str {
 
 fn compatible(kind: LitKind, declared: &str) -> bool {
   let d = declared.to_ascii_uppercase();
+  // Strip the optional length spec `(...)` and any schema prefix
+  // (`pg_catalog.varchar` -> `VARCHAR`). The catalog introspection
+  // returns fully qualified type names for built-ins.
   let d = d.split('(').next().unwrap_or(&d).trim();
+  let d = d.rsplit('.').next().unwrap_or(d).trim();
   let int_types =
     ["INT", "INTEGER", "BIGINT", "SMALLINT", "INT4", "INT8", "INT2", "SERIAL", "BIGSERIAL", "SMALLSERIAL"];
   let num_types = ["NUMERIC", "DECIMAL", "REAL", "DOUBLE", "FLOAT", "MONEY"];

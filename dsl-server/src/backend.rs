@@ -99,6 +99,16 @@ impl LanguageServer for Backend {
       self.state.documents.update(&params.text_document.uri, change.text, params.text_document.version);
     }
     crate::diagnostics::publish_for(&self.client, &self.state, &params.text_document.uri).await;
+    // Nudge clients to re-fetch inlay hints + code lenses + semantic
+    // tokens. VS Code caches each per-document until told otherwise;
+    // without a refresh request a stale `SELECT *` expansion sticks
+    // around after the user edits the projection.
+    let _ = self.client.send_request::<tower_lsp::lsp_types::request::InlayHintRefreshRequest>(()).await;
+    let _ = self.client.send_request::<tower_lsp::lsp_types::request::CodeLensRefresh>(()).await;
+    let _ = self
+      .client
+      .send_request::<tower_lsp::lsp_types::request::SemanticTokensRefresh>(())
+      .await;
   }
 
   async fn did_close(&self, params: DidCloseTextDocumentParams) {
