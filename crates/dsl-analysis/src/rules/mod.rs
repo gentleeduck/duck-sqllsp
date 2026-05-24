@@ -22,7 +22,9 @@ pub mod deprecated_function;
 pub mod distinct_with_aggregate;
 pub mod empty_comment;
 pub mod exit_outside_loop;
+pub mod explain_analyze_in_dml;
 pub mod generate_series_no_alias;
+pub mod grant_to_public;
 pub mod group_by_all;
 pub mod group_by_position;
 pub mod group_by_required;
@@ -78,6 +80,7 @@ pub mod union_vs_all;
 pub mod unknown_column;
 pub mod unreachable_after_return;
 pub mod unresolved_table;
+pub mod update_from_no_pk_filter;
 pub mod update_set_unknown_col;
 
 use crate::LintRule;
@@ -161,5 +164,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(like_with_no_collation::Rule),
         Box::new(select_into_outside_plpgsql::Rule),
         Box::new(cte_missing_recursive::Rule),
+        Box::new(explain_analyze_in_dml::Rule),
+        Box::new(grant_to_public::Rule),
+        Box::new(update_from_no_pk_filter::Rule),
     ]
 }
