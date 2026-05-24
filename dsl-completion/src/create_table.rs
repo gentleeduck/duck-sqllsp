@@ -228,14 +228,21 @@ fn classify_entry(_source: &str, entry: &Entry<'_>, enclosing: Option<&str>) -> 
             &trimmed[ident_len..]
         };
         let after_upper = after_name.trim_start().to_uppercase();
-        if after_upper.starts_with("PRIMARY KEY")
-            || after_upper.starts_with("UNIQUE")
-            || after_upper.starts_with("CHECK")
-        {
+        if after_upper.starts_with("PRIMARY KEY") || after_upper.starts_with("UNIQUE") {
             if inside_paren(committed) {
                 if let Some(t) = enclosing.map(str::to_string) {
                     return Phase::CtlExpectFkColumn { table: t };
                 }
+            }
+            return Phase::Unknown;
+        }
+        if after_upper.starts_with("CHECK") {
+            // Named CHECK constraint: CONSTRAINT <name> CHECK ( <expr> )
+            // -- inside the paren the user types an arbitrary expression,
+            // so surface columns + the full PG function library +
+            // expression keywords (sql, char_length, length, now, ...).
+            if inside_paren(committed) {
+                return Phase::CtlCheckExpr { table: enclosing.map(str::to_string) };
             }
             return Phase::Unknown;
         }

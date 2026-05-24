@@ -553,3 +553,46 @@ fn all_built_in_functions_appear_in_order_by() {
             "function `{fname}` missing from ORDER BY completion");
     }
 }
+
+// Constraint-clause completion edge cases requested by user:
+// every CHECK / DEFAULT / GENERATED context must surface functions
+// alongside the table's own columns.
+
+#[test]
+fn named_constraint_check_offers_functions() {
+    let cat = catalog_with_users_and_orders();
+    let src = "CREATE TABLE posts (body text, CONSTRAINT chk_body CHECK (";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_lowercase()).collect();
+    for fname in &["length", "char_length", "lower"] {
+        assert!(labels.iter().any(|l| l == fname),
+            "function `{fname}` missing from `CONSTRAINT name CHECK (` completion");
+    }
+}
+
+#[test]
+fn after_default_keyword_offers_functions() {
+    let cat = catalog_with_users_and_orders();
+    let src = "CREATE TABLE t (created_at timestamptz DEFAULT ";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_lowercase()).collect();
+    for fname in &["now", "gen_random_uuid"] {
+        assert!(labels.iter().any(|l| l == fname),
+            "function `{fname}` missing after DEFAULT");
+    }
+}
+
+#[test]
+fn after_inline_check_keyword_offers_functions() {
+    let cat = catalog_with_users_and_orders();
+    let src = "CREATE TABLE t (body text CHECK (";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_lowercase()).collect();
+    for fname in &["length", "char_length"] {
+        assert!(labels.iter().any(|l| l == fname),
+            "function `{fname}` missing inside inline CHECK");
+    }
+}

@@ -258,6 +258,13 @@ fn route_phase(
         }
         Phase::CtlExpectColumnConstraint => {
             sources::column_constraint_keywords(&mut out);
+            // Constraint keywords like DEFAULT / CHECK introduce
+            // expression contexts. Surface functions + expression
+            // keywords here too so `col text DEFAULT now()` /
+            // `col text CHECK (length(col) > 0)` autocompletes the
+            // function names without forcing a new phase.
+            push_all_functions(cat, &mut out);
+            sources::expression_keywords(&mut out);
         }
         Phase::CtlExpectConstraintName => {
             // Fresh constraint name; nothing useful.
