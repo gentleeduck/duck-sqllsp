@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.1.5
+
+- URL-only connection schema. Server-side `dsl_conn::ConnectionSpec` is
+  now `{ name, url }`; driver inferred from URL scheme
+  (postgres://, postgresql://, mysql://, mariadb://, sqlite:). Old
+  host/port/user/password/database fields removed. Extension's
+  Add Connection prompts for name + URL and writes the same shape.
+- Toml writer preserves every other block (style, formatter,
+  createTable, comments) when adding/removing connections. The
+  full project config that lived in `.duck-sqllsp.toml` before is
+  never silently dropped on save.
+- Toml reader accepts both the new `url` field and the legacy
+  field-style spec (host/port/user/password/database) so existing
+  configs auto-upgrade on first load -- the next save rewrites them
+  as URLs.
+
+## 0.1.4
+
+- Drop nvim store import. The VS Code extension now reads only its
+  own `.duck-sqllsp.toml`. No cross-editor coupling -- nvim users keep
+  their dadbod/db_manager flow, VS Code users keep their sidebar +
+  toml, and they share data only when the user explicitly puts an
+  entry in `.duck-sqllsp.toml`.
+- Tree item description simplified back to `<kind>` (no
+  `- toml`/`- nvim` source tag).
+
 ## 0.1.3
 
 **Critical bug fix.** 0.1.0..0.1.2 shipped without bundled runtime

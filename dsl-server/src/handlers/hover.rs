@@ -22,7 +22,11 @@ pub fn run(state: &ServerState, params: HoverParams) -> Option<Hover> {
   let live = state.catalog.read().clone();
   let cache = doc.parsed();
   let derived = dsl_completion::source_tables::from_source(&cache.file, &doc.text);
-  let cat = dsl_completion::source_tables::merge(&live, &derived);
+  let ws_offline = state.workspace_offline_snapshot();
+  let cat = dsl_completion::source_tables::merge(
+    &dsl_completion::source_tables::merge(&live, &derived),
+    &ws_offline,
+  );
   let case = match state.config_snapshot().style.keyword {
     Case::Upper => KeywordCase::Upper,
     Case::Lower => KeywordCase::Lower,

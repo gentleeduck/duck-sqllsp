@@ -65,10 +65,10 @@ impl DuckSqllspConfig {
       return d;
     }
     if let Some(active) = self.active() {
-      return match active.driver.to_ascii_lowercase().as_str() {
-        "postgresql" | "postgres" | "pg" => Dialect::Postgresql,
-        "mysql" | "mariadb" => Dialect::Mysql,
-        "sqlite" | "sqlite3" => Dialect::Sqlite,
+      return match active.driver() {
+        "postgres" => Dialect::Postgresql,
+        "mysql" => Dialect::Mysql,
+        "sqlite" => Dialect::Sqlite,
         _ => Dialect::Postgresql,
       };
     }

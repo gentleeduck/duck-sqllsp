@@ -1,25 +1,14 @@
 // Connection store: persists `.duck-sqllsp.toml` at the workspace root.
-// Format mirrors what the LSP's `dsl-server::config` parser reads from
-// the same file -- one [[connections]] table per saved spec.
-//
-// Connections from a sibling Neovim setup are also surfaced (read-only
-// import) so users who already configured connections in nvim's
-// dadbod/db_manager flow see them automatically in the VS Code sidebar.
+// Single source of truth: `{ name, url }`. The driver is inferred from
+// the URL scheme by the server (`dsl-conn::ConnectionSpec::driver()`).
 
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { workspace } from "vscode";
 
-export type ConnectionKind = "postgres" | "mysql" | "sqlite";
-
 export interface ConnectionSpec {
   name: string;
-  kind: ConnectionKind;
   url: string;
-  /// "toml" when sourced from .duck-sqllsp.toml in the workspace,
-  /// "nvim" when imported from the nvim db_manager store on disk.
-  source?: "toml" | "nvim";
 }
 
 export interface ProjectConfig {
@@ -35,89 +24,35 @@ function configPath(): string | undefined {
 
 export function loadConfig(): ProjectConfig {
   const file = configPath();
-  let cfg: ProjectConfig = { connections: [] };
-  if (file && fs.existsSync(file)) {
-    cfg = parseToml(fs.readFileSync(file, "utf8"));
-    cfg.connections.forEach((c) => (c.source = "toml"));
+  if (!file || !fs.existsSync(file)) {
+    return { connections: [] };
   }
-  // Pull in nvim's db_manager store too -- users who set things up
-  // through nvim's dadbod flow should see those entries without
-  // re-typing. Merge by name; existing toml entries win.
-  for (const n of loadNvimConnections()) {
-    if (!cfg.connections.some((c) => c.name === n.name)) {
-      cfg.connections.push(n);
-    }
-  }
-  const active = loadNvimActive();
-  if (!cfg.active && active) {
-    cfg.active = active;
-  }
-  return cfg;
-}
-
-/// Pull connection list from ~/.local/share/nvim/db_connections.json
-/// (the format the user's nvim dadbod/db_manager flow writes). Each
-/// entry has `name`, `driver`, `user`, `host`, `port`, `database`,
-/// `password`. Converted to a libpq-style URL so it matches the
-/// dsl-conn spec the LSP expects.
-function loadNvimConnections(): ConnectionSpec[] {
-  const file = path.join(os.homedir(), ".local", "share", "nvim", "db_connections.json");
-  if (!fs.existsSync(file)) return [];
-  try {
-    const raw = JSON.parse(fs.readFileSync(file, "utf8"));
-    if (!Array.isArray(raw)) return [];
-    return raw.map((c: any): ConnectionSpec | undefined => {
-      const driver = String(c.driver ?? "postgresql").toLowerCase();
-      const kind: ConnectionKind | undefined =
-        driver.startsWith("postgres") ? "postgres"
-        : driver.startsWith("mysql") ? "mysql"
-        : driver.startsWith("sqlite") ? "sqlite"
-        : undefined;
-      if (!kind) return undefined;
-      const user = c.user ?? "";
-      const pass = c.password ? `:${encodeURIComponent(c.password)}` : "";
-      const auth = user ? `${encodeURIComponent(user)}${pass}@` : "";
-      const host = c.host ?? "localhost";
-      const port = c.port ? `:${c.port}` : "";
-      const db = c.database ?? "";
-      const url = kind === "sqlite"
-        ? `sqlite://${c.database ?? ""}`
-        : `${kind}://${auth}${host}${port}/${db}`;
-      return { name: c.name ?? "unnamed", kind, url, source: "nvim" };
-    }).filter((c): c is ConnectionSpec => !!c);
-  } catch {
-    return [];
-  }
-}
-
-function loadNvimActive(): string | undefined {
-  const file = path.join(os.homedir(), ".local", "share", "nvim", "db_active.json");
-  if (!fs.existsSync(file)) return undefined;
-  try {
-    const obj = JSON.parse(fs.readFileSync(file, "utf8"));
-    if (typeof obj === "object" && obj && typeof obj.active === "string") {
-      return obj.active;
-    }
-  } catch {}
-  return undefined;
+  return parseToml(fs.readFileSync(file, "utf8"));
 }
 
 export function saveConfig(cfg: ProjectConfig): string | undefined {
   const file = configPath();
   if (!file) return undefined;
-  // Only persist toml-sourced entries -- nvim-sourced ones live in
-  // their own store and should not be duplicated.
-  const persistable: ProjectConfig = {
-    active: cfg.active,
-    connections: cfg.connections.filter((c) => c.source !== "nvim"),
-  };
-  fs.writeFileSync(file, serializeToml(persistable), "utf8");
+  const previous = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+  fs.writeFileSync(file, mergeIntoExistingToml(previous, cfg), "utf8");
   return file;
 }
 
-// Tiny TOML reader. Only handles the shape this extension writes; if
-// the user hand-edits more exotic TOML we leave it alone via the
-// fallback parse path (best effort).
+/// Extract the driver from a URL scheme. Mirrors the server's
+/// `ConnectionSpec::driver()` so the sidebar can show what kind of
+/// DB each entry will connect to.
+export function driverFromUrl(url: string): "postgres" | "mysql" | "sqlite" | "unknown" {
+  const u = url.toLowerCase();
+  if (u.startsWith("postgres://") || u.startsWith("postgresql://")) return "postgres";
+  if (u.startsWith("mysql://") || u.startsWith("mariadb://")) return "mysql";
+  if (u.startsWith("sqlite://") || u.startsWith("sqlite:")) return "sqlite";
+  return "unknown";
+}
+
+/// Toml reader. Only handles the shape this extension writes.
+/// Connection blocks accept both the new `url` field and the older
+/// host/port/user/password/database (transparently converted to a
+/// URL) so users upgrading from an earlier toml don't lose data.
 function parseToml(text: string): ProjectConfig {
   const cfg: ProjectConfig = { connections: [] };
   let current: Record<string, string> | null = null;
@@ -153,30 +88,82 @@ function parseToml(text: string): ProjectConfig {
 }
 
 function specFromBag(b: Record<string, string>): ConnectionSpec {
-  return {
-    name: b.name ?? "default",
-    kind: (b.kind as ConnectionKind) ?? "postgres",
-    url: b.url ?? "",
-  };
+  const name = b.name ?? "default";
+  if (b.url) return { name, url: b.url };
+  // Old shape: assemble a URL from the field-style entries.
+  const driver = (b.driver ?? b.kind ?? "postgres").toLowerCase();
+  const scheme = driver.startsWith("postgres") ? "postgres" : driver === "mariadb" ? "mysql" : driver;
+  if (scheme === "sqlite") {
+    return { name, url: `sqlite://${b.database ?? ""}` };
+  }
+  const user = b.user ? encodeURIComponent(b.user) : "";
+  const pass = b.password ? `:${encodeURIComponent(b.password)}` : "";
+  const auth = user ? `${user}${pass}@` : "";
+  const host = b.host ?? "localhost";
+  const port = b.port ? `:${b.port}` : "";
+  const db = b.database ?? "";
+  return { name, url: `${scheme}://${auth}${host}${port}/${db}` };
 }
 
-function serializeToml(cfg: ProjectConfig): string {
-  const lines: string[] = [];
-  lines.push("# duck-sqllsp project config (managed by the VS Code extension).");
-  lines.push("");
-  if (cfg.active) {
-    lines.push(`[duck_sqllsp]`);
-    lines.push(`active_connection = "${escape(cfg.active)}"`);
-    lines.push("");
+/// Splice cfg's connections + active_connection into the previous
+/// .duck-sqllsp.toml content WITHOUT touching any other blocks
+/// (style / formatter / createTable / comments / etc).
+function mergeIntoExistingToml(previous: string, cfg: ProjectConfig): string {
+  const lines = previous.split("\n");
+  const out: string[] = [];
+  let i = 0;
+
+  let inMainBlock = false;
+  let activeWritten = false;
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (trimmed === "[[duck_sqllsp.connections]]" || trimmed === "[[connections]]") {
+      i++;
+      while (i < lines.length && !lines[i].trim().startsWith("[")) i++;
+      continue;
+    }
+    if (trimmed.startsWith("[duck_sqllsp]") || trimmed === "[duck_sqllsp]") {
+      inMainBlock = true;
+      out.push(line);
+      i++;
+      continue;
+    }
+    if (trimmed.startsWith("[") && trimmed !== "[duck_sqllsp]") {
+      inMainBlock = false;
+      out.push(line);
+      i++;
+      continue;
+    }
+    if (inMainBlock && (trimmed.startsWith("active_connection") || trimmed.startsWith("active "))) {
+      if (cfg.active) {
+        out.push(`active_connection = "${escape(cfg.active)}"`);
+        activeWritten = true;
+      }
+      i++;
+      continue;
+    }
+    out.push(line);
+    i++;
   }
+
+  if (cfg.active && !activeWritten) {
+    const header = ["[duck_sqllsp]", `active_connection = "${escape(cfg.active)}"`, ""];
+    let inj = 0;
+    while (inj < out.length && (out[inj].startsWith("#") || out[inj].trim() === "")) inj++;
+    out.splice(inj, 0, ...header);
+  }
+
+  while (out.length && out[out.length - 1].trim() === "") out.pop();
+
+  if (cfg.connections.length > 0) out.push("");
   for (const c of cfg.connections) {
-    lines.push("[[duck_sqllsp.connections]]");
-    lines.push(`name = "${escape(c.name)}"`);
-    lines.push(`kind = "${escape(c.kind)}"`);
-    lines.push(`url  = "${escape(c.url)}"`);
-    lines.push("");
+    out.push("[[duck_sqllsp.connections]]");
+    out.push(`name = "${escape(c.name)}"`);
+    out.push(`url  = "${escape(c.url)}"`);
+    out.push("");
   }
-  return lines.join("\n");
+  return out.join("\n");
 }
 
 function escape(s: string): string {

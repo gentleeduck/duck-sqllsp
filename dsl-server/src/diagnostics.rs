@@ -27,7 +27,11 @@ pub async fn publish_for(client: &Client, state: &ServerState, uri: &Url) {
   // guard does not cross the suspend point (not Send).
   let live = state.catalog.read().clone();
   let derived = dsl_completion::source_tables::from_source(&cache.file, &text);
-  let cat = dsl_completion::source_tables::merge(&live, &derived);
+  let ws_offline = state.workspace_offline_snapshot();
+  let cat = dsl_completion::source_tables::merge(
+    &dsl_completion::source_tables::merge(&live, &derived),
+    &ws_offline,
+  );
   let raw = dsl_analysis::run(&text, &cache.file, &cache.scopes, &cat);
 
   // Cancellation check #1: skip mapping work if a newer didChange

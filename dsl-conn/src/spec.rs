@@ -1,62 +1,37 @@
-//! ConnectionSpec: the shape the LSP receives from `initializationOptions`.
+//! ConnectionSpec: the shape the LSP receives from
+//! `initializationOptions` and `.duck-sqllsp.toml`.
 //!
-//! Mirrors what the editor's `db_manager` plugin stores on disk so there
-//! is no field translation between client and server.
+//! Single source of truth: a URL string. The driver is inferred from
+//! the URL scheme (`postgres://...`, `postgresql://...`, `mysql://...`,
+//! `mariadb://...`, `sqlite://...`). No separate host / port / user /
+//! password / database fields -- the URL carries them.
 
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ConnectionSpec {
   pub name: String,
-  pub driver: String,
-  #[serde(default)]
-  pub host: Option<String>,
-  #[serde(default)]
-  pub port: Option<u16>,
-  #[serde(default)]
-  pub user: Option<String>,
-  #[serde(default)]
-  pub password: Option<String>,
-  #[serde(default)]
-  pub database: Option<String>,
-  #[serde(default)]
-  pub schema: Option<String>,
+  pub url: String,
 }
 
 impl ConnectionSpec {
-  /// Build the URL form sqlx accepts. Password is included.
+  /// URL passed straight to sqlx.
   pub fn url(&self) -> String {
-    match self.driver.as_str() {
-      "postgres" | "postgresql" => {
-        let user = self.user.clone().unwrap_or_default();
-        let pass = self.password.clone().unwrap_or_default();
-        let host = self.host.clone().unwrap_or_else(|| "localhost".into());
-        let port = self.port.unwrap_or(5432);
-        let db = self.database.clone().unwrap_or_default();
-        if pass.is_empty() {
-          format!("postgres://{user}@{host}:{port}/{db}")
-        } else {
-          format!("postgres://{user}:{pass}@{host}:{port}/{db}")
-        }
-      },
-      "mysql" | "mariadb" => {
-        let user = self.user.clone().unwrap_or_default();
-        let pass = self.password.clone().unwrap_or_default();
-        let host = self.host.clone().unwrap_or_else(|| "localhost".into());
-        let port = self.port.unwrap_or(3306);
-        let db = self.database.clone().unwrap_or_default();
-        if pass.is_empty() {
-          format!("mysql://{user}@{host}:{port}/{db}")
-        } else {
-          format!("mysql://{user}:{pass}@{host}:{port}/{db}")
-        }
-      },
-      "sqlite" | "sqlite3" => {
-        // `database` carries the file path. Empty → in-memory.
-        let path = self.database.clone().unwrap_or_default();
-        if path.is_empty() { "sqlite::memory:".into() } else { format!("sqlite://{path}") }
-      },
-      _ => String::new(),
+    self.url.clone()
+  }
+
+  /// Extract the driver from the URL scheme. Returns the canonical
+  /// driver name [`crate::build`] matches on.
+  pub fn driver(&self) -> &'static str {
+    let lower = self.url.to_ascii_lowercase();
+    if lower.starts_with("postgres://") || lower.starts_with("postgresql://") {
+      "postgres"
+    } else if lower.starts_with("mysql://") || lower.starts_with("mariadb://") {
+      "mysql"
+    } else if lower.starts_with("sqlite://") || lower.starts_with("sqlite:") {
+      "sqlite"
+    } else {
+      "unknown"
     }
   }
 }

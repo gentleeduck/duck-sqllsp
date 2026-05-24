@@ -18,8 +18,14 @@ pub fn run(state: &ServerState, params: CompletionParams) -> Option<CompletionRe
   }
   let offset = position::to_offset(&doc.rope, params.text_document_position.position);
   let cache = doc.parsed();
-  let cat = state.catalog.read();
-  let items = engine_complete(&doc.text, &cache.file, &cache.scopes, &*cat, offset);
+  // Workspace-scan catalog (every .sql in the project) merged on top
+  // of the live catalog snapshot. The engine then folds in the
+  // current buffer's own CREATE TABLE bodies inside complete(). Live
+  // wins on collisions because merge keeps the first-seen entry.
+  let live = state.catalog.read().clone();
+  let ws_offline = state.workspace_offline_snapshot();
+  let cat = dsl_completion::source_tables::merge(&live, &ws_offline);
+  let items = engine_complete(&doc.text, &cache.file, &cache.scopes, &cat, offset);
 
   let style = state.config_snapshot().style;
   let lsp_items: Vec<CompletionItem> = items.into_iter().map(|it| to_lsp_item(it, &style)).collect();

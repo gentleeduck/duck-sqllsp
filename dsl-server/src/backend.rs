@@ -38,8 +38,18 @@ impl LanguageServer for Backend {
       if let Some(proj) = config::load_project_config(&root) {
         effective.merge_from(proj);
       }
+      self.state.set_workspace_root(root);
     }
     self.state.set_config(effective);
+    // Workspace .sql scan: walks every *.sql in the workspace and
+    // builds a baseline offline catalog so completion / hover /
+    // diagnostics see tables/functions/types defined in files the
+    // user has not yet opened. Live catalog (when connected) still
+    // wins on collisions.
+    let state = self.state.clone();
+    tokio::spawn(async move {
+      state.rescan_workspace_offline();
+    });
 
     Ok(InitializeResult {
       server_info: Some(ServerInfo {
@@ -220,11 +230,8 @@ impl LanguageServer for Backend {
   }
 
   async fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
-    // Whenever .duck-sqllsp.toml / .json changes on disk, reload the
-    // project config (walks upward from the changed file) and merge.
-    // Triggers a catalog refresh so the LSP picks up new connections
-    // without requiring a restart.
-    let mut any_relevant = false;
+    let mut config_changed = false;
+    let mut sql_changed = false;
     for change in &params.changes {
       let Ok(path) = change.uri.to_file_path() else { continue };
       let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
@@ -233,15 +240,28 @@ impl LanguageServer for Backend {
           let mut cfg = self.state.config_snapshot();
           cfg.merge_from(proj);
           self.state.set_config(cfg);
-          any_relevant = true;
+          config_changed = true;
+        }
+      }
+      if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+        if matches!(ext.to_ascii_lowercase().as_str(), "sql" | "pgsql" | "psql") {
+          sql_changed = true;
         }
       }
     }
-    if any_relevant {
+    if config_changed {
       let state = self.state.clone();
       let client = self.client.clone();
       tokio::spawn(async move {
         refresh::refresh_catalog(state, client).await;
+      });
+    }
+    if sql_changed {
+      // A .sql file on disk changed -- rescan the workspace so the
+      // offline catalog stays in sync with what's actually on disk.
+      let state = self.state.clone();
+      tokio::spawn(async move {
+        state.rescan_workspace_offline();
       });
     }
   }

@@ -3,7 +3,7 @@
 // `view/item/context` menu wiring.
 
 import * as vscode from "vscode";
-import { ConnectionSpec, ProjectConfig, loadConfig } from "./connections";
+import { ConnectionSpec, ProjectConfig, driverFromUrl, loadConfig } from "./connections";
 
 export class ConnectionsProvider implements vscode.TreeDataProvider<ConnectionItem> {
   private _onDidChange = new vscode.EventEmitter<ConnectionItem | undefined | void>();
@@ -21,10 +21,7 @@ export class ConnectionsProvider implements vscode.TreeDataProvider<ConnectionIt
     const cfg: ProjectConfig = loadConfig();
     const items = cfg.connections.map((c) => new ConnectionItem(c, c.name === cfg.active));
     if (items.length === 0) {
-      const empty = new ConnectionItem(
-        { name: "(no connections saved)", kind: "postgres", url: "" },
-        false,
-      );
+      const empty = new ConnectionItem({ name: "(no connections saved)", url: "" }, false);
       empty.contextValue = "empty";
       empty.command = { command: "duckSqllsp.addConnection", title: "Add" };
       return Promise.resolve([empty]);
@@ -40,13 +37,8 @@ export class ConnectionItem extends vscode.TreeItem {
   ) {
     super(spec.name, vscode.TreeItemCollapsibleState.None);
     this.tooltip = spec.url || "(no URL)";
-    // Show kind + source tag (e.g. `postgres - nvim`) so the user
-    // knows where each entry came from.
-    const src = spec.source === "nvim" ? " - nvim" : spec.source === "toml" ? " - toml" : "";
-    this.description = `${spec.kind}${src}`;
+    this.description = driverFromUrl(spec.url);
     this.contextValue = spec.url ? "connection" : "empty";
-    // Filled circle for active, plug icon for inactive (matches the
-    // "plug into a DB" metaphor the user is already familiar with).
     this.iconPath = new vscode.ThemeIcon(
       active ? "pass-filled" : "plug",
       active ? new vscode.ThemeColor("charts.green") : undefined,

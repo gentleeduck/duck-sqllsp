@@ -47,8 +47,44 @@ pub fn run(state: &ServerState, params: CodeLensParams) -> Option<Vec<CodeLens>>
       }),
       data: None,
     });
+    // Slow-query nudge: a SELECT with 3+ JOINs and no LIMIT clause
+    // is likely to scan a lot of rows. Surface inline LIMIT 100 and
+    // EXPLAIN ANALYZE shortcuts so the user can quickly bound the
+    // scope or get a cost estimate.
+    if let StatementKind::Select(_) = &stmt.kind {
+      if is_slow_select(&text) {
+        out.push(CodeLens {
+          range,
+          command: Some(Command {
+            title: "+ LIMIT 100".into(),
+            command: "duck-sqllsp.addLimit".into(),
+            arguments: Some(vec![serde_json::json!(text), serde_json::json!(100)]),
+          }),
+          data: None,
+        });
+        out.push(CodeLens {
+          range,
+          command: Some(Command {
+            title: "EXPLAIN ANALYZE".into(),
+            command: "duck-sqllsp.explainAnalyzeQuery".into(),
+            arguments: Some(vec![serde_json::json!(text)]),
+          }),
+          data: None,
+        });
+      }
+    }
   }
   if out.is_empty() { None } else { Some(out) }
+}
+
+/// SELECT with >= 3 JOIN tokens and no LIMIT (case-insensitive, word-
+/// bounded). Crude but covers the cases worth nudging on.
+fn is_slow_select(text: &str) -> bool {
+  let upper = text.to_ascii_uppercase();
+  let join_count = upper.split_whitespace().filter(|w| *w == "JOIN").count();
+  if join_count < 3 { return false; }
+  // Reject if any LIMIT keyword survives, as a whole word.
+  !upper.split(|c: char| !c.is_ascii_alphanumeric() && c != '_').any(|w| w == "LIMIT")
 }
 
 fn slice_of(text: &str, r: TextRange) -> String {

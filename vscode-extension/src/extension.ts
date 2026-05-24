@@ -12,8 +12,8 @@ import {
   TransportKind,
 } from "vscode-languageclient/node";
 import {
-  ConnectionKind,
   ConnectionSpec,
+  driverFromUrl,
   loadConfig,
   saveConfig,
 } from "./connections";
@@ -250,27 +250,18 @@ async function addConnection(): Promise<void> {
   });
   if (!name) return;
 
-  const kind = (await window.showQuickPick(
-    [
-      { label: "postgres", description: "PostgreSQL via libpq URL" },
-      { label: "mysql", description: "MySQL via DSN URL" },
-      { label: "sqlite", description: "SQLite file path" },
-    ],
-    { placeHolder: "Database kind" },
-  ))?.label as ConnectionKind | undefined;
-  if (!kind) return;
-
-  const placeholder =
-    kind === "postgres"
-      ? "postgres://user:password@host:5432/dbname"
-      : kind === "mysql"
-        ? "mysql://user:password@host:3306/dbname"
-        : "sqlite:///absolute/path/to/file.db";
   const url = await window.showInputBox({
-    prompt: `Connection URL (${kind})`,
-    placeHolder: placeholder,
+    prompt: "Connection URL",
+    placeHolder: "postgres://user:password@host:5432/dbname  |  mysql://...  |  sqlite:///path/to/file.db",
     password: false,
     ignoreFocusOut: true,
+    validateInput: (v) => {
+      if (!v) return "URL is required";
+      if (!/^(postgres|postgresql|mysql|mariadb|sqlite):/i.test(v)) {
+        return "URL must start with postgres:// / postgresql:// / mysql:// / mariadb:// / sqlite:";
+      }
+      return null;
+    },
   });
   if (!url) return;
 
@@ -283,9 +274,9 @@ async function addConnection(): Promise<void> {
       "Overwrite",
     );
     if (overwrite !== "Overwrite") return;
-    Object.assign(existing, { kind, url });
+    existing.url = url;
   } else {
-    cfg.connections.push({ name, kind, url });
+    cfg.connections.push({ name, url });
   }
   if (!cfg.active) cfg.active = name;
 
@@ -308,7 +299,7 @@ async function listConnections(): Promise<void> {
   const pick = await window.showQuickPick(
     cfg.connections.map((c) => ({
       label: c.name + (c.name === cfg.active ? " (active)" : ""),
-      description: c.kind,
+      description: driverFromUrl(c.url),
       detail: c.url,
       conn: c,
     })),

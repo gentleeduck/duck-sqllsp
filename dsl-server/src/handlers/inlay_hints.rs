@@ -21,11 +21,15 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
   let live = state.catalog.read().clone();
   let cache = doc.parsed();
   let parsed = &cache.file;
-  // Merge live catalog with buffer-derived tables so JOIN-on heuristics
-  // can see fresh CREATE TABLE bodies (and tests with no live catalog
-  // still resolve to a column list).
+  // Merge live catalog + buffer-derived tables + workspace .sql scan
+  // so JOIN-on heuristics and SELECT * expansion see every CREATE
+  // TABLE in the project, not just the open files.
   let derived = dsl_completion::source_tables::from_source(parsed, &doc.text);
-  let cat = dsl_completion::source_tables::merge(&live, &derived);
+  let ws_offline = state.workspace_offline_snapshot();
+  let cat = dsl_completion::source_tables::merge(
+    &dsl_completion::source_tables::merge(&live, &derived),
+    &ws_offline,
+  );
 
   // Also resolve against buffer-defined tables so a fresh `CREATE TABLE`
   // expands its columns immediately without needing a DB round-trip.
