@@ -2507,9 +2507,10 @@ fn sql145_flags_default_random() {
 }
 
 #[test]
-fn sql145_flags_default_nextval() {
+fn sql145_quiet_for_default_nextval() {
+    // nextval is the *intended* default for serial-ish columns.
     let d = diags("CREATE TABLE t (id int DEFAULT nextval('seq'));");
-    assert!(d.iter().any(|x| x.code == "sql145"));
+    assert!(!d.iter().any(|x| x.code == "sql145"));
 }
 
 #[test]
@@ -2815,6 +2816,114 @@ fn sql153_quiet_with_interval() {
 fn sql153_flags_current_date_minus_int() {
     let d = diags("SELECT current_date - 7 FROM users;");
     assert!(d.iter().any(|x| x.code == "sql153"));
+}
+
+// ===== sql145 default whitelist regression ================================
+
+#[test]
+fn sql145_quiet_for_gen_random_uuid_default() {
+    let d = diags("CREATE TABLE t (id uuid DEFAULT gen_random_uuid());");
+    assert!(!d.iter().any(|x| x.code == "sql145"),
+        "gen_random_uuid() is the intended default use; got: {:?}",
+        d.iter().filter(|x| x.code == "sql145").collect::<Vec<_>>());
+}
+
+#[test]
+fn sql145_quiet_for_uuid_generate_v4_default() {
+    let d = diags("CREATE TABLE t (id uuid DEFAULT uuid_generate_v4());");
+    assert!(!d.iter().any(|x| x.code == "sql145"));
+}
+
+#[test]
+fn sql145_quiet_for_now_default_whitelisted() {
+    let d = diags("CREATE TABLE t (created_at timestamptz DEFAULT now());");
+    assert!(!d.iter().any(|x| x.code == "sql145"));
+}
+
+#[test]
+fn sql145_quiet_for_nextval_default_whitelisted() {
+    let d = diags("CREATE TABLE t (id int DEFAULT nextval('seq'));");
+    assert!(!d.iter().any(|x| x.code == "sql145"));
+}
+
+#[test]
+fn sql145_still_flags_random() {
+    let d = diags("CREATE TABLE t (lottery int DEFAULT random());");
+    assert!(d.iter().any(|x| x.code == "sql145"),
+        "random() default is unlikely intentional");
+}
+
+// ===== sql139 UNIQUE column-list regression ===============================
+
+#[test]
+fn sql139_quiet_when_all_unique_columns_not_null() {
+    let src = "CREATE TABLE user_roles (
+        user_id uuid NOT NULL,
+        role text NOT NULL,
+        UNIQUE (user_id, role)
+    );";
+    let d = diags(src);
+    assert!(!d.iter().any(|x| x.code == "sql139"),
+        "UNIQUE (user_id, role) over NOT NULL cols, expected quiet; got: {:?}",
+        d.iter().filter(|x| x.code == "sql139").map(|x| &x.message).collect::<Vec<_>>());
+}
+
+#[test]
+fn sql139_flags_when_one_unique_column_nullable() {
+    let src = "CREATE TABLE user_roles (
+        user_id uuid NOT NULL,
+        role text,
+        UNIQUE (user_id, role)
+    );";
+    let d = diags(src);
+    assert!(d.iter().any(|x| x.code == "sql139"),
+        "role is nullable, expected sql139");
+}
+
+#[test]
+fn sql139_flags_inline_unique_without_not_null() {
+    let d = diags("CREATE TABLE x (email TEXT UNIQUE);");
+    assert!(d.iter().any(|x| x.code == "sql139"));
+}
+
+#[test]
+fn sql139_quiet_inline_unique_with_not_null() {
+    let d = diags("CREATE TABLE x (email TEXT NOT NULL UNIQUE);");
+    assert!(!d.iter().any(|x| x.code == "sql139"));
+}
+
+// ===== sql160 advisory lock without unlock =================================
+
+#[test]
+fn sql160_flags_session_lock_no_unlock() {
+    let d = diags("SELECT pg_advisory_lock(42);");
+    assert!(d.iter().any(|x| x.code == "sql160"));
+}
+
+#[test]
+fn sql160_quiet_when_unlock_follows() {
+    let d = diags("SELECT pg_advisory_lock(42); SELECT 1; SELECT pg_advisory_unlock(42);");
+    assert!(!d.iter().any(|x| x.code == "sql160"));
+}
+
+#[test]
+fn sql160_quiet_for_xact_lock() {
+    let d = diags("SELECT pg_advisory_xact_lock(42);");
+    assert!(!d.iter().any(|x| x.code == "sql160"));
+}
+
+// ===== sql157 RAISE USING ERRCODE unquoted =================================
+
+#[test]
+fn sql157_flags_unquoted_errcode() {
+    let d = diags("CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'bad' USING ERRCODE = unique_violation; END $$;");
+    assert!(d.iter().any(|x| x.code == "sql157"));
+}
+
+#[test]
+fn sql157_quiet_when_quoted() {
+    let d = diags("CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'bad' USING ERRCODE = '23505'; END $$;");
+    assert!(!d.iter().any(|x| x.code == "sql157"));
 }
 
 // ===== regression: ENTIRE user trigger fn must produce zero warnings ======

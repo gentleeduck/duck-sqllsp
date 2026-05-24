@@ -4,6 +4,7 @@
 
 pub mod alter_table_no_owner;
 pub mod alter_type_add_value_in_tx;
+pub mod advisory_lock_no_unlock;
 pub mod ambiguous_column;
 pub mod array_subscript_zero;
 pub mod backslash_in_string;
@@ -73,6 +74,7 @@ pub mod order_by_random;
 pub mod prefer_alias;
 pub mod raise_arg_count;
 pub mod raise_message_no_args;
+pub mod raise_using_errcode;
 pub mod redundant_parens;
 pub mod reserved_word_identifier;
 pub mod return_type_literal;
@@ -219,5 +221,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(cast_text_in_distinct::Rule),
         Box::new(select_into_strict_no_exception::Rule),
         Box::new(timestamp_int_arithmetic::Rule),
+        Box::new(advisory_lock_no_unlock::Rule),
+        Box::new(raise_using_errcode::Rule),
     ]
 }

@@ -44,11 +44,12 @@ impl LintRule for Rule {
                     j += 1;
                 }
                 let arg = &upper[arg_start..j];
-                let volatile = arg.starts_with("RANDOM(")
-                    || arg.starts_with("NEXTVAL(")
-                    || arg.starts_with("GEN_RANDOM_UUID(")
-                    || arg.starts_with("UUID_GENERATE")
-                    || arg.starts_with("CLOCK_TIMESTAMP(");
+                // Whitelist the well-known volatile-by-design defaults:
+                // gen_random_uuid, uuid_generate_v*, now, current_*,
+                // clock_timestamp, nextval -- these are the *intended*
+                // uses of a volatile default. Only flag random() (almost
+                // never what you want as a default).
+                let volatile = arg.starts_with("RANDOM(");
                 if volatile {
                     let abs_start = start + i;
                     let abs_end = start + j;
