@@ -225,6 +225,44 @@ fn signature_help_picks_active_param() {
 }
 
 #[test]
+fn signature_help_for_length_renders_signature() {
+    use tower_lsp::lsp_types::{SignatureHelpParams, TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams};
+    let src = "SELECT length() FROM users;";
+    let (state, url) = state_with("file:///sh-len.sql", src);
+    // Cursor inside the `(`.
+    let r = signature_help::run(&state, SignatureHelpParams {
+        text_document_position_params: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: url },
+            position: Position { line: 0, character: 14 },
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        context: None,
+    }).expect("length signature");
+    let sig = &r.signatures[0];
+    assert!(sig.label.to_ascii_lowercase().contains("length"),
+        "label should contain `length`; got: {}", sig.label);
+    assert!(sig.label.to_ascii_lowercase().contains("text"),
+        "label should mention text arg; got: {}", sig.label);
+}
+
+#[test]
+fn signature_help_for_char_length_renders_signature() {
+    use tower_lsp::lsp_types::{SignatureHelpParams, TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams};
+    let src = "SELECT char_length() FROM users;";
+    let (state, url) = state_with("file:///sh-cl.sql", src);
+    let r = signature_help::run(&state, SignatureHelpParams {
+        text_document_position_params: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: url },
+            position: Position { line: 0, character: 19 },
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        context: None,
+    }).expect("char_length signature");
+    let sig = &r.signatures[0];
+    assert!(sig.label.to_ascii_lowercase().contains("char_length"));
+}
+
+#[test]
 fn document_store_roundtrip() {
     let store = DocumentStore::default();
     let url: Url = "file:///x.sql".parse().unwrap();
