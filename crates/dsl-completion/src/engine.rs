@@ -449,16 +449,42 @@ fn floor_char_boundary(s: &str, byte: usize) -> usize {
 /// Keeps the first occurrence (which is also the highest-priority emit
 /// per call ordering). Matched case-insensitively because PG keyword
 /// completion may be cased differently across sources.
+/// Merge entries with the same `(label, kind)`. The first occurrence
+/// wins for `insert_text` / `documentation_md`, but later occurrences
+/// can contribute origin info into the `detail` field so a column that
+/// lives in multiple tables surfaces as `id (users, orders, ...)`
+/// instead of silently hiding the second binding.
 fn dedup_items(items: Vec<Item>) -> Vec<Item> {
     use crate::item::ItemKind;
-    use std::collections::HashSet;
-    let mut seen: HashSet<(String, ItemKind)> = HashSet::new();
-    let mut out = Vec::with_capacity(items.len());
+    use std::collections::HashMap;
+    let mut idx: HashMap<(String, ItemKind), usize> = HashMap::new();
+    let mut out: Vec<Item> = Vec::with_capacity(items.len());
     for it in items {
         let key = (it.label.to_ascii_lowercase(), it.kind);
-        if seen.insert(key) {
-            out.push(it);
+        if let Some(&existing) = idx.get(&key) {
+            // Merge origin info into detail.
+            if let (Some(existing_detail), Some(new_detail)) =
+                (out[existing].detail.as_ref(), it.detail.as_ref())
+            {
+                if existing_detail != new_detail
+                    && !existing_detail.contains(new_detail.as_str())
+                {
+                    let merged = format!("{existing_detail}, {new_detail}");
+                    out[existing].detail = Some(merged);
+                }
+            } else if out[existing].detail.is_none() && it.detail.is_some() {
+                out[existing].detail = it.detail;
+            }
+            // Pick the lower (= higher-priority) sort, so a column that
+            // is in-scope (priority 0) wins over a catalog-wide bare
+            // version (priority 3) regardless of insertion order.
+            if it.sort_priority < out[existing].sort_priority {
+                out[existing].sort_priority = it.sort_priority;
+            }
+            continue;
         }
+        idx.insert(key, out.len());
+        out.push(it);
     }
     out
 }
