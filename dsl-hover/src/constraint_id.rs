@@ -102,28 +102,30 @@ fn find_in_catalog<'a>(token: &str, catalog: &'a Catalog) -> Option<Found<'a>> {
 }
 
 fn render_known(token: &str, kind: Kind, found: Found<'_>) -> String {
-    // Plain markdown structure: heading, bold kind label, the
-    // location, then a fenced ```sql block. **Bold** instead of
-    // _italic_ for the kind label because some nvim colorschemes
-    // render italic ranges with the same highlight as block-quoted
-    // text -- the SQL fence then inherits the italic background and
-    // the user sees the whole card as one washed-out colour. Bold
-    // uses a distinct highlight group and isolates from the code
-    // block below.
+    // The card stays in markdown but every dynamic piece (token name,
+    // location, SQL definition) lives inside inline backticks or a
+    // fenced code block. We deliberately avoid `_italic_` because some
+    // nvim colorschemes link `@markup.italic` to the same group used
+    // for the block-quoted code background -- which makes the whole
+    // card render as one washed-out italic span. `**bold**` uses a
+    // distinct highlight group.
     let mut s = String::new();
-    s.push_str(&format!("# `{token}`\n\n**{kind_label}**\n\n", kind_label = kind.label()));
+    s.push_str(&format!("# `{token}`\n\n"));
+    s.push_str(&format!("**{kind_label}**\n\n", kind_label = kind.label()));
     match found {
         Found::Constraint(t, c) => {
             s.push_str(&format!("on `{}.{}`\n\n", t.schema, t.name));
-            s.push_str("```sql\n");
+            // Surround the fence with explicit blank lines so the
+            // markdown parser cleanly starts/ends the code block --
+            // some renderers swallow the fence when it abuts a
+            // preceding paragraph.
+            s.push_str("\n```sql\n");
             s.push_str(&render_constraint(c));
-            s.push_str("\n```\n\n");
+            s.push_str("\n```\n");
         }
         Found::Index(t, i) => {
             s.push_str(&format!("on `{}.{}`\n\n", t.schema, t.name));
-            s.push_str("```sql\n");
-            // Prefer pg_get_indexdef when available -- it captures USING,
-            // partial WHERE, expression columns, etc.
+            s.push_str("\n```sql\n");
             if let Some(def) = &i.definition {
                 s.push_str(def);
                 if !def.trim_end().ends_with(';') { s.push(';'); }
@@ -134,16 +136,16 @@ fn render_known(token: &str, kind: Kind, found: Found<'_>) -> String {
                     i.name, t.schema, t.name, i.columns.join(", ")
                 ));
             }
-            s.push_str("\n```\n\n");
+            s.push_str("\n```\n");
         }
         Found::Trigger(t, tg) => {
             s.push_str(&format!("on `{}.{}`\n\n", t.schema, t.name));
-            s.push_str("```sql\n");
+            s.push_str("\n```sql\n");
             s.push_str(&format!(
                 "CREATE TRIGGER {} {} {} ON {}.{} FOR EACH {} EXECUTE FUNCTION {}();",
                 tg.name, tg.timing, tg.event, t.schema, t.name, tg.granularity, tg.function
             ));
-            s.push_str("\n```\n\n");
+            s.push_str("\n```\n");
         }
     }
     s

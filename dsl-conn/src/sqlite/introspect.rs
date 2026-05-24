@@ -78,6 +78,7 @@ pub async fn run(pool: &SqlitePool, spec: &ConnectionSpec) -> Result<Catalog, Dr
         schemas: vec![schema],
         functions: Vec::new(),
         types: Vec::new(),
+        roles: Vec::new(),
     })
 }
 

@@ -407,12 +407,26 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
         }
     }
 
+    // Roles -- consumed by sql169 owner_to_unknown_role and by
+    // completion / hover of GRANT TO / OWNER TO. Skip rolname starting
+    // with `pg_` (built-in PG internal roles).
+    let mut roles: Vec<String> = Vec::new();
+    if let Ok(rows) = sqlx::query_as::<_, (String,)>(
+        "SELECT rolname FROM pg_roles ORDER BY rolname"
+    )
+    .fetch_all(pool)
+    .await
+    {
+        roles = rows.into_iter().map(|(n,)| n).collect();
+    }
+
     Ok(Catalog {
         version: CATALOG_VERSION,
         connection_id: spec.name.clone(),
         schemas: schemas.into_values().collect(),
         functions,
         types,
+        roles,
     })
 }
 

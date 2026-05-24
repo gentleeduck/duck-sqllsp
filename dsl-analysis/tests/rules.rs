@@ -53,6 +53,7 @@ fn cat() -> Catalog {
         schemas: vec![Schema { name: "public".into(), tables: vec![users, orders, flags] }],
         functions: vec![],
         types: vec![],
+        roles: vec![],
     }
 }
 
@@ -1656,6 +1657,56 @@ fn sql052_range_covers_like_pattern() {
     let s: u32 = hit.range.start().into();
     let e: u32 = hit.range.end().into();
     assert_eq!(&src[s as usize..e as usize], "LIKE 'literal'");
+}
+
+// ===== sql169 owner_to_unknown_role =======================================
+
+#[test]
+fn sql169_flags_unknown_role_when_catalog_loaded() {
+    use dsl_analysis::run;
+    let mut cat = cat();
+    cat.roles = vec!["app".into(), "admin".into()];
+    let src = "ALTER TABLE users OWNER TO postgres;";
+    let file = parse(src, Dialect::Postgres);
+    let scopes = resolve_with_source(&file.statements, src);
+    let d = run(src, &file, &scopes, &cat);
+    let hit = d.iter().find(|x| x.code == "sql169").expect("sql169 should fire");
+    let s: u32 = hit.range.start().into();
+    let e: u32 = hit.range.end().into();
+    assert_eq!(&src[s as usize..e as usize], "postgres",
+        "range should cover just the role token");
+}
+
+#[test]
+fn sql169_quiet_for_known_role() {
+    use dsl_analysis::run;
+    let mut cat = cat();
+    cat.roles = vec!["app_user".into(), "postgres".into()];
+    let src = "ALTER TABLE users OWNER TO postgres;";
+    let file = parse(src, Dialect::Postgres);
+    let scopes = resolve_with_source(&file.statements, src);
+    let d = run(src, &file, &scopes, &cat);
+    assert!(!d.iter().any(|x| x.code == "sql169"));
+}
+
+#[test]
+fn sql169_quiet_when_catalog_roles_empty() {
+    // No live connection / no roles loaded -> never fires (avoid noise
+    // when editing offline).
+    let d = diags("ALTER TABLE users OWNER TO whatever;");
+    assert!(!d.iter().any(|x| x.code == "sql169"));
+}
+
+#[test]
+fn sql169_quiet_for_current_user_keyword() {
+    use dsl_analysis::run;
+    let mut cat = cat();
+    cat.roles = vec!["app".into()];
+    let src = "ALTER TABLE users OWNER TO CURRENT_USER;";
+    let file = parse(src, Dialect::Postgres);
+    let scopes = resolve_with_source(&file.statements, src);
+    let d = run(src, &file, &scopes, &cat);
+    assert!(!d.iter().any(|x| x.code == "sql169"));
 }
 
 // ===== sql089 multiple RAISE EXCEPTION =====================================

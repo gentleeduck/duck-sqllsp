@@ -14,6 +14,12 @@ pub struct Catalog {
     /// catalog snapshots continue to deserialise.
     #[serde(default)]
     pub types: Vec<Type>,
+    /// Role names from `pg_roles` -- consumed by sql169
+    /// owner_to_unknown_role and by completion / hover of GRANT TO /
+    /// OWNER TO. Default empty so cached catalogs remain forward-
+    /// compatible.
+    #[serde(default)]
+    pub roles: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

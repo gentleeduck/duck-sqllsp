@@ -61,6 +61,7 @@ pub fn from_file(file: &ParsedFile) -> Catalog {
         schemas,
         functions: Vec::new(),
         types: Vec::new(),
+        roles: Vec::new(),
     }
 }
 

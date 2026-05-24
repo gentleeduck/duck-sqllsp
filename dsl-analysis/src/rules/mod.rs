@@ -74,6 +74,7 @@ pub mod nullif_same_args;
 pub mod numeric_no_precision;
 pub mod order_by_position;
 pub mod order_by_random;
+pub mod owner_to_unknown_role;
 pub mod perform_for_pure_select;
 pub mod prefer_alias;
 pub mod raise_arg_count;
@@ -244,5 +245,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(redundant_index_on_pk::Rule),
         Box::new(begin_no_lock_mode::Rule),
         Box::new(redundant_unique_index::Rule),
+        Box::new(owner_to_unknown_role::Rule),
     ]
 }

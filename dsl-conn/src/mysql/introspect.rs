@@ -194,6 +194,7 @@ pub async fn run(pool: &MySqlPool, spec: &ConnectionSpec) -> Result<Catalog, Dri
         schemas: schemas.into_values().collect(),
         functions: Vec::new(), // TODO: information_schema.routines
         types: Vec::new(),
+        roles: Vec::new(),
     })
 }
 
