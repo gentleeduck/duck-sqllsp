@@ -2213,3 +2213,49 @@ fn sql127_quiet_for_plain_update() {
     let d = diags("UPDATE users SET name = 'x' WHERE id = 1;");
     assert!(!d.iter().any(|x| x.code == "sql127"));
 }
+
+// ===== sql119 SET TRANSACTION ISOLATION not first ==========================
+
+#[test]
+fn sql119_flags_set_iso_after_select() {
+    let d = diags("BEGIN; SELECT 1; SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;");
+    assert!(d.iter().any(|x| x.code == "sql119"));
+}
+
+#[test]
+fn sql119_quiet_when_first_after_begin() {
+    let d = diags("BEGIN; SET TRANSACTION ISOLATION LEVEL SERIALIZABLE; SELECT 1;");
+    assert!(!d.iter().any(|x| x.code == "sql119"));
+}
+
+#[test]
+fn sql119_quiet_when_no_begin() {
+    let d = diags("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;");
+    assert!(!d.iter().any(|x| x.code == "sql119"));
+}
+
+// ===== sql131 RAISE message has more placeholders than args ================
+
+#[test]
+fn sql131_flags_missing_arg() {
+    let d = diags("CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RAISE NOTICE 'value is %s'; END $$;");
+    assert!(d.iter().any(|x| x.code == "sql131"));
+}
+
+#[test]
+fn sql131_quiet_when_args_match() {
+    let d = diags("CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RAISE NOTICE 'value is %s', 'x'; END $$;");
+    assert!(!d.iter().any(|x| x.code == "sql131"));
+}
+
+#[test]
+fn sql131_quiet_when_no_placeholder() {
+    let d = diags("CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RAISE NOTICE 'plain message'; END $$;");
+    assert!(!d.iter().any(|x| x.code == "sql131"));
+}
+
+#[test]
+fn sql131_quiet_for_escaped_percent() {
+    let d = diags("CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RAISE NOTICE '100%%'; END $$;");
+    assert!(!d.iter().any(|x| x.code == "sql131"));
+}
