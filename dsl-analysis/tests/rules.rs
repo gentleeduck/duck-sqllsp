@@ -2637,3 +2637,43 @@ fn sql150_range_points_at_case_keyword() {
     let e: u32 = hit.range.end().into();
     assert_eq!(&src[s as usize..e as usize].to_ascii_uppercase(), "CASE");
 }
+
+// ===== sql149 UPDATE SET x = x =============================================
+
+#[test]
+fn sql149_flags_self_assignment() {
+    let d = diags("UPDATE users SET name = name WHERE id = 1;");
+    assert!(d.iter().any(|x| x.code == "sql149"));
+}
+
+#[test]
+fn sql149_quiet_for_normal_set() {
+    let d = diags("UPDATE users SET name = 'x' WHERE id = 1;");
+    assert!(!d.iter().any(|x| x.code == "sql149"));
+}
+
+#[test]
+fn sql149_flags_qualified_self_assignment() {
+    let d = diags("UPDATE users SET u.name = u.name WHERE u.id = 1;");
+    assert!(d.iter().any(|x| x.code == "sql149"));
+}
+
+// ===== sql143 RETURNING without INTO inside plpgsql ========================
+
+#[test]
+fn sql143_flags_returning_no_into() {
+    let d = diags("CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN INSERT INTO users (email) VALUES ('a@b.com') RETURNING id; END $$;");
+    assert!(d.iter().any(|x| x.code == "sql143"));
+}
+
+#[test]
+fn sql143_quiet_when_into_present() {
+    let d = diags("CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ DECLARE new_id uuid; BEGIN INSERT INTO users (email) VALUES ('a@b.com') RETURNING id INTO new_id; END $$;");
+    assert!(!d.iter().any(|x| x.code == "sql143"));
+}
+
+#[test]
+fn sql143_quiet_for_top_level_returning() {
+    let d = diags("INSERT INTO users (email) VALUES ('a@b.com') RETURNING id;");
+    assert!(!d.iter().any(|x| x.code == "sql143"));
+}

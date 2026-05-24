@@ -75,6 +75,7 @@ pub mod raise_message_no_args;
 pub mod redundant_parens;
 pub mod reserved_word_identifier;
 pub mod return_type_literal;
+pub mod returning_no_assign;
 pub mod savepoint_no_release;
 pub mod select_for_update_in_recursive_cte;
 pub mod set_role_no_reset;
@@ -98,6 +99,7 @@ pub mod unknown_column;
 pub mod unreachable_after_return;
 pub mod unresolved_table;
 pub mod update_from_no_pk_filter;
+pub mod update_set_no_change;
 pub mod update_set_unknown_col;
 pub mod vacuum_in_transaction;
 
@@ -203,5 +205,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(array_subscript_zero::Rule),
         Box::new(trigger_when_uses_new_in_delete::Rule),
         Box::new(case_no_else::Rule),
+        Box::new(update_set_no_change::Rule),
+        Box::new(returning_no_assign::Rule),
     ]
 }
