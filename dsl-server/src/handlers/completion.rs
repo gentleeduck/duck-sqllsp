@@ -6,7 +6,7 @@ use crate::state::ServerState;
 use dsl_completion::{complete as engine_complete, Item, ItemKind};
 use tower_lsp::lsp_types::{
     CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams,
-    CompletionResponse, Documentation, MarkupContent, MarkupKind,
+    CompletionResponse, Documentation, InsertTextFormat, MarkupContent, MarkupKind,
 };
 
 pub fn run(state: &ServerState, params: CompletionParams) -> Option<CompletionResponse> {
@@ -44,7 +44,18 @@ fn case_for(kind: ItemKind, style: &Style) -> Case {
 fn to_lsp_item(it: Item, style: &Style) -> CompletionItem {
     let case = case_for(it.kind, style);
     let label = case.apply(&it.label);
-    let insert = case.apply(&it.insert_text);
+    // Snippet insert text must keep `$0` / `${n:label}` placeholders
+    // verbatim; only re-case the function-name prefix before the `(`.
+    let insert = if it.is_snippet {
+        if let Some(paren) = it.insert_text.find('(') {
+            let head = case.apply(&it.insert_text[..paren]);
+            format!("{head}{}", &it.insert_text[paren..])
+        } else {
+            it.insert_text.clone()
+        }
+    } else {
+        case.apply(&it.insert_text)
+    };
     // `sortText` is a string; clients compare lexicographically. Use a
     // single ASCII digit prefix (0..9) so lower `sort_priority` wins.
     // The label tail breaks ties alphabetically within the same prio.
@@ -64,6 +75,11 @@ fn to_lsp_item(it: Item, style: &Style) -> CompletionItem {
             })
         }),
         insert_text: Some(insert),
+        insert_text_format: if it.is_snippet {
+            Some(InsertTextFormat::SNIPPET)
+        } else {
+            None
+        },
         sort_text: Some(sort_text),
         ..Default::default()
     }

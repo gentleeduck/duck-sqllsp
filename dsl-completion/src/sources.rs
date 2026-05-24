@@ -50,6 +50,7 @@ pub fn db_types(cat: &Catalog, out: &mut Vec<Item>) {
             description: Some(format!("{} (db)", t.schema)),
             documentation_md: Some(doc),
             insert_text: t.name.clone(),
+            is_snippet: false,
             sort_priority: 5,
         });
     }
@@ -71,13 +72,19 @@ pub fn db_functions(cat: &Catalog, out: &mut Vec<Item>) {
             "**DB function** `{}.{}`\n\n```sql\n{}\n```\n",
             f.schema, f.name, signature
         );
+        let insert_text = if f.arguments.is_empty() {
+            format!("{}()", f.name)
+        } else {
+            format!("{}($0)", f.name)
+        };
         out.push(Item {
             label: f.name.clone(),
             kind: ItemKind::Function,
             detail: Some(signature),
             description: Some(format!("{} (db)", f.schema)),
             documentation_md: Some(doc),
-            insert_text: f.name.clone(),
+            insert_text,
+            is_snippet: !f.arguments.is_empty(),
             sort_priority: 5,
         });
     }
@@ -233,6 +240,7 @@ pub fn new_old_aliases(out: &mut Vec<Item>) {
                 .into(),
         ),
         insert_text: "NEW".into(),
+            is_snippet: false,
             sort_priority: 5,
     });
     out.push(Item {
@@ -246,6 +254,7 @@ pub fn new_old_aliases(out: &mut Vec<Item>) {
                 .into(),
         ),
         insert_text: "OLD".into(),
+            is_snippet: false,
             sort_priority: 5,
     });
 }
@@ -285,6 +294,7 @@ pub fn aliases_in_scope(scope: &Scope, out: &mut Vec<Item>) {
                 b.alias, b.table.name,
             )),
             insert_text: b.alias.clone(),
+            is_snippet: false,
             sort_priority: 1,
         });
     }
@@ -342,6 +352,7 @@ pub fn schemas(cat: &Catalog, out: &mut Vec<Item>) {
             description: Some("schema".into()),
             documentation_md: None,
             insert_text: s.name.clone(),
+            is_snippet: false,
             sort_priority: 5,
         });
     }
@@ -384,6 +395,7 @@ fn table_item(t: &Table) -> Item {
         description: Some(t.schema.clone()),
         documentation_md: Some(render::table(t)),
         insert_text: t.name.clone(),
+            is_snippet: false,
             sort_priority: 5,
     }
 }
@@ -396,6 +408,7 @@ pub fn column_item(t: &Table, c: &Column) -> Item {
         description: Some(t.name.clone()),
         documentation_md: Some(render::column(t, c)),
         insert_text: c.name.clone(),
+            is_snippet: false,
             sort_priority: 5,
     }
 }
@@ -412,13 +425,36 @@ fn from_entry(label: &str, e: &Entry, kind: ItemKind) -> Item {
             let first_line = e.doc.lines().next().unwrap_or("").trim();
             if first_line.is_empty() { None } else { Some(first_line.to_string()) }
         });
+    // For built-in functions, emit a snippet template like `length($0)`
+    // so the editor inserts `length(<cursor>)` and the user only types
+    // the argument. Zero-arg functions still get bare `name()`.
+    let (insert_text, is_snippet) = if kind == ItemKind::Function {
+        // Empty-paren check: if signature ends in `()` -> no args.
+        let zero_args = e.signature
+            .map(|s| {
+                let trimmed = s.trim_end_matches(|c: char| c == ' ' || c == '\t');
+                trimmed.contains("()") || trimmed.ends_with("() -> ")
+                    || trimmed.split_once("(")
+                        .map(|(_, rest)| rest.trim_start().starts_with(')'))
+                        .unwrap_or(false)
+            })
+            .unwrap_or(false);
+        if zero_args {
+            (format!("{label}()"), false)
+        } else {
+            (format!("{label}($0)"), true)
+        }
+    } else {
+        (label.to_string(), false)
+    };
     Item {
         label: label.to_string(),
         kind,
         detail,
         description: None,
         documentation_md: Some(kb::render_markdown(e)),
-        insert_text: label.to_string(),
-            sort_priority: 5,
+        insert_text,
+        is_snippet,
+        sort_priority: 5,
     }
 }

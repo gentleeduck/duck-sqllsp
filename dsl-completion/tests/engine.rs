@@ -623,6 +623,41 @@ fn functions_in_in_predicate() {
     }
 }
 
+// ===== function snippet insertion =========================================
+
+#[test]
+fn built_in_function_inserts_with_snippet_placeholder() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT  FROM users;";
+    let cur = "SELECT ".len();
+    let items = complete_at(src, cur, &cat);
+    let length = items.iter().find(|i| i.label == "length").expect("length");
+    assert!(length.is_snippet, "length should be a snippet");
+    assert_eq!(length.insert_text, "length($0)");
+}
+
+#[test]
+fn zero_arg_function_inserts_bare_parens() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT  FROM users;";
+    let cur = "SELECT ".len();
+    let items = complete_at(src, cur, &cat);
+    let now = items.iter().find(|i| i.label == "now").expect("now");
+    assert!(!now.is_snippet, "now() takes no args, not a snippet");
+    assert_eq!(now.insert_text, "now()");
+}
+
+#[test]
+fn non_function_items_are_not_snippets() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT * FROM ";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    let users = items.iter().find(|i| i.label == "users").expect("users");
+    assert!(!users.is_snippet);
+    assert_eq!(users.insert_text, "users");
+}
+
 #[test]
 fn functions_in_plpgsql_assign_rhs() {
     let cat = catalog_with_users_and_orders();

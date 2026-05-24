@@ -92,6 +92,7 @@ pub fn complete(
                             description: None,
                             documentation_md: None,
                             insert_text: col.clone(),
+                            is_snippet: false,
                             sort_priority: 0,
                         });
                     }
@@ -287,6 +288,7 @@ fn route_phase(
                             description: None,
                             documentation_md: None,
                             insert_text: name,
+                            is_snippet: false,
                             sort_priority: 0,
                         });
                     }
@@ -310,6 +312,7 @@ fn route_phase(
                         description: Some("buffer".into()),
                         documentation_md: None,
                         insert_text: name,
+            is_snippet: false,
             sort_priority: 5,
                     });
                 }
