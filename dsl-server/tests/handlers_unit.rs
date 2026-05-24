@@ -126,6 +126,32 @@ fn references_matches_quoted_identifier_case_insensitively() {
 }
 
 #[test]
+fn no_op_update_keeps_parse_cache() {
+    // didChange with byte-identical text (common: format-on-save with
+    // nothing to format) should not invalidate the parse cache.
+    let store = DocumentStore::default();
+    let url: Url = "file:///x.sql".parse().unwrap();
+    let src = "SELECT 1; SELECT 2;".to_string();
+    store.open(url.clone(), src.clone(), 1);
+    let before = store.get(&url).unwrap().parsed();
+    store.update(&url, src.clone(), 2);
+    let after = store.get(&url).unwrap().parsed();
+    assert!(std::sync::Arc::ptr_eq(&before, &after), "Arc should be reused");
+    assert_eq!(store.get(&url).unwrap().version, 2, "version bumps even on no-op");
+}
+
+#[test]
+fn changed_update_invalidates_parse_cache() {
+    let store = DocumentStore::default();
+    let url: Url = "file:///x.sql".parse().unwrap();
+    store.open(url.clone(), "SELECT 1;".into(), 1);
+    let before = store.get(&url).unwrap().parsed();
+    store.update(&url, "SELECT 2;".into(), 2);
+    let after = store.get(&url).unwrap().parsed();
+    assert!(!std::sync::Arc::ptr_eq(&before, &after), "real edit should reparse");
+}
+
+#[test]
 fn references_walks_every_open_buffer() {
     use tower_lsp::lsp_types::{
         PartialResultParams, ReferenceContext, ReferenceParams, TextDocumentIdentifier,

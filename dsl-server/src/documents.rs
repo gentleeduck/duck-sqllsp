@@ -95,6 +95,16 @@ impl DocumentStore {
 
     pub fn update(&self, uri: &Url, text: String, version: i32) {
         if let Some(mut d) = self.docs.get_mut(uri) {
+            // Incremental fast-path: editors regularly re-send an
+            // identical full buffer (format-on-save with no diff, save
+            // hooks, autosave-on-blur). Skip rope rebuild + parse
+            // invalidation when bytes are unchanged -- only bump the
+            // version. Any in-flight handler keyed to the old version
+            // is correct for the new one too.
+            if d.text == text {
+                d.version = version;
+                return;
+            }
             d.text = text;
             d.rope = Rope::from_str(&d.text);
             d.version = version;
