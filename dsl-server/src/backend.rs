@@ -115,6 +115,17 @@ impl LanguageServer for Backend {
     self.state.documents.close(&params.text_document.uri);
   }
 
+  async fn did_save(&self, _params: DidSaveTextDocumentParams) {
+    // Buffer saved to disk -- rescan the workspace .sql files so the
+    // offline catalog (used by other open files' completion / hover /
+    // diagnostics) sees the new CREATE TABLE / FUNCTION / TRIGGER /
+    // etc immediately, without waiting on a watched-file notification.
+    let state = self.state.clone();
+    tokio::spawn(async move {
+      state.rescan_workspace_offline();
+    });
+  }
+
   async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
     Ok(handlers::completion::run(&self.state, params))
   }
