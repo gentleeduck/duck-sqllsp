@@ -2821,6 +2821,46 @@ fn golden_audit_log_table_zero_warnings() {
         unexpected.iter().map(|x| (&x.code, &x.message)).collect::<Vec<_>>());
 }
 
+// ===== sql151 missing LATERAL ==============================================
+
+#[test]
+fn sql151_flags_fn_in_from_using_outer_col() {
+    let d = diags("SELECT * FROM users u, generate_series(u.id, 10);");
+    assert!(d.iter().any(|x| x.code == "sql151"));
+}
+
+#[test]
+fn sql151_quiet_with_lateral() {
+    let d = diags("SELECT * FROM users u, LATERAL generate_series(u.id, 10);");
+    assert!(!d.iter().any(|x| x.code == "sql151"));
+}
+
+#[test]
+fn sql151_quiet_when_fn_takes_constants() {
+    let d = diags("SELECT * FROM users u, generate_series(1, 10);");
+    assert!(!d.iter().any(|x| x.code == "sql151"));
+}
+
+// ===== sql166 ROW(x) single-element constructor ============================
+
+#[test]
+fn sql166_flags_single_element_row() {
+    let d = diags("SELECT ROW(id) FROM users;");
+    assert!(d.iter().any(|x| x.code == "sql166"));
+}
+
+#[test]
+fn sql166_quiet_for_multi_element_row() {
+    let d = diags("SELECT ROW(id, email) FROM users;");
+    assert!(!d.iter().any(|x| x.code == "sql166"));
+}
+
+#[test]
+fn sql166_quiet_for_implicit_tuple() {
+    let d = diags("SELECT (id) FROM users;");
+    assert!(!d.iter().any(|x| x.code == "sql166"));
+}
+
 #[test]
 fn golden_user_roles_unique_pair_zero_warnings() {
     let src = r#"CREATE TABLE user_roles (

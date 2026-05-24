@@ -57,6 +57,7 @@ pub mod listen_unbounded;
 pub mod limit_without_order;
 pub mod lock_table_no_tx;
 pub mod long_in_list;
+pub mod missing_lateral;
 pub mod missing_primary_key;
 pub mod missing_trigger_return;
 pub mod multi_raise_exception;
@@ -82,6 +83,7 @@ pub mod reserved_word_identifier;
 pub mod return_type_literal;
 pub mod returning_no_assign;
 pub mod returning_with_truncate;
+pub mod row_constructor_single;
 pub mod row_count_after_dml;
 pub mod savepoint_no_release;
 pub mod select_for_update_in_recursive_cte;
@@ -234,5 +236,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(trigger_stmt_uses_new::Rule),
         Box::new(count_star_returns_one::Rule),
         Box::new(text_int_arithmetic::Rule),
+        Box::new(missing_lateral::Rule),
+        Box::new(row_constructor_single::Rule),
     ]
 }
