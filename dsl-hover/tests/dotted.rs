@@ -150,3 +150,41 @@ fn hover_on_schema_qualified_table_card() {
     let md = hover_at(src, cur).expect("schema.table hover should resolve");
     assert!(md.contains("users"), "expected users-table card; got: {md}");
 }
+
+// ===== sequence hover via nextval('...') / currval / setval ===============
+
+#[test]
+fn hover_on_sequence_in_nextval() {
+    let src = "SELECT nextval('user_id_seq') FROM users;";
+    let cur = src.find("user_id_seq").unwrap() + 3;
+    let md = hover_at(src, cur).expect("nextval seq hover");
+    assert!(md.contains("Sequence"), "expected sequence card; got: {md}");
+    assert!(md.contains("user_id_seq"));
+    assert!(md.contains("nextval"));
+}
+
+#[test]
+fn hover_on_sequence_in_currval() {
+    let src = "SELECT currval('audit_log_id_seq');";
+    let cur = src.find("audit_log_id_seq").unwrap();
+    let md = hover_at(src, cur).expect("currval seq hover");
+    assert!(md.contains("audit_log_id_seq"));
+}
+
+#[test]
+fn hover_on_sequence_in_setval() {
+    let src = "SELECT setval('thing_seq', 42);";
+    let cur = src.find("thing_seq").unwrap() + 4;
+    let md = hover_at(src, cur).expect("setval seq hover");
+    assert!(md.contains("thing_seq"));
+}
+
+#[test]
+fn hover_on_non_sequence_string_returns_no_seq_card() {
+    let src = "SELECT * FROM users WHERE name = 'admin';";
+    let cur = src.find("admin").unwrap();
+    let md = hover_at(src, cur);
+    if let Some(md) = md {
+        assert!(!md.contains("Sequence"), "should not be a sequence card");
+    }
+}

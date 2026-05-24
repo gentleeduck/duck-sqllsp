@@ -65,6 +65,12 @@ pub fn hover_with(
     if let Some(md) = ddl::column_decl_at(&parsed, source, offset) {
         return Some(md);
     }
+    // Sequence reference inside `nextval('seq_name')` / `currval(...)`
+    // / `setval(...)` — when the cursor sits on the literal sequence
+    // name, return a card describing it.
+    if let Some(md) = sequence_ref_at(source, offset) {
+        return Some(md);
+    }
 
     if let Some(tok) = token::token_at(source, offset) {
         // Dotted token `a.b` -- narrow to the side under the cursor.
@@ -704,4 +710,48 @@ fn stmt_end(source: &str, mut i: usize) -> usize {
         }
     }
     n
+}
+
+/// `nextval('seq')`, `currval('seq')`, `setval('seq', 1)` — when the
+/// cursor sits inside the single-quoted sequence-name literal, return
+/// a sequence card. Returns None when not in such a context.
+fn sequence_ref_at(source: &str, offset: TextSize) -> Option<String> {
+    let pos: usize = u32::from(offset) as usize;
+    let bytes = source.as_bytes();
+    let n = bytes.len();
+    if pos >= n { return None; }
+    // Walk back to the opening `'` of the string the cursor is in.
+    let mut s = pos;
+    while s > 0 && bytes[s - 1] != b'\'' { s -= 1; }
+    if s == 0 || bytes[s - 1] != b'\'' { return None; }
+    // Walk forward to the closing `'`.
+    let mut e = pos;
+    while e < n && bytes[e] != b'\'' { e += 1; }
+    if e == n { return None; }
+    let literal = &source[s..e];
+    if literal.is_empty() { return None; }
+    // The literal must look like an identifier (sequence name).
+    if !literal.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '.') {
+        return None;
+    }
+    // Walk back from the opening `'` over whitespace, expect `(`, then
+    // walk back over whitespace, expect `NEXTVAL` / `CURRVAL` / `SETVAL`.
+    let mut k = s.saturating_sub(1);
+    while k > 0 && bytes[k - 1].is_ascii_whitespace() { k -= 1; }
+    if k == 0 || bytes[k - 1] != b'(' { return None; }
+    k -= 1;
+    let kw_end = k;
+    while k > 0 && (bytes[k - 1].is_ascii_alphabetic() || bytes[k - 1] == b'_') {
+        k -= 1;
+    }
+    let kw = source[k..kw_end].to_ascii_uppercase();
+    if !matches!(kw.as_str(), "NEXTVAL" | "CURRVAL" | "SETVAL" | "LASTVAL") {
+        return None;
+    }
+    let qualified = literal;
+    let bare = qualified.rsplit('.').next().unwrap_or(qualified);
+    Some(format!(
+        "```sql\n-- Sequence: {qualified}\n-- referenced by {kw_lc}('{qualified}')\n\nCREATE SEQUENCE {bare};\n```\n",
+        kw_lc = kw.to_ascii_lowercase(),
+    ))
 }

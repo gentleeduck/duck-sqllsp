@@ -256,6 +256,40 @@ fn signature_help_for_length_renders_signature() {
 }
 
 #[test]
+fn completion_snippet_item_has_expands_to_preview() {
+    use tower_lsp::lsp_types::{
+        CompletionParams, PartialResultParams, TextDocumentIdentifier,
+        TextDocumentPositionParams, WorkDoneProgressParams, CompletionResponse,
+        Documentation,
+    };
+    let (state, url) = state_with("file:///snip.sql", "");
+    let resp = completion::run(&state, CompletionParams {
+        text_document_position: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: url },
+            position: Position { line: 0, character: 0 },
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+        context: None,
+    }).expect("completion result");
+    let items = match resp {
+        CompletionResponse::Array(a) => a,
+        CompletionResponse::List(l) => l.items,
+    };
+    let it = items.iter().find(|i| i.label.eq_ignore_ascii_case("ctable"))
+        .expect("ctable snippet");
+    let doc = it.documentation.as_ref().expect("snippet doc set");
+    let text = match doc {
+        Documentation::MarkupContent(m) => m.value.clone(),
+        Documentation::String(s) => s.clone(),
+    };
+    assert!(text.contains("Expands to"),
+        "snippet doc should preview the expansion; got: {text}");
+    assert!(text.to_lowercase().contains("create table name"),
+        "preview should show placeholder labels stripped of ${{}}; got: {text}");
+}
+
+#[test]
 fn signature_help_for_char_length_renders_signature() {
     use tower_lsp::lsp_types::{SignatureHelpParams, TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams};
     let src = "SELECT char_length() FROM users;";
