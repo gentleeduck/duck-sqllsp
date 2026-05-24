@@ -66,3 +66,34 @@ fn cte_columns_lookup_returns_none_for_unknown_cte() {
     let scopes = resolve(&p.statements);
     assert!(scopes[0].cte_columns_of("nope").is_none());
 }
+
+#[test]
+fn resolve_with_source_extracts_cte_projection_columns() {
+    use dsl_resolve::resolve_with_source;
+    let src = "WITH t AS (SELECT id, email FROM users) SELECT * FROM t;";
+    let p = parse(src, Dialect::Postgres);
+    let scopes = resolve_with_source(&p.statements, src);
+    let cols = scopes[0].cte_columns_of("t").expect("t declared");
+    assert!(cols.contains(&"id".to_string()), "got {cols:?}");
+    assert!(cols.contains(&"email".to_string()), "got {cols:?}");
+}
+
+#[test]
+fn resolve_with_source_uses_explicit_column_list_when_present() {
+    use dsl_resolve::resolve_with_source;
+    let src = "WITH t(a, b) AS (SELECT id, email FROM users) SELECT * FROM t;";
+    let p = parse(src, Dialect::Postgres);
+    let scopes = resolve_with_source(&p.statements, src);
+    let cols = scopes[0].cte_columns_of("t").expect("t declared");
+    assert_eq!(cols, &vec!["a".to_string(), "b".to_string()]);
+}
+
+#[test]
+fn resolve_with_source_handles_alias_with_as() {
+    use dsl_resolve::resolve_with_source;
+    let src = "WITH t AS (SELECT count(*) AS total FROM users) SELECT * FROM t;";
+    let p = parse(src, Dialect::Postgres);
+    let scopes = resolve_with_source(&p.statements, src);
+    let cols = scopes[0].cte_columns_of("t").expect("t declared");
+    assert!(cols.contains(&"total".to_string()), "got {cols:?}");
+}
