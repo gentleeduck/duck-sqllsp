@@ -2345,3 +2345,43 @@ fn sql136_quiet_with_csv_keyword() {
     let d = diags("COPY users FROM '/tmp/users.csv' CSV;");
     assert!(!d.iter().any(|x| x.code == "sql136"));
 }
+
+// ===== sql132 FOR UPDATE in recursive CTE ==================================
+
+#[test]
+fn sql132_flags_for_update_in_recursive_cte() {
+    let d = diags("WITH RECURSIVE t AS (SELECT 1 UNION SELECT id FROM users FOR UPDATE) SELECT * FROM t;");
+    assert!(d.iter().any(|x| x.code == "sql132"));
+}
+
+#[test]
+fn sql132_quiet_for_non_recursive_cte() {
+    let d = diags("WITH t AS (SELECT id FROM users FOR UPDATE) SELECT * FROM t;");
+    assert!(!d.iter().any(|x| x.code == "sql132"));
+}
+
+#[test]
+fn sql132_quiet_when_no_for_update() {
+    let d = diags("WITH RECURSIVE t AS (SELECT 1 UNION SELECT id FROM users) SELECT * FROM t;");
+    assert!(!d.iter().any(|x| x.code == "sql132"));
+}
+
+// ===== sql137 LISTEN without UNLISTEN ======================================
+
+#[test]
+fn sql137_flags_bare_listen() {
+    let d = diags("LISTEN events;");
+    assert!(d.iter().any(|x| x.code == "sql137"));
+}
+
+#[test]
+fn sql137_quiet_when_unlisten_follows() {
+    let d = diags("LISTEN events; SELECT 1; UNLISTEN events;");
+    assert!(!d.iter().any(|x| x.code == "sql137"));
+}
+
+#[test]
+fn sql137_quiet_when_unlisten_star_follows() {
+    let d = diags("LISTEN events; SELECT 1; UNLISTEN *;");
+    assert!(!d.iter().any(|x| x.code == "sql137"));
+}
