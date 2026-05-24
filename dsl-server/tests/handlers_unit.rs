@@ -223,6 +223,61 @@ fn rename_rejects_invalid_identifier() {
 }
 
 #[test]
+fn inlay_guesses_join_predicate_without_fk() {
+    // No live catalog, no parsed CREATE TABLE constraints -> source_tables
+    // derives the schema but with zero FKs. Inlay must still surface a
+    // heuristic ON for a JOIN whose schema follows the `*_id` convention.
+    use tower_lsp::lsp_types::{InlayHintParams, Range, TextDocumentIdentifier, WorkDoneProgressParams};
+    let src = "\
+CREATE TABLE users  (id INT);
+CREATE TABLE orders (id INT, user_id INT);
+SELECT * FROM orders o JOIN users u;
+";
+    let (state, url) = state_with("file:///j.sql", src);
+    let hints = inlay_hints::run(&state, InlayHintParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        range: Range {
+            start: Position { line: 0, character: 0 },
+            end:   Position { line: 10, character: 0 },
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+    }).expect("inlay");
+    let any_join_hint = hints.iter().any(|h| match &h.label {
+        tower_lsp::lsp_types::InlayHintLabel::String(s) =>
+            s.contains("user_id") && s.contains("id") && s.contains("?"),
+        _ => false,
+    });
+    assert!(any_join_hint, "expected heuristic JOIN ON hint, got: {hints:?}");
+}
+
+#[test]
+fn inlay_falls_back_to_question_marks_when_no_overlap() {
+    // Two tables with no column overlap and no convention match. The
+    // hint should still surface as `???  -- missing ON` so the user is
+    // nudged about the JOIN that lacks a predicate.
+    use tower_lsp::lsp_types::{InlayHintParams, Range, TextDocumentIdentifier, WorkDoneProgressParams};
+    let src = "\
+CREATE TABLE alpha (x INT);
+CREATE TABLE beta  (y INT);
+SELECT * FROM alpha a JOIN beta b;
+";
+    let (state, url) = state_with("file:///jx.sql", src);
+    let hints = inlay_hints::run(&state, InlayHintParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        range: Range {
+            start: Position { line: 0, character: 0 },
+            end:   Position { line: 10, character: 0 },
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+    }).expect("inlay");
+    let any_missing_on = hints.iter().any(|h| match &h.label {
+        tower_lsp::lsp_types::InlayHintLabel::String(s) => s.contains("missing ON"),
+        _ => false,
+    });
+    assert!(any_missing_on, "expected `missing ON` hint when no overlap, got: {hints:?}");
+}
+
+#[test]
 fn inlay_expands_select_star_against_buffer_table() {
     use tower_lsp::lsp_types::{InlayHintParams, Range, TextDocumentIdentifier, WorkDoneProgressParams};
     let src = "CREATE TABLE t (a INT, b INT);\nSELECT * FROM t;";

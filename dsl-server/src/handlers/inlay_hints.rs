@@ -19,9 +19,14 @@ use tower_lsp::lsp_types::{
 pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint>> {
     let uri = params.text_document.uri;
     let doc = state.documents.get(&uri)?;
-    let cat = state.catalog.read().clone();
+    let live = state.catalog.read().clone();
     let cache = doc.parsed();
     let parsed = &cache.file;
+    // Merge live catalog with buffer-derived tables so JOIN-on heuristics
+    // can see fresh CREATE TABLE bodies (and tests with no live catalog
+    // still resolve to a column list).
+    let derived = dsl_completion::source_tables::from_file(parsed);
+    let cat = dsl_completion::source_tables::merge(&live, &derived);
 
     // Also resolve against buffer-defined tables so a fresh `CREATE TABLE`
     // expands its columns immediately without needing a DB round-trip.
@@ -120,51 +125,166 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
         }
     }
 
-    // JOIN with missing / minimal ON-clause: when an FK relates the
-    // two tables, surface ` -- t.user_id = u.id` next to the JOIN
-    // keyword as a guess of the missing predicate.
-    for stmt in &parsed.statements {
-        let StatementKind::Select(sel) = &stmt.kind else { continue };
-        if sel.joins.is_empty() { continue; }
-        if sel.from.is_empty() { continue; }
-        // Build alias -> table lookup for the FROM table.
-        let from = &sel.from[0];
-        let from_table = cat.find_table(from.schema.as_deref(), &from.name);
-        let from_alias = from.alias.clone().unwrap_or_else(|| from.name.clone());
-        for j in &sel.joins {
-            // Skip joins that already have a non-trivial ON.
-            if j.on.is_some() { continue; }
-            let join_table = cat.find_table(j.table.schema.as_deref(), &j.table.name);
-            let join_alias = j.table.alias.clone().unwrap_or_else(|| j.table.name.clone());
-            // Walk both directions: from->join, join->from. Look for a
-            // single-column FK linking the two.
-            let predicate = find_fk_predicate(from_table, &from_alias, join_table, &join_alias)
-                .or_else(|| find_fk_predicate(join_table, &join_alias, from_table, &from_alias));
-            let Some(pred) = predicate else { continue };
-            // Place the hint after the JOIN's table name.
-            let stmt_start: u32 = stmt.range.start().into();
-            let stmt_end: u32 = stmt.range.end().into();
-            let body = &doc.text[stmt_start as usize..(stmt_end as usize).min(doc.text.len())];
-            // First "JOIN" keyword after FROM is good enough as an anchor.
-            let join_idx = body.to_ascii_uppercase().find(" JOIN ");
-            if let Some(idx) = join_idx {
-                let pos_byte = stmt_start as usize + idx + 6 + j.table.name.len() + 1;
-                let pos = byte_to_position(&doc.rope, pos_byte.min(doc.text.len()));
-                hints.push(InlayHint {
-                    position: pos,
-                    label: InlayHintLabel::String(format!("  -- ON {pred}")),
-                    kind: Some(InlayHintKind::TYPE),
-                    text_edits: None,
-                    tooltip: None,
-                    padding_left: Some(false),
-                    padding_right: Some(false),
-                    data: None,
-                });
-            }
-        }
+    // JOIN with missing / minimal ON-clause: surface a guessed ` -- ON
+    // t.user_id = u.id` next to each JOIN that has no ON/USING. Text-
+    // scan rather than parser-based so we still fire on the incomplete
+    // SQL the user is writing (a JOIN without ON usually does not parse,
+    // so the AST branch would skip exactly the case we care about).
+    for missing in scan_joins_missing_on(&doc.text) {
+        let pred = predicate_for_join(&cat, &missing);
+        let pos = byte_to_position(&doc.rope, missing.hint_pos.min(doc.text.len()));
+        hints.push(InlayHint {
+            position: pos,
+            label: InlayHintLabel::String(format!("  -- ON {pred}")),
+            kind: Some(InlayHintKind::TYPE),
+            text_edits: None,
+            tooltip: None,
+            padding_left: Some(false),
+            padding_right: Some(false),
+            data: None,
+        });
     }
 
     if hints.is_empty() { None } else { Some(hints) }
+}
+
+/// A JOIN clause located in the buffer text that lacks an ON / USING
+/// predicate. Carries both sides' table names + aliases, plus the byte
+/// position where the hint should land (right after the JOIN's table /
+/// alias declaration).
+#[derive(Debug)]
+struct MissingOnJoin {
+    from_name: String,
+    from_alias: String,
+    join_name: String,
+    join_alias: String,
+    hint_pos: usize,
+}
+
+/// Walk `src` looking for `FROM <tbl> [alias] JOIN <tbl2> [alias2]`
+/// segments where the next non-whitespace token is not ON / USING.
+/// Each match becomes a `MissingOnJoin`. Token-level scan; doesn't try
+/// to be a full parser, just covers the common one-JOIN case.
+fn scan_joins_missing_on(src: &str) -> Vec<MissingOnJoin> {
+    let mut out = Vec::new();
+    let upper = src.to_ascii_uppercase();
+    let mut cursor = 0usize;
+    while let Some(rel_from) = upper[cursor..].find(" FROM ") {
+        let from_at = cursor + rel_from + 6;
+        let (from_name, from_alias, after_from) = read_table_decl(src, from_at);
+        if from_name.is_empty() { cursor = from_at; continue; }
+        // Scan forward looking for the next JOIN before a statement-
+        // terminating semicolon / new SELECT / WHERE etc.
+        let stop_re = ["WHERE ", "GROUP ", "ORDER ", "LIMIT ", "HAVING ", "OFFSET ", "RETURNING ", ";"];
+        let mut k = after_from;
+        // Loop multiple JOINs after the same FROM.
+        let mut current_from_name = from_name.clone();
+        let mut current_from_alias = from_alias.clone();
+        while k < src.len() {
+            // Bail if a stop-keyword arrives first.
+            let upper_tail = upper[k..].trim_start();
+            let consumed = upper[k..].len() - upper_tail.len();
+            if stop_re.iter().any(|kw| upper_tail.starts_with(kw)) { break; }
+            // Locate the next JOIN keyword.
+            let Some(rel_join) = upper[k..].find("JOIN ") else { break };
+            let join_at = k + rel_join + 5;
+            // Skip CROSS JOIN -- those legitimately lack ON.
+            let prefix = upper[k..k + rel_join].trim_end();
+            if prefix.ends_with("CROSS") { k = join_at; continue; }
+            let (join_name, join_alias, after_join) = read_table_decl(src, join_at);
+            if join_name.is_empty() { k = join_at; break; }
+            // What comes after the join table decl?
+            let tail = upper[after_join..].trim_start();
+            let already_has_predicate = tail.starts_with("ON ")
+                || tail.starts_with("ON(")
+                || tail.starts_with("USING ")
+                || tail.starts_with("USING(");
+            if !already_has_predicate {
+                out.push(MissingOnJoin {
+                    from_name: current_from_name.clone(),
+                    from_alias: current_from_alias.clone(),
+                    join_name: join_name.clone(),
+                    join_alias: join_alias.clone(),
+                    hint_pos: after_join,
+                });
+            }
+            // The right side of this JOIN becomes the FROM target for any
+            // following JOIN.
+            current_from_name = join_name;
+            current_from_alias = join_alias;
+            k = after_join;
+            let _ = consumed;
+        }
+        cursor = after_from;
+    }
+    out
+}
+
+/// Starting at `pos` (after `FROM ` or `JOIN `), read the table name
+/// (possibly schema-qualified or quoted) and an optional alias. Returns
+/// `(table_name, alias, byte_offset_after_decl)`. Alias defaults to the
+/// table's base name when absent. Skips a leading `ONLY` (PG extension).
+fn read_table_decl(src: &str, pos: usize) -> (String, String, usize) {
+    let bytes = src.as_bytes();
+    let mut i = pos;
+    while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1; }
+    // Optional ONLY.
+    let upper_at = src[i..].chars().take(5).collect::<String>().to_ascii_uppercase();
+    if upper_at.starts_with("ONLY ") {
+        i += 5;
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1; }
+    }
+    // Read identifier (possibly quoted, possibly schema.qualified).
+    let id_start = i;
+    while i < bytes.len() {
+        let c = bytes[i] as char;
+        if c.is_alphanumeric() || c == '_' || c == '.' || c == '"' { i += 1; }
+        else { break; }
+    }
+    if id_start == i { return (String::new(), String::new(), pos); }
+    let full = src[id_start..i].trim_matches('"').to_string();
+    let bare = full.rsplit('.').next().unwrap_or(&full).trim_matches('"').to_string();
+    let after_id = i;
+    // Optional alias: AS x, or bare alias x.
+    while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1; }
+    let upper_alias_kw = src[i..].chars().take(3).collect::<String>().to_ascii_uppercase();
+    if upper_alias_kw == "AS " {
+        i += 3;
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1; }
+    }
+    let alias_start = i;
+    while i < bytes.len() {
+        let c = bytes[i] as char;
+        if c.is_alphanumeric() || c == '_' { i += 1; } else { break; }
+    }
+    let alias_raw = &src[alias_start..i];
+    let alias_upper = alias_raw.to_ascii_uppercase();
+    // Reserved-ish words that aren't aliases.
+    let is_alias = !alias_raw.is_empty() && !matches!(
+        alias_upper.as_str(),
+        "JOIN" | "INNER" | "LEFT" | "RIGHT" | "FULL" | "CROSS" | "ON" | "USING"
+        | "WHERE" | "GROUP" | "ORDER" | "LIMIT" | "HAVING" | "OFFSET" | "RETURNING"
+    );
+    if is_alias {
+        (bare.clone(), alias_raw.to_string(), i)
+    } else {
+        (bare.clone(), bare, after_id)
+    }
+}
+
+/// Build the predicate text for an inlay hint, in order of confidence:
+/// real FK (either direction), name-convention guess, shared column,
+/// `???` placeholder.
+fn predicate_for_join(cat: &dsl_catalog::Catalog, j: &MissingOnJoin) -> String {
+    let from_table = cat.find_table(None, &j.from_name);
+    let join_table = cat.find_table(None, &j.join_name);
+    find_fk_predicate(from_table, &j.from_alias, join_table, &j.join_alias)
+        .or_else(|| find_fk_predicate(join_table, &j.join_alias, from_table, &j.from_alias))
+        .or_else(|| guess_join_predicate(
+            from_table, &j.from_alias, &j.from_name,
+            join_table, &j.join_alias, &j.join_name,
+        ))
+        .unwrap_or_else(|| "???  -- missing ON".to_string())
 }
 
 fn find_fk_predicate(
@@ -186,6 +306,72 @@ fn find_fk_predicate(
         ));
     }
     None
+}
+
+/// Catalog has no FK -> guess a JOIN predicate from column names. Two
+/// signals, in order of confidence:
+///
+///   1. Convention: one side has `id` and the other has `<this>_id` or
+///      `<singular(other)>_id`. Postgres / Rails / Django / Ecto all
+///      land here, so this catches a large chunk of real schemas with
+///      no FKs (migrations skipped, intentional denormalisation, etc).
+///   2. Shared column name: both sides expose a column with the exact
+///      same name (e.g. `tenant_id`, `account_id`). Common for
+///      multi-tenant or sharded designs.
+///
+/// Output is annotated with `?` so users can tell the suggestion came
+/// from heuristics rather than a real FK.
+fn guess_join_predicate(
+    from_table: Option<&dsl_catalog::Table>,
+    from_alias: &str,
+    from_name: &str,
+    join_table: Option<&dsl_catalog::Table>,
+    join_alias: &str,
+    join_name: &str,
+) -> Option<String> {
+    let from = from_table?;
+    let join = join_table?;
+    let has = |t: &dsl_catalog::Table, col: &str| -> bool {
+        t.columns.iter().any(|c| c.name.eq_ignore_ascii_case(col))
+    };
+    // Convention check both directions.
+    for (parent_t, parent_a, parent_name, child_t, child_a) in [
+        (from, from_alias, from_name, join, join_alias),
+        (join, join_alias, join_name, from, from_alias),
+    ] {
+        if !has(parent_t, "id") { continue; }
+        // Try `<parent_singular>_id` first (orders.user_id -> users.id),
+        // then `<parent>_id` (rare but real for non-pluralised tables).
+        let singular = singularise(parent_name);
+        for candidate in [format!("{singular}_id"), format!("{}_id", parent_name)] {
+            if has(child_t, &candidate) {
+                return Some(format!("{child_a}.{candidate} = {parent_a}.id  -- ?"));
+            }
+        }
+    }
+    // Shared-column-name fallback. Pick the first column they both expose,
+    // preferring `*_id` so we don't latch onto something trivial like
+    // `created_at`.
+    let mut shared: Vec<&str> = from.columns.iter()
+        .filter(|c| join.columns.iter().any(|jc| jc.name.eq_ignore_ascii_case(&c.name)))
+        .map(|c| c.name.as_str())
+        .collect();
+    shared.sort_by_key(|c| !c.ends_with("_id"));
+    let col = shared.first()?;
+    Some(format!("{from_alias}.{col} = {join_alias}.{col}  -- ?"))
+}
+
+/// Drop a single trailing 's' for the obvious pluralisation case so
+/// `users` -> `user`. Keeps any other word ending untouched (we don't
+/// try to be a real inflector -- the `_id` lookup will still hit the
+/// non-singularised candidate below).
+fn singularise(name: &str) -> String {
+    let lower = name.to_ascii_lowercase();
+    if lower.ends_with('s') && !lower.ends_with("ss") {
+        lower[..lower.len() - 1].to_string()
+    } else {
+        lower
+    }
 }
 
 /// Locate the byte position right *after* each top-level literal in the
