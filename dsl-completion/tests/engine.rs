@@ -1080,6 +1080,36 @@ fn offline_mode_surfaces_default_roles() {
 }
 
 #[test]
+fn select_projection_filters_already_listed_columns() {
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT id,  FROM users;";
+  // Cursor sits right after `id, ` (before "FROM").
+  let cur = src.find(",  FROM").unwrap() + 2;
+  let items = complete_at(src, cur, &cat);
+  let column_labels: Vec<&str> = items
+    .iter()
+    .filter(|i| i.kind == dsl_completion::ItemKind::Column)
+    .map(|i| i.label.as_str())
+    .collect();
+  assert!(!column_labels.contains(&"id"), "id already listed, should be filtered; got: {column_labels:?}");
+  assert!(column_labels.contains(&"email"), "other cols should remain; got: {column_labels:?}");
+}
+
+#[test]
+fn insert_column_list_filters_already_listed() {
+  let cat = catalog_with_users_and_orders();
+  let src = "INSERT INTO users (id, );";
+  let cur = src.find(", )").unwrap() + 2;
+  let items = complete_at(src, cur, &cat);
+  let column_labels: Vec<&str> = items
+    .iter()
+    .filter(|i| i.kind == dsl_completion::ItemKind::Column)
+    .map(|i| i.label.as_str())
+    .collect();
+  assert!(!column_labels.contains(&"id"), "id already in INSERT col list; got: {column_labels:?}");
+}
+
+#[test]
 fn json_path_completion_walks_nested_path() {
   // Buffer has a jsonb default with a nested object; completion at
   // `data->'profile'->'<cursor>'` should surface the nested keys,

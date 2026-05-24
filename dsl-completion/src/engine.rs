@@ -291,11 +291,11 @@ fn route_phase(
     Phase::CtlExpectFkTable {} => {
       sources::tables(cat, &mut out);
     },
-    Phase::CtlCheckExpr { table } => {
-      if let Some(t) = table {
-        sources::columns_of_table(cat, None, &t, &mut out);
+    Phase::CtlCheckExpr { ref table } => {
+      if let Some(t) = table.as_ref() {
+        sources::columns_of_table(cat, None, t, &mut out);
         if out.is_empty() {
-          for name in crate::source_tables::buffer_column_names(source, &t) {
+          for name in crate::source_tables::buffer_column_names(source, t) {
             out.push(crate::item::Item {
               label: name.clone(),
               kind: crate::item::ItemKind::Column,
@@ -312,8 +312,8 @@ fn route_phase(
       push_all_functions(cat, &mut out);
       sources::expression_keywords(&mut out);
     },
-    Phase::CtlExpectFkColumn { table } => {
-      sources::columns_of_table(cat, None, &table, &mut out);
+    Phase::CtlExpectFkColumn { ref table } => {
+      sources::columns_of_table(cat, None, table, &mut out);
       // Fallback: the table being created may not have parsed
       // cleanly yet (cursor inside an unclosed body). Scan the
       // buffer for `CREATE TABLE <table>` and harvest column names
@@ -401,7 +401,199 @@ fn route_phase(
       sources::columns(cat, &mut out);
     },
   }
+  // Filter columns the user already typed in the same comma-list
+  // clause. Applies to projection / SET / GROUP BY / ORDER BY /
+  // INSERT (cols) / CREATE INDEX ON t (cols) / CONSTRAINT (cols) /
+  // RETURNING. Keeps the menu honest -- typing `SELECT id, ` won't
+  // re-offer `id`.
+  if matches!(
+    ph,
+    Phase::SelectProjection
+      | Phase::InProjection
+      | Phase::NextProjection
+      | Phase::GroupByList
+      | Phase::OrderByList
+      | Phase::InsertColumnList
+      | Phase::UpdateAssignment
+  ) {
+    let used = used_columns_in_clause(source, offset);
+    if !used.is_empty() {
+      out.retain(|it| !is_column_listed(it, &used));
+    }
+  }
   dedup_items(out)
+}
+
+/// True for completion items that should be filtered when the column
+/// is already in the current clause's comma list. Matches both bare
+/// columns (`id`) and qualified ones (`u.id`) by checking the tail.
+fn is_column_listed(it: &Item, used: &std::collections::HashSet<String>) -> bool {
+  if !matches!(it.kind, crate::item::ItemKind::Column) {
+    return false;
+  }
+  let tail = it.label.rsplit('.').next().unwrap_or(&it.label);
+  used.contains(&tail.to_ascii_lowercase())
+}
+
+/// Walk back from `offset` to the nearest clause-start anchor
+/// (`SELECT`, `SET`, `GROUP BY`, `ORDER BY`, `RETURNING`, `(`) and
+/// collect every bare identifier (split by top-level `,`) seen
+/// between the anchor and the cursor. Lowercased for case-insensitive
+/// matching. Multi-byte safe: only treats bytes < 128 as ASCII.
+fn used_columns_in_clause(source: &str, offset: TextSize) -> std::collections::HashSet<String> {
+  let pos: usize = u32::from(offset) as usize;
+  let mut pos = pos.min(source.len());
+  while pos > 0 && !source.is_char_boundary(pos) {
+    pos -= 1;
+  }
+  let bytes = source.as_bytes();
+  let mut anchor = 0usize;
+  let mut depth = 0i32;
+  let mut i = pos;
+  while i > 0 {
+    let b = bytes[i - 1];
+    // Non-ASCII: skip without inspecting (continuation byte / multi-
+    // byte char). Word-boundary logic only cares about ASCII keywords.
+    if b >= 128 {
+      i -= 1;
+      continue;
+    }
+    let c = b as char;
+    if c == ')' {
+      depth += 1;
+      i -= 1;
+      continue;
+    }
+    if c == '(' {
+      if depth == 0 {
+        anchor = i;
+        break;
+      }
+      depth -= 1;
+      i -= 1;
+      continue;
+    }
+    if c == ';' {
+      anchor = i;
+      break;
+    }
+    let _ = c;
+    if match_kw_at(bytes, i, b"SELECT")
+      || match_kw_at(bytes, i, b"RETURNING")
+      || match_kw_at(bytes, i, b"VALUES")
+      || match_kw_at(bytes, i, b"SET")
+      || match_kw_at(bytes, i, b"BY")
+    {
+      anchor = i;
+      break;
+    }
+    i -= 1;
+  }
+  let region = if source.is_char_boundary(anchor) && source.is_char_boundary(pos) {
+    &source[anchor..pos]
+  } else {
+    ""
+  };
+  collect_idents_csv(region)
+}
+
+/// True when `bytes[end - kw.len()..end]` (case-insensitive) equals
+/// `kw` AND the byte before AND after are non-word chars (word-
+/// boundary on both sides). Skips bounds checks cleanly when
+/// end < kw.len().
+fn match_kw_at(bytes: &[u8], end: usize, kw: &[u8]) -> bool {
+  let len = kw.len();
+  if end < len {
+    return false;
+  }
+  let start = end - len;
+  for k in 0..len {
+    let a = bytes[start + k];
+    let b = kw[k];
+    if !a.is_ascii() {
+      return false;
+    }
+    if a.to_ascii_uppercase() != b {
+      return false;
+    }
+  }
+  let prev_ok = if start == 0 {
+    true
+  } else {
+    let prev = bytes[start - 1];
+    prev >= 128 || !is_word_char(prev as char)
+  };
+  let next_ok = if end >= bytes.len() {
+    true
+  } else {
+    let next = bytes[end];
+    next >= 128 || !is_word_char(next as char)
+  };
+  prev_ok && next_ok
+}
+
+fn is_word_char(c: char) -> bool {
+  c.is_ascii_alphanumeric() || c == '_'
+}
+
+/// Split `region` on top-level `,` (paren-depth aware), pull the
+/// first identifier off each item, lowercase + collect.
+fn collect_idents_csv(region: &str) -> std::collections::HashSet<String> {
+  let mut out = std::collections::HashSet::new();
+  let bytes = region.as_bytes();
+  let n = bytes.len();
+  let mut depth = 0i32;
+  let mut item_start = 0usize;
+  let mut i = 0usize;
+  while i < n {
+    let c = bytes[i] as char;
+    if c == '\'' {
+      i += 1;
+      while i < n && bytes[i] != b'\'' {
+        i += 1;
+      }
+      i = (i + 1).min(n);
+      continue;
+    }
+    if c == '(' {
+      depth += 1;
+      i += 1;
+      continue;
+    }
+    if c == ')' {
+      depth -= 1;
+      i += 1;
+      continue;
+    }
+    if c == ',' && depth == 0 {
+      push_first_ident(&region[item_start..i], &mut out);
+      item_start = i + 1;
+    }
+    i += 1;
+  }
+  push_first_ident(&region[item_start..], &mut out);
+  out
+}
+
+fn push_first_ident(item: &str, out: &mut std::collections::HashSet<String>) {
+  let item = item.trim();
+  if item.is_empty() {
+    return;
+  }
+  // Take the trailing dotted segment (`u.email` -> `email`) so we
+  // don't match aliases. Strip everything after the first
+  // non-word/dot char (`u.email = ...` -> `u.email`).
+  let head_end = item
+    .find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"')
+    .unwrap_or(item.len());
+  let head = item[..head_end].trim_matches('"');
+  if head.is_empty() {
+    return;
+  }
+  let tail = head.rsplit('.').next().unwrap_or(head).trim_matches('"');
+  if !tail.is_empty() {
+    out.insert(tail.to_ascii_lowercase());
+  }
 }
 
 /// Walk back from `pos` to find the enclosing `CREATE [OR REPLACE]
