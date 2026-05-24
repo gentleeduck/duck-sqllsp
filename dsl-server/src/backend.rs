@@ -218,6 +218,33 @@ impl LanguageServer for Backend {
       refresh::refresh_catalog(state, client).await;
     });
   }
+
+  async fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
+    // Whenever .duck-sqllsp.toml / .json changes on disk, reload the
+    // project config (walks upward from the changed file) and merge.
+    // Triggers a catalog refresh so the LSP picks up new connections
+    // without requiring a restart.
+    let mut any_relevant = false;
+    for change in &params.changes {
+      let Ok(path) = change.uri.to_file_path() else { continue };
+      let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+      if name == ".duck-sqllsp.toml" || name == ".duck-sqllsp.json" {
+        if let Some(proj) = config::load_project_config(&path) {
+          let mut cfg = self.state.config_snapshot();
+          cfg.merge_from(proj);
+          self.state.set_config(cfg);
+          any_relevant = true;
+        }
+      }
+    }
+    if any_relevant {
+      let state = self.state.clone();
+      let client = self.client.clone();
+      tokio::spawn(async move {
+        refresh::refresh_catalog(state, client).await;
+      });
+    }
+  }
 }
 
 /// Pick a workspace path from initialize params, preferring workspace_folders
