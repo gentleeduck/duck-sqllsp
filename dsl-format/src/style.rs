@@ -11,7 +11,7 @@ use serde::Deserialize;
 /// Column-aligned CREATE TABLE output. Mirrors the DataGrip-style block
 /// the user prefers: `(` on its own line, name / type / NOT NULL /
 /// DEFAULT all padded to column width, constraints last.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct CreateTableStyle {
     #[serde(rename = "alignColumns", alias = "align_columns", default = "yes")]
     pub align_columns: bool,
@@ -44,7 +44,7 @@ impl Default for CreateTableStyle {
 /// External SQL formatter (`sql-formatter` v15+) tuning. Every key maps
 /// directly onto a JSON option understood by the binary; we serialise
 /// them at handler time. Add a field, get a knob -- no string literals.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct FormatterStyle {
     /// SQL dialect passed via `-l` (postgresql, mysql, sqlite, ...).
     #[serde(rename = "language", alias = "language", default = "default_lang")]
