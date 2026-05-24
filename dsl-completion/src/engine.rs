@@ -63,7 +63,10 @@ pub fn complete(source: &str, file: &ParsedFile, scopes: &[Scope], catalog: &Cat
   }
 
   // Merge live catalog with in-file CREATE TABLE definitions.
-  let derived = source_tables::from_file(file);
+  // Offline-mode enrichment: tables from AST + sequences / types /
+  // extensions / functions / roles harvested from buffer text + the
+  // default offline roles. Live catalog wins on collisions.
+  let derived = source_tables::from_source(file, source);
   let cat = source_tables::merge(catalog, &derived);
 
   // Dot context first: highest priority, beats any phase result.

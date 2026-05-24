@@ -16,13 +16,19 @@ pub fn run(state: &ServerState, params: HoverParams) -> Option<Hover> {
     return None;
   }
   let offset = position::to_offset(&doc.rope, params.text_document_position_params.position);
-  let cat = state.catalog.read();
+  // Offline-mode enrichment: merge live + buffer-derived catalogs so
+  // hover finds sequences / types / extensions / roles defined only
+  // in the buffer (no DB connection required).
+  let live = state.catalog.read().clone();
+  let cache = doc.parsed();
+  let derived = dsl_completion::source_tables::from_source(&cache.file, &doc.text);
+  let cat = dsl_completion::source_tables::merge(&live, &derived);
   let case = match state.config_snapshot().style.keyword {
     Case::Upper => KeywordCase::Upper,
     Case::Lower => KeywordCase::Lower,
     Case::Preserve => KeywordCase::Preserve,
   };
-  let md = hover_with(&doc.text, offset, &*cat, case)?;
+  let md = hover_with(&doc.text, offset, &cat, case)?;
   Some(Hover { contents: split_markdown_fences(&md), range: None })
 }
 

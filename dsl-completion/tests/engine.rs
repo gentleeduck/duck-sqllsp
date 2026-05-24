@@ -1027,6 +1027,59 @@ fn extra_dml_snippets_all_present() {
 }
 
 #[test]
+fn offline_mode_surfaces_buffer_defined_types_after_cast() {
+  // No live catalog -> empty Catalog. The buffer declares a custom
+  // enum + a CREATE TABLE; completion at `::<cursor>` should still
+  // surface the enum from the source-derived catalog.
+  use dsl_catalog::{CATALOG_VERSION, Catalog};
+  let empty_cat = Catalog {
+    version: CATALOG_VERSION,
+    connection_id: "<offline>".into(),
+    schemas: vec![],
+    functions: vec![],
+    types: vec![],
+    roles: vec![],
+    sequences: vec![],
+    extensions: vec![],
+  };
+  let src = "\
+CREATE TYPE mood AS ENUM ('happy', 'sad');
+SELECT 'happy'::
+";
+  let cur = src.rfind("::").unwrap() + 2;
+  let items = complete_at(src, cur, &empty_cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"mood"),
+          "offline-mode cast completion should surface buffer-defined type `mood`; got: {labels:?}");
+}
+
+#[test]
+fn offline_mode_surfaces_default_roles() {
+  // No live catalog, no CREATE ROLE in buffer -- the default offline
+  // role set should still appear at OWNER TO.
+  use dsl_catalog::{CATALOG_VERSION, Catalog};
+  let empty_cat = Catalog {
+    version: CATALOG_VERSION,
+    connection_id: "<offline>".into(),
+    schemas: vec![],
+    functions: vec![],
+    types: vec![],
+    roles: vec![],
+    sequences: vec![],
+    extensions: vec![],
+  };
+  let src = "ALTER TABLE x OWNER TO ";
+  let items = complete_at(src, src.len(), &empty_cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"postgres"),
+          "default offline role `postgres` should be in OWNER TO menu; got: {labels:?}");
+  assert!(labels.contains(&"pg_read_all_data"),
+          "default offline role `pg_read_all_data` should be present; got: {labels:?}");
+  assert!(labels.contains(&"PUBLIC"),
+          "pseudo-role PUBLIC should be present; got: {labels:?}");
+}
+
+#[test]
 fn json_path_completion_walks_nested_path() {
   // Buffer has a jsonb default with a nested object; completion at
   // `data->'profile'->'<cursor>'` should surface the nested keys,

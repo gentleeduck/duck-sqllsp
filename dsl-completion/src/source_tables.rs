@@ -1,13 +1,28 @@
 //! Build a synthetic catalog from CREATE TABLE statements in the current
-//! file, so completion / hover surface tables the user is actively
-//! defining even before the DB knows about them.
+//! file (and a few text-scanned object families) so completion / hover /
+//! validation work even offline -- before the DB knows about anything,
+//! or when there is no DB connection configured at all.
+//!
+//! Offline-mode coverage:
+//!   * Tables  -- AST: every CREATE TABLE in the parsed file.
+//!   * Sequences -- text-scan: CREATE SEQUENCE <name>.
+//!   * Types -- text-scan: CREATE TYPE <name> AS ENUM/DOMAIN/(...).
+//!   * Extensions -- text-scan: CREATE EXTENSION [IF NOT EXISTS] <name>.
+//!   * Functions -- text-scan: CREATE [OR REPLACE] FUNCTION <name>.
+//!   * Roles -- text-scan: CREATE ROLE/USER/GROUP <name>; plus a
+//!     fixed offline fallback set (postgres, pg_read_all_data,
+//!     pg_write_all_data) so role-completion / role-hover work even
+//!     in a brand-new file.
 //!
 //! This is purely additive: the live catalog from `dsl-catalog` and the
 //! source-derived one are merged at lookup time. When both define the
-//! same table, the live catalog wins because it has richer metadata
+//! same object, the live catalog wins because it has richer metadata
 //! (constraints, indexes, comments).
 
-use dsl_catalog::{CATALOG_VERSION, Catalog, Column, Schema, Table, TableKind};
+use dsl_catalog::{
+  CATALOG_VERSION, Catalog, Column, Extension, Function, FunctionArg, Schema, Sequence, Table,
+  TableKind, Type, TypeKind,
+};
 use dsl_parse::{ParsedFile, StatementKind};
 
 /// Build a [`Catalog`] from every CREATE TABLE statement in `file`.
@@ -69,6 +84,160 @@ pub fn from_file(file: &ParsedFile) -> Catalog {
     sequences: Vec::new(),
     extensions: Vec::new(),
   }
+}
+
+/// Full offline-mode catalog: tables from AST + sequences / types /
+/// extensions / functions / roles harvested from raw source text. The
+/// scans are intentionally lenient -- partial / unparseable input is
+/// fine because the goal is "give the user *something* without a DB".
+/// `source` is the buffer text the AST in `file` came from.
+pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
+  let mut cat = from_file(file);
+  cat.sequences = scan_sequences(source);
+  cat.types = scan_types(source);
+  cat.extensions = scan_extensions(source);
+  cat.functions = scan_functions(source);
+  cat.roles = scan_roles(source);
+  cat
+}
+
+/// The conventional roles that exist in any fresh Postgres install.
+/// Returned as a Vec so callers can union them into the offline cat.
+pub fn default_offline_roles() -> Vec<String> {
+  vec![
+    "postgres".into(),
+    "pg_read_all_data".into(),
+    "pg_write_all_data".into(),
+    "pg_monitor".into(),
+    "pg_signal_backend".into(),
+  ]
+}
+
+fn scan_sequences(src: &str) -> Vec<Sequence> {
+  scan_create_named(src, &["CREATE SEQUENCE "])
+    .into_iter()
+    .map(|name| Sequence {
+      schema: "public".into(),
+      name,
+      data_type: "bigint".into(),
+      start_value: 1,
+      min_value: 1,
+      max_value: i64::MAX,
+      increment_by: 1,
+      cycle: false,
+      owned_by_column: None,
+      comment: Some("defined in current buffer".into()),
+    })
+    .collect()
+}
+
+fn scan_extensions(src: &str) -> Vec<Extension> {
+  let mut out = Vec::new();
+  for name in scan_create_named(src, &["CREATE EXTENSION IF NOT EXISTS ", "CREATE EXTENSION "]) {
+    out.push(Extension {
+      name: name.trim_matches('"').to_string(),
+      schema: "public".into(),
+      version: "?".into(),
+      comment: Some("declared in current buffer".into()),
+    });
+  }
+  out
+}
+
+fn scan_types(src: &str) -> Vec<Type> {
+  let mut out = Vec::new();
+  let upper = src.to_ascii_uppercase();
+  for (prefix, kind) in [
+    ("CREATE TYPE ", TypeKind::Composite),
+    ("CREATE DOMAIN ", TypeKind::Domain),
+  ] {
+    for name in scan_create_named_with_upper(src, &upper, prefix) {
+      // Peek a few chars past the name for AS ENUM -> Enum.
+      let resolved_kind = if name_followed_by_as_enum(src, &upper, prefix, &name) {
+        TypeKind::Enum
+      } else {
+        kind
+      };
+      out.push(Type { schema: "public".into(), name, kind: resolved_kind });
+    }
+  }
+  out
+}
+
+fn name_followed_by_as_enum(src: &str, upper: &str, prefix: &str, name: &str) -> bool {
+  let needle = format!("{prefix}{name}");
+  let needle_upper = needle.to_ascii_uppercase();
+  let Some(rel) = upper.find(&needle_upper) else { return false; };
+  let after = rel + needle.len();
+  let tail = src[after..].trim_start();
+  tail.to_ascii_uppercase().starts_with("AS ENUM")
+}
+
+fn scan_functions(src: &str) -> Vec<Function> {
+  let upper = src.to_ascii_uppercase();
+  let mut out = Vec::new();
+  for prefix in ["CREATE OR REPLACE FUNCTION ", "CREATE FUNCTION ", "CREATE PROCEDURE "] {
+    for name in scan_create_named_with_upper(src, &upper, prefix) {
+      out.push(Function {
+        schema: "public".into(),
+        name,
+        arguments: Vec::<FunctionArg>::new(),
+        return_type: "?".into(),
+        comment: Some("defined in current buffer".into()),
+      });
+    }
+  }
+  out
+}
+
+fn scan_roles(src: &str) -> Vec<String> {
+  let mut out: std::collections::BTreeSet<String> = default_offline_roles().into_iter().collect();
+  for prefix in ["CREATE ROLE ", "CREATE USER ", "CREATE GROUP "] {
+    for name in scan_create_named(src, &[prefix]) {
+      out.insert(name);
+    }
+  }
+  out.into_iter().collect()
+}
+
+/// Walk the source for each prefix; for each match return the identifier
+/// (possibly schema-qualified, returned bare) immediately following.
+fn scan_create_named(src: &str, prefixes: &[&str]) -> Vec<String> {
+  let upper = src.to_ascii_uppercase();
+  let mut out = Vec::new();
+  for prefix in prefixes {
+    out.extend(scan_create_named_with_upper(src, &upper, prefix));
+  }
+  out.sort();
+  out.dedup();
+  out
+}
+
+fn scan_create_named_with_upper(src: &str, upper: &str, prefix: &str) -> Vec<String> {
+  let bytes = src.as_bytes();
+  let n = bytes.len();
+  let mut out = Vec::new();
+  let mut from = 0usize;
+  while let Some(rel) = upper[from..].find(prefix) {
+    let after = from + rel + prefix.len();
+    let mut k = after;
+    while k < n && bytes[k].is_ascii_whitespace() {
+      k += 1;
+    }
+    let id_start = k;
+    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') {
+      k += 1;
+    }
+    if k > id_start {
+      let raw = &src[id_start..k];
+      let bare = raw.rsplit('.').next().unwrap_or(raw).trim_matches('"').to_string();
+      if !bare.is_empty() {
+        out.push(bare);
+      }
+    }
+    from = after;
+  }
+  out
 }
 
 /// Text-scan fallback: harvest the column-name list from a possibly
@@ -213,7 +382,11 @@ fn split_top_commas(s: &str) -> Vec<&str> {
   out
 }
 
-/// Merge two catalogs into one. `live` wins on name collisions.
+/// Merge two catalogs into one. `live` wins on name collisions across
+/// every collection (tables, sequences, types, extensions, functions,
+/// roles). Derived entries fill in only where live has a gap, so a
+/// live DB connection always takes precedence over text-scanned
+/// guesses but offline use still gets the full set.
 pub fn merge(live: &Catalog, derived: &Catalog) -> Catalog {
   let mut out = live.clone();
   for ds in &derived.schemas {
@@ -228,6 +401,31 @@ pub fn merge(live: &Catalog, derived: &Catalog) -> Catalog {
       if !target.tables.iter().any(|t| t.name == dt.name) {
         target.tables.push(dt.clone());
       }
+    }
+  }
+  for s in &derived.sequences {
+    if !out.sequences.iter().any(|x| x.name.eq_ignore_ascii_case(&s.name)) {
+      out.sequences.push(s.clone());
+    }
+  }
+  for t in &derived.types {
+    if !out.types.iter().any(|x| x.name.eq_ignore_ascii_case(&t.name)) {
+      out.types.push(t.clone());
+    }
+  }
+  for e in &derived.extensions {
+    if !out.extensions.iter().any(|x| x.name.eq_ignore_ascii_case(&e.name)) {
+      out.extensions.push(e.clone());
+    }
+  }
+  for f in &derived.functions {
+    if !out.functions.iter().any(|x| x.name.eq_ignore_ascii_case(&f.name)) {
+      out.functions.push(f.clone());
+    }
+  }
+  for r in &derived.roles {
+    if !out.roles.iter().any(|x| x.eq_ignore_ascii_case(r)) {
+      out.roles.push(r.clone());
     }
   }
   out

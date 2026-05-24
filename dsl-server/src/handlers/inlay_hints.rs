@@ -24,7 +24,7 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
   // Merge live catalog with buffer-derived tables so JOIN-on heuristics
   // can see fresh CREATE TABLE bodies (and tests with no live catalog
   // still resolve to a column list).
-  let derived = dsl_completion::source_tables::from_file(parsed);
+  let derived = dsl_completion::source_tables::from_source(parsed, &doc.text);
   let cat = dsl_completion::source_tables::merge(&live, &derived);
 
   // Also resolve against buffer-defined tables so a fresh `CREATE TABLE`

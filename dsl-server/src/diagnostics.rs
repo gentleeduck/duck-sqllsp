@@ -20,9 +20,14 @@ pub async fn publish_for(client: &Client, state: &ServerState, uri: &Url) {
   let text = doc.text;
   let rope = doc.rope;
 
-  // Clone the catalog snapshot so the read guard does not cross the
-  // upcoming .await; parking_lot guards are not Send.
-  let cat = state.catalog.read().clone();
+  // Offline-mode enrichment: merge live catalog with text-scanned
+  // sequences / types / extensions / functions / roles + AST-derived
+  // tables so analysis rules still see something useful when the DB
+  // isn't connected. Clone before the upcoming .await so the parking_lot
+  // guard does not cross the suspend point (not Send).
+  let live = state.catalog.read().clone();
+  let derived = dsl_completion::source_tables::from_source(&cache.file, &text);
+  let cat = dsl_completion::source_tables::merge(&live, &derived);
   let raw = dsl_analysis::run(&text, &cache.file, &cache.scopes, &cat);
 
   // Cancellation check #1: skip mapping work if a newer didChange
