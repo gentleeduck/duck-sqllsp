@@ -41,7 +41,8 @@
     "onCommand:duckSqllsp.removeConnection",
     "onCommand:duckSqllsp.refreshCatalog",
     "onCommand:duckSqllsp.restartServer",
-    "onCommand:duckSqllsp.showLogs"
+    "onCommand:duckSqllsp.showLogs",
+    "onCommand:duckSqllsp.testConnection"
   ],
   "contributes": {
     "commands": [
@@ -86,6 +87,12 @@
         "title": "Show Logs",
         "category": "duck-sqllsp",
         "icon": "$(output)"
+      },
+      {
+        "command": "duckSqllsp.testConnection",
+        "title": "Test Active Connection",
+        "category": "duck-sqllsp",
+        "icon": "$(zap)"
       }
     ],
     "viewsContainers": {
@@ -125,9 +132,14 @@
           "group": "navigation@3"
         },
         {
-          "command": "duckSqllsp.showLogs",
+          "command": "duckSqllsp.testConnection",
           "when": "view == duckSqllsp.connections",
           "group": "navigation@4"
+        },
+        {
+          "command": "duckSqllsp.showLogs",
+          "when": "view == duckSqllsp.connections",
+          "group": "navigation@5"
         }
       ],
       "view/item/context": [

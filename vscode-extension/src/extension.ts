@@ -50,6 +50,7 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand("duckSqllsp.refreshCatalog", refreshCatalog),
     commands.registerCommand("duckSqllsp.restartServer", restartServer),
     commands.registerCommand("duckSqllsp.showLogs", () => outputChannel?.show(true)),
+    commands.registerCommand("duckSqllsp.testConnection", testConnection),
     workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("duckSqllsp")) {
         connectionsProvider?.refresh();
@@ -336,6 +337,38 @@ async function removeConnection(item?: ConnectionItem): Promise<void> {
 
 async function refreshCatalog(): Promise<void> {
   await restartServer();
+}
+
+/// Asks the LSP to ping the active connection and reports the result.
+/// The server-side handler is `workspace/executeCommand` with the
+/// command `duck-sqllsp.testConnection`.
+async function testConnection(): Promise<void> {
+  if (!client) {
+    window.showErrorMessage("duck-sqllsp not running");
+    return;
+  }
+  try {
+    const res = (await client.sendRequest("workspace/executeCommand", {
+      command: "duck-sqllsp.testConnection",
+      arguments: [],
+    })) as { ok: boolean; name: string; message: string; tables: number } | null;
+    if (!res) {
+      window.showWarningMessage("duck-sqllsp: server did not respond to testConnection");
+      return;
+    }
+    const headline = res.ok
+      ? `duck-sqllsp: ${res.name} OK -- ${res.message}`
+      : `duck-sqllsp: ${res.name} failed -- ${res.message}`;
+    if (res.ok) {
+      window.showInformationMessage(headline);
+    } else {
+      window.showErrorMessage(headline, "Show Logs").then((c) => {
+        if (c === "Show Logs") outputChannel?.show(true);
+      });
+    }
+  } catch (e: any) {
+    window.showErrorMessage(`duck-sqllsp: testConnection failed -- ${e?.message ?? e}`);
+  }
 }
 
 async function restartServer(): Promise<void> {
