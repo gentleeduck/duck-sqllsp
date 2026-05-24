@@ -15,15 +15,14 @@ use tower_lsp::Client;
 
 pub async fn publish_for(client: &Client, state: &ServerState, uri: &Url) {
     let Some(doc) = state.documents.get(uri) else { return; };
+    let cache = doc.parsed();
     let text = doc.text;
     let rope = doc.rope;
 
-    let parsed = dsl_parse::parse(&text, dsl_parse::Dialect::Postgres);
-    let scopes = dsl_resolve::resolve(&parsed.statements);
     // Clone the catalog snapshot so the read guard does not cross the
     // upcoming .await; parking_lot guards are not Send.
     let cat = state.catalog.read().clone();
-    let raw = dsl_analysis::run(&text, &parsed, &scopes, &cat);
+    let raw = dsl_analysis::run(&text, &cache.file, &cache.scopes, &cat);
 
     let diagnostics = raw
         .into_iter()

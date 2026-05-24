@@ -4,8 +4,6 @@ use crate::config::{Case, Style};
 use crate::handlers::position;
 use crate::state::ServerState;
 use dsl_completion::{complete as engine_complete, Item, ItemKind};
-use dsl_parse::{parse, Dialect};
-use dsl_resolve::resolve;
 use tower_lsp::lsp_types::{
     CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams,
     CompletionResponse, Documentation, MarkupContent, MarkupKind,
@@ -16,10 +14,9 @@ pub fn run(state: &ServerState, params: CompletionParams) -> Option<CompletionRe
     let doc = state.documents.get(&uri)?;
     if doc.too_large() { return None; }
     let offset = position::to_offset(&doc.rope, params.text_document_position.position);
-    let parsed = parse(&doc.text, Dialect::Postgres);
-    let scopes = resolve(&parsed.statements);
+    let cache = doc.parsed();
     let cat = state.catalog.read();
-    let items = engine_complete(&doc.text, &parsed, &scopes, &*cat, offset);
+    let items = engine_complete(&doc.text, &cache.file, &cache.scopes, &*cat, offset);
 
     let style = state.config_snapshot().style;
     let lsp_items: Vec<CompletionItem> = items
