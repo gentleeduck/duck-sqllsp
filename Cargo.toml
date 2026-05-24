@@ -46,7 +46,7 @@ tower-lsp      = "0.20"
 async-trait    = "0.1"
 
 # Existing SQL parsers
-sqlparser      = { version = "0.52", features = ["visitor"] }
+sqlparser      = { version = "0.62", features = ["visitor"] }
 # Real Postgres parser (libpg_query FFI) -- gets us PG18-complete syntax
 # coverage (ON DELETE SET NULL (col), MERGE, FETCH FIRST, ...).
 pg_query       = { version = "6" }
