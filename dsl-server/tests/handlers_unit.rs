@@ -2,7 +2,7 @@
 
 use dsl_server::{
     documents::DocumentStore,
-    handlers::{completion, document_symbol, hover, inlay_hints, references, rename, selection_range, signature_help, workspace_symbol},
+    handlers::{code_action, completion, document_symbol, hover, inlay_hints, references, rename, selection_range, signature_help, workspace_symbol},
     state::ServerState,
 };
 use tower_lsp::lsp_types::{
@@ -287,6 +287,33 @@ fn completion_snippet_item_has_expands_to_preview() {
         "snippet doc should preview the expansion; got: {text}");
     assert!(text.to_lowercase().contains("create table name"),
         "preview should show placeholder labels stripped of ${{}}; got: {text}");
+}
+
+#[test]
+fn code_action_explain_analyze_wrap() {
+    use tower_lsp::lsp_types::{
+        CodeActionContext, CodeActionParams, CodeActionResponse,
+        PartialResultParams, Range, TextDocumentIdentifier, WorkDoneProgressParams,
+    };
+    let src = "SELECT id FROM users WHERE id = '1';";
+    let (state, url) = state_with("file:///ea.sql", src);
+    let r = code_action::run(&state, CodeActionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        range: Range {
+            start: Position { line: 0, character: 5 },
+            end: Position { line: 0, character: 5 },
+        },
+        context: CodeActionContext { diagnostics: vec![], only: None, trigger_kind: None },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+    }).expect("actions");
+    let titles: Vec<String> = r.iter().filter_map(|a| match a {
+        tower_lsp::lsp_types::CodeActionOrCommand::CodeAction(ca) => Some(ca.title.clone()),
+        _ => None,
+    }).collect();
+    assert!(titles.iter().any(|t| t.contains("EXPLAIN ANALYZE")),
+        "expected EXPLAIN ANALYZE wrap action; got: {titles:?}");
+    let _: CodeActionResponse = r;
 }
 
 #[test]

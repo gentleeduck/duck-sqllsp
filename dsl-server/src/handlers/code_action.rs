@@ -42,6 +42,12 @@ pub fn run(state: &ServerState, params: CodeActionParams) -> Option<CodeActionRe
     // Split `INSERT INTO t VALUES (...), (...), (...)` so each tuple
     // sits on its own line -- easier to read in code-review.
     split_values_rows_action(&uri, &params.range, &doc.text, &mut actions);
+    // Convert `SELECT *` to an explicit column list (when the single
+    // FROM table is known to the catalog).
+    expand_select_star_action(&uri, &params.range, state, &doc.text, &mut actions);
+    // Wrap the enclosing statement in `EXPLAIN ANALYZE BEGIN ... ROLLBACK`
+    // for a one-shot perf check that doesn't mutate.
+    explain_analyze_wrap_action(&uri, &params.range, &doc.text, &mut actions);
 
     if actions.is_empty() { return None; }
     Some(actions)
@@ -244,6 +250,142 @@ fn split_values_rows_action(uri: &Url, range: &Range, text: &str, out: &mut Vec<
         }));
         return;
     }
+}
+
+/// `SELECT *` over a single FROM table whose schema is in the catalog
+/// → `SELECT col1, col2, ...`. Schema-aware refactor that protects
+/// against the silent-rename / silent-add hazard.
+fn expand_select_star_action(
+    uri: &Url,
+    range: &Range,
+    state: &ServerState,
+    text: &str,
+    out: &mut Vec<CodeActionOrCommand>,
+) {
+    let Some(sel) = line_col_to_byte(text, range.start) else { return };
+    let upper = text.to_ascii_uppercase();
+    let bytes = text.as_bytes();
+    // Find a `SELECT *` whose statement contains the cursor.
+    let mut search = 0;
+    while let Some(rel) = upper[search..].find("SELECT") {
+        let select_at = search + rel;
+        let prev_ok = select_at == 0 || !is_id_char(bytes[select_at - 1] as char);
+        let after = select_at + 6;
+        if !prev_ok || after >= bytes.len()
+            || !(bytes[after].is_ascii_whitespace())
+        {
+            search = after; continue;
+        }
+        // Walk past whitespace; require `*` immediately.
+        let mut j = after;
+        while j < bytes.len() && bytes[j].is_ascii_whitespace() { j += 1; }
+        if j >= bytes.len() || bytes[j] != b'*' {
+            search = after; continue;
+        }
+        // Star must be followed by ` FROM ` (no other projection).
+        let mut k = j + 1;
+        while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+        if k + 5 > bytes.len() || !upper[k..k + 4].eq_ignore_ascii_case("FROM") {
+            search = after; continue;
+        }
+        let from_at = k;
+        let after_from = k + 4;
+        // Find the statement end (next `;` or EOF).
+        let stmt_end = text[after_from..].find(';').map(|p| after_from + p).unwrap_or(text.len());
+        if sel < select_at || sel > stmt_end { search = stmt_end; continue; }
+        // Skip multi-FROM (don't touch joins yet -- too easy to break).
+        let from_body = &text[after_from..stmt_end];
+        if from_body.contains(',') {
+            search = after; continue;
+        }
+        // Identify the single table name.
+        let table: String = from_body.trim_start()
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '.')
+            .collect();
+        let bare = table.rsplit('.').next().unwrap_or(&table).to_string();
+        if bare.is_empty() { return; }
+        let cat = state.catalog.read();
+        let Some(t) = cat.find_table(None, &bare) else { return };
+        if t.columns.is_empty() { return; }
+        let cols = t.columns.iter().map(|c| c.name.clone()).collect::<Vec<_>>().join(", ");
+        let r = byte_range_to_lsp(text, j, j + 1);
+        let mut changes = HashMap::new();
+        changes.insert(uri.clone(), vec![TextEdit {
+            range: r,
+            new_text: cols,
+        }]);
+        out.push(CodeActionOrCommand::CodeAction(CodeAction {
+            title: format!("Expand `*` to explicit columns of `{bare}`"),
+            kind: Some(CodeActionKind::REFACTOR),
+            diagnostics: None,
+            edit: Some(WorkspaceEdit {
+                changes: Some(changes),
+                document_changes: None,
+                change_annotations: None,
+            }),
+            command: None,
+            is_preferred: None,
+            disabled: None,
+            data: None,
+        }));
+        return;
+    }
+}
+
+/// Wrap the enclosing statement in
+/// `BEGIN; EXPLAIN ANALYZE <stmt>; ROLLBACK;` so the planner runs the
+/// query (with real timings) but the rollback discards any mutation.
+fn explain_analyze_wrap_action(
+    uri: &Url,
+    range: &Range,
+    text: &str,
+    out: &mut Vec<CodeActionOrCommand>,
+) {
+    let Some(sel) = line_col_to_byte(text, range.start) else { return };
+    let bytes = text.as_bytes();
+    let n = bytes.len();
+    // Find the enclosing statement: walk back to last `;` (or BOF),
+    // walk forward to next `;` (or EOF).
+    let stmt_start = text[..sel].rfind(';').map(|i| {
+        let mut j = i + 1;
+        while j < n && bytes[j].is_ascii_whitespace() { j += 1; }
+        j
+    }).unwrap_or(0);
+    let stmt_end = text[sel..].find(';').map(|p| sel + p + 1).unwrap_or(text.len());
+    if stmt_start >= stmt_end { return; }
+    let stmt = &text[stmt_start..stmt_end];
+    let trimmed = stmt.trim_start();
+    let upper = trimmed.to_ascii_uppercase();
+    // Skip when already EXPLAIN or BEGIN.
+    if upper.starts_with("EXPLAIN") || upper.starts_with("BEGIN") {
+        return;
+    }
+    let stmt_no_trailing_semi = stmt.trim_end().trim_end_matches(';');
+    let new_text = format!(
+        "BEGIN;\nEXPLAIN ANALYZE\n{};\nROLLBACK;",
+        stmt_no_trailing_semi.trim()
+    );
+    let r = byte_range_to_lsp(text, stmt_start, stmt_end);
+    let mut changes = HashMap::new();
+    changes.insert(uri.clone(), vec![TextEdit {
+        range: r,
+        new_text,
+    }]);
+    out.push(CodeActionOrCommand::CodeAction(CodeAction {
+        title: "Wrap in BEGIN; EXPLAIN ANALYZE ...; ROLLBACK;".into(),
+        kind: Some(CodeActionKind::REFACTOR),
+        diagnostics: None,
+        edit: Some(WorkspaceEdit {
+            changes: Some(changes),
+            document_changes: None,
+            change_annotations: None,
+        }),
+        command: None,
+        is_preferred: None,
+        disabled: None,
+        data: None,
+    }));
 }
 
 fn matched_close(bytes: &[u8], open: usize) -> Option<usize> {
