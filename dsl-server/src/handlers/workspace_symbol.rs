@@ -22,6 +22,9 @@ use tower_lsp::lsp_types::{
 pub fn run(state: &ServerState, params: WorkspaceSymbolParams) -> Option<Vec<SymbolInformation>> {
     let query = params.query.to_ascii_lowercase();
     let cat = state.catalog.read().clone();
+    // Score every candidate so the best match floats to the top.
+    // (score, SymbolInformation) -- sort descending by score.
+    let mut scored: Vec<(i32, SymbolInformation)> = Vec::new();
     let mut out: Vec<SymbolInformation> = Vec::new();
 
     let synthetic: Url = "duck-sqllsp://catalog".parse().ok()?;
@@ -36,7 +39,7 @@ pub fn run(state: &ServerState, params: WorkspaceSymbolParams) -> Option<Vec<Sym
     let function_locs = collect_function_locations(state);
 
     for t in cat.tables() {
-        if !query.is_empty() && !t.name.to_ascii_lowercase().contains(&query) { continue; }
+        let Some(score) = score_match(&t.name, &query) else { continue };
         let loc = table_locs
             .iter()
             .find(|(name, _)| name.eq_ignore_ascii_case(&t.name))
@@ -185,4 +188,40 @@ fn byte_to_position(rope: &Rope, byte: usize) -> Position {
         bytes_seen += c.len_utf8();
     }
     Position { line: line as u32, character: utf16 }
+}
+
+/// Score a candidate symbol name against the user's lowercased query.
+/// Returns None for no-match, higher = better. Heuristics:
+///   100 -- exact match
+///    90 -- prefix match
+///    80 -- snake_case initials prefix (`ur` matches `user_roles`)
+///    70 -- camelCase initials prefix (`uR` matches `userRoles`)
+///    50 -- substring match
+///    20 -- subsequence match (chars in order)
+fn score_match(name: &str, query: &str) -> Option<i32> {
+    if query.is_empty() { return Some(0); }
+    let lower = name.to_ascii_lowercase();
+    if lower == query { return Some(100); }
+    if lower.starts_with(query) { return Some(90); }
+    let snake_initials: String = lower.split('_')
+        .filter_map(|seg| seg.chars().next())
+        .collect();
+    if snake_initials.starts_with(query) { return Some(80); }
+    let camel_initials: String = name.chars()
+        .enumerate()
+        .filter_map(|(i, c)| {
+            if i == 0 { Some(c.to_ascii_lowercase()) }
+            else if c.is_ascii_uppercase() { Some(c.to_ascii_lowercase()) }
+            else { None }
+        })
+        .collect();
+    if camel_initials.starts_with(query) { return Some(70); }
+    if lower.contains(query) { return Some(50); }
+    if is_subsequence(query, &lower) { return Some(20); }
+    None
+}
+
+fn is_subsequence(needle: &str, haystack: &str) -> bool {
+    let mut hit = haystack.chars();
+    needle.chars().all(|c| hit.any(|h| h == c))
 }

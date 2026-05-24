@@ -245,6 +245,11 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(redundant_index_on_pk::Rule),
         Box::new(begin_no_lock_mode::Rule),
         Box::new(redundant_unique_index::Rule),
-        Box::new(owner_to_unknown_role::Rule),
+        // sql169 owner_to_unknown_role unregistered -- too many false
+        // positive vectors: partial pg_roles visibility (non-superuser
+        // conns), cached catalog snapshots predating the roles field,
+        // built-in roles that some setups hide. Module retained for
+        // future opt-in via config.
+        // Box::new(owner_to_unknown_role::Rule),
     ]
 }

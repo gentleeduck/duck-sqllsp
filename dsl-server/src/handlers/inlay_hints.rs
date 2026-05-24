@@ -119,7 +119,73 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
             });
         }
     }
+
+    // JOIN with missing / minimal ON-clause: when an FK relates the
+    // two tables, surface ` -- t.user_id = u.id` next to the JOIN
+    // keyword as a guess of the missing predicate.
+    for stmt in &parsed.statements {
+        let StatementKind::Select(sel) = &stmt.kind else { continue };
+        if sel.joins.is_empty() { continue; }
+        if sel.from.is_empty() { continue; }
+        // Build alias -> table lookup for the FROM table.
+        let from = &sel.from[0];
+        let from_table = cat.find_table(from.schema.as_deref(), &from.name);
+        let from_alias = from.alias.clone().unwrap_or_else(|| from.name.clone());
+        for j in &sel.joins {
+            // Skip joins that already have a non-trivial ON.
+            if j.on.is_some() { continue; }
+            let join_table = cat.find_table(j.table.schema.as_deref(), &j.table.name);
+            let join_alias = j.table.alias.clone().unwrap_or_else(|| j.table.name.clone());
+            // Walk both directions: from->join, join->from. Look for a
+            // single-column FK linking the two.
+            let predicate = find_fk_predicate(from_table, &from_alias, join_table, &join_alias)
+                .or_else(|| find_fk_predicate(join_table, &join_alias, from_table, &from_alias));
+            let Some(pred) = predicate else { continue };
+            // Place the hint after the JOIN's table name.
+            let stmt_start: u32 = stmt.range.start().into();
+            let stmt_end: u32 = stmt.range.end().into();
+            let body = &doc.text[stmt_start as usize..(stmt_end as usize).min(doc.text.len())];
+            // First "JOIN" keyword after FROM is good enough as an anchor.
+            let join_idx = body.to_ascii_uppercase().find(" JOIN ");
+            if let Some(idx) = join_idx {
+                let pos_byte = stmt_start as usize + idx + 6 + j.table.name.len() + 1;
+                let pos = byte_to_position(&doc.rope, pos_byte.min(doc.text.len()));
+                hints.push(InlayHint {
+                    position: pos,
+                    label: InlayHintLabel::String(format!("  -- ON {pred}")),
+                    kind: Some(InlayHintKind::TYPE),
+                    text_edits: None,
+                    tooltip: None,
+                    padding_left: Some(false),
+                    padding_right: Some(false),
+                    data: None,
+                });
+            }
+        }
+    }
+
     if hints.is_empty() { None } else { Some(hints) }
+}
+
+fn find_fk_predicate(
+    src_table: Option<&dsl_catalog::Table>,
+    src_alias: &str,
+    target_table: Option<&dsl_catalog::Table>,
+    target_alias: &str,
+) -> Option<String> {
+    let src = src_table?;
+    let target = target_table?;
+    for c in &src.constraints {
+        if !matches!(c.kind, dsl_catalog::ConstraintKind::ForeignKey) { continue; }
+        let Some(refs) = &c.references else { continue };
+        if !refs.table.eq_ignore_ascii_case(&target.name) { continue; }
+        if c.columns.len() != 1 || refs.columns.len() != 1 { continue; }
+        return Some(format!(
+            "{src_alias}.{} = {target_alias}.{}",
+            c.columns[0], refs.columns[0]
+        ));
+    }
+    None
 }
 
 /// Locate the byte position right *after* each top-level literal in the

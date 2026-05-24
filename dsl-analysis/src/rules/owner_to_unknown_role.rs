@@ -64,6 +64,13 @@ impl LintRule for Rule {
         if catalog.roles.iter().any(|r| r.eq_ignore_ascii_case(&role_norm)) {
             return;
         }
+        // Whitelist always-present built-in / convention roles.
+        // `postgres` is the bootstrap superuser, `pg_*` are internal
+        // group roles. Skip when the introspection might have missed
+        // them (non-superuser conn, restricted pg_roles visibility).
+        if role_norm == "postgres" || role_norm.starts_with("pg_") {
+            return;
+        }
         let abs_start = start + role_start;
         let abs_end = start + role_end;
         out.push(Diagnostic {
