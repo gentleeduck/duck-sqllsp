@@ -68,26 +68,40 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
       ins.columns.iter().filter_map(|name| cols.iter().find(|(n, _)| n.eq_ignore_ascii_case(name)).cloned()).collect()
     };
     let positional = ins.columns.is_empty();
-    for (idx, lit_byte) in find_values_literals(&doc.text, stmt.range).into_iter().enumerate() {
-      let Some((col_name, col_type)) = ordered.get(idx) else { break };
-      let label = if positional {
-        format!(" : {col_name}")
-      } else if col_type.is_empty() {
-        continue;
-      } else {
-        format!(" : {col_type}")
-      };
-      let pos = byte_to_position(&doc.rope, lit_byte);
-      hints.push(InlayHint {
-        position: pos,
-        label: InlayHintLabel::String(label),
-        kind: Some(InlayHintKind::TYPE),
-        text_edits: None,
-        tooltip: None,
-        padding_left: Some(false),
-        padding_right: Some(false),
-        data: None,
-      });
+    if positional {
+      // No explicit column list -> hint the column name AFTER each
+      // value (mirrors the legacy behaviour).
+      for (idx, lit_byte) in find_values_literals(&doc.text, stmt.range).into_iter().enumerate() {
+        let Some((col_name, _)) = ordered.get(idx) else { break };
+        let pos = byte_to_position(&doc.rope, lit_byte);
+        hints.push(InlayHint {
+          position: pos,
+          label: InlayHintLabel::String(format!(" : {col_name}")),
+          kind: Some(InlayHintKind::TYPE),
+          text_edits: None,
+          tooltip: None,
+          padding_left: Some(false),
+          padding_right: Some(false),
+          data: None,
+        });
+      }
+    } else {
+      // Explicit column list -> drop a column-name chip BEFORE each
+      // value, integrated inline with the literal (DataGrip-style).
+      for (idx, lit_start) in find_values_literal_starts(&doc.text, stmt.range).into_iter().enumerate() {
+        let Some((col_name, _)) = ordered.get(idx) else { break };
+        let pos = byte_to_position(&doc.rope, lit_start);
+        hints.push(InlayHint {
+          position: pos,
+          label: InlayHintLabel::String(col_name.clone()),
+          kind: Some(InlayHintKind::PARAMETER),
+          text_edits: None,
+          tooltip: None,
+          padding_left: Some(false),
+          padding_right: Some(true),
+          data: None,
+        });
+      }
     }
   }
 
@@ -412,6 +426,66 @@ fn singularise(name: &str) -> String {
 }
 
 /// Locate the byte position right *after* each top-level literal in the
+/// Mirror of [`find_values_literals`] returning byte offsets that
+/// land at the *start* of each item -- the first non-whitespace byte
+/// inside the tuple (or immediately after the preceding comma). Used
+/// to drop a column-name chip BEFORE each value, the way DataGrip /
+/// JetBrains DBs render the column hint inline with the literal.
+fn find_values_literal_starts(source: &str, range: TextRange) -> Vec<usize> {
+  let s: u32 = range.start().into();
+  let e: u32 = range.end().into();
+  let start = s as usize;
+  let end = (e as usize).min(source.len());
+  let slice = &source[start..end];
+  let upper = slice.to_ascii_uppercase();
+  let Some(values_at) = upper.find("VALUES") else { return Vec::new() };
+  let bytes = slice.as_bytes();
+  let n = bytes.len();
+  let mut k = values_at + 6;
+  while k < n && bytes[k].is_ascii_whitespace() {
+    k += 1;
+  }
+  if k >= n || bytes[k] != b'(' {
+    return Vec::new();
+  }
+  let mut out: Vec<usize> = Vec::new();
+  let mut depth = 1i32;
+  let mut item_start: Option<usize> = None;
+  let mut i = k + 1;
+  while i < n && depth > 0 {
+    match bytes[i] {
+      b'(' => {
+        depth += 1;
+        if item_start.is_none() { item_start = Some(i); }
+      }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          if let Some(s) = item_start.take() { out.push(start + s); }
+          break;
+        }
+      }
+      b'\'' => {
+        if item_start.is_none() { item_start = Some(i); }
+        i += 1;
+        while i < n && bytes[i] != b'\'' { i += 1; }
+        if i < n { i += 1; continue; }
+      }
+      b',' if depth == 1 => {
+        if let Some(s) = item_start.take() { out.push(start + s); }
+        i += 1;
+        continue;
+      }
+      c if c.is_ascii_whitespace() => {}
+      _ => {
+        if item_start.is_none() { item_start = Some(i); }
+      }
+    }
+    i += 1;
+  }
+  out
+}
+
 /// first VALUES tuple of an INSERT statement. Skips nested parens and
 /// quoted strings.
 fn find_values_literals(source: &str, range: TextRange) -> Vec<usize> {

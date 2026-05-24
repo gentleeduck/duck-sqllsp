@@ -465,6 +465,47 @@ fn rename_rejects_invalid_identifier() {
 }
 
 #[test]
+fn inlay_emits_inline_column_chip_for_insert_with_explicit_columns() {
+  // INSERT INTO t (a, b) VALUES (1, 'x') -- a chip with the column
+  // name should land BEFORE each literal, not after.
+  use tower_lsp::lsp_types::{InlayHintKind, InlayHintParams, Range, TextDocumentIdentifier, WorkDoneProgressParams};
+  let src = "\
+CREATE TABLE user_roles (user_id INT, role TEXT);
+INSERT INTO user_roles (user_id, role) VALUES ('id_1', 'admin');
+";
+  let (state, url) = state_with("file:///iv.sql", src);
+  let hints = inlay_hints::run(
+    &state,
+    InlayHintParams {
+      text_document: TextDocumentIdentifier { uri: url },
+      range: Range { start: Position { line: 0, character: 0 }, end: Position { line: 10, character: 0 } },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+    },
+  )
+  .expect("hints");
+  let chips: Vec<&str> = hints
+    .iter()
+    .filter(|h| h.kind == Some(InlayHintKind::PARAMETER))
+    .filter_map(|h| match &h.label {
+      tower_lsp::lsp_types::InlayHintLabel::String(s) => Some(s.as_str()),
+      _ => None,
+    })
+    .collect();
+  assert!(chips.contains(&"user_id"), "expected `user_id` chip; got: {chips:?}");
+  assert!(chips.contains(&"role"), "expected `role` chip; got: {chips:?}");
+  // Chip lands at the start of the value, not at end.
+  let user_id_chip = hints.iter().find(|h| {
+    matches!(&h.label, tower_lsp::lsp_types::InlayHintLabel::String(s) if s == "user_id")
+  }).unwrap();
+  // The chip's character should sit at the column where `'id_1'` starts.
+  let line1 = "INSERT INTO user_roles (user_id, role) VALUES ('id_1', 'admin');";
+  let expected_col = line1.find("'id_1'").unwrap() as u32;
+  assert_eq!(user_id_chip.position.character, expected_col,
+             "chip should sit at start of literal, got {} expected {}",
+             user_id_chip.position.character, expected_col);
+}
+
+#[test]
 fn inlay_guesses_join_predicate_without_fk() {
   // No live catalog, no parsed CREATE TABLE constraints -> source_tables
   // derives the schema but with zero FKs. Inlay must still surface a
