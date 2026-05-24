@@ -135,6 +135,12 @@ pub fn complete(source: &str, file: &ParsedFile, scopes: &[Scope], catalog: &Cat
         }
       }
     }
+    // Filter columns already used in the same clause -- even in dot
+    // context, typing `SELECT u.id, u.|` should not re-offer `id`.
+    let used = used_columns_in_clause(source, offset);
+    if !used.is_empty() {
+      out.retain(|it| !is_column_listed(it, &used));
+    }
     return out;
   }
 
