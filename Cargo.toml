@@ -78,7 +78,7 @@ anyhow         = "1"
 thiserror      = "2"
 
 # Dirs / XDG paths
-directories    = "5"
+directories    = "6"
 
 [profile.release]
 lto = "thin"
