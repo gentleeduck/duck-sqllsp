@@ -68,12 +68,34 @@ pub fn complete(
             // misleading global column dump.
             return out;
         }
-        let count = scope_for_offset(file, scopes, offset)
+        let stmt_scope = scope_for_offset(file, scopes, offset);
+        let count = stmt_scope
             .map(|s| sources::columns_of_alias(&cat, s, &alias, &mut out))
             .unwrap_or(0);
         if count == 0 {
             if let Some(fb) = fallback::scope_from_text(source) {
                 sources::columns_of_alias(&cat, &fb, &alias, &mut out);
+            }
+        }
+        // CTE alias: surface columns the resolver extracted from the
+        // CTE body projection. `cte_columns_of(alias)` returns
+        // `Some(empty)` when the CTE is declared but the body was not
+        // parsed -- in that case we have nothing useful to add.
+        if out.is_empty() {
+            if let Some(s) = stmt_scope {
+                if let Some(cols) = s.cte_columns_of(&alias) {
+                    for col in cols {
+                        out.push(crate::item::Item {
+                            label: col.clone(),
+                            kind: crate::item::ItemKind::Column,
+                            detail: Some(format!("CTE {alias}")),
+                            description: None,
+                            documentation_md: None,
+                            insert_text: col.clone(),
+                            sort_priority: 0,
+                        });
+                    }
+                }
             }
         }
         // PL/pgSQL local typed as a catalog table (row variable).
