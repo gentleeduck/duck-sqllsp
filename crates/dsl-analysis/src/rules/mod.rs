@@ -13,6 +13,7 @@ pub mod cast_text_to_int_in_where;
 pub mod char_length_vs_length;
 pub mod char_n_type;
 pub mod count_one_vs_star;
+pub mod cte_missing_recursive;
 pub mod deep_case_nesting;
 pub mod distinct_after_group_by;
 pub mod distinct_on_no_order;
@@ -62,6 +63,7 @@ pub mod reserved_word_identifier;
 pub mod return_type_literal;
 pub mod savepoint_no_release;
 pub mod select_for_update_no_where;
+pub mod select_into_outside_plpgsql;
 pub mod select_no_from_no_agg;
 pub mod select_into_shape;
 pub mod single_stmt_transaction;
@@ -157,5 +159,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(backslash_in_string::Rule),
         Box::new(boolean_in_text_column::Rule),
         Box::new(like_with_no_collation::Rule),
+        Box::new(select_into_outside_plpgsql::Rule),
+        Box::new(cte_missing_recursive::Rule),
     ]
 }

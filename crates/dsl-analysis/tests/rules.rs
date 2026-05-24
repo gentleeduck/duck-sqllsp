@@ -2093,3 +2093,47 @@ fn sql122_quiet_when_collate_present() {
     let d = diags("CREATE VIEW v AS SELECT * FROM users WHERE email COLLATE \"C\" LIKE 'a%';");
     assert!(!d.iter().any(|x| x.code == "sql122"));
 }
+
+// ===== sql118 SELECT INTO outside plpgsql ==================================
+
+#[test]
+fn sql118_flags_top_level_select_into() {
+    let d = diags("SELECT id, email INTO snapshot FROM users;");
+    assert!(d.iter().any(|x| x.code == "sql118"));
+}
+
+#[test]
+fn sql118_quiet_for_normal_select() {
+    let d = diags("SELECT id, email FROM users;");
+    assert!(!d.iter().any(|x| x.code == "sql118"));
+}
+
+#[test]
+fn sql118_range_points_at_into() {
+    let src = "SELECT id INTO snapshot FROM users;";
+    let d = diags(src);
+    let hit = d.iter().find(|x| x.code == "sql118").expect("sql118");
+    let s: u32 = hit.range.start().into();
+    let e: u32 = hit.range.end().into();
+    assert_eq!(&src[s as usize..e as usize], "INTO");
+}
+
+// ===== sql124 CTE missing RECURSIVE ========================================
+
+#[test]
+fn sql124_flags_self_ref_without_recursive() {
+    let d = diags("WITH t AS (SELECT 1 UNION ALL SELECT n+1 FROM t WHERE n < 10) SELECT * FROM t;");
+    assert!(d.iter().any(|x| x.code == "sql124"));
+}
+
+#[test]
+fn sql124_quiet_when_recursive_present() {
+    let d = diags("WITH RECURSIVE t AS (SELECT 1 UNION ALL SELECT n+1 FROM t WHERE n < 10) SELECT * FROM t;");
+    assert!(!d.iter().any(|x| x.code == "sql124"));
+}
+
+#[test]
+fn sql124_quiet_for_non_self_referencing_cte() {
+    let d = diags("WITH t AS (SELECT id FROM users) SELECT * FROM t;");
+    assert!(!d.iter().any(|x| x.code == "sql124"));
+}
