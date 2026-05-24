@@ -51,6 +51,7 @@ pub fn server_capabilities() -> ServerCapabilities {
     references_provider: Some(OneOf::Left(true)),
     document_highlight_provider: Some(OneOf::Left(true)),
     folding_range_provider: Some(tower_lsp::lsp_types::FoldingRangeProviderCapability::Simple(true)),
+    linked_editing_range_provider: Some(tower_lsp::lsp_types::LinkedEditingRangeServerCapabilities::Simple(true)),
     rename_provider: Some(OneOf::Right(RenameOptions {
       prepare_provider: Some(true),
       work_done_progress_options: WorkDoneProgressOptions::default(),

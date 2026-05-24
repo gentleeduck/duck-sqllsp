@@ -8,6 +8,7 @@ pub mod folding_range;
 pub mod formatting;
 pub mod hover;
 pub mod inlay_hints;
+pub mod linked_editing;
 pub mod on_type_formatting;
 pub mod perf;
 pub mod position;

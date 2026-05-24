@@ -4,8 +4,8 @@ use dsl_server::{
   documents::DocumentStore,
   handlers::{
     code_action, completion, definition, document_highlight, document_symbol, folding_range, hover,
-    inlay_hints, on_type_formatting, references, rename, selection_range, semantic_tokens,
-    signature_help, type_definition, workspace_symbol,
+    inlay_hints, linked_editing, on_type_formatting, references, rename, selection_range,
+    semantic_tokens, signature_help, type_definition, workspace_symbol,
   },
   state::ServerState,
 };
@@ -302,6 +302,46 @@ fn folding_range_emits_block_comment_fold() {
     r.iter().any(|f| f.kind == Some(FoldingRangeKind::Comment) && f.start_line == 0 && f.end_line == 2),
     "missing comment fold: {r:?}"
   );
+}
+
+#[test]
+fn linked_editing_returns_all_in_statement_occurrences() {
+  use tower_lsp::lsp_types::{
+    LinkedEditingRangeParams, TextDocumentIdentifier, TextDocumentPositionParams,
+    WorkDoneProgressParams,
+  };
+  let src = "SELECT u.id FROM users u WHERE u.id = 1;";
+  let (state, url) = state_with("file:///le.sql", src);
+  let cur = src.find("FROM users u").unwrap() + 5; // inside `users`
+  let r = linked_editing::run(
+    &state,
+    LinkedEditingRangeParams {
+      text_document_position_params: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url.clone() },
+        position: Position { line: 0, character: cur as u32 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+    },
+  );
+  // `users` appears only once -> < 2, returns None.
+  assert!(r.is_none(), "single occurrence should not produce linked ranges");
+
+  let src2 = "SELECT u.id FROM users u JOIN orders o ON u.id = o.user_id WHERE u.email = 'x';";
+  let (state2, url2) = state_with("file:///le2.sql", src2);
+  // Cursor on alias `u` (first occurrence in `u.id`).
+  let cur2 = src2.find("u.id").unwrap();
+  let r2 = linked_editing::run(
+    &state2,
+    LinkedEditingRangeParams {
+      text_document_position_params: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url2 },
+        position: Position { line: 0, character: cur2 as u32 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+    },
+  )
+  .expect("linked ranges");
+  assert!(r2.ranges.len() >= 3, "alias `u` repeats 3+ times; got {} ranges", r2.ranges.len());
 }
 
 #[test]

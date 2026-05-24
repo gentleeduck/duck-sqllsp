@@ -142,6 +142,13 @@ impl LanguageServer for Backend {
     Ok(handlers::type_definition::run(&self.state, params))
   }
 
+  async fn linked_editing_range(
+    &self,
+    params: LinkedEditingRangeParams,
+  ) -> Result<Option<LinkedEditingRanges>> {
+    Ok(handlers::linked_editing::run(&self.state, params))
+  }
+
   async fn prepare_rename(&self, params: TextDocumentPositionParams) -> Result<Option<PrepareRenameResponse>> {
     Ok(handlers::rename::prepare(&self.state, params))
   }
