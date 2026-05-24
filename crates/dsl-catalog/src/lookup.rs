@@ -41,4 +41,11 @@ impl Catalog {
         let t = self.find_table(schema, table)?;
         t.columns.iter().find(|c| c.name == column)
     }
+
+    /// Look up a user-defined type by name (enum / domain / composite).
+    pub fn find_type(&self, schema: Option<&str>, name: &str) -> Option<&Type> {
+        self.types().find(|t| {
+            t.name == name && schema.is_none_or(|s| t.schema == s)
+        })
+    }
 }
