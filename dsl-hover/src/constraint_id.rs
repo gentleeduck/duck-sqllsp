@@ -102,30 +102,24 @@ fn find_in_catalog<'a>(token: &str, catalog: &'a Catalog) -> Option<Found<'a>> {
 }
 
 fn render_known(token: &str, kind: Kind, found: Found<'_>) -> String {
-    // The card stays in markdown but every dynamic piece (token name,
-    // location, SQL definition) lives inside inline backticks or a
-    // fenced code block. We deliberately avoid `_italic_` because some
-    // nvim colorschemes link `@markup.italic` to the same group used
-    // for the block-quoted code background -- which makes the whole
-    // card render as one washed-out italic span. `**bold**` uses a
-    // distinct highlight group.
+    // Pure-SQL output: one fenced code block, header lines as SQL
+    // comments. The server splits this at the fence and ships the
+    // body as `LanguageString { language: "sql", value: ... }` so
+    // nvim's stock hover handler colors EVERY line with sql.vim
+    // syntax -- including the comment header. No markdown italic /
+    // bold / heading styling can leak through.
     let mut s = String::new();
-    s.push_str(&format!("# `{token}`\n\n"));
-    s.push_str(&format!("**{kind_label}**\n\n", kind_label = kind.label()));
+    s.push_str("```sql\n");
+    s.push_str(&format!("-- {}: {}\n", kind.label(), token));
     match found {
         Found::Constraint(t, c) => {
-            s.push_str(&format!("on `{}.{}`\n\n", t.schema, t.name));
-            // Surround the fence with explicit blank lines so the
-            // markdown parser cleanly starts/ends the code block --
-            // some renderers swallow the fence when it abuts a
-            // preceding paragraph.
-            s.push_str("\n```sql\n");
+            s.push_str(&format!("-- on {}.{}\n", t.schema, t.name));
+            s.push('\n');
             s.push_str(&render_constraint(c));
-            s.push_str("\n```\n");
         }
         Found::Index(t, i) => {
-            s.push_str(&format!("on `{}.{}`\n\n", t.schema, t.name));
-            s.push_str("\n```sql\n");
+            s.push_str(&format!("-- on {}.{}\n", t.schema, t.name));
+            s.push('\n');
             if let Some(def) = &i.definition {
                 s.push_str(def);
                 if !def.trim_end().ends_with(';') { s.push(';'); }
@@ -136,33 +130,32 @@ fn render_known(token: &str, kind: Kind, found: Found<'_>) -> String {
                     i.name, t.schema, t.name, i.columns.join(", ")
                 ));
             }
-            s.push_str("\n```\n");
         }
         Found::Trigger(t, tg) => {
-            s.push_str(&format!("on `{}.{}`\n\n", t.schema, t.name));
-            s.push_str("\n```sql\n");
+            s.push_str(&format!("-- on {}.{}\n", t.schema, t.name));
+            s.push('\n');
             s.push_str(&format!(
                 "CREATE TRIGGER {} {} {} ON {}.{} FOR EACH {} EXECUTE FUNCTION {}();",
                 tg.name, tg.timing, tg.event, t.schema, t.name, tg.granularity, tg.function
             ));
-            s.push_str("\n```\n");
         }
     }
+    s.push_str("\n```\n");
     s
 }
 
 fn render_unknown(token: &str, kind: Kind) -> String {
     let hint = match kind {
-        Kind::PrimaryKey  => "Convention: pk_<table>_<columns>",
-        Kind::ForeignKey  => "Convention: fk_<table>_<column>_<ref_table>",
-        Kind::Unique      => "Convention: uq_<table>_<columns>",
-        Kind::UniqueIndex => "Convention: uidx_<table>_<columns>",
-        Kind::Index       => "Convention: idx_<table>_<columns>",
-        Kind::Check       => "Convention: ch_<table>_<rule>",
-        Kind::Trigger     => "Convention: tg_<table>_<event>",
+        Kind::PrimaryKey  => "pk_<table>_<columns>",
+        Kind::ForeignKey  => "fk_<table>_<column>_<ref_table>",
+        Kind::Unique      => "uq_<table>_<columns>",
+        Kind::UniqueIndex => "uidx_<table>_<columns>",
+        Kind::Index       => "idx_<table>_<columns>",
+        Kind::Check       => "ch_<table>_<rule>",
+        Kind::Trigger     => "tg_<table>_<event>",
     };
     format!(
-        "# `{token}`\n\n**{kind_label}** (identifier)\n\nNo matching object in the catalog yet.\n\n{hint}\n",
+        "```sql\n-- {kind_label} (identifier): {token}\n-- No matching object in the catalog yet.\n-- Convention: {hint}\n```\n",
         kind_label = kind.label(),
     )
 }
