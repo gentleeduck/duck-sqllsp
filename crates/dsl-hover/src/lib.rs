@@ -563,6 +563,13 @@ fn buffer_object(source: &str, token: &str) -> Option<String> {
         ("CREATE UNIQUE INDEX ",         "Unique index"),
         ("CREATE MATERIALIZED VIEW ",    "Materialised view"),
         ("CREATE VIEW ",                 "View"),
+        ("CREATE OR REPLACE VIEW ",     "View"),
+        ("CREATE SEQUENCE ",             "Sequence"),
+        ("CREATE TYPE ",                 "Type"),
+        ("CREATE DOMAIN ",               "Domain"),
+        ("CREATE EXTENSION ",            "Extension"),
+        ("CREATE SCHEMA ",               "Schema"),
+        ("CREATE POLICY ",               "Policy"),
     ] {
         if let Some(body) = find_def(source, heading, token) {
             return Some(format!(
