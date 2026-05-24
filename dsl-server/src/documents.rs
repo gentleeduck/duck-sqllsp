@@ -37,6 +37,11 @@ pub struct Document {
 pub struct ParseCache {
     pub file: ParsedFile,
     pub scopes: Vec<Scope>,
+    /// `Document.version` that the cache was built from. Handlers can
+    /// compare this against the current `DocumentStore` snapshot to
+    /// detect mid-flight cancellation -- if a newer `didChange` came
+    /// in, drop the in-flight result instead of shipping stale data.
+    pub version: i32,
 }
 
 impl Document {
@@ -61,13 +66,25 @@ impl Document {
     /// runs the parser/resolver; subsequent calls return the cached
     /// value. Cleared on every `DocumentStore::update`.
     pub fn parsed(&self) -> Arc<ParseCache> {
+        let version = self.version;
         self.parse_cache
             .get_or_init(|| {
                 let file = dsl_parse::parse(&self.text, Dialect::Postgres);
                 let scopes = dsl_resolve::resolve_with_source(&file.statements, &self.text);
-                Arc::new(ParseCache { file, scopes })
+                Arc::new(ParseCache { file, scopes, version })
             })
             .clone()
+    }
+}
+
+impl DocumentStore {
+    /// True when the current document version is newer than `version`.
+    /// Heavy async handlers (diagnostics) compare the version their
+    /// parse cache was built from against this; if newer, the request
+    /// is effectively cancelled by a fresher didChange and we should
+    /// drop the in-flight result.
+    pub fn is_stale(&self, uri: &Url, version: i32) -> bool {
+        self.docs.get(uri).map(|d| d.version > version).unwrap_or(true)
     }
 }
 

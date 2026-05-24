@@ -25,6 +25,7 @@ dsl-parse      = { workspace = true }
 dsl-resolve    = { workspace = true }
 
 tokio          = { workspace = true }
+tokio-util     = { version = "0.7", features = ["rt"] }
 tower-lsp      = { workspace = true }
 async-trait    = { workspace = true }
 serde          = { workspace = true }

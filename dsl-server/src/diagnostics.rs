@@ -15,6 +15,7 @@ use tower_lsp::Client;
 
 pub async fn publish_for(client: &Client, state: &ServerState, uri: &Url) {
     let Some(doc) = state.documents.get(uri) else { return; };
+    let snapshot_version = doc.version;
     let cache = doc.parsed();
     let text = doc.text;
     let rope = doc.rope;
@@ -23,6 +24,14 @@ pub async fn publish_for(client: &Client, state: &ServerState, uri: &Url) {
     // upcoming .await; parking_lot guards are not Send.
     let cat = state.catalog.read().clone();
     let raw = dsl_analysis::run(&text, &cache.file, &cache.scopes, &cat);
+
+    // Cancellation check #1: skip mapping work if a newer didChange
+    // already arrived. The next publish_for call will produce diagnostics
+    // for the fresher buffer.
+    if state.documents.is_stale(uri, snapshot_version) {
+        tracing::debug!(uri = %uri, "diagnostics dropped: doc version superseded mid-analysis");
+        return;
+    }
 
     let diagnostics = raw
         .into_iter()
@@ -38,8 +47,14 @@ pub async fn publish_for(client: &Client, state: &ServerState, uri: &Url) {
         })
         .collect::<Vec<_>>();
 
+    // Cancellation check #2: right before we ship to the client.
+    if state.documents.is_stale(uri, snapshot_version) {
+        tracing::debug!(uri = %uri, "diagnostics dropped: doc version superseded before publish");
+        return;
+    }
+
     client
-        .publish_diagnostics(uri.clone(), diagnostics, Some(doc.version))
+        .publish_diagnostics(uri.clone(), diagnostics, Some(snapshot_version))
         .await;
 }
 
