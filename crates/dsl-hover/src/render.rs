@@ -5,7 +5,7 @@
 //! NOT NULL, DEFAULT, FK targets) in one glance. Column / function /
 //! column-decl hovers each have their own renderer.
 
-use dsl_catalog::{Column, Constraint, ConstraintKind, Table, TableKind};
+use dsl_catalog::{Column, Constraint, ConstraintKind, Table, TableKind, Type, TypeKind};
 
 pub fn table(t: &Table) -> String {
     let fq = format!("{}.{}", t.schema, t.name);
@@ -321,4 +321,14 @@ fn function_body(f: &dsl_catalog::Function) -> Option<String> {
     let c = f.comment.as_ref()?;
     let trimmed = c.trim_start().to_ascii_uppercase();
     if trimmed.starts_with("CREATE") { Some(c.clone()) } else { None }
+}
+
+pub fn user_type(t: &Type) -> String {
+    let fq = format!("{}.{}", t.schema, t.name);
+    let kind = match t.kind {
+        TypeKind::Enum => "enum",
+        TypeKind::Domain => "domain",
+        TypeKind::Composite => "composite type",
+    };
+    format!("# `{fq}`\n_{kind}_\n")
 }

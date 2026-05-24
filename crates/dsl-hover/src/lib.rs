@@ -176,6 +176,9 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
     if let Some(t) = catalog.find_table(None, token) {
         return Some(render::table(t));
     }
+    if let Some(ty) = catalog.find_type(None, token) {
+        return Some(render::user_type(ty));
+    }
     let cols = catalog.columns_named(token);
     if !cols.is_empty() {
         return Some(render::column_in_tables(&cols));
