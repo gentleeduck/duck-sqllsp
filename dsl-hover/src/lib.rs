@@ -79,6 +79,13 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
     return Some(md);
   }
 
+  // Cursor on a `*` token (SELECT projection / `u.*` / `count(*)`).
+  // The lexer-based token_at skips non-word chars so the star never
+  // makes it to the normal lookup path. Handle it explicitly.
+  if let Some(md) = star_hover(source, offset, catalog) {
+    return Some(md);
+  }
+
   if let Some(tok) = token::token_at(source, offset) {
     // Dotted token `a.b` -- narrow to the side under the cursor.
     // Cursor on the alias side ⇒ table card. Cursor on the column
@@ -269,6 +276,167 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
 /// name with a role shouldn't be hijacked. Surfaces:
 ///   * Catalog membership status (known / unknown / built-in).
 ///   * Source: live catalog vs convention whitelist.
+/// Hover handler for the `*` token. Three flavours:
+///   * `SELECT *` (no qualifier) -> list every column of every FROM
+///     table in the current statement.
+///   * `<alias>.*` -> list every column of `alias`'s bound table.
+///   * `count(*)` / `count(*)`-like aggregates -> render the function
+///     card explaining the implicit-all semantics.
+///
+/// Returns None when the cursor is not on a star.
+fn star_hover(source: &str, offset: TextSize, catalog: &Catalog) -> Option<String> {
+  let pos: usize = u32::from(offset) as usize;
+  let bytes = source.as_bytes();
+  if pos >= bytes.len() || bytes[pos] != b'*' {
+    return None;
+  }
+  // Walk back over whitespace; if the preceding non-ws char is `.`,
+  // grab the qualifier (alias / table).
+  let mut k = pos;
+  while k > 0 && bytes[k - 1].is_ascii_whitespace() {
+    k -= 1;
+  }
+  if k > 0 && bytes[k - 1] == b'.' {
+    let mut id_end = k - 1;
+    let mut id_start = id_end;
+    while id_start > 0 {
+      let c = bytes[id_start - 1] as char;
+      if c.is_ascii_alphanumeric() || c == '_' || c == '"' {
+        id_start -= 1;
+      } else {
+        break;
+      }
+    }
+    if id_start < id_end {
+      let qualifier = source[id_start..id_end].trim_matches('"');
+      if let Some(md) = qualified_star_hover(source, offset, qualifier, catalog) {
+        return Some(md);
+      }
+    }
+    let _ = id_end;
+  }
+  // Walk back over whitespace; if preceded by `(`, look for the
+  // function call name before the paren (`count(`, `avg(`, etc).
+  let mut k = pos;
+  while k > 0 && bytes[k - 1].is_ascii_whitespace() {
+    k -= 1;
+  }
+  if k > 0 && bytes[k - 1] == b'(' {
+    let paren = k - 1;
+    let mut fn_end = paren;
+    while fn_end > 0 && bytes[fn_end - 1].is_ascii_whitespace() {
+      fn_end -= 1;
+    }
+    let mut fn_start = fn_end;
+    while fn_start > 0 {
+      let c = bytes[fn_start - 1] as char;
+      if c.is_ascii_alphanumeric() || c == '_' {
+        fn_start -= 1;
+      } else {
+        break;
+      }
+    }
+    if fn_start < fn_end {
+      let fname = &source[fn_start..fn_end];
+      let mut card = format!(
+        "# `{fname}(*)`\n\n_aggregate-over-all-rows form_\n\n",
+      );
+      if let Some(entry) = dsl_knowledge::lookup(fname) {
+        card.push_str(&dsl_knowledge::render_markdown(entry));
+        card.push_str("\n\n");
+      }
+      card.push_str(
+        "`*` here means \"count every row\" (no column referenced). \
+         Equivalent to `count(1)` for COUNT; for other aggregates the \
+         expansion depends on the function.",
+      );
+      return Some(card);
+    }
+  }
+  // Bare `*` in a SELECT projection.
+  unqualified_star_hover(source, offset, catalog)
+}
+
+fn qualified_star_hover(
+  source: &str,
+  offset: TextSize,
+  alias: &str,
+  catalog: &Catalog,
+) -> Option<String> {
+  // Resolve alias -> bound table via the existing alias_lookup path,
+  // but we want the column list, not the table card. Find the
+  // binding directly.
+  let pos: usize = u32::from(offset) as usize;
+  let parsed = dsl_parse::parse(source, dsl_parse::Dialect::Postgres);
+  let scopes = dsl_resolve::resolve(&parsed.statements);
+  let idx = parsed.statements.iter().position(|s| {
+    let lo: u32 = s.range.start().into();
+    let hi: u32 = s.range.end().into();
+    pos >= lo as usize && pos <= hi as usize
+  });
+  let table_name = if let Some(i) = idx {
+    scopes.get(i).and_then(|scope| {
+      scope.bindings.iter().find_map(|(k, v)| {
+        if v.alias.eq_ignore_ascii_case(alias) || k.eq_ignore_ascii_case(alias) {
+          Some(v.table.name.clone())
+        } else {
+          None
+        }
+      })
+    })
+  } else {
+    None
+  };
+  let table_name = table_name.unwrap_or_else(|| alias.to_string());
+  let table = catalog.find_table(None, &table_name)?;
+  let cols: Vec<String> = table.columns.iter().map(|c| format!("{alias}.{}", c.name)).collect();
+  if cols.is_empty() {
+    return None;
+  }
+  Some(format!(
+    "# `{alias}.*`\n\n_expands to every column of `{}.{}`_\n\n```sql\n{}\n```\n",
+    table.schema,
+    table.name,
+    cols.join(",\n"),
+  ))
+}
+
+fn unqualified_star_hover(source: &str, offset: TextSize, catalog: &Catalog) -> Option<String> {
+  let pos: usize = u32::from(offset) as usize;
+  let parsed = dsl_parse::parse(source, dsl_parse::Dialect::Postgres);
+  // Find the enclosing SELECT statement.
+  let stmt = parsed.statements.iter().find(|s| {
+    let lo: u32 = s.range.start().into();
+    let hi: u32 = s.range.end().into();
+    pos >= lo as usize && pos <= hi as usize
+  })?;
+  let dsl_parse::StatementKind::Select(sel) = &stmt.kind else { return None };
+  let mut lines: Vec<String> = Vec::new();
+  for from in &sel.from {
+    let alias = from.alias.as_deref().unwrap_or(&from.name);
+    if let Some(table) = catalog.find_table(from.schema.as_deref(), &from.name) {
+      for c in &table.columns {
+        lines.push(format!("{alias}.{}", c.name));
+      }
+    }
+  }
+  for join in &sel.joins {
+    let alias = join.table.alias.as_deref().unwrap_or(&join.table.name);
+    if let Some(table) = catalog.find_table(join.table.schema.as_deref(), &join.table.name) {
+      for c in &table.columns {
+        lines.push(format!("{alias}.{}", c.name));
+      }
+    }
+  }
+  if lines.is_empty() {
+    return None;
+  }
+  Some(format!(
+    "# `*`\n\n_expands to every column of every FROM/JOIN table_\n\n```sql\n{}\n```\n",
+    lines.join(",\n"),
+  ))
+}
+
 fn role_hover(source: &str, offset: TextSize, token: &str, catalog: &Catalog) -> Option<String> {
   let pos: usize = u32::from(offset) as usize;
   if !near_role_slot(source, pos) { return None; }
