@@ -21,7 +21,7 @@
 
 use dsl_catalog::{
   CATALOG_VERSION, Catalog, Column, Constraint, ConstraintKind, ConstraintRef, Extension,
-  Function, FunctionArg, Schema, Sequence, Table, TableKind, Type, TypeKind,
+  Function, FunctionArg, IndexDef, Schema, Sequence, Table, TableKind, Trigger, Type, TypeKind,
 };
 use dsl_parse::{ParsedFile, StatementKind};
 
@@ -55,7 +55,10 @@ pub fn from_file(file: &ParsedFile) -> Catalog {
       indexes: Vec::new(),
       triggers: Vec::new(),
       policies: Vec::new(),
-      comment: Some("defined in current file".into()),
+      // No synthetic comment -- the table is real, not a doc artifact.
+      // Real COMMENT ON TABLE statements get picked up in
+      // scan_table_comments() below when present.
+      comment: None,
     };
     if schema_name == "public" {
       public.tables.push(table);
@@ -103,12 +106,263 @@ pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
   // The AST doesn't carry these (CreateTableStmt::columns only has
   // name + type + nullable + default), so this text-scan is how
   // offline mode learns about FKs at all.
+  let comments_by_col = scan_column_comments(source);
+  let table_comments = scan_table_comments(source);
+  let indexes_by_table = scan_indexes(source);
+  let triggers_by_table = scan_triggers(source);
   for schema in cat.schemas.iter_mut() {
     for table in schema.tables.iter_mut() {
       table.constraints = scan_constraints_for(source, &table.name);
+      let key = table.name.to_ascii_lowercase();
+      if let Some(c) = table_comments.get(&key) {
+        table.comment = Some(c.clone());
+      }
+      if let Some(idxs) = indexes_by_table.get(&key) {
+        table.indexes = idxs.clone();
+      }
+      if let Some(trgs) = triggers_by_table.get(&key) {
+        table.triggers = trgs.clone();
+      }
+      for col in table.columns.iter_mut() {
+        let ckey = format!("{}.{}", table.name.to_ascii_lowercase(), col.name.to_ascii_lowercase());
+        if let Some(c) = comments_by_col.get(&ckey) {
+          col.comment = Some(c.clone());
+        }
+      }
     }
   }
   cat
+}
+
+/// `COMMENT ON TABLE <tbl> IS '<text>'` -> map<table_lower, text>.
+fn scan_table_comments(src: &str) -> std::collections::HashMap<String, String> {
+  let upper = src.to_ascii_uppercase();
+  let mut out = std::collections::HashMap::new();
+  let mut from = 0usize;
+  while let Some(rel) = upper[from..].find("COMMENT ON TABLE ") {
+    let after = from + rel + "COMMENT ON TABLE ".len();
+    let bytes = src.as_bytes();
+    let mut k = after;
+    while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+      k += 1;
+    }
+    let id_start = k;
+    while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') {
+      k += 1;
+    }
+    let id = &src[id_start..k];
+    let bare = id.rsplit('.').next().unwrap_or(id).trim_matches('"').to_ascii_lowercase();
+    while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+    if k + 2 > bytes.len() || !upper[k..].starts_with("IS") {
+      from = after;
+      continue;
+    }
+    k += 2;
+    while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+    if k >= bytes.len() || bytes[k] != b'\'' {
+      from = after;
+      continue;
+    }
+    let s_start = k + 1;
+    let mut s_end = s_start;
+    while s_end < bytes.len() && bytes[s_end] != b'\'' { s_end += 1; }
+    if s_end >= bytes.len() { break; }
+    out.insert(bare, src[s_start..s_end].to_string());
+    from = s_end + 1;
+  }
+  out
+}
+
+/// `CREATE [UNIQUE] INDEX [IF NOT EXISTS] <name> ON <tbl> (cols) [USING ...]`
+/// -> map<table_lower, Vec<IndexDef>>.
+fn scan_indexes(src: &str) -> std::collections::HashMap<String, Vec<IndexDef>> {
+  let upper = src.to_ascii_uppercase();
+  let bytes = src.as_bytes();
+  let mut out: std::collections::HashMap<String, Vec<IndexDef>> = std::collections::HashMap::new();
+  for (needle, unique) in [
+    ("CREATE UNIQUE INDEX IF NOT EXISTS ", true),
+    ("CREATE UNIQUE INDEX ", true),
+    ("CREATE INDEX IF NOT EXISTS ", false),
+    ("CREATE INDEX ", false),
+  ] {
+    let mut from = 0usize;
+    while let Some(rel) = upper[from..].find(needle) {
+      let after = from + rel + needle.len();
+      let mut k = after;
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+      let name_start = k;
+      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'"') {
+        k += 1;
+      }
+      let name = src[name_start..k].trim_matches('"').to_string();
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+      if upper[k..].starts_with("ON ") {
+        k += 3;
+      } else {
+        from = after;
+        continue;
+      }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+      let tbl_start = k;
+      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') {
+        k += 1;
+      }
+      let raw_tbl = &src[tbl_start..k];
+      let bare = raw_tbl.rsplit('.').next().unwrap_or(raw_tbl).trim_matches('"').to_ascii_lowercase();
+      // Find `(`.
+      while k < bytes.len() && bytes[k] != b'(' && bytes[k] != b';' { k += 1; }
+      let cols = if k < bytes.len() && bytes[k] == b'(' {
+        let end = match_paren(bytes, k);
+        let body = &src[k + 1..end];
+        split_top_commas(body)
+          .into_iter()
+          .map(|c| c.trim().trim_matches('"').to_string())
+          .filter(|c| !c.is_empty())
+          .collect()
+      } else {
+        Vec::new()
+      };
+      // Find the end of this statement.
+      let stmt_end = src[name_start..].find(';').map(|i| name_start + i + 1).unwrap_or(src.len());
+      let definition = src[from + rel..stmt_end].trim().to_string();
+      out.entry(bare).or_default().push(IndexDef {
+        name,
+        columns: cols,
+        unique,
+        definition: Some(definition),
+      });
+      from = after;
+    }
+  }
+  out
+}
+
+/// `CREATE [OR REPLACE] TRIGGER <name> {BEFORE|AFTER|INSTEAD OF}
+/// {INSERT|UPDATE|DELETE|TRUNCATE} ON <tbl> FOR EACH {ROW|STATEMENT}
+/// EXECUTE FUNCTION <fn>()` -> map<table_lower, Vec<Trigger>>.
+fn scan_triggers(src: &str) -> std::collections::HashMap<String, Vec<Trigger>> {
+  let upper = src.to_ascii_uppercase();
+  let bytes = src.as_bytes();
+  let mut out: std::collections::HashMap<String, Vec<Trigger>> = std::collections::HashMap::new();
+  for needle in ["CREATE OR REPLACE TRIGGER ", "CREATE TRIGGER ", "CREATE CONSTRAINT TRIGGER "] {
+    let mut from = 0usize;
+    while let Some(rel) = upper[from..].find(needle) {
+      let after = from + rel + needle.len();
+      let mut k = after;
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+      let name_start = k;
+      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'"') { k += 1; }
+      let name = src[name_start..k].trim_matches('"').to_string();
+      let stmt_end = src[after..].find(';').map(|i| after + i).unwrap_or(src.len());
+      let stmt = &src[after..stmt_end];
+      let stmt_upper = stmt.to_ascii_uppercase();
+      let timing = if stmt_upper.contains("INSTEAD OF") { "INSTEAD OF" }
+        else if stmt_upper.contains("BEFORE") { "BEFORE" }
+        else if stmt_upper.contains("AFTER") { "AFTER" }
+        else { "" };
+      let mut events = Vec::new();
+      if stmt_upper.contains("INSERT") { events.push("INSERT"); }
+      if stmt_upper.contains("UPDATE") { events.push("UPDATE"); }
+      if stmt_upper.contains("DELETE") { events.push("DELETE"); }
+      if stmt_upper.contains("TRUNCATE") { events.push("TRUNCATE"); }
+      let event = events.join(" OR ");
+      // `ON <tbl>`.
+      let tbl = if let Some(on_at) = stmt_upper.find(" ON ") {
+        let after_on = on_at + 4;
+        let rest = &stmt[after_on..];
+        let lead = rest.len() - rest.trim_start().len();
+        let raw = &rest[lead..];
+        let id_end = raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(raw.len());
+        raw[..id_end].rsplit('.').next().unwrap_or(&raw[..id_end]).trim_matches('"').to_ascii_lowercase()
+      } else {
+        String::new()
+      };
+      let granularity = if stmt_upper.contains("FOR EACH ROW") { "ROW" }
+        else if stmt_upper.contains("FOR EACH STATEMENT") { "STATEMENT" }
+        else { "ROW" };
+      let function = if let Some(at) = stmt_upper.find("EXECUTE FUNCTION ").or_else(|| stmt_upper.find("EXECUTE PROCEDURE ")) {
+        let after_kw = at + "EXECUTE FUNCTION ".len();
+        let rest = &stmt[after_kw..];
+        let lead = rest.len() - rest.trim_start().len();
+        let raw = &rest[lead..];
+        let id_end = raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.').unwrap_or(raw.len());
+        raw[..id_end].to_string()
+      } else {
+        String::new()
+      };
+      if !tbl.is_empty() {
+        out.entry(tbl).or_default().push(Trigger {
+          name,
+          timing: timing.to_string(),
+          event,
+          granularity: granularity.to_string(),
+          function,
+        });
+      }
+      from = after;
+    }
+  }
+  out
+}
+
+/// Harvest `COMMENT ON COLUMN <tbl>.<col> IS '<text>'` statements
+/// (case-insensitive) from raw source. Returns a `tbl.col -> text` map
+/// (both keys lowercased) so attach_column_comments can match without
+/// a second pass. Permissive scan -- malformed/half-written input is
+/// silently skipped.
+fn scan_column_comments(src: &str) -> std::collections::HashMap<String, String> {
+  let upper = src.to_ascii_uppercase();
+  let mut out = std::collections::HashMap::new();
+  let mut from = 0usize;
+  while let Some(rel) = upper[from..].find("COMMENT ON COLUMN ") {
+    let after = from + rel + "COMMENT ON COLUMN ".len();
+    let bytes = src.as_bytes();
+    let mut k = after;
+    while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+      k += 1;
+    }
+    let id_start = k;
+    while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') {
+      k += 1;
+    }
+    let id = &src[id_start..k];
+    // Need at least `table.column` (two segments).
+    let parts: Vec<&str> = id.split('.').map(|s| s.trim_matches('"')).collect();
+    if parts.len() < 2 {
+      from = after;
+      continue;
+    }
+    let tbl = parts[parts.len() - 2].to_ascii_lowercase();
+    let col = parts[parts.len() - 1].to_ascii_lowercase();
+    // Look for `IS '<text>'`.
+    while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+      k += 1;
+    }
+    if k + 2 > bytes.len() || !upper[k..].starts_with("IS") {
+      from = after;
+      continue;
+    }
+    k += 2;
+    while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+      k += 1;
+    }
+    if k >= bytes.len() || bytes[k] != b'\'' {
+      from = after;
+      continue;
+    }
+    let s_start = k + 1;
+    let mut s_end = s_start;
+    while s_end < bytes.len() && bytes[s_end] != b'\'' {
+      s_end += 1;
+    }
+    if s_end >= bytes.len() {
+      break;
+    }
+    let text = src[s_start..s_end].to_string();
+    out.insert(format!("{tbl}.{col}"), text);
+    from = s_end + 1;
+  }
+  out
 }
 
 /// Locate the CREATE TABLE body for `name` and pull out every
