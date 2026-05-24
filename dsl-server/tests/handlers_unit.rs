@@ -126,6 +126,39 @@ fn references_matches_quoted_identifier_case_insensitively() {
 }
 
 #[test]
+fn references_walks_every_open_buffer() {
+    use tower_lsp::lsp_types::{
+        PartialResultParams, ReferenceContext, ReferenceParams, TextDocumentIdentifier,
+        TextDocumentPositionParams, WorkDoneProgressParams,
+    };
+    let state = ServerState::new();
+    let schema: Url = "file:///migrations/001_schema.sql".parse().unwrap();
+    let seed: Url   = "file:///seeds/products.sql".parse().unwrap();
+    let query: Url  = "file:///queries/list.sql".parse().unwrap();
+    state.documents.open(schema.clone(), "CREATE TABLE products (id INT);".into(), 1);
+    state.documents.open(seed.clone(),   "INSERT INTO products (id) VALUES (1);".into(), 1);
+    state.documents.open(query.clone(),  "SELECT * FROM products WHERE products.id = 1;".into(), 1);
+
+    let locs = references::run(&state, ReferenceParams {
+        text_document_position: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: schema.clone() },
+            position: Position { line: 0, character: 16 }, // inside "products" in CREATE TABLE
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+        context: ReferenceContext { include_declaration: true },
+    }).expect("ref result");
+
+    let by_uri: std::collections::HashMap<_, usize> = locs.iter().fold(
+        std::collections::HashMap::new(),
+        |mut acc, l| { *acc.entry(l.uri.clone()).or_default() += 1; acc },
+    );
+    assert_eq!(by_uri.get(&schema).copied(), Some(1), "1 hit in schema (CREATE TABLE)");
+    assert_eq!(by_uri.get(&seed).copied(),   Some(1), "1 hit in seed (INSERT INTO)");
+    assert_eq!(by_uri.get(&query).copied(),  Some(2), "2 hits in query (FROM + WHERE qualifier)");
+}
+
+#[test]
 fn rename_returns_workspace_edit() {
     let (state, url) = state_with(
         "file:///r.sql",

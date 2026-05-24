@@ -1,10 +1,15 @@
 //! `textDocument/references` handler.
 //!
-//! Returns every buffer-scoped occurrence of the identifier under the
-//! cursor. Strings, comments, and dollar-quoted bodies are excluded so a
-//! literal `'orders'` does not shadow a real reference. Identifier match
-//! is case-insensitive; quoted identifiers are matched on their inner
-//! text without the surrounding `"`.
+//! Returns every occurrence of the identifier under the cursor across
+//! every open buffer in the workspace. Strings, comments, and
+//! dollar-quoted bodies are excluded so a literal `'orders'` does not
+//! shadow a real reference. Identifier match is case-insensitive;
+//! quoted identifiers are matched on their inner text without the
+//! surrounding `"`. The cursor's own document is always included --
+//! regardless of `include_declaration`, since SQL identifiers don't
+//! have a single canonical "declaration" the way variables in
+//! procedural languages do (think: a column appears in CREATE TABLE,
+//! every SELECT that uses it, and in ALTER statements too).
 
 use crate::handlers::position;
 use crate::state::ServerState;
@@ -12,20 +17,24 @@ use ropey::Rope;
 use tower_lsp::lsp_types::{Location, Position, Range, ReferenceParams};
 
 pub fn run(state: &ServerState, params: ReferenceParams) -> Option<Vec<Location>> {
-    let uri = params.text_document_position.text_document.uri;
-    let doc = state.documents.get(&uri)?;
-    let offset = position::to_offset(&doc.rope, params.text_document_position.position);
-    let token = token_at(&doc.text, offset)?;
+    let cursor_uri = params.text_document_position.text_document.uri;
+    let cursor_doc = state.documents.get(&cursor_uri)?;
+    let offset = position::to_offset(&cursor_doc.rope, params.text_document_position.position);
+    let token = token_at(&cursor_doc.text, offset)?;
 
+    // Walk every open buffer, not just the cursor's, so refs follow
+    // the schema across split-file migrations and seed scripts.
     let mut out = Vec::new();
-    for (start, end) in find_word_occurrences(&doc.text, &token) {
-        out.push(Location {
-            uri: uri.clone(),
-            range: Range {
-                start: byte_to_position(&doc.rope, start),
-                end:   byte_to_position(&doc.rope, end),
-            },
-        });
+    for (uri, doc) in state.documents.snapshot() {
+        for (start, end) in find_word_occurrences(&doc.text, &token) {
+            out.push(Location {
+                uri: uri.clone(),
+                range: Range {
+                    start: byte_to_position(&doc.rope, start),
+                    end:   byte_to_position(&doc.rope, end),
+                },
+            });
+        }
     }
     if out.is_empty() { None } else { Some(out) }
 }
