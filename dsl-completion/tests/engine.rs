@@ -596,3 +596,42 @@ fn after_inline_check_keyword_offers_functions() {
             "function `{fname}` missing inside inline CHECK");
     }
 }
+
+#[test]
+fn functions_in_join_on_clause() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT * FROM users u JOIN orders o ON ";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_lowercase()).collect();
+    for fname in &["length", "coalesce", "now"] {
+        assert!(labels.iter().any(|l| l == fname),
+            "function `{fname}` missing from ON-clause completion");
+    }
+}
+
+#[test]
+fn functions_in_in_predicate() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT * FROM users WHERE id IN (";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_lowercase()).collect();
+    for fname in &["length", "coalesce"] {
+        assert!(labels.iter().any(|l| l == fname),
+            "function `{fname}` missing from IN-predicate completion");
+    }
+}
+
+#[test]
+fn functions_in_plpgsql_assign_rhs() {
+    let cat = catalog_with_users_and_orders();
+    let src = "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ DECLARE v text; BEGIN v := ";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_lowercase()).collect();
+    for fname in &["length", "now", "coalesce"] {
+        assert!(labels.iter().any(|l| l == fname),
+            "function `{fname}` missing from PL/pgSQL assign RHS completion");
+    }
+}
