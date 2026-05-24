@@ -70,6 +70,7 @@ pub mod reserved_word_identifier;
 pub mod return_type_literal;
 pub mod savepoint_no_release;
 pub mod select_for_update_in_recursive_cte;
+pub mod set_role_no_reset;
 pub mod select_for_update_no_where;
 pub mod select_into_outside_plpgsql;
 pub mod select_no_from_no_agg;
@@ -80,6 +81,7 @@ pub mod sql_lang_uses_new_old;
 pub mod time_with_timezone;
 pub mod timestamp_without_tz;
 pub mod transaction_isolation_no_set;
+pub mod trigger_when_uses_old_in_insert;
 pub mod trailing_comma_values;
 pub mod truncate_no_cascade;
 pub mod union_column_count;
@@ -183,5 +185,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(copy_no_format::Rule),
         Box::new(select_for_update_in_recursive_cte::Rule),
         Box::new(listen_unbounded::Rule),
+        Box::new(set_role_no_reset::Rule),
+        Box::new(trigger_when_uses_old_in_insert::Rule),
     ]
 }
