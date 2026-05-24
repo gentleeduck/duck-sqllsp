@@ -3,10 +3,12 @@
 //! New rules: add the module, then push an instance into [`all`].
 
 pub mod ambiguous_column;
+pub mod backslash_in_string;
 pub mod bare_return_typed;
 pub mod between_reversed;
 pub mod bool_compare_equals;
 pub mod case_single_when;
+pub mod cast_text_to_int_in_where;
 pub mod char_length_vs_length;
 pub mod char_n_type;
 pub mod count_one_vs_star;
@@ -149,5 +151,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(jsonb_set_no_create::Rule),
         Box::new(numeric_no_precision::Rule),
         Box::new(distinct_after_group_by::Rule),
+        Box::new(cast_text_to_int_in_where::Rule),
+        Box::new(backslash_in_string::Rule),
     ]
 }
