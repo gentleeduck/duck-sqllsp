@@ -101,3 +101,51 @@ fn unknown_alias_returns_no_hover() {
     let md = hover_at(src, cur);
     assert!(md.is_none() || !md.as_ref().unwrap().contains("Column"));
 }
+
+// ===== cast-operator hover =================================================
+
+#[test]
+fn hover_on_text_after_cast_op_renders_type_card() {
+    let src = "SELECT id::text FROM users;";
+    // Cursor sits on the `t` of `text`.
+    let cur = src.find("text").unwrap();
+    let md = hover_at(src, cur).expect("hover should resolve type");
+    // Knowledge-driven type card includes the type name plus a docs link.
+    assert!(md.to_ascii_lowercase().contains("text"),
+        "expected text-type card; got: {md}");
+}
+
+#[test]
+fn hover_on_jsonb_after_cast_op_renders_type_card() {
+    let src = "SELECT data::jsonb FROM events;";
+    let cur = src.find("jsonb").unwrap();
+    let md = hover_at(src, cur).expect("hover should resolve jsonb");
+    assert!(md.to_ascii_lowercase().contains("jsonb"));
+}
+
+#[test]
+fn hover_on_int_after_cast_op_renders_type_card() {
+    let src = "SELECT col::int FROM t;";
+    let cur = src.find("int").unwrap();
+    let md = hover_at(src, cur).expect("hover should resolve int");
+    assert!(md.to_ascii_lowercase().contains("int"));
+}
+
+// ===== schema-qualified column resolve ===================================
+
+#[test]
+fn hover_on_schema_qualified_column_path() {
+    let src = "SELECT public.users.id FROM public.users;";
+    let cur = src.find(".id").unwrap() + 1;
+    let md = hover_at(src, cur).expect("schema.table.col hover should resolve");
+    assert!(md.contains("id") && md.to_ascii_lowercase().contains("uuid"),
+        "expected id-column card; got: {md}");
+}
+
+#[test]
+fn hover_on_schema_qualified_table_card() {
+    let src = "SELECT * FROM public.users;";
+    let cur = src.find(".users").unwrap() + 1;
+    let md = hover_at(src, cur).expect("schema.table hover should resolve");
+    assert!(md.contains("users"), "expected users-table card; got: {md}");
+}

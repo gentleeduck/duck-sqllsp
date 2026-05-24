@@ -112,6 +112,13 @@ fn column_exists(
     name: &str,
 ) -> bool {
     if let Some(q) = qualifier {
+        // Schema-qualified qualifier `schema.table` -- look up directly
+        // in the catalog before falling back to scope/CTE lookups.
+        if let Some((schema, table)) = q.split_once('.') {
+            if let Some(t) = catalog.find_table(Some(schema), table) {
+                return t.columns.iter().any(|c| c.name.eq_ignore_ascii_case(name));
+            }
+        }
         // Qualifier matches a CTE name? Check declared CTE columns.
         // Empty Vec means the resolver could not parse the body --
         // be lenient and accept the column rather than emit a false

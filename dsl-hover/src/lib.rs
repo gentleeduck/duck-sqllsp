@@ -163,6 +163,18 @@ pub fn hover_with(
 }
 
 fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
+    // Schema-qualified 3-segment path: `schema.table.column`.
+    let segs: Vec<&str> = token.split('.').collect();
+    if segs.len() == 3 {
+        let (schema, table, column) = (segs[0], segs[1], segs[2]);
+        if let Some(t) = catalog.find_table(Some(schema), table) {
+            if let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(column)) {
+                return Some(render::column(t, c));
+            }
+            // 3rd segment is not a column -- still a valid table card.
+            return Some(render::table(t));
+        }
+    }
     if let Some((left, right)) = token.split_once('.') {
         if let Some(t) = catalog.find_table(Some(left), right) {
             return Some(render::table(t));

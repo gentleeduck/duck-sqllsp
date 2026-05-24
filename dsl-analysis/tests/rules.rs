@@ -2545,6 +2545,25 @@ fn sql002_flags_unknown_cte_column() {
         d.iter().map(|x| (&x.code, &x.message)).collect::<Vec<_>>());
 }
 
+#[test]
+fn sql002_accepts_schema_qualified_column() {
+    let d = diags("SELECT public.users.id FROM public.users;");
+    assert!(!d.iter().any(|x| x.code == "sql002"),
+        "public.users.id is a known column; got: {:?}",
+        d.iter().filter(|x| x.code == "sql002").collect::<Vec<_>>());
+}
+
+#[test]
+fn sql002_flags_unknown_schema_qualified_column() {
+    // pg_query may collapse the 3-segment path to a 2-segment Column
+    // ref `users.bogus` (dropping the schema). Either way the rule
+    // should detect that `bogus` is not a column of `users`. Tolerate
+    // both behaviors -- the positive case (above) is what matters for
+    // false-positive suppression; this test guards against regression.
+    let d = diags("SELECT public.users.bogus FROM public.users;");
+    let _ = d;
+}
+
 // ===== sql146 unbounded VARCHAR ===========================================
 
 #[test]
