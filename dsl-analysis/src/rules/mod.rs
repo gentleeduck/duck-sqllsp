@@ -9,6 +9,7 @@ pub mod ambiguous_column;
 pub mod array_subscript_zero;
 pub mod backslash_in_string;
 pub mod bare_return_typed;
+pub mod begin_no_lock_mode;
 pub mod between_reversed;
 pub mod bool_compare_equals;
 pub mod boolean_in_text_column;
@@ -78,6 +79,7 @@ pub mod prefer_alias;
 pub mod raise_arg_count;
 pub mod raise_message_no_args;
 pub mod raise_using_errcode;
+pub mod redundant_index_on_pk;
 pub mod redundant_parens;
 pub mod reserved_word_identifier;
 pub mod return_type_literal;
@@ -238,5 +240,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(text_int_arithmetic::Rule),
         Box::new(missing_lateral::Rule),
         Box::new(row_constructor_single::Rule),
+        Box::new(redundant_index_on_pk::Rule),
+        Box::new(begin_no_lock_mode::Rule),
     ]
 }

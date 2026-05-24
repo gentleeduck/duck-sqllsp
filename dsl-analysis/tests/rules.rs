@@ -2861,6 +2861,40 @@ fn sql166_quiet_for_implicit_tuple() {
     assert!(!d.iter().any(|x| x.code == "sql166"));
 }
 
+// ===== sql167 redundant index on PK column ================================
+
+#[test]
+fn sql167_flags_index_on_pk_column() {
+    let d = diags("CREATE INDEX idx_users_id ON users (id);");
+    assert!(d.iter().any(|x| x.code == "sql167"));
+}
+
+#[test]
+fn sql167_quiet_for_index_on_non_pk_column() {
+    let d = diags("CREATE INDEX idx_users_email ON users (email);");
+    assert!(!d.iter().any(|x| x.code == "sql167"));
+}
+
+// ===== sql152 BEGIN without explicit lock mode ============================
+
+#[test]
+fn sql152_flags_begin_with_update_no_lock() {
+    let d = diags("BEGIN; UPDATE users SET name = 'x' WHERE id = '1'; COMMIT;");
+    assert!(d.iter().any(|x| x.code == "sql152"));
+}
+
+#[test]
+fn sql152_quiet_with_for_update_lock() {
+    let d = diags("BEGIN; SELECT * FROM users WHERE id = '1' FOR UPDATE; UPDATE users SET name = 'x' WHERE id = '1'; COMMIT;");
+    assert!(!d.iter().any(|x| x.code == "sql152"));
+}
+
+#[test]
+fn sql152_quiet_for_read_only_tx() {
+    let d = diags("BEGIN; SELECT * FROM users; COMMIT;");
+    assert!(!d.iter().any(|x| x.code == "sql152"));
+}
+
 #[test]
 fn golden_user_roles_unique_pair_zero_warnings() {
     let src = r#"CREATE TABLE user_roles (
