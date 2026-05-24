@@ -84,12 +84,14 @@ pub mod select_for_update_in_recursive_cte;
 pub mod set_role_no_reset;
 pub mod select_for_update_no_where;
 pub mod select_into_outside_plpgsql;
+pub mod select_into_strict_no_exception;
 pub mod select_no_from_no_agg;
 pub mod select_into_shape;
 pub mod single_stmt_transaction;
 pub mod select_star_insert;
 pub mod sql_lang_uses_new_old;
 pub mod time_with_timezone;
+pub mod timestamp_int_arithmetic;
 pub mod timestamp_without_tz;
 pub mod transaction_isolation_no_set;
 pub mod trigger_when_uses_new_in_delete;
@@ -215,5 +217,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(unique_on_nullable::Rule),
         Box::new(returning_with_truncate::Rule),
         Box::new(cast_text_in_distinct::Rule),
+        Box::new(select_into_strict_no_exception::Rule),
+        Box::new(timestamp_int_arithmetic::Rule),
     ]
 }

@@ -2776,3 +2776,66 @@ fn sql138_quiet_for_plain_distinct() {
     let d = diags("SELECT DISTINCT id FROM users;");
     assert!(!d.iter().any(|x| x.code == "sql138"));
 }
+
+// ===== sql156 SELECT INTO STRICT without EXCEPTION =========================
+
+#[test]
+fn sql156_flags_strict_no_exception_block() {
+    let d = diags("CREATE FUNCTION f() RETURNS uuid LANGUAGE plpgsql AS $$ DECLARE r uuid; BEGIN SELECT id INTO STRICT r FROM users WHERE email = 'x'; RETURN r; END $$;");
+    assert!(d.iter().any(|x| x.code == "sql156"));
+}
+
+#[test]
+fn sql156_quiet_with_exception_block() {
+    let d = diags("CREATE FUNCTION f() RETURNS uuid LANGUAGE plpgsql AS $$ DECLARE r uuid; BEGIN SELECT id INTO STRICT r FROM users WHERE email = 'x'; RETURN r; EXCEPTION WHEN NO_DATA_FOUND THEN RETURN NULL; END $$;");
+    assert!(!d.iter().any(|x| x.code == "sql156"));
+}
+
+#[test]
+fn sql156_quiet_without_strict() {
+    let d = diags("CREATE FUNCTION f() RETURNS uuid LANGUAGE plpgsql AS $$ DECLARE r uuid; BEGIN SELECT id INTO r FROM users WHERE email = 'x'; RETURN r; END $$;");
+    assert!(!d.iter().any(|x| x.code == "sql156"));
+}
+
+// ===== sql153 timestamp + int arithmetic ===================================
+
+#[test]
+fn sql153_flags_now_plus_int() {
+    let d = diags("SELECT now() + 1 FROM users;");
+    assert!(d.iter().any(|x| x.code == "sql153"));
+}
+
+#[test]
+fn sql153_quiet_with_interval() {
+    let d = diags("SELECT now() + INTERVAL '1 day' FROM users;");
+    assert!(!d.iter().any(|x| x.code == "sql153"));
+}
+
+#[test]
+fn sql153_flags_current_date_minus_int() {
+    let d = diags("SELECT current_date - 7 FROM users;");
+    assert!(d.iter().any(|x| x.code == "sql153"));
+}
+
+// ===== regression: ENTIRE user trigger fn must produce zero warnings ======
+
+#[test]
+fn user_trigger_set_updated_at_zero_warnings() {
+    let src = r#"CREATE OR REPLACE FUNCTION set_updated_at ()
+    RETURNS TRIGGER
+AS $$
+BEGIN
+    new.updated_at := now();
+    RETURN new;
+END;
+$$ LANGUAGE plpgsql;"#;
+    let d = diags(src);
+    let our_diags: Vec<_> = d.iter()
+        .filter(|x| !matches!(x.code, "sql044" | "sql023"))
+        .collect();
+    assert!(
+        our_diags.is_empty(),
+        "trigger fn should produce zero diagnostics, got: {:?}",
+        our_diags.iter().map(|x| (&x.code, &x.message)).collect::<Vec<_>>(),
+    );
+}
