@@ -76,6 +76,7 @@ pub mod redundant_parens;
 pub mod reserved_word_identifier;
 pub mod return_type_literal;
 pub mod returning_no_assign;
+pub mod row_count_after_dml;
 pub mod savepoint_no_release;
 pub mod select_for_update_in_recursive_cte;
 pub mod set_role_no_reset;
@@ -95,6 +96,7 @@ pub mod trailing_comma_values;
 pub mod truncate_no_cascade;
 pub mod union_column_count;
 pub mod union_vs_all;
+pub mod unique_on_nullable;
 pub mod unknown_column;
 pub mod unreachable_after_return;
 pub mod unresolved_table;
@@ -207,5 +209,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(case_no_else::Rule),
         Box::new(update_set_no_change::Rule),
         Box::new(returning_no_assign::Rule),
+        Box::new(row_count_after_dml::Rule),
+        Box::new(unique_on_nullable::Rule),
     ]
 }

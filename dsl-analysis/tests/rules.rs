@@ -2677,3 +2677,43 @@ fn sql143_quiet_for_top_level_returning() {
     let d = diags("INSERT INTO users (email) VALUES ('a@b.com') RETURNING id;");
     assert!(!d.iter().any(|x| x.code == "sql143"));
 }
+
+// ===== sql126 DML in plpgsql without GET DIAGNOSTICS ======================
+
+#[test]
+fn sql126_flags_update_no_diagnostics() {
+    let d = diags("CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN UPDATE users SET name = 'x' WHERE id = '1'; END $$;");
+    assert!(d.iter().any(|x| x.code == "sql126"));
+}
+
+#[test]
+fn sql126_quiet_when_get_diagnostics_follows() {
+    let d = diags("CREATE FUNCTION f() RETURNS int LANGUAGE plpgsql AS $$ DECLARE n int; BEGIN UPDATE users SET name = 'x' WHERE id = '1'; GET DIAGNOSTICS n = ROW_COUNT; RETURN n; END $$;");
+    assert!(!d.iter().any(|x| x.code == "sql126"));
+}
+
+#[test]
+fn sql126_quiet_when_returning_into_present() {
+    let d = diags("CREATE FUNCTION f() RETURNS uuid LANGUAGE plpgsql AS $$ DECLARE r uuid; BEGIN UPDATE users SET name = 'x' WHERE id = '1' RETURNING id INTO r; RETURN r; END $$;");
+    assert!(!d.iter().any(|x| x.code == "sql126"));
+}
+
+// ===== sql139 UNIQUE on nullable ==========================================
+
+#[test]
+fn sql139_flags_unique_no_not_null() {
+    let d = diags("CREATE TABLE x (email TEXT UNIQUE);");
+    assert!(d.iter().any(|x| x.code == "sql139"));
+}
+
+#[test]
+fn sql139_quiet_when_not_null_present() {
+    let d = diags("CREATE TABLE x (email TEXT NOT NULL UNIQUE);");
+    assert!(!d.iter().any(|x| x.code == "sql139"));
+}
+
+#[test]
+fn sql139_quiet_when_nulls_not_distinct() {
+    let d = diags("CREATE TABLE x (email TEXT UNIQUE NULLS NOT DISTINCT);");
+    assert!(!d.iter().any(|x| x.code == "sql139"));
+}
