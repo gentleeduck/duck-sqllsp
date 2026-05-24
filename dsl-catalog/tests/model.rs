@@ -1,4 +1,6 @@
-use dsl_catalog::{Catalog, Column, Schema, Table, TableKind, CATALOG_VERSION};
+use dsl_catalog::{
+    Catalog, Column, Extension, Schema, Sequence, Table, TableKind, CATALOG_VERSION,
+};
 
 fn sample() -> Catalog {
     Catalog {
@@ -24,7 +26,52 @@ fn sample() -> Catalog {
         }],
         functions: vec![],
         types: vec![],
+        roles: vec![],
+        sequences: vec![Sequence {
+            schema: "public".into(),
+            name: "users_id_seq".into(),
+            data_type: "bigint".into(),
+            start_value: 1, min_value: 1, max_value: i64::MAX,
+            increment_by: 1, cycle: false,
+            owned_by_column: Some("public.users.id".into()),
+            comment: None,
+        }],
+        extensions: vec![Extension {
+            name: "pgcrypto".into(),
+            schema: "public".into(),
+            version: "1.3".into(),
+            comment: Some("cryptographic functions".into()),
+        }],
     }
+}
+
+#[test]
+fn finds_sequence_by_name() {
+    let cat = sample();
+    let s = cat.find_sequence(None, "users_id_seq").unwrap();
+    assert_eq!(s.schema, "public");
+    assert_eq!(s.data_type, "bigint");
+}
+
+#[test]
+fn has_extension_is_case_insensitive() {
+    let cat = sample();
+    assert!(cat.has_extension("pgcrypto"));
+    assert!(cat.has_extension("PGCRYPTO"));
+    assert!(!cat.has_extension("postgis"));
+}
+
+#[test]
+fn old_catalog_json_round_trips_without_new_fields() {
+    // Catalogs cached before sequences/extensions existed must still
+    // deserialise (serde(default)).
+    let json = r#"{
+      "version": 1, "connection_id": "x", "schemas": [],
+      "functions": [], "types": [], "roles": []
+    }"#;
+    let cat: Catalog = serde_json::from_str(json).unwrap();
+    assert!(cat.sequences.is_empty());
+    assert!(cat.extensions.is_empty());
 }
 
 #[test]

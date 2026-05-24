@@ -20,6 +20,46 @@ pub struct Catalog {
     /// compatible.
     #[serde(default)]
     pub roles: Vec<String>,
+    /// Sequences from `pg_sequences`. Hover / completion / nextval()
+    /// argument validation use these. Default empty so older snapshots
+    /// stay forward-compatible.
+    #[serde(default)]
+    pub sequences: Vec<Sequence>,
+    /// Installed extensions from `pg_extension`. Lets hover annotate
+    /// `CREATE EXTENSION` and lets sql checks for known extensions
+    /// (pgcrypto, uuid-ossp, postgis...) know what is available.
+    #[serde(default)]
+    pub extensions: Vec<Extension>,
+}
+
+/// Sequence object. Mirrors the columns of `pg_sequences`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Sequence {
+    pub schema: String,
+    pub name: String,
+    /// `bigint` / `integer` / `smallint`.
+    pub data_type: String,
+    pub start_value: i64,
+    pub min_value: i64,
+    pub max_value: i64,
+    pub increment_by: i64,
+    pub cycle: bool,
+    /// True when this sequence is owned by a column (created
+    /// implicitly by SERIAL / BIGSERIAL / GENERATED AS IDENTITY).
+    pub owned_by_column: Option<String>,
+    #[serde(default)]
+    pub comment: Option<String>,
+}
+
+/// Installed Postgres extension. Mirrors `pg_extension` joined with
+/// `pg_namespace` for the install schema.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Extension {
+    pub name: String,
+    pub schema: String,
+    pub version: String,
+    #[serde(default)]
+    pub comment: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

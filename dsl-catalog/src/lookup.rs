@@ -4,7 +4,7 @@
 //! as inherent methods on `Catalog` for ergonomic call sites:
 //! `catalog.find_table(Some("public"), "users")`.
 
-use crate::model::{Catalog, Column, IndexDef, Policy, Table, Trigger, Type};
+use crate::model::{Catalog, Column, Extension, IndexDef, Policy, Sequence, Table, Trigger, Type};
 
 impl Catalog {
     pub fn tables(&self) -> impl Iterator<Item = &Table> {
@@ -79,5 +79,27 @@ impl Catalog {
             }
         }
         None
+    }
+
+    /// All known sequences, across schemas.
+    pub fn sequences(&self) -> impl Iterator<Item = &Sequence> {
+        self.sequences.iter()
+    }
+
+    /// Find a sequence by name (and optional schema).
+    pub fn find_sequence(&self, schema: Option<&str>, name: &str) -> Option<&Sequence> {
+        self.sequences().find(|s| {
+            s.name == name && schema.is_none_or(|sch| s.schema == sch)
+        })
+    }
+
+    /// All installed extensions.
+    pub fn extensions(&self) -> impl Iterator<Item = &Extension> {
+        self.extensions.iter()
+    }
+
+    /// True when an extension with `name` is installed (case-insensitive).
+    pub fn has_extension(&self, name: &str) -> bool {
+        self.extensions.iter().any(|e| e.name.eq_ignore_ascii_case(name))
     }
 }
