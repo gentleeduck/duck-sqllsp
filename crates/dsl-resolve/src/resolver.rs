@@ -22,6 +22,11 @@ fn resolve_one(stmt: &Statement) -> Scope {
             // when the same CTE appears later in the same SELECT.
             for name in &s.cte_names {
                 add_synthetic(&mut scope, name);
+                // Register the CTE in `cte_columns` with an empty Vec
+                // -- the body parse that would fill projection columns
+                // is a future enhancement. `Some(empty)` lets callers
+                // tell "declared but unknown" from "no such CTE".
+                scope.cte_columns.entry(name.clone()).or_insert_with(Vec::new);
             }
             for t in &s.from { add(&mut scope, t); }
             for j in &s.joins { add(&mut scope, &j.table); }
