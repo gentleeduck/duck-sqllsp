@@ -293,7 +293,7 @@ fn scope_column_lookup(
 ) -> Option<String> {
     let pos: usize = u32::from(offset) as usize;
     let parsed = dsl_parse::parse(source, dsl_parse::Dialect::Postgres);
-    let scopes = dsl_resolve::resolve(&parsed.statements);
+    let scopes = dsl_resolve::resolve_with_source(&parsed.statements, source);
     let idx = parsed.statements.iter().position(|s| {
         let lo: u32 = s.range.start().into();
         let hi: u32 = s.range.end().into();
@@ -304,6 +304,23 @@ fn scope_column_lookup(
     // Qualified form: `alias.col` -- resolve alias, then look up col.
     if let Some((left, right)) = tok.split_once('.') {
         if right.is_empty() { return None; }
+        // CTE-qualified column? Render a CTE card showing the alias and
+        // the projected column name.
+        if let Some(cte_cols) = scope.cte_columns_of(left) {
+            if cte_cols.iter().any(|c| c.eq_ignore_ascii_case(right)) {
+                let cols_md = if cte_cols.is_empty() {
+                    String::from("_columns not parsed_")
+                } else {
+                    cte_cols.iter()
+                        .map(|c| format!("- `{c}`"))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                };
+                return Some(format!(
+                    "# `{left}.{right}`\n_CTE column_\n\n**`{left}`** projects:\n\n{cols_md}\n"
+                ));
+            }
+        }
         if let Some(binding) = scope.bindings.iter().find_map(|(k, v)| {
             if v.alias.eq_ignore_ascii_case(left) || k.eq_ignore_ascii_case(left) {
                 Some(v)
