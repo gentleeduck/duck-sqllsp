@@ -3,9 +3,9 @@
 use dsl_server::{
   documents::DocumentStore,
   handlers::{
-    code_action, completion, document_highlight, document_symbol, folding_range, hover, inlay_hints,
-    on_type_formatting, references, rename, selection_range, semantic_tokens, signature_help,
-    type_definition, workspace_symbol,
+    code_action, completion, definition, document_highlight, document_symbol, folding_range, hover,
+    inlay_hints, on_type_formatting, references, rename, selection_range, semantic_tokens,
+    signature_help, type_definition, workspace_symbol,
   },
   state::ServerState,
 };
@@ -302,6 +302,97 @@ fn folding_range_emits_block_comment_fold() {
     r.iter().any(|f| f.kind == Some(FoldingRangeKind::Comment) && f.start_line == 0 && f.end_line == 2),
     "missing comment fold: {r:?}"
   );
+}
+
+#[test]
+fn definition_jumps_to_create_role() {
+  use tower_lsp::lsp_types::{
+    GotoDefinitionParams, GotoDefinitionResponse, TextDocumentIdentifier, TextDocumentPositionParams,
+    WorkDoneProgressParams, PartialResultParams,
+  };
+  let src = "\
+CREATE ROLE app_owner;
+ALTER TABLE users OWNER TO app_owner;
+";
+  let (state, url) = state_with("file:///gd.sql", src);
+  let line1 = "ALTER TABLE users OWNER TO app_owner;";
+  let cur = line1.find("app_owner").unwrap() + 3;
+  let resp = definition::run(
+    &state,
+    GotoDefinitionParams {
+      text_document_position_params: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url.clone() },
+        position: Position { line: 1, character: cur as u32 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  ).expect("def");
+  let loc = match resp {
+    GotoDefinitionResponse::Scalar(l) => l,
+    _ => panic!("expected scalar"),
+  };
+  assert_eq!(loc.uri, url);
+  assert_eq!(loc.range.start.line, 0, "should land on CREATE ROLE line");
+}
+
+#[test]
+fn definition_jumps_across_open_buffers() {
+  use tower_lsp::lsp_types::{
+    GotoDefinitionParams, GotoDefinitionResponse, TextDocumentIdentifier, TextDocumentPositionParams,
+    WorkDoneProgressParams, PartialResultParams,
+  };
+  let state = ServerState::new();
+  let schema: Url = "file:///migrations/001_schema.sql".parse().unwrap();
+  let query: Url = "file:///queries/list.sql".parse().unwrap();
+  state.documents.open(schema.clone(), "CREATE TABLE products (id INT);".into(), 1);
+  state.documents.open(query.clone(), "SELECT * FROM products;".into(), 1);
+  let q_src = "SELECT * FROM products;";
+  let cur = q_src.find("products").unwrap() + 3;
+  let resp = definition::run(
+    &state,
+    GotoDefinitionParams {
+      text_document_position_params: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: query.clone() },
+        position: Position { line: 0, character: cur as u32 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  ).expect("def");
+  let loc = match resp {
+    GotoDefinitionResponse::Scalar(l) => l,
+    _ => panic!("expected scalar"),
+  };
+  assert_eq!(loc.uri, schema, "jump should land in the schema buffer");
+}
+
+#[test]
+fn definition_jumps_to_cte_binding() {
+  use tower_lsp::lsp_types::{
+    GotoDefinitionParams, GotoDefinitionResponse, TextDocumentIdentifier, TextDocumentPositionParams,
+    WorkDoneProgressParams, PartialResultParams,
+  };
+  let src = "WITH active AS (SELECT 1) SELECT * FROM active;";
+  let (state, url) = state_with("file:///cte.sql", src);
+  let cur = src.rfind("active").unwrap() + 3;
+  let resp = definition::run(
+    &state,
+    GotoDefinitionParams {
+      text_document_position_params: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        position: Position { line: 0, character: cur as u32 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  ).expect("def");
+  let loc = match resp {
+    GotoDefinitionResponse::Scalar(l) => l,
+    _ => panic!("expected scalar"),
+  };
+  let expected_col = src.find("active").unwrap() as u32;
+  assert_eq!(loc.range.start.character, expected_col, "should land on CTE binding's `active`");
 }
 
 #[test]

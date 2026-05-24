@@ -43,43 +43,72 @@ pub fn run(state: &ServerState, params: GotoDefinitionParams) -> Option<GotoDefi
   let token = right.clone().or_else(|| left.clone())?;
 
   // 1. CREATE <kind> <name> -- text scan over every common DDL keyword.
-  const DDL_NAMES: &[(&str, &str)] = &[
-    ("CREATE OR REPLACE FUNCTION", "FUNCTION"),
-    ("CREATE FUNCTION", "FUNCTION"),
-    ("CREATE OR REPLACE PROCEDURE", "PROCEDURE"),
-    ("CREATE PROCEDURE", "PROCEDURE"),
-    ("CREATE OR REPLACE TRIGGER", "TRIGGER"),
-    ("CREATE TRIGGER", "TRIGGER"),
-    ("CREATE OR REPLACE VIEW", "VIEW"),
-    ("CREATE VIEW", "VIEW"),
-    ("CREATE MATERIALIZED VIEW", "MV"),
-    ("CREATE UNIQUE INDEX IF NOT EXISTS", "INDEX"),
-    ("CREATE UNIQUE INDEX", "INDEX"),
-    ("CREATE INDEX IF NOT EXISTS", "INDEX"),
-    ("CREATE INDEX", "INDEX"),
-    ("CREATE TABLE IF NOT EXISTS", "TABLE"),
-    ("CREATE TEMPORARY TABLE", "TABLE"),
-    ("CREATE TEMP TABLE", "TABLE"),
-    ("CREATE TABLE", "TABLE"),
-    ("CREATE SEQUENCE IF NOT EXISTS", "SEQUENCE"),
-    ("CREATE SEQUENCE", "SEQUENCE"),
-    ("CREATE TYPE", "TYPE"),
-    ("CREATE DOMAIN", "DOMAIN"),
-    ("CREATE SCHEMA IF NOT EXISTS", "SCHEMA"),
-    ("CREATE SCHEMA", "SCHEMA"),
-    ("CREATE EXTENSION IF NOT EXISTS", "EXTENSION"),
-    ("CREATE EXTENSION", "EXTENSION"),
+  //    Walks every open buffer so definitions split across files
+  //    (migrations / seeds / function libraries) all resolve.
+  const DDL_NAMES: &[&str] = &[
+    "CREATE OR REPLACE FUNCTION",
+    "CREATE FUNCTION",
+    "CREATE OR REPLACE PROCEDURE",
+    "CREATE PROCEDURE",
+    "CREATE OR REPLACE TRIGGER",
+    "CREATE TRIGGER",
+    "CREATE OR REPLACE VIEW",
+    "CREATE VIEW",
+    "CREATE MATERIALIZED VIEW",
+    "CREATE UNIQUE INDEX IF NOT EXISTS",
+    "CREATE UNIQUE INDEX",
+    "CREATE INDEX IF NOT EXISTS",
+    "CREATE INDEX",
+    "CREATE TABLE IF NOT EXISTS",
+    "CREATE TEMPORARY TABLE",
+    "CREATE TEMP TABLE",
+    "CREATE TABLE",
+    "CREATE SEQUENCE IF NOT EXISTS",
+    "CREATE SEQUENCE",
+    "CREATE TYPE",
+    "CREATE DOMAIN",
+    "CREATE SCHEMA IF NOT EXISTS",
+    "CREATE SCHEMA",
+    "CREATE EXTENSION IF NOT EXISTS",
+    "CREATE EXTENSION",
+    "CREATE OR REPLACE POLICY",
+    "CREATE POLICY",
+    "CREATE OR REPLACE AGGREGATE",
+    "CREATE AGGREGATE",
+    "CREATE ROLE",
+    "CREATE USER",
+    "CREATE GROUP",
   ];
+
+  // Search cursor's doc first (most common hit), then every other buffer.
   let upper = text.to_ascii_uppercase();
-  for (needle, _) in DDL_NAMES {
+  for needle in DDL_NAMES {
     if let Some(r) = find_def_name(&upper, text, needle, &token) {
       return Some(scalar(uri.clone(), &doc.rope, r));
     }
   }
-
-  // 2. Alias definition: `FROM <table> [AS] <alias>` or `JOIN <table> [AS] <alias>`
+  // PL/pgSQL local: DECLARE <name> ... in the same buffer.
+  if let Some(r) = find_declare_site(text, &token, u32::from(offset) as usize) {
+    return Some(scalar(uri.clone(), &doc.rope, r));
+  }
+  // CTE: WITH <name> AS (...) (or comma-separated subsequent CTEs).
+  if let Some(r) = find_cte_site(text, &token, u32::from(offset) as usize) {
+    return Some(scalar(uri.clone(), &doc.rope, r));
+  }
+  // Alias site in this buffer.
   if let Some(r) = find_alias_site(text, &upper, &token) {
     return Some(scalar(uri.clone(), &doc.rope, r));
+  }
+
+  // Workspace-wide DDL lookup: scan every other open buffer.
+  for (other_uri, other_doc) in state.documents.snapshot() {
+    if other_uri == uri { continue; }
+    let other_upper = other_doc.text.to_ascii_uppercase();
+    for needle in DDL_NAMES {
+      if let Some(r) = find_def_name(&other_upper, &other_doc.text, needle, &token) {
+        return Some(scalar(other_uri.clone(), &other_doc.rope, r));
+      }
+    }
   }
 
   None
@@ -136,6 +165,106 @@ fn find_def_name(upper: &str, text: &str, needle: &str, name: &str) -> Option<Te
 
 /// Find `<alias>` declared via `FROM <table> [AS] <alias>` or
 /// `JOIN <table> [AS] <alias>` and return the alias token range.
+/// Locate `DECLARE <name>` for a PL/pgSQL local variable that is in
+/// scope at byte position `cursor_pos`. Walks back from the cursor to
+/// the nearest enclosing `$$ ... DECLARE ... BEGIN` window and searches
+/// the DECLARE section for the name token.
+fn find_declare_site(text: &str, name: &str, cursor_pos: usize) -> Option<TextRange> {
+  let upper = text.to_ascii_uppercase();
+  // Find the most recent `$$` opener before the cursor and the next
+  // `BEGIN` after that opener. The DECLARE section lives between
+  // those two anchors.
+  let dollar = upper[..cursor_pos].rfind("$$")?;
+  // Slice from dollar to cursor (or to a closing $$).
+  let win_end = upper[dollar + 2..]
+    .find("$$")
+    .map(|i| dollar + 2 + i)
+    .unwrap_or(text.len());
+  let win = &text[dollar + 2..win_end];
+  let win_upper = upper[dollar + 2..win_end].to_string();
+  let decl_at = win_upper.find("DECLARE")?;
+  let begin_at = win_upper[decl_at..].find("BEGIN").map(|i| decl_at + i).unwrap_or(win.len());
+  let body = &win[decl_at + "DECLARE".len()..begin_at];
+  let body_start_abs = dollar + 2 + decl_at + "DECLARE".len();
+
+  // Each line in the DECLARE section is `name [CONSTANT] type ...;` --
+  // we just want the leading identifier.
+  for stmt in body.split(';') {
+    let s = stmt.trim_start();
+    let lead_ws = stmt.len() - s.len();
+    let id_end = s.chars().take_while(|c| is_word_char(*c)).count();
+    if id_end == 0 { continue; }
+    let candidate = &s[..id_end];
+    if candidate.eq_ignore_ascii_case(name) {
+      let rel = stmt.as_ptr() as usize - body.as_ptr() as usize;
+      let abs_start = body_start_abs + rel + lead_ws;
+      let abs_end = abs_start + id_end;
+      return Some(TextRange::new((abs_start as u32).into(), (abs_end as u32).into()));
+    }
+  }
+  None
+}
+
+/// Locate the CTE binding `WITH <name> AS (...)` or `, <name> AS (...)`
+/// whose body is the lexical predecessor of `cursor_pos`. Returns the
+/// range of the CTE name token.
+fn find_cte_site(text: &str, name: &str, cursor_pos: usize) -> Option<TextRange> {
+  let upper = text.to_ascii_uppercase();
+  // Find the most recent `WITH ` (word-boundary) before the cursor.
+  let mut from = 0usize;
+  let mut last_with: Option<usize> = None;
+  while let Some(rel) = upper[from..cursor_pos].find("WITH ") {
+    let at = from + rel;
+    let prev_ok = at == 0 || !is_word_char(upper.as_bytes()[at - 1] as char);
+    if prev_ok { last_with = Some(at); }
+    from = at + 5;
+  }
+  let with_at = last_with?;
+  // Scan forward through CTE bindings: `name AS (...)` separated by `,`.
+  let mut k = with_at + 5;
+  let bytes = text.as_bytes();
+  loop {
+    while k < cursor_pos && bytes[k].is_ascii_whitespace() {
+      k += 1;
+    }
+    if upper[k..].starts_with("RECURSIVE ") {
+      k += "RECURSIVE ".len();
+      while k < cursor_pos && bytes[k].is_ascii_whitespace() {
+        k += 1;
+      }
+    }
+    let id_start = k;
+    while k < bytes.len() && is_word_char(bytes[k] as char) {
+      k += 1;
+    }
+    let id_end = k;
+    if id_end == id_start { return None; }
+    if text[id_start..id_end].eq_ignore_ascii_case(name) {
+      return Some(TextRange::new((id_start as u32).into(), (id_end as u32).into()));
+    }
+    // Skip to the matching `)` that closes this binding's body.
+    while k < bytes.len() && bytes[k] != b'(' {
+      k += 1;
+    }
+    if k >= bytes.len() { return None; }
+    let mut depth = 1i32;
+    k += 1;
+    while k < bytes.len() && depth > 0 {
+      match bytes[k] {
+        b'(' => depth += 1,
+        b')' => depth -= 1,
+        _ => {}
+      }
+      k += 1;
+    }
+    while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+      k += 1;
+    }
+    if k >= bytes.len() || bytes[k] != b',' { return None; }
+    k += 1;
+  }
+}
+
 fn find_alias_site(text: &str, upper: &str, alias: &str) -> Option<TextRange> {
   let bytes = text.as_bytes();
   for kw in ["FROM ", "JOIN ", "UPDATE "] {
