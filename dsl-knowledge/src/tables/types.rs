@@ -157,5 +157,58 @@ pub fn build() -> HashMap<&'static str, Entry> {
     t!("INET", "IPv4 / IPv6 host or network.", "client_ip INET",
        pg("datatype-net-types.html"));
 
+    // Range types -- built-ins added in PG 9.2. Each holds an ordered
+    // pair of bounds over the underlying subtype with inclusive/
+    // exclusive notation. Multirange types (PG 14+) hold a set of
+    // disjoint ranges.
+    t!("INT4RANGE",
+       "Range of integer. `'[1,10)'::int4range`. Use `@>` for containment, `&&` for overlap.",
+       "valid_ids INT4RANGE",
+       pg("rangetypes.html"));
+    t!("INT8RANGE",
+       "Range of bigint.",
+       "id_window INT8RANGE",
+       pg("rangetypes.html"));
+    t!("NUMRANGE",
+       "Range of numeric.",
+       "price_band NUMRANGE",
+       pg("rangetypes.html"));
+    t!("TSRANGE",
+       "Range of timestamp without time zone.",
+       "valid TSRANGE",
+       pg("rangetypes.html"));
+    t!("TSTZRANGE",
+       "Range of timestamp with time zone. The right default for time-bounded data.",
+       "active TSTZRANGE NOT NULL",
+       pg("rangetypes.html"));
+    t!("DATERANGE",
+       "Range of date.",
+       "booking DATERANGE",
+       pg("rangetypes.html"));
+    t!("INT4MULTIRANGE",
+       "Multirange of integer (PG 14+). Set of disjoint int4ranges.",
+       "windows INT4MULTIRANGE",
+       pg("rangetypes.html"));
+    t!("INT8MULTIRANGE",
+       "Multirange of bigint (PG 14+).",
+       "windows INT8MULTIRANGE",
+       pg("rangetypes.html"));
+    t!("NUMMULTIRANGE",
+       "Multirange of numeric (PG 14+).",
+       "bands NUMMULTIRANGE",
+       pg("rangetypes.html"));
+    t!("TSMULTIRANGE",
+       "Multirange of timestamp (PG 14+).",
+       "windows TSMULTIRANGE",
+       pg("rangetypes.html"));
+    t!("TSTZMULTIRANGE",
+       "Multirange of timestamp with time zone (PG 14+).",
+       "active TSTZMULTIRANGE",
+       pg("rangetypes.html"));
+    t!("DATEMULTIRANGE",
+       "Multirange of date (PG 14+).",
+       "blackout DATEMULTIRANGE",
+       pg("rangetypes.html"));
+
     m
 }
