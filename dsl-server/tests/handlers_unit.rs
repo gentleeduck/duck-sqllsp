@@ -2,7 +2,7 @@
 
 use dsl_server::{
     documents::DocumentStore,
-    handlers::{code_action, completion, document_symbol, hover, inlay_hints, references, rename, selection_range, signature_help, workspace_symbol},
+    handlers::{code_action, completion, document_symbol, hover, inlay_hints, references, rename, selection_range, semantic_tokens, signature_help, workspace_symbol},
     state::ServerState,
 };
 use tower_lsp::lsp_types::{
@@ -275,6 +275,67 @@ SELECT * FROM alpha a JOIN beta b;
         _ => false,
     });
     assert!(any_missing_on, "expected `missing ON` hint when no overlap, got: {hints:?}");
+}
+
+#[test]
+fn semantic_tokens_classify_cast_and_brackets_and_range_type() {
+    use tower_lsp::lsp_types::{
+        SemanticTokensParams, SemanticTokensResult, TextDocumentIdentifier, WorkDoneProgressParams,
+        PartialResultParams,
+    };
+    // Cast to a built-in: `'1'::INT` should emit Operator + Type tokens.
+    // Cast to a non-built-in (custom_enum): promote_cast_targets should
+    // still tag it as Type. Brackets around the subscript should be
+    // Operators. Range type `tstzrange` should be classified as Type.
+    let src = "SELECT '1'::INT, x::custom_enum, arr[0:5], v::tstzrange FROM t;";
+    let (state, url) = state_with("file:///st.sql", src);
+    let r = semantic_tokens::run(&state, SemanticTokensParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+    }).expect("tokens");
+    let SemanticTokensResult::Tokens(toks) = r else { panic!("expected tokens variant") };
+
+    // Reconstruct (line, char, len, type) from delta encoding so we can
+    // ask "what kind is the token at byte X?" without rebuilding the
+    // whole encoder logic.
+    let mut line = 0u32;
+    let mut col  = 0u32;
+    // Map of (line, col) -> token_type for assertion.
+    let mut by_pos: std::collections::HashMap<(u32, u32), (u32, u32)> = std::collections::HashMap::new();
+    for t in &toks.data {
+        if t.delta_line != 0 { line += t.delta_line; col = t.delta_start; }
+        else { col += t.delta_start; }
+        by_pos.insert((line, col), (t.length, t.token_type));
+    }
+
+    // Resolve the byte offset of each thing we want to assert on.
+    let find_col = |needle: &str| -> u32 {
+        src.find(needle).expect(needle) as u32
+    };
+    // Constants from the Tok enum:
+    const TOK_TYPE: u32 = 1;
+    const TOK_OPERATOR: u32 = 10;
+
+    let cast1 = find_col("::INT");
+    let (_, ty) = by_pos.get(&(0, cast1)).expect("`::` operator should be a token");
+    assert_eq!(*ty, TOK_OPERATOR, "`::` should be Operator");
+    let int_at = find_col("INT,");
+    let (_, ty) = by_pos.get(&(0, int_at)).expect("`INT` type token");
+    assert_eq!(*ty, TOK_TYPE, "INT should be Type");
+
+    let custom_at = find_col("custom_enum");
+    let (_, ty) = by_pos.get(&(0, custom_at)).expect("`custom_enum` token after `::` should be promoted");
+    assert_eq!(*ty, TOK_TYPE, "user-defined cast target should be promoted to Type");
+
+    let open_bracket = find_col("[0:5]");
+    let (len, ty) = by_pos.get(&(0, open_bracket)).expect("`[` token");
+    assert_eq!(*ty, TOK_OPERATOR, "`[` should be Operator");
+    assert_eq!(*len, 1);
+
+    let tstz_at = find_col("tstzrange");
+    let (_, ty) = by_pos.get(&(0, tstz_at)).expect("tstzrange token");
+    assert_eq!(*ty, TOK_TYPE, "tstzrange should be Type");
 }
 
 #[test]

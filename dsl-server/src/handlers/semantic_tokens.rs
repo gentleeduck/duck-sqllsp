@@ -124,24 +124,80 @@ pub fn run(state: &ServerState, params: SemanticTokensParams) -> Option<Semantic
             raw.push((start, i, kind));
             continue;
         }
-        // operators
-        if matches!(c, '=' | '<' | '>' | '+' | '-' | '*' | '/' | '!' | '%' | '|' | '&') {
+        // operators -- `:` added so the PG cast operator `::` gets a
+        // single Operator token (otherwise the two colons fell through
+        // and the cast stayed unstyled).
+        if matches!(c, '=' | '<' | '>' | '+' | '-' | '*' | '/' | '!' | '%' | '|' | '&' | ':') {
             let start = i;
             i += 1;
-            while i < n && matches!(bytes[i] as char, '=' | '<' | '>' | '+' | '-' | '*' | '/' | '!' | '%' | '|' | '&') {
+            while i < n && matches!(bytes[i] as char, '=' | '<' | '>' | '+' | '-' | '*' | '/' | '!' | '%' | '|' | '&' | ':') {
                 i += 1;
             }
             raw.push((start, i, Tok::Operator));
+            continue;
+        }
+        // Array subscript brackets / range-subscript colon: tag as
+        // Operator so `arr[0]` and `arr[1:5]` get a consistent colour.
+        if c == '[' || c == ']' {
+            raw.push((i, i + 1, Tok::Operator));
+            i += 1;
             continue;
         }
 
         i += 1;
     }
 
+    // Post-pass: any identifier that immediately follows an operator
+    // token whose text contains `::` is a cast target. Promote it from
+    // whatever it landed on (often unmatched and dropped) to Type so
+    // user-defined enum / domain casts colour correctly even when not
+    // in the built-in type table.
+    promote_cast_targets(&doc.text, &mut raw);
+
     Some(SemanticTokensResult::Tokens(SemanticTokens {
         result_id: None,
         data: encode(&doc.rope, raw),
     }))
+}
+
+/// Walk `raw` looking for `<Operator containing "::">` followed by an
+/// identifier-shaped region of `text`; if no identifier token currently
+/// covers that region (because it was dropped), insert one as Type.
+/// When an identifier token does cover it (e.g. a known type like
+/// `text`), re-tag the existing token to Type.
+fn promote_cast_targets(text: &str, raw: &mut Vec<(usize, usize, Tok)>) {
+    let bytes = text.as_bytes();
+    let n = bytes.len();
+    // Indices of operator tokens whose text contains `::`.
+    let cast_ops: Vec<usize> = raw
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, (s, e, k))| {
+            if matches!(k, Tok::Operator) && text.get(*s..*e).is_some_and(|t| t.contains("::")) {
+                Some(idx)
+            } else {
+                None
+            }
+        })
+        .collect();
+    for op_idx in cast_ops {
+        let (_, op_end, _) = raw[op_idx];
+        // Skip whitespace after the `::`.
+        let mut k = op_end;
+        while k < n && bytes[k].is_ascii_whitespace() { k += 1; }
+        if k >= n { continue; }
+        if !(bytes[k].is_ascii_alphabetic() || bytes[k] == b'_') { continue; }
+        let ident_start = k;
+        while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_') { k += 1; }
+        let ident_end = k;
+        if ident_end == ident_start { continue; }
+        // Existing token covering this region?
+        if let Some(existing) = raw.iter_mut().find(|(s, e, _)| *s == ident_start && *e == ident_end) {
+            existing.2 = Tok::Type;
+        } else {
+            raw.push((ident_start, ident_end, Tok::Type));
+        }
+    }
 }
 
 fn is_function_call(bytes: &[u8], end: usize) -> bool {
