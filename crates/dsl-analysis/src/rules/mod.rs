@@ -43,6 +43,7 @@ pub mod jsonb_set_no_create;
 pub mod like_leading_wildcard;
 pub mod like_with_no_collation;
 pub mod like_without_wildcard;
+pub mod listen_unbounded;
 pub mod limit_without_order;
 pub mod lock_table_no_tx;
 pub mod long_in_list;
@@ -68,6 +69,7 @@ pub mod redundant_parens;
 pub mod reserved_word_identifier;
 pub mod return_type_literal;
 pub mod savepoint_no_release;
+pub mod select_for_update_in_recursive_cte;
 pub mod select_for_update_no_where;
 pub mod select_into_outside_plpgsql;
 pub mod select_no_from_no_agg;
@@ -179,5 +181,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(multiple_truncate_in_tx::Rule),
         Box::new(alter_table_no_owner::Rule),
         Box::new(copy_no_format::Rule),
+        Box::new(select_for_update_in_recursive_cte::Rule),
+        Box::new(listen_unbounded::Rule),
     ]
 }
