@@ -1027,6 +1027,26 @@ fn extra_dml_snippets_all_present() {
 }
 
 #[test]
+fn json_path_completion_walks_nested_path() {
+  // Buffer has a jsonb default with a nested object; completion at
+  // `data->'profile'->'<cursor>'` should surface the nested keys,
+  // not the outer ones.
+  let cat = catalog_with_users_and_orders();
+  let src = "\
+CREATE TABLE m (data jsonb DEFAULT '{\"profile\":{\"avatar\":\"x\",\"nickname\":\"y\"},\"meta\":{\"v\":1}}');
+SELECT data->'profile'->'' FROM m;
+";
+  let cur = src.rfind("''").unwrap() + 1;
+  let items = complete_at(src, cur, &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"avatar"), "expected nested key `avatar`; got: {labels:?}");
+  assert!(labels.contains(&"nickname"), "expected nested key `nickname`; got: {labels:?}");
+  // The outer-only keys must NOT leak in.
+  assert!(!labels.contains(&"profile"), "outer key leaked into nested completion: {labels:?}");
+  assert!(!labels.contains(&"meta"), "sibling key leaked: {labels:?}");
+}
+
+#[test]
 fn json_path_completion_returns_normal_in_plain_string() {
   let cat = catalog_with_users_and_orders();
   // Not in a `->'` context -- string literals get the normal menu.

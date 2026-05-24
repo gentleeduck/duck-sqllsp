@@ -748,7 +748,10 @@ fn scope_for_offset<'a>(file: &ParsedFile, scopes: &'a [Scope], offset: TextSize
 /// When the cursor sits inside the literal of `<expr>->'<cursor>` or
 /// `<expr>->>'<cursor>`, return the JSON keys observed in same-buffer
 /// jsonb literals (`'{"key":...}'`) so the user can autocomplete
-/// instead of guessing. Returns None outside this context.
+/// instead of guessing. Handles chained paths: `col->'a'->'b'->'<cursor>'`
+/// walks into nested objects of the harvested literals and surfaces
+/// only the keys present at depth a.b. Returns None outside this
+/// context.
 fn json_path_keys_at(source: &str, offset: TextSize) -> Option<Vec<String>> {
   let pos: usize = u32::from(offset) as usize;
   let bytes = source.as_bytes();
@@ -779,11 +782,15 @@ fn json_path_keys_at(source: &str, offset: TextSize) -> Option<Vec<String>> {
   if !has_double && !has_single {
     return None;
   }
-  // Harvest jsonb keys from same-buffer literals.
+  // Walk further back to harvest the chain of preceding `->'KEY'`
+  // segments so we know what depth to look up in the JSON blobs.
+  let chain_end = if has_double { k - 3 } else { k - 2 };
+  let chain = collect_json_path_chain(source, chain_end);
+
+  // Harvest jsonb keys from same-buffer literals -- at the requested depth.
   let mut keys: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
   let mut i = 0;
   while i < n {
-    // Look for `'{...}'` or `'[...]'` JSON literals.
     if bytes[i] == b'\'' && i + 1 < n && (bytes[i + 1] == b'{' || bytes[i + 1] == b'[') {
       let lit_start = i + 1;
       let mut j = lit_start;
@@ -791,7 +798,9 @@ fn json_path_keys_at(source: &str, offset: TextSize) -> Option<Vec<String>> {
         j += 1;
       }
       if j < n {
-        harvest_json_keys(&source[lit_start..j], &mut keys);
+        let blob = &source[lit_start..j];
+        let nested = navigate_json(blob, &chain).unwrap_or(blob);
+        harvest_json_keys(nested, &mut keys);
         i = j + 1;
         continue;
       }
@@ -802,6 +811,148 @@ fn json_path_keys_at(source: &str, offset: TextSize) -> Option<Vec<String>> {
     return None;
   }
   Some(keys.into_iter().collect())
+}
+
+/// Walk backwards from `end` collecting `->'KEY'` (or `->>'KEY'`)
+/// segments in left-to-right order. Stops at the first non-segment
+/// token. Whitespace between segments is tolerated.
+fn collect_json_path_chain(source: &str, end: usize) -> Vec<String> {
+  let bytes = source.as_bytes();
+  let mut chain: Vec<String> = Vec::new();
+  let mut k = end;
+  loop {
+    // Skip trailing whitespace.
+    while k > 0 && bytes[k - 1].is_ascii_whitespace() {
+      k -= 1;
+    }
+    // Need a closing `'`.
+    if k == 0 || bytes[k - 1] != b'\'' {
+      break;
+    }
+    let close = k - 1;
+    // Walk back to the opening `'`.
+    let mut open = close;
+    while open > 0 && bytes[open - 1] != b'\'' {
+      open -= 1;
+    }
+    if open == 0 {
+      break;
+    }
+    let key = &source[open..close];
+    let preceded_by_arrow = {
+      let mut p = open.saturating_sub(1); // points at the opening `'`
+      while p > 0 && bytes[p - 1].is_ascii_whitespace() {
+        p -= 1;
+      }
+      let double = p >= 3 && bytes[p - 1] == b'>' && bytes[p - 2] == b'>' && bytes[p - 3] == b'-';
+      let single = p >= 2 && bytes[p - 1] == b'>' && bytes[p - 2] == b'-';
+      if double || single {
+        Some(if double { p - 3 } else { p - 2 })
+      } else {
+        None
+      }
+    };
+    if let Some(next_end) = preceded_by_arrow {
+      chain.push(key.to_string());
+      k = next_end;
+    } else {
+      break;
+    }
+  }
+  chain.reverse();
+  chain
+}
+
+/// Given a JSON object literal (no surrounding quotes), navigate down
+/// the `keys` path and return a sub-blob that the caller can re-scan
+/// for keys. Returns None when the path doesn't resolve.
+fn navigate_json<'a>(blob: &'a str, keys: &[String]) -> Option<&'a str> {
+  if keys.is_empty() {
+    return Some(blob);
+  }
+  let mut current = blob;
+  for key in keys {
+    current = find_value_for_key(current, key)?;
+  }
+  Some(current)
+}
+
+/// Locate `"key":` in `blob` and return the slice starting at the
+/// value's first byte and ending at the matching close (`}` for
+/// objects, `]` for arrays, or the next top-level `,`).
+fn find_value_for_key<'a>(blob: &'a str, key: &str) -> Option<&'a str> {
+  let needle = format!("\"{key}\"");
+  let bytes = blob.as_bytes();
+  let n = bytes.len();
+  let mut i = 0;
+  while i + needle.len() <= n {
+    if &blob[i..i + needle.len()] == needle {
+      let mut j = i + needle.len();
+      while j < n && bytes[j].is_ascii_whitespace() {
+        j += 1;
+      }
+      if j >= n || bytes[j] != b':' {
+        i += 1;
+        continue;
+      }
+      j += 1;
+      while j < n && bytes[j].is_ascii_whitespace() {
+        j += 1;
+      }
+      if j >= n {
+        return None;
+      }
+      let value_start = j;
+      let value_end = scan_value_end(bytes, value_start);
+      return Some(&blob[value_start..value_end]);
+    }
+    i += 1;
+  }
+  None
+}
+
+fn scan_value_end(bytes: &[u8], start: usize) -> usize {
+  let n = bytes.len();
+  if start >= n {
+    return n;
+  }
+  match bytes[start] {
+    b'{' | b'[' => {
+      let open = bytes[start];
+      let close = if open == b'{' { b'}' } else { b']' };
+      let mut depth = 1i32;
+      let mut i = start + 1;
+      while i < n && depth > 0 {
+        match bytes[i] {
+          b'"' => {
+            i += 1;
+            while i < n && bytes[i] != b'"' {
+              if bytes[i] == b'\\' && i + 1 < n { i += 2; } else { i += 1; }
+            }
+          }
+          c if c == open => depth += 1,
+          c if c == close => depth -= 1,
+          _ => {}
+        }
+        i += 1;
+      }
+      i.min(n)
+    }
+    b'"' => {
+      let mut i = start + 1;
+      while i < n && bytes[i] != b'"' {
+        if bytes[i] == b'\\' && i + 1 < n { i += 2; } else { i += 1; }
+      }
+      (i + 1).min(n)
+    }
+    _ => {
+      let mut i = start;
+      while i < n && bytes[i] != b',' && bytes[i] != b'}' && bytes[i] != b']' {
+        i += 1;
+      }
+      i
+    }
+  }
 }
 
 fn harvest_json_keys(blob: &str, out: &mut std::collections::BTreeSet<String>) {
