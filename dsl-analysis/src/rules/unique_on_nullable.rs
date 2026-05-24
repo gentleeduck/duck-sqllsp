@@ -28,11 +28,15 @@ impl LintRule for Rule {
         let upper = body.to_ascii_uppercase();
         let trimmed = upper.trim_start();
         if !trimmed.starts_with("CREATE TABLE") { return; }
-        // Parse the column definitions in this CREATE TABLE body so we
-        // can cross-reference each UNIQUE constraint against the actual
-        // nullability of its columns. Suppresses the noise case where
-        // the UNIQUE is over all-NOT-NULL columns.
-        let cols = parse_columns(body);
+        // Build the effective-column model: PK columns are implicitly
+        // NOT NULL, SERIAL columns are NOT NULL + defaulted, etc. This
+        // catches the case where a column is `id uuid PRIMARY KEY` and
+        // a UNIQUE includes it -- without the model, the rule would
+        // see `id uuid` as nullable.
+        let cols: Vec<(String, bool)> = crate::ct_model::effective_columns(body)
+            .into_iter()
+            .map(|c| (c.name, c.nullable))
+            .collect();
         let bytes = upper.as_bytes();
         let n = bytes.len();
         let mut i = 0;

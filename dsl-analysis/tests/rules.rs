@@ -3070,6 +3070,49 @@ fn sql139_quiet_inline_unique_with_not_null() {
     assert!(!d.iter().any(|x| x.code == "sql139"));
 }
 
+// ===== effective-column model: implicit PG semantics ======================
+
+#[test]
+fn sql139_quiet_for_unique_over_pk_columns() {
+    // Inline PRIMARY KEY implies NOT NULL -- explicit NOT NULL not
+    // needed for the UNIQUE-on-nullable check to stay quiet.
+    let src = "CREATE TABLE t (id uuid PRIMARY KEY, role text NOT NULL, UNIQUE (id, role));";
+    let d = diags(src);
+    assert!(!d.iter().any(|x| x.code == "sql139"),
+        "PK column should be NOT NULL via implicit semantics; got: {:?}",
+        d.iter().filter(|x| x.code == "sql139").collect::<Vec<_>>());
+}
+
+#[test]
+fn sql139_quiet_for_unique_over_table_level_pk() {
+    // Table-level PRIMARY KEY (id, tenant) marks both as NOT NULL.
+    let src = "CREATE TABLE t (id uuid, tenant uuid, role text NOT NULL, PRIMARY KEY (id, tenant), UNIQUE (id, tenant, role));";
+    let d = diags(src);
+    assert!(!d.iter().any(|x| x.code == "sql139"),
+        "table-level PK should propagate NOT NULL; got: {:?}",
+        d.iter().filter(|x| x.code == "sql139").collect::<Vec<_>>());
+}
+
+#[test]
+fn sql139_quiet_for_unique_over_serial() {
+    // SERIAL implies NOT NULL.
+    let src = "CREATE TABLE t (id SERIAL PRIMARY KEY, slug text NOT NULL, UNIQUE (id, slug));";
+    let d = diags(src);
+    assert!(!d.iter().any(|x| x.code == "sql139"),
+        "SERIAL should be NOT NULL via implicit semantics; got: {:?}",
+        d.iter().filter(|x| x.code == "sql139").collect::<Vec<_>>());
+}
+
+#[test]
+fn sql139_quiet_for_unique_over_identity() {
+    // GENERATED ... AS IDENTITY implies NOT NULL.
+    let src = "CREATE TABLE t (id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name text NOT NULL, UNIQUE (id, name));";
+    let d = diags(src);
+    assert!(!d.iter().any(|x| x.code == "sql139"),
+        "IDENTITY should be NOT NULL via implicit semantics; got: {:?}",
+        d.iter().filter(|x| x.code == "sql139").collect::<Vec<_>>());
+}
+
 // ===== sql160 advisory lock without unlock =================================
 
 #[test]

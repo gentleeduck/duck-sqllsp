@@ -5,6 +5,7 @@
 //! list. Rules are tagged with stable codes (sql000..sql099) so users can
 //! disable individual rules through configuration.
 
+pub mod ct_model;
 pub mod diagnostic;
 pub mod rules;
 
