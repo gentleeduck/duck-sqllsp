@@ -868,6 +868,45 @@ fn truncate_offers_existing_tables() {
         "TRUNCATE should surface existing tables; got: {:?}", labels);
 }
 
+// ===== JSON path key completion ===========================================
+
+#[test]
+fn json_path_completion_surfaces_keys_from_buffer() {
+    let cat = catalog_with_users_and_orders();
+    // Buffer has a CREATE TABLE with a jsonb DEFAULT literal that
+    // contains observed keys (`role`, `team`). When the cursor sits
+    // inside `data->'<cursor>'` later in the buffer, those keys
+    // should appear.
+    let src = "CREATE TABLE m (data jsonb NOT NULL DEFAULT '{\"role\":\"admin\",\"team\":\"core\"}');\nSELECT data->'' FROM m;";
+    let cur = src.rfind("''").unwrap() + 1;
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(labels.contains(&"role"), "expected `role` key; got: {labels:?}");
+    assert!(labels.contains(&"team"), "expected `team` key; got: {labels:?}");
+}
+
+#[test]
+fn json_path_completion_works_for_double_arrow() {
+    let cat = catalog_with_users_and_orders();
+    let src = "CREATE TABLE m (d jsonb DEFAULT '{\"a\":1}');\nSELECT d->>'' FROM m;";
+    let cur = src.rfind("''").unwrap() + 1;
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(labels.contains(&"a"), "got: {labels:?}");
+}
+
+#[test]
+fn json_path_completion_returns_normal_in_plain_string() {
+    let cat = catalog_with_users_and_orders();
+    // Not in a `->'` context -- string literals get the normal menu.
+    let src = "SELECT * FROM users WHERE name = '';";
+    let cur = src.rfind("''").unwrap() + 1;
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<String> = items.iter().map(|i| i.label.to_lowercase()).collect();
+    // Should NOT contain "role" / "team" from JSON harvesting.
+    assert!(!labels.contains(&"role".to_string()));
+}
+
 #[test]
 fn functions_in_plpgsql_assign_rhs() {
     let cat = catalog_with_users_and_orders();

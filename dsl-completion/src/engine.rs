@@ -47,6 +47,27 @@ pub fn complete(
         return Vec::new();
     }
 
+    // JSON-path key slot: `data->'<cursor>` or `data->>'<cursor>`.
+    // Surface keys observed in same-buffer jsonb literal defaults / CHECK
+    // constraints. Highest priority -- we don't want to drown the menu
+    // in catalog table names when the user is clearly typing a JSON key.
+    if let Some(keys) = json_path_keys_at(source, offset) {
+        let mut out = Vec::with_capacity(keys.len());
+        for k in keys {
+            out.push(crate::item::Item {
+                label: k.clone(),
+                kind: crate::item::ItemKind::Variable,
+                detail: Some("JSON key".into()),
+                description: Some("observed in this buffer".into()),
+                documentation_md: None,
+                insert_text: k,
+                is_snippet: false,
+                sort_priority: 0,
+            });
+        }
+        return out;
+    }
+
     // Merge live catalog with in-file CREATE TABLE definitions.
     let derived = source_tables::from_file(file);
     let cat = source_tables::merge(catalog, &derived);
@@ -733,4 +754,78 @@ fn scope_for_offset<'a>(
         .iter()
         .position(|s| s.range.contains_inclusive(offset))?;
     scopes.get(idx)
+}
+
+/// When the cursor sits inside the literal of `<expr>->'<cursor>` or
+/// `<expr>->>'<cursor>`, return the JSON keys observed in same-buffer
+/// jsonb literals (`'{"key":...}'`) so the user can autocomplete
+/// instead of guessing. Returns None outside this context.
+fn json_path_keys_at(source: &str, offset: TextSize) -> Option<Vec<String>> {
+    let pos: usize = u32::from(offset) as usize;
+    let bytes = source.as_bytes();
+    let n = bytes.len().min(source.len());
+    if pos > n { return None; }
+    // Walk back to the opening `'` of the string the cursor is in.
+    let mut s = pos;
+    while s > 0 && bytes[s - 1] != b'\'' { s -= 1; }
+    if s == 0 || bytes[s - 1] != b'\'' { return None; }
+    // The string must be preceded by `->` or `->>`. Skip whitespace.
+    let mut k = s - 1; // points at the `'`
+    while k > 0 && bytes[k - 1].is_ascii_whitespace() { k -= 1; }
+    if k < 2 { return None; }
+    // `->>` form: bytes[k-3]='-', bytes[k-2]='>', bytes[k-1]='>'.
+    // `->`  form: bytes[k-2]='-', bytes[k-1]='>'.
+    let has_double = k >= 3 && bytes[k - 1] == b'>' && bytes[k - 2] == b'>' && bytes[k - 3] == b'-';
+    let has_single = bytes[k - 1] == b'>' && bytes[k - 2] == b'-';
+    if !has_double && !has_single { return None; }
+    // Harvest jsonb keys from same-buffer literals.
+    let mut keys: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut i = 0;
+    while i < n {
+        // Look for `'{...}'` or `'[...]'` JSON literals.
+        if bytes[i] == b'\'' && i + 1 < n && (bytes[i + 1] == b'{' || bytes[i + 1] == b'[') {
+            let lit_start = i + 1;
+            let mut j = lit_start;
+            while j < n && bytes[j] != b'\'' { j += 1; }
+            if j < n {
+                harvest_json_keys(&source[lit_start..j], &mut keys);
+                i = j + 1;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    if keys.is_empty() { return None; }
+    Some(keys.into_iter().collect())
+}
+
+fn harvest_json_keys(blob: &str, out: &mut std::collections::BTreeSet<String>) {
+    // Cheap key-scanner: find each `"<key>":` pair without a real JSON
+    // parser. Good enough for completion -- if the blob is malformed,
+    // we miss a key or two, no harm done.
+    let b = blob.as_bytes();
+    let n = b.len();
+    let mut i = 0;
+    while i < n {
+        if b[i] == b'"' {
+            let key_start = i + 1;
+            let mut j = key_start;
+            while j < n && b[j] != b'"' { j += 1; }
+            if j >= n { return; }
+            let key = &blob[key_start..j];
+            // Look forward for `:`.
+            let mut k = j + 1;
+            while k < n && b[k].is_ascii_whitespace() { k += 1; }
+            if k < n && b[k] == b':' {
+                if !key.is_empty()
+                    && key.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+                {
+                    out.insert(key.to_string());
+                }
+            }
+            i = j + 1;
+            continue;
+        }
+        i += 1;
+    }
 }

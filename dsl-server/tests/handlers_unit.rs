@@ -2,7 +2,7 @@
 
 use dsl_server::{
     documents::DocumentStore,
-    handlers::{completion, hover, inlay_hints, references, rename, selection_range, signature_help, workspace_symbol},
+    handlers::{completion, document_symbol, hover, inlay_hints, references, rename, selection_range, signature_help, workspace_symbol},
     state::ServerState,
 };
 use tower_lsp::lsp_types::{
@@ -304,6 +304,34 @@ fn signature_help_for_char_length_renders_signature() {
     }).expect("char_length signature");
     let sig = &r.signatures[0];
     assert!(sig.label.to_ascii_lowercase().contains("char_length"));
+}
+
+#[test]
+fn document_symbol_nests_columns_and_constraints_under_table() {
+    use tower_lsp::lsp_types::{
+        DocumentSymbolParams, DocumentSymbolResponse, PartialResultParams,
+        TextDocumentIdentifier, WorkDoneProgressParams,
+    };
+    let src = "CREATE TABLE t (\n  id uuid NOT NULL PRIMARY KEY,\n  email text NOT NULL,\n  CONSTRAINT uq_t_email UNIQUE (email),\n  CHECK (length(email) > 3)\n);";
+    let (state, url) = state_with("file:///ds.sql", src);
+    let resp = document_symbol::run(&state, DocumentSymbolParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+    }).expect("document symbol");
+    let symbols = match resp {
+        DocumentSymbolResponse::Nested(n) => n,
+        _ => panic!("expected nested"),
+    };
+    let table = symbols.iter().find(|s| s.name == "t").expect("table symbol");
+    let children = table.children.as_ref().expect("children");
+    let names: Vec<&str> = children.iter().map(|c| c.name.as_str()).collect();
+    assert!(names.contains(&"id"), "expected `id` column child; got: {names:?}");
+    assert!(names.contains(&"email"), "expected `email` column child");
+    assert!(names.contains(&"uq_t_email"),
+        "expected named UNIQUE constraint child; got: {names:?}");
+    assert!(names.contains(&"CHECK"),
+        "expected anonymous CHECK constraint child");
 }
 
 #[test]

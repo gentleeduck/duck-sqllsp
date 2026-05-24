@@ -30,23 +30,41 @@ fn symbol_for(stmt: &Statement, text: &str, rope: &Rope) -> Option<DocumentSymbo
     let range = to_lsp_range(rope, stmt.range);
     match &stmt.kind {
         StatementKind::CreateTable(ct) => {
-            let children: Vec<DocumentSymbol> = ct
+            let mut children: Vec<DocumentSymbol> = ct
                 .columns
                 .iter()
                 .map(|c| {
+                    // Prefer the column's own range over the whole-stmt
+                    // range so the editor can jump straight to that
+                    // column definition.
+                    let col_range = if c.range.len() > text_size::TextSize::from(0) {
+                        to_lsp_range(rope, c.range)
+                    } else {
+                        range
+                    };
+                    // Compose a single-line detail like
+                    // `uuid NOT NULL DEFAULT gen_random_uuid()`.
+                    let mut detail = c.type_name.clone();
+                    if !c.nullable { detail.push_str(" NOT NULL"); }
+                    if let Some(d) = &c.default {
+                        detail.push_str(&format!(" DEFAULT {d}"));
+                    }
                     #[allow(deprecated)]
                     DocumentSymbol {
                         name: c.name.clone(),
-                        detail: Some(c.type_name.clone()),
+                        detail: Some(detail),
                         kind: SymbolKind::FIELD,
                         tags: None,
                         deprecated: None,
-                        range,
-                        selection_range: range,
+                        range: col_range,
+                        selection_range: col_range,
                         children: None,
                     }
                 })
                 .collect();
+            // Scan for table-level constraints (named + anonymous) and
+            // surface each one under the table.
+            children.extend(scan_table_constraints(text, stmt.range, rope));
             Some(make_symbol(
                 &ct.table.name,
                 Some("table".into()),
@@ -161,6 +179,120 @@ fn byte_to_position(rope: &Rope, byte: usize) -> Position {
         bytes_seen += c.len_utf8();
     }
     Position { line: line as u32, character: utf16 }
+}
+
+/// Walk the body of a CREATE TABLE statement and yield a DocumentSymbol
+/// per table-level constraint. Recognises both named (`CONSTRAINT x
+/// CHECK (...)`) and anonymous forms (`PRIMARY KEY (...)`, `UNIQUE (...)`,
+/// `FOREIGN KEY (...)`, `CHECK (...)`).
+fn scan_table_constraints(source: &str, stmt_range: TextRange, rope: &Rope) -> Vec<DocumentSymbol> {
+    let mut out = Vec::new();
+    let s: u32 = stmt_range.start().into();
+    let e: u32 = stmt_range.end().into();
+    let start = s as usize;
+    let end = (e as usize).min(source.len());
+    let body_full = &source[start..end];
+    let upper = body_full.to_ascii_uppercase();
+    let Some(open) = upper.find('(') else { return out };
+    let bytes = body_full.as_bytes();
+    let n = bytes.len();
+    // Walk top-level comma-separated entries.
+    let mut d = 1i32;
+    let mut item_start = open + 1;
+    let mut i = open + 1;
+    while i < n && d > 0 {
+        match bytes[i] {
+            b'(' => d += 1,
+            b')' => {
+                d -= 1;
+                if d == 0 {
+                    if let Some(sym) = classify_entry(body_full, item_start, i, start, rope) {
+                        out.push(sym);
+                    }
+                    break;
+                }
+            }
+            b'\'' => {
+                i += 1;
+                while i < n && bytes[i] != b'\'' { i += 1; }
+            }
+            b',' if d == 1 => {
+                if let Some(sym) = classify_entry(body_full, item_start, i, start, rope) {
+                    out.push(sym);
+                }
+                item_start = i + 1;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    out
+}
+
+fn classify_entry(
+    body: &str,
+    entry_start: usize,
+    entry_end: usize,
+    abs_offset: usize,
+    rope: &Rope,
+) -> Option<DocumentSymbol> {
+    let raw = &body[entry_start..entry_end];
+    let trimmed = raw.trim();
+    if trimmed.is_empty() { return None; }
+    let upper = trimmed.to_ascii_uppercase();
+    let (name, detail) = if upper.starts_with("CONSTRAINT") {
+        // `CONSTRAINT <name> <kind> (...)`
+        let rest = trimmed[10..].trim_start();
+        let cname: String = rest.chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '"')
+            .collect();
+        let cname = cname.trim_matches('"').to_string();
+        if cname.is_empty() { return None; }
+        let after_name = rest[cname.len()..].trim_start();
+        let kind = constraint_kind_label(after_name);
+        (cname, kind)
+    } else if upper.starts_with("PRIMARY KEY") {
+        ("PRIMARY KEY".to_string(), "primary key".to_string())
+    } else if upper.starts_with("UNIQUE") {
+        ("UNIQUE".to_string(), "unique".to_string())
+    } else if upper.starts_with("FOREIGN KEY") {
+        ("FOREIGN KEY".to_string(), "foreign key".to_string())
+    } else if upper.starts_with("CHECK") {
+        ("CHECK".to_string(), "check".to_string())
+    } else if upper.starts_with("EXCLUDE") {
+        ("EXCLUDE".to_string(), "exclude".to_string())
+    } else {
+        return None;
+    };
+    let leading_ws = raw.len() - raw.trim_start().len();
+    let abs_start = abs_offset + entry_start + leading_ws;
+    let abs_end = abs_offset + entry_start + leading_ws + trimmed.len();
+    let r = TextRange::new(
+        (abs_start as u32).into(),
+        (abs_end as u32).into(),
+    );
+    let lsp_r = to_lsp_range(rope, r);
+    #[allow(deprecated)]
+    Some(DocumentSymbol {
+        name,
+        detail: Some(detail),
+        kind: SymbolKind::PROPERTY,
+        tags: None,
+        deprecated: None,
+        range: lsp_r,
+        selection_range: lsp_r,
+        children: None,
+    })
+}
+
+fn constraint_kind_label(after_name: &str) -> String {
+    let upper = after_name.to_ascii_uppercase();
+    if upper.starts_with("PRIMARY KEY") { "primary key".into() }
+    else if upper.starts_with("FOREIGN KEY") { "foreign key".into() }
+    else if upper.starts_with("UNIQUE") { "unique".into() }
+    else if upper.starts_with("CHECK") { "check".into() }
+    else if upper.starts_with("EXCLUDE") { "exclude".into() }
+    else { "constraint".into() }
 }
 
 fn extract_function_name(t: &str) -> String {
