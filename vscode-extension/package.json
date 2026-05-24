@@ -2,7 +2,7 @@
   "name": "duck-sqllsp-vscode",
   "displayName": "duck-sqllsp",
   "description": "SQL Language Server for Postgres (and MySQL / SQLite) -- completion, hover, diagnostics, formatting, inlay hints, refactors. Works offline; richer when a DB is connected.",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "publisher": "wildduck",
   "license": "MIT",
   "repository": {
@@ -42,7 +42,10 @@
     "onCommand:duckSqllsp.refreshCatalog",
     "onCommand:duckSqllsp.restartServer",
     "onCommand:duckSqllsp.showLogs",
-    "onCommand:duckSqllsp.testConnection"
+    "onCommand:duckSqllsp.testConnection",
+    "onCommand:duckSqllsp.refreshSchema",
+    "onCommand:duckSqllsp.insertColumnAtCursor",
+    "onView:duckSqllsp.schema"
   ],
   "contributes": {
     "commands": [
@@ -93,6 +96,17 @@
         "title": "Test Active Connection",
         "category": "duck-sqllsp",
         "icon": "$(zap)"
+      },
+      {
+        "command": "duckSqllsp.refreshSchema",
+        "title": "Refresh Schema Tree",
+        "category": "duck-sqllsp",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "duckSqllsp.insertColumnAtCursor",
+        "title": "Insert column at cursor",
+        "category": "duck-sqllsp"
       }
     ],
     "viewsContainers": {
@@ -111,11 +125,22 @@
           "name": "Connections",
           "icon": "$(database)",
           "contextualTitle": "duck-sqllsp"
+        },
+        {
+          "id": "duckSqllsp.schema",
+          "name": "Schema",
+          "icon": "$(symbol-namespace)",
+          "contextualTitle": "duck-sqllsp"
         }
       ]
     },
     "menus": {
       "view/title": [
+        {
+          "command": "duckSqllsp.refreshSchema",
+          "when": "view == duckSqllsp.schema",
+          "group": "navigation@1"
+        },
         {
           "command": "duckSqllsp.addConnection",
           "when": "view == duckSqllsp.connections",

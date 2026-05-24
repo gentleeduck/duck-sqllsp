@@ -17,10 +17,12 @@ import {
   loadConfig,
   saveConfig,
 } from "./connections";
+import { SchemaProvider } from "./schema-tree";
 import { ConnectionItem, ConnectionsProvider } from "./tree";
 
 let client: LanguageClient | undefined;
 let connectionsProvider: ConnectionsProvider | undefined;
+let schemaProvider: SchemaProvider | undefined;
 let statusItem: vscode.StatusBarItem | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
 let traceChannel: vscode.OutputChannel | undefined;
@@ -60,6 +62,8 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand("duckSqllsp.restartServer", safe("restartServer", restartServer)),
     commands.registerCommand("duckSqllsp.showLogs", () => outputChannel?.show(true)),
     commands.registerCommand("duckSqllsp.testConnection", safe("testConnection", testConnection)),
+    commands.registerCommand("duckSqllsp.refreshSchema", () => schemaProvider?.refresh()),
+    commands.registerCommand("duckSqllsp.insertColumnAtCursor", safe("insertColumnAtCursor", insertColumnAtCursor)),
   );
   outputChannel.appendLine("[ext] commands registered");
 
@@ -67,11 +71,14 @@ export function activate(context: ExtensionContext) {
   // failure here can't break the command surface.
   try {
     connectionsProvider = new ConnectionsProvider();
+    schemaProvider = new SchemaProvider(() => client);
     context.subscriptions.push(
       window.registerTreeDataProvider("duckSqllsp.connections", connectionsProvider),
+      window.registerTreeDataProvider("duckSqllsp.schema", schemaProvider),
       workspace.onDidChangeConfiguration((e) => {
         if (e.affectsConfiguration("duckSqllsp")) {
           connectionsProvider?.refresh();
+          schemaProvider?.refresh();
         }
       }),
     );
@@ -392,6 +399,19 @@ async function testConnection(): Promise<void> {
   } catch (e: any) {
     window.showErrorMessage(`duck-sqllsp: testConnection failed -- ${e?.message ?? e}`);
   }
+}
+
+async function insertColumnAtCursor(name: string): Promise<void> {
+  const ed = window.activeTextEditor;
+  if (!ed) {
+    window.showWarningMessage("duck-sqllsp: open a SQL file before inserting a column.");
+    return;
+  }
+  await ed.edit((eb) => {
+    for (const sel of ed.selections) {
+      eb.replace(sel, name);
+    }
+  });
 }
 
 async function restartServer(): Promise<void> {

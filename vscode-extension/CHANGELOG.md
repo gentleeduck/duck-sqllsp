@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.6
+
+- Schema sidebar tree. Second view under the duck-sqllsp activity bar
+  entry shows schemas -> tables -> columns of the merged offline
+  catalog (every CREATE TABLE in the workspace + live DB intro when
+  connected). Click a column to insert its name at the cursor.
+- Server: workspace/executeCommand gains `duck-sqllsp.getCatalog`
+  -- returns the merged catalog as JSON for the sidebar to render.
+
 ## 0.1.5
 
 - URL-only connection schema. Server-side `dsl_conn::ConnectionSpec` is
