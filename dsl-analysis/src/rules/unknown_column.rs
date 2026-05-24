@@ -112,6 +112,14 @@ fn column_exists(
     name: &str,
 ) -> bool {
     if let Some(q) = qualifier {
+        // Qualifier matches a CTE name? Check declared CTE columns.
+        // Empty Vec means the resolver could not parse the body --
+        // be lenient and accept the column rather than emit a false
+        // positive.
+        if let Some(cte_cols) = scope.cte_columns_of(q) {
+            if cte_cols.is_empty() { return true; }
+            return cte_cols.iter().any(|c| c == name);
+        }
         if let Some(b) = scope.get(q) {
             if let Some(t) = catalog.find_table(b.table.schema.as_deref(), &b.table.name) {
                 return t.columns.iter().any(|c| c.name == name);
@@ -119,12 +127,19 @@ fn column_exists(
         }
         return false;
     }
+    // Unqualified column: check catalog tables in scope and CTE columns.
     for b in scope.tables() {
         if let Some(t) = catalog.find_table(b.table.schema.as_deref(), &b.table.name) {
             if t.columns.iter().any(|c| c.name == name) {
                 return true;
             }
         }
+    }
+    for (cte_name, cols) in &scope.cte_columns {
+        // Only consider CTEs that are also bound as a FROM target.
+        if scope.get(cte_name).is_none() { continue; }
+        if cols.is_empty() { return true; }
+        if cols.iter().any(|c| c == name) { return true; }
     }
     false
 }

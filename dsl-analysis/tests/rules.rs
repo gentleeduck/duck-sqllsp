@@ -2477,3 +2477,61 @@ fn sql133_range_points_at_clause() {
     let e: u32 = hit.range.end().into();
     assert_eq!(&src[s as usize..e as usize], "WITH GRANT OPTION");
 }
+
+// ===== sql142 IMMUTABLE function body does DDL =============================
+
+#[test]
+fn sql142_flags_create_inside_immutable() {
+    let d = diags("CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql IMMUTABLE AS $$ BEGIN CREATE TABLE t (id int); END $$;");
+    assert!(d.iter().any(|x| x.code == "sql142"));
+}
+
+#[test]
+fn sql142_quiet_for_stable_function() {
+    let d = diags("CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql STABLE AS $$ BEGIN CREATE TABLE t (id int); END $$;");
+    assert!(!d.iter().any(|x| x.code == "sql142"));
+}
+
+#[test]
+fn sql142_quiet_for_immutable_no_ddl() {
+    let d = diags("CREATE FUNCTION f(a int) RETURNS int LANGUAGE sql IMMUTABLE AS $$ SELECT a + 1 $$;");
+    assert!(!d.iter().any(|x| x.code == "sql142"));
+}
+
+// ===== sql145 DEFAULT volatile =============================================
+
+#[test]
+fn sql145_flags_default_random() {
+    let d = diags("CREATE TABLE t (id int DEFAULT random());");
+    assert!(d.iter().any(|x| x.code == "sql145"));
+}
+
+#[test]
+fn sql145_flags_default_nextval() {
+    let d = diags("CREATE TABLE t (id int DEFAULT nextval('seq'));");
+    assert!(d.iter().any(|x| x.code == "sql145"));
+}
+
+#[test]
+fn sql145_quiet_for_now_default() {
+    let d = diags("CREATE TABLE t (created_at timestamptz DEFAULT now());");
+    assert!(!d.iter().any(|x| x.code == "sql145"));
+}
+
+#[test]
+fn sql145_quiet_for_constant_default() {
+    let d = diags("CREATE TABLE t (active bool DEFAULT true);");
+    assert!(!d.iter().any(|x| x.code == "sql145"));
+}
+
+// ===== sql002 column lookup honors CTE columns =============================
+
+#[test]
+fn sql002_accepts_cte_qualified_reference() {
+    // resolve() (no source) leaves cte_columns empty -> rule is
+    // lenient: any column reference against a declared CTE passes.
+    let d = diags("WITH t AS (SELECT id, email FROM users) SELECT t.anything FROM t;");
+    assert!(!d.iter().any(|x| x.code == "sql002"),
+        "expected sql002 quiet for CTE-qualified ref, got: {:?}",
+        d.iter().map(|x| (&x.code, &x.message)).collect::<Vec<_>>());
+}

@@ -14,9 +14,11 @@ pub mod case_single_when;
 pub mod cast_text_to_int_in_where;
 pub mod char_length_vs_length;
 pub mod char_n_type;
+pub mod column_default_volatile;
 pub mod copy_no_format;
 pub mod count_one_vs_star;
 pub mod cte_missing_recursive;
+pub mod ddl_in_immutable;
 pub mod deep_case_nesting;
 pub mod distinct_after_group_by;
 pub mod distinct_on_no_order;
@@ -191,5 +193,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(trigger_when_uses_old_in_insert::Rule),
         Box::new(alter_type_add_value_in_tx::Rule),
         Box::new(grant_with_grant_option::Rule),
+        Box::new(ddl_in_immutable::Rule),
+        Box::new(column_default_volatile::Rule),
     ]
 }
