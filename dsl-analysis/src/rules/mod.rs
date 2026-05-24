@@ -5,6 +5,7 @@
 pub mod alter_table_no_owner;
 pub mod alter_type_add_value_in_tx;
 pub mod ambiguous_column;
+pub mod array_subscript_zero;
 pub mod backslash_in_string;
 pub mod bare_return_typed;
 pub mod between_reversed;
@@ -12,6 +13,7 @@ pub mod bool_compare_equals;
 pub mod boolean_in_text_column;
 pub mod case_single_when;
 pub mod cast_text_to_int_in_where;
+pub mod character_varying_no_limit;
 pub mod char_length_vs_length;
 pub mod char_n_type;
 pub mod column_default_volatile;
@@ -195,5 +197,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(grant_with_grant_option::Rule),
         Box::new(ddl_in_immutable::Rule),
         Box::new(column_default_volatile::Rule),
+        Box::new(character_varying_no_limit::Rule),
+        Box::new(array_subscript_zero::Rule),
     ]
 }

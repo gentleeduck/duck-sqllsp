@@ -1,7 +1,7 @@
 use dsl_analysis::{run, Severity};
 use dsl_catalog::{Catalog, Column, Constraint, ConstraintKind, Schema, Table, TableKind, CATALOG_VERSION};
 use dsl_parse::{parse, Dialect};
-use dsl_resolve::resolve;
+use dsl_resolve::resolve_with_source;
 
 fn cat() -> Catalog {
     let users = Table {
@@ -58,7 +58,7 @@ fn cat() -> Catalog {
 
 fn diags(src: &str) -> Vec<dsl_analysis::Diagnostic> {
     let file = parse(src, Dialect::Postgres);
-    let scopes = resolve(&file.statements);
+    let scopes = resolve_with_source(&file.statements, src);
     run(src, &file, &scopes, &cat())
 }
 
@@ -78,7 +78,7 @@ fn sql001_quiet_when_table_exists() {
 fn sql001_quiet_with_empty_catalog() {
     let empty = Catalog::default();
     let file = parse("SELECT * FROM anything;", Dialect::Postgres);
-    let scopes = resolve(&file.statements);
+    let scopes = resolve_with_source(&file.statements, "SELECT * FROM anything;");
     let d = run("SELECT * FROM anything;", &file, &scopes, &empty);
     assert!(d.iter().all(|x| x.code != "sql001"));
 }
@@ -2527,11 +2527,69 @@ fn sql145_quiet_for_constant_default() {
 // ===== sql002 column lookup honors CTE columns =============================
 
 #[test]
-fn sql002_accepts_cte_qualified_reference() {
-    // resolve() (no source) leaves cte_columns empty -> rule is
-    // lenient: any column reference against a declared CTE passes.
-    let d = diags("WITH t AS (SELECT id, email FROM users) SELECT t.anything FROM t;");
+fn sql002_accepts_known_cte_column() {
+    let d = diags("WITH t AS (SELECT id, email FROM users) SELECT t.id FROM t;");
     assert!(!d.iter().any(|x| x.code == "sql002"),
-        "expected sql002 quiet for CTE-qualified ref, got: {:?}",
+        "t.id is in the CTE projection, expected quiet: {:?}",
         d.iter().map(|x| (&x.code, &x.message)).collect::<Vec<_>>());
+}
+
+#[test]
+fn sql002_flags_unknown_cte_column() {
+    let d = diags("WITH t AS (SELECT id, email FROM users) SELECT t.bogus FROM t;");
+    assert!(d.iter().any(|x| x.code == "sql002"),
+        "t.bogus is not in projection, expected sql002: {:?}",
+        d.iter().map(|x| (&x.code, &x.message)).collect::<Vec<_>>());
+}
+
+// ===== sql146 unbounded VARCHAR ===========================================
+
+#[test]
+fn sql146_flags_bare_varchar() {
+    let d = diags("CREATE TABLE x (name VARCHAR);");
+    assert!(d.iter().any(|x| x.code == "sql146"));
+}
+
+#[test]
+fn sql146_flags_character_varying() {
+    let d = diags("CREATE TABLE x (name CHARACTER VARYING);");
+    assert!(d.iter().any(|x| x.code == "sql146"));
+}
+
+#[test]
+fn sql146_quiet_for_varchar_with_limit() {
+    let d = diags("CREATE TABLE x (name VARCHAR(255));");
+    assert!(!d.iter().any(|x| x.code == "sql146"));
+}
+
+#[test]
+fn sql146_quiet_for_text() {
+    let d = diags("CREATE TABLE x (name TEXT);");
+    assert!(!d.iter().any(|x| x.code == "sql146"));
+}
+
+// ===== sql148 array subscript zero / negative =============================
+
+#[test]
+fn sql148_flags_subscript_zero() {
+    let d = diags("SELECT arr[0] FROM t;");
+    assert!(d.iter().any(|x| x.code == "sql148"));
+}
+
+#[test]
+fn sql148_flags_subscript_negative() {
+    let d = diags("SELECT arr[-1] FROM t;");
+    assert!(d.iter().any(|x| x.code == "sql148"));
+}
+
+#[test]
+fn sql148_quiet_for_subscript_one() {
+    let d = diags("SELECT arr[1] FROM t;");
+    assert!(!d.iter().any(|x| x.code == "sql148"));
+}
+
+#[test]
+fn sql148_quiet_for_empty_brackets_type() {
+    let d = diags("CREATE TABLE x (xs int[]);");
+    assert!(!d.iter().any(|x| x.code == "sql148"));
 }
