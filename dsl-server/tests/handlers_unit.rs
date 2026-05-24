@@ -290,6 +290,26 @@ fn completion_snippet_item_has_expands_to_preview() {
 }
 
 #[test]
+fn signature_help_for_update_set_tuple() {
+    use tower_lsp::lsp_types::{SignatureHelpParams, TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams};
+    let src = "UPDATE users SET (id, email) = ();";
+    let (state, url) = state_with("file:///us.sql", src);
+    let cur = src.find(") = (").unwrap() + 5;
+    let r = signature_help::run(&state, SignatureHelpParams {
+        text_document_position_params: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: url },
+            position: Position { line: 0, character: cur as u32 },
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        context: None,
+    }).expect("UPDATE SET sig");
+    let sig = &r.signatures[0];
+    assert!(sig.label.contains("SET"), "label: {}", sig.label);
+    assert!(sig.label.contains("id"));
+    assert!(sig.label.contains("email"));
+}
+
+#[test]
 fn signature_help_for_insert_values_explicit_columns() {
     use tower_lsp::lsp_types::{SignatureHelpParams, TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams};
     let src = "INSERT INTO users (id, email) VALUES ();";

@@ -34,9 +34,203 @@ pub fn run(state: &ServerState, params: CodeActionParams) -> Option<CodeActionRe
     // Cursor-position refactor: offer to quote / unquote the identifier
     // under the selection range. Always available, no diagnostic needed.
     quote_toggle_action(&uri, &params.range, &doc.text, &mut actions);
+    // Convert `col IN ('a','b','c')` -> `col = ANY (ARRAY['a','b','c'])`
+    // when the selection range overlaps an IN-list.
+    in_to_any_action(&uri, &params.range, &doc.text, &mut actions);
+    // Extract a SELECT subquery inside FROM into a WITH ... CTE.
+    extract_subquery_to_cte_action(&uri, &params.range, &doc.text, &mut actions);
 
     if actions.is_empty() { return None; }
     Some(actions)
+}
+
+/// `col IN ('a', 'b', 'c')` -> `col = ANY (ARRAY['a', 'b', 'c'])`.
+/// Fires when the selection range overlaps an IN-with-literal-list
+/// fragment. PG generates an identical plan for either form, but ANY
+/// composes better with subquery rewrites and parameterised arrays.
+fn in_to_any_action(uri: &Url, range: &Range, text: &str, out: &mut Vec<CodeActionOrCommand>) {
+    // Find an `IN (...)` whose paren span contains the cursor.
+    let sel_offset = line_col_to_byte(text, range.start);
+    let Some(sel) = sel_offset else { return };
+    let upper = text.to_ascii_uppercase();
+    let bytes = text.as_bytes();
+    let mut search = 0;
+    while let Some(rel) = upper[search..].find(" IN ") {
+        let in_at = search + rel + 1;
+        // Skip if surrounding context is `NOT IN` -- we still want to
+        // refactor both, but the replacement differs.
+        let after = &text[in_at + 2..];
+        let after_trim = after.trim_start();
+        if !after_trim.starts_with('(') {
+            search = in_at + 2;
+            continue;
+        }
+        let paren_pos = in_at + 2 + (after.len() - after_trim.len());
+        let Some(close) = matched_close(bytes, paren_pos) else {
+            search = paren_pos + 1;
+            continue;
+        };
+        if sel < in_at || sel > close {
+            search = close + 1;
+            continue;
+        }
+        // Only literal-list -- skip subqueries (`IN (SELECT ...)`).
+        let list_inner = &text[paren_pos + 1..close];
+        let inner_up = list_inner.to_ascii_uppercase();
+        if inner_up.trim_start().starts_with("SELECT") {
+            search = close + 1;
+            continue;
+        }
+        let r = byte_range_to_lsp(text, in_at, close + 1);
+        let new_text = format!("= ANY (ARRAY[{list}])", list = list_inner.trim());
+        let mut changes = HashMap::new();
+        changes.insert(uri.clone(), vec![TextEdit {
+            range: r,
+            new_text,
+        }]);
+        out.push(CodeActionOrCommand::CodeAction(CodeAction {
+            title: "Convert IN (literals) -> = ANY (ARRAY[...])".into(),
+            kind: Some(CodeActionKind::REFACTOR),
+            diagnostics: None,
+            edit: Some(WorkspaceEdit {
+                changes: Some(changes),
+                document_changes: None,
+                change_annotations: None,
+            }),
+            command: None,
+            is_preferred: None,
+            disabled: None,
+            data: None,
+        }));
+        return;
+    }
+}
+
+/// Extract a `(SELECT ...)` subquery from the FROM list into a leading
+/// `WITH _tmp AS (SELECT ...)` CTE. Fires when the selection range
+/// touches a parenthesised SELECT.
+fn extract_subquery_to_cte_action(uri: &Url, range: &Range, text: &str, out: &mut Vec<CodeActionOrCommand>) {
+    let sel_offset = line_col_to_byte(text, range.start);
+    let Some(sel) = sel_offset else { return };
+    let bytes = text.as_bytes();
+    let n = bytes.len();
+    // Walk back from cursor to find the most-recent `(`.
+    let mut paren_open = sel;
+    while paren_open > 0 && bytes[paren_open - 1] != b'(' { paren_open -= 1; }
+    if paren_open == 0 { return; }
+    let inner_start = paren_open; // first byte after `(`
+    let Some(close) = matched_close(bytes, paren_open - 1) else { return };
+    if sel > close { return; }
+    let inner = &text[inner_start..close];
+    let trimmed = inner.trim_start();
+    if !trimmed.to_ascii_uppercase().starts_with("SELECT") { return; }
+    // Only offer this when the paren immediately follows ` FROM ` or `,`
+    // (subquery in FROM position).
+    let before = &text[..paren_open - 1];
+    let before_trimmed = before.trim_end();
+    let last_word = before_trimmed.rsplit_terminator(|c: char| c.is_whitespace() || c == ',').next();
+    let is_from_pos = last_word.map(|w| w.eq_ignore_ascii_case("FROM")).unwrap_or(false)
+        || before_trimmed.ends_with(',');
+    if !is_from_pos { return; }
+    // Find the statement start (last `;` or BOF) to insert the WITH clause.
+    let stmt_start = text[..paren_open].rfind(';').map(|i| {
+        let mut j = i + 1;
+        while j < n && bytes[j].is_ascii_whitespace() { j += 1; }
+        j
+    }).unwrap_or(0);
+    // Build edits: insert `WITH _tmp AS (...) ` before stmt_start, and
+    // replace `(<subquery>)` (the inclusive parens) with `_tmp`.
+    let cte_decl = format!("WITH _tmp AS (\n{}\n)\n", inner);
+    let mut edits = Vec::new();
+    edits.push(TextEdit {
+        range: byte_range_to_lsp(text, stmt_start, stmt_start),
+        new_text: cte_decl,
+    });
+    edits.push(TextEdit {
+        range: byte_range_to_lsp(text, paren_open - 1, close + 1),
+        new_text: "_tmp".into(),
+    });
+    let mut changes = HashMap::new();
+    changes.insert(uri.clone(), edits);
+    out.push(CodeActionOrCommand::CodeAction(CodeAction {
+        title: "Extract subquery to WITH _tmp AS (...) CTE".into(),
+        kind: Some(CodeActionKind::REFACTOR_EXTRACT),
+        diagnostics: None,
+        edit: Some(WorkspaceEdit {
+            changes: Some(changes),
+            document_changes: None,
+            change_annotations: None,
+        }),
+        command: None,
+        is_preferred: None,
+        disabled: None,
+        data: None,
+    }));
+}
+
+fn matched_close(bytes: &[u8], open: usize) -> Option<usize> {
+    if open >= bytes.len() || bytes[open] != b'(' { return None; }
+    let n = bytes.len();
+    let mut depth = 1i32;
+    let mut i = open + 1;
+    while i < n {
+        match bytes[i] {
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                if depth == 0 { return Some(i); }
+            }
+            b'\'' => {
+                i += 1;
+                while i < n && bytes[i] != b'\'' { i += 1; }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
+fn line_col_to_byte(text: &str, p: Position) -> Option<usize> {
+    let mut byte = 0usize;
+    let mut line = 0u32;
+    for ch in text.chars() {
+        if line == p.line {
+            // count characters in current line until p.character
+            let line_start = byte;
+            let mut col = 0u32;
+            let rest = &text[line_start..];
+            for c in rest.chars() {
+                if c == '\n' { return Some(line_start + (col as usize)); }
+                if col >= p.character { return Some(line_start + col as usize); }
+                col += c.len_utf16() as u32;
+            }
+            return Some(line_start + rest.len());
+        }
+        byte += ch.len_utf8();
+        if ch == '\n' { line += 1; }
+    }
+    Some(byte)
+}
+
+fn byte_range_to_lsp(text: &str, start: usize, end: usize) -> Range {
+    Range {
+        start: byte_to_pos(text, start),
+        end: byte_to_pos(text, end),
+    }
+}
+
+fn byte_to_pos(text: &str, byte: usize) -> Position {
+    let mut line = 0u32;
+    let mut col = 0u32;
+    let mut consumed = 0usize;
+    for c in text.chars() {
+        if consumed >= byte { break; }
+        if c == '\n' { line += 1; col = 0; }
+        else { col += c.len_utf16() as u32; }
+        consumed += c.len_utf8();
+    }
+    Position { line, character: col }
 }
 
 /// REFACTOR: wrap or unwrap the identifier under the requested range in

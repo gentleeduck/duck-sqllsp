@@ -25,6 +25,14 @@ pub fn run(state: &ServerState, params: SignatureHelpParams) -> Option<Signature
     let pos = pos.min(doc.text.len());
 
     let (open_paren, arg_index) = find_enclosing_call(&doc.text, pos)?;
+
+    // UPDATE ... SET (a, b, c) = (|...) -- the enclosing `(` is the
+    // rhs tuple; no identifier precedes it (`=` does). Check this
+    // BEFORE the function-name lookup, which would bail.
+    if let Some(sig) = update_set_tuple_signature(&doc.text, &state.catalog.read(), open_paren, arg_index) {
+        return Some(sig);
+    }
+
     let name = identifier_before(&doc.text, open_paren)?;
 
     // INSERT INTO t (a, b, c) VALUES (|...) -- when the enclosing `(`
@@ -232,6 +240,82 @@ fn insert_values_signature(
             label,
             documentation: Some(tower_lsp::lsp_types::Documentation::String(
                 format!("Positional VALUES for `{bare_table}` -- column slot {active}.")
+            )),
+            parameters: Some(parameters),
+            active_parameter: Some(active as u32),
+        }],
+        active_signature: Some(0),
+        active_parameter: Some(active as u32),
+    })
+}
+
+/// `UPDATE t SET (a, b) = (|...)` -- when the enclosing paren follows
+/// `= (` and a column-tuple list, surface each column as a parameter.
+fn update_set_tuple_signature(
+    src: &str,
+    catalog: &dsl_catalog::Catalog,
+    rhs_paren: usize,
+    arg_index: usize,
+) -> Option<SignatureHelp> {
+    // Look back across whitespace, expect `=`, then whitespace, then `)`.
+    let bytes = src.as_bytes();
+    let mut k = rhs_paren;
+    while k > 0 && bytes[k - 1].is_ascii_whitespace() { k -= 1; }
+    if k == 0 || bytes[k - 1] != b'=' { return None; }
+    k -= 1;
+    while k > 0 && bytes[k - 1].is_ascii_whitespace() { k -= 1; }
+    if k == 0 || bytes[k - 1] != b')' { return None; }
+    let lhs_close = k - 1;
+    // Walk back to the matching `(` of the lhs.
+    let mut depth = 1i32;
+    let mut j = lhs_close;
+    while j > 0 && depth > 0 {
+        j -= 1;
+        match bytes[j] {
+            b')' => depth += 1,
+            b'(' => depth -= 1,
+            _ => {}
+        }
+    }
+    if depth != 0 { return None; }
+    let lhs_open = j;
+    let lhs_inner = &src[lhs_open + 1..lhs_close];
+    let cols: Vec<String> = lhs_inner.split(',')
+        .map(|c| c.trim().trim_matches('"').to_string())
+        .filter(|c| !c.is_empty())
+        .collect();
+    if cols.is_empty() { return None; }
+    // Look back for `UPDATE <table>` to grab catalog types.
+    let upper = src[..lhs_open].to_ascii_uppercase();
+    let table = upper.rfind("UPDATE").and_then(|u| {
+        let after = src[u + 6..lhs_open].trim_start();
+        let name: String = after.chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '.')
+            .collect();
+        if name.is_empty() { None } else { Some(name) }
+    });
+    let t = table.as_deref().and_then(|n| {
+        let bare = n.rsplit('.').next().unwrap_or(n);
+        catalog.find_table(None, bare)
+    });
+    let parts: Vec<String> = cols.iter().map(|n| {
+        let ty = t.and_then(|t| t.columns.iter()
+            .find(|c| c.name.eq_ignore_ascii_case(n))
+            .map(|c| c.data_type.clone())
+        ).unwrap_or_default();
+        if ty.is_empty() { n.clone() } else { format!("{n} {ty}") }
+    }).collect();
+    let label = format!("SET ({})", parts.join(", "));
+    let parameters = parts.iter().map(|p| ParameterInformation {
+        label: ParameterLabel::Simple(p.clone()),
+        documentation: None,
+    }).collect();
+    let active = arg_index.min(cols.len().saturating_sub(1));
+    Some(SignatureHelp {
+        signatures: vec![SignatureInformation {
+            label,
+            documentation: Some(tower_lsp::lsp_types::Documentation::String(
+                format!("Tuple-form UPDATE SET -- column slot {active}.")
             )),
             parameters: Some(parameters),
             active_parameter: Some(active as u32),
