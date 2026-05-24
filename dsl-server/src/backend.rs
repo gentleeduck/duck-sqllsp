@@ -151,6 +151,13 @@ impl LanguageServer for Backend {
         Ok(handlers::document_highlight::run(&self.state, params))
     }
 
+    async fn folding_range(
+        &self,
+        params: FoldingRangeParams,
+    ) -> Result<Option<Vec<FoldingRange>>> {
+        Ok(handlers::folding_range::run(&self.state, params))
+    }
+
     async fn prepare_rename(
         &self,
         params: TextDocumentPositionParams,

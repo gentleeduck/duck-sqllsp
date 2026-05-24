@@ -2,7 +2,7 @@
 
 use dsl_server::{
     documents::DocumentStore,
-    handlers::{code_action, completion, document_highlight, document_symbol, hover, inlay_hints, references, rename, selection_range, semantic_tokens, signature_help, workspace_symbol},
+    handlers::{code_action, completion, document_highlight, document_symbol, folding_range, hover, inlay_hints, references, rename, selection_range, semantic_tokens, signature_help, workspace_symbol},
     state::ServerState,
 };
 use tower_lsp::lsp_types::{
@@ -149,6 +149,52 @@ fn changed_update_invalidates_parse_cache() {
     store.update(&url, "SELECT 2;".into(), 2);
     let after = store.get(&url).unwrap().parsed();
     assert!(!std::sync::Arc::ptr_eq(&before, &after), "real edit should reparse");
+}
+
+#[test]
+fn folding_range_collapses_create_table_body_and_plpgsql_block() {
+    use tower_lsp::lsp_types::{FoldingRangeParams, TextDocumentIdentifier, WorkDoneProgressParams, PartialResultParams};
+    let src = "\
+CREATE TABLE users (
+  id INT,
+  email TEXT
+);
+CREATE OR REPLACE FUNCTION f() RETURNS VOID LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE NOTICE 'hi';
+END
+$$;
+";
+    let (state, url) = state_with("file:///fr.sql", src);
+    let r = folding_range::run(&state, FoldingRangeParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+    }).expect("folds");
+    // Paren fold for `( ... )` of CREATE TABLE.
+    let any_paren = r.iter().any(|f| f.start_line == 0 && f.end_line >= 1 && f.end_line <= 3);
+    assert!(any_paren, "expected CREATE TABLE paren fold; got: {r:?}");
+    // BEGIN..END fold inside dollar-quoted body.
+    let any_begin = r.iter().any(|f| {
+        // BEGIN is on line 5; END on line 7. Fold should be [5, 6].
+        f.start_line == 5 && f.end_line >= 6
+    });
+    assert!(any_begin, "expected BEGIN..END fold; got: {r:?}");
+}
+
+#[test]
+fn folding_range_emits_block_comment_fold() {
+    use tower_lsp::lsp_types::{FoldingRangeParams, TextDocumentIdentifier, WorkDoneProgressParams, PartialResultParams, FoldingRangeKind};
+    let src = "/* multi\n   line\n   comment */ SELECT 1;";
+    let (state, url) = state_with("file:///fc.sql", src);
+    let r = folding_range::run(&state, FoldingRangeParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+    }).expect("folds");
+    assert!(r.iter().any(|f| f.kind == Some(FoldingRangeKind::Comment)
+                          && f.start_line == 0 && f.end_line == 2),
+            "missing comment fold: {r:?}");
 }
 
 #[test]
