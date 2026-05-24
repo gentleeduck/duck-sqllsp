@@ -149,6 +149,27 @@ impl LanguageServer for Backend {
     Ok(handlers::linked_editing::run(&self.state, params))
   }
 
+  async fn prepare_call_hierarchy(
+    &self,
+    params: CallHierarchyPrepareParams,
+  ) -> Result<Option<Vec<CallHierarchyItem>>> {
+    Ok(handlers::call_hierarchy::prepare(&self.state, params))
+  }
+
+  async fn incoming_calls(
+    &self,
+    params: CallHierarchyIncomingCallsParams,
+  ) -> Result<Option<Vec<CallHierarchyIncomingCall>>> {
+    Ok(handlers::call_hierarchy::incoming(&self.state, params))
+  }
+
+  async fn outgoing_calls(
+    &self,
+    params: CallHierarchyOutgoingCallsParams,
+  ) -> Result<Option<Vec<CallHierarchyOutgoingCall>>> {
+    Ok(handlers::call_hierarchy::outgoing(&self.state, params))
+  }
+
   async fn prepare_rename(&self, params: TextDocumentPositionParams) -> Result<Option<PrepareRenameResponse>> {
     Ok(handlers::rename::prepare(&self.state, params))
   }

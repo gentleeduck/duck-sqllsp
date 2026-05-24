@@ -3,9 +3,9 @@
 use dsl_server::{
   documents::DocumentStore,
   handlers::{
-    code_action, completion, definition, document_highlight, document_symbol, folding_range, hover,
-    inlay_hints, linked_editing, on_type_formatting, references, rename, selection_range,
-    semantic_tokens, signature_help, type_definition, workspace_symbol,
+    call_hierarchy, code_action, completion, definition, document_highlight, document_symbol,
+    folding_range, hover, inlay_hints, linked_editing, on_type_formatting, references, rename,
+    selection_range, semantic_tokens, signature_help, type_definition, workspace_symbol,
   },
   state::ServerState,
 };
@@ -302,6 +302,67 @@ fn folding_range_emits_block_comment_fold() {
     r.iter().any(|f| f.kind == Some(FoldingRangeKind::Comment) && f.start_line == 0 && f.end_line == 2),
     "missing comment fold: {r:?}"
   );
+}
+
+#[test]
+fn call_hierarchy_finds_incoming_caller() {
+  use tower_lsp::lsp_types::{
+    CallHierarchyIncomingCallsParams, CallHierarchyItem, CallHierarchyPrepareParams, SymbolKind,
+    TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams, PartialResultParams,
+    Range,
+  };
+  let src = "\
+CREATE OR REPLACE FUNCTION audit_log() RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE NOTICE 'log';
+END;
+$$;
+CREATE OR REPLACE FUNCTION on_update() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM audit_log();
+  RETURN NEW;
+END;
+$$;
+";
+  let (state, url) = state_with("file:///ch.sql", src);
+  // Prepare on `audit_log` (in the on_update body).
+  let cur = src.rfind("audit_log()").unwrap() + 3;
+  let items = call_hierarchy::prepare(
+    &state,
+    CallHierarchyPrepareParams {
+      text_document_position_params: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url.clone() },
+        position: Position { line: 7, character: (cur - src.lines().take(7).map(|l| l.len() + 1).sum::<usize>()) as u32 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+    },
+  );
+  let item = items
+    .expect("prepare returns")
+    .into_iter()
+    .next()
+    .expect("at least one item");
+  let incoming = call_hierarchy::incoming(
+    &state,
+    CallHierarchyIncomingCallsParams {
+      item: CallHierarchyItem {
+        name: "audit_log".into(),
+        kind: SymbolKind::FUNCTION,
+        tags: None,
+        detail: None,
+        uri: url.clone(),
+        range: Range { start: Position { line: 0, character: 0 }, end: Position { line: 0, character: 0 } },
+        selection_range: Range { start: Position { line: 0, character: 0 }, end: Position { line: 0, character: 0 } },
+        data: None,
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  )
+  .expect("incoming");
+  assert_eq!(incoming.len(), 1, "expected one caller (on_update)");
+  assert_eq!(incoming[0].from.name, "on_update");
+  let _ = item;
 }
 
 #[test]
