@@ -238,15 +238,36 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
   }
   if let Some((t, i)) = catalog.find_index(token) {
     let def = i.definition.as_deref().unwrap_or("");
-    return Some(format!(
-      "# `{}`\n_index on `{}.{}`_\n\n- **columns**: `{}`\n- **unique**: `{}`\n{}",
+    let lead = i.columns.first().cloned().unwrap_or_default();
+    let mut s = format!(
+      "# `{}`\n_index on `{}.{}`_\n\n- **columns**: `{}`\n- **unique**: `{}`\n",
       i.name,
       t.schema,
       t.name,
       i.columns.join(", "),
       i.unique,
-      if def.is_empty() { String::new() } else { format!("\n```sql\n{def}\n```\n") },
-    ));
+    );
+    if !def.is_empty() {
+      s.push_str(&format!("\n```sql\n{def}\n```\n"));
+    }
+    // Workload hint: leading column drives B-tree usage. Equality +
+    // range on the leading column hits this index; predicates that
+    // touch only later columns do NOT use it for index access.
+    if !lead.is_empty() {
+      s.push_str(&format!(
+        "\n**Best for**\n\n- `WHERE {lead} = ...`\n- `WHERE {lead} BETWEEN ... AND ...`\n- `ORDER BY {lead}` (no extra sort)\n",
+      ));
+      if i.columns.len() > 1 {
+        s.push_str(&format!(
+          "- Multi-column equality starting from `{lead}` ({})\n",
+          i.columns.join(", ")
+        ));
+      }
+      if i.unique {
+        s.push_str(&format!("- `SELECT ... WHERE {lead} = ...` -> at most one row\n"));
+      }
+    }
+    return Some(s);
   }
   if let Some(s) = catalog.find_sequence(None, token) {
     let cycle = if s.cycle { "yes" } else { "no" };
