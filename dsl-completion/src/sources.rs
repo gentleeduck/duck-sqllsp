@@ -402,6 +402,46 @@ pub fn constraint_kinds(out: &mut Vec<Item>) {
     emit_keyword_subset(out, KEEP);
 }
 
+/// Sub-actions valid after `ALTER TABLE <name> `. Each item is a
+/// snippet so the user lands inside the relevant placeholder. List
+/// is curated from the PG13+ ALTER TABLE grammar -- the cardinality
+/// is too high to dump every variation, so we ship the high-value
+/// ones and let users fall back to free-form typing for the rest.
+pub fn alter_table_actions(out: &mut Vec<Item>) {
+    let actions: &[(&str, &str, &str)] = &[
+        ("ADD COLUMN",       "add a column",                "ADD COLUMN ${1:name} ${2:type}${3| NOT NULL,|}${4: DEFAULT ${5:expr}}"),
+        ("DROP COLUMN",      "drop a column",               "DROP COLUMN ${1:name}${2| CASCADE,|}"),
+        ("RENAME COLUMN",    "rename a column",             "RENAME COLUMN ${1:old} TO ${2:new}"),
+        ("ALTER COLUMN",     "modify a column",             "ALTER COLUMN ${1:name} ${2|TYPE ${3:type},SET DEFAULT ${4:expr},DROP DEFAULT,SET NOT NULL,DROP NOT NULL|}"),
+        ("RENAME TO",        "rename the table",            "RENAME TO ${1:new_name}"),
+        ("SET SCHEMA",       "move to a different schema",  "SET SCHEMA ${1:schema}"),
+        ("ADD CONSTRAINT",   "add a named constraint",      "ADD CONSTRAINT ${1:name} ${2|PRIMARY KEY (${3:cols}),UNIQUE (${3:cols}),FOREIGN KEY (${4:col}) REFERENCES ${5:tbl}(${6:col}),CHECK (${7:expr})|}"),
+        ("DROP CONSTRAINT",  "drop a constraint",           "DROP CONSTRAINT ${1:name}${2| CASCADE,|}"),
+        ("OWNER TO",         "change owner",                "OWNER TO ${1:role}"),
+        ("ENABLE",           "enable trigger / RLS",        "ENABLE ${1|TRIGGER ${2:name},ROW LEVEL SECURITY|}"),
+        ("DISABLE",          "disable trigger / RLS",       "DISABLE ${1|TRIGGER ${2:name},ROW LEVEL SECURITY|}"),
+        ("ATTACH PARTITION", "attach a partition",          "ATTACH PARTITION ${1:partition} ${2|FOR VALUES IN (${3:list}),FOR VALUES FROM (${4:lo}) TO (${5:hi}),DEFAULT|}"),
+        ("DETACH PARTITION", "detach a partition",          "DETACH PARTITION ${1:partition}"),
+        ("INHERIT",          "add parent table",            "INHERIT ${1:parent}"),
+        ("NO INHERIT",       "remove parent table",         "NO INHERIT ${1:parent}"),
+        ("SET TABLESPACE",   "move table to tablespace",    "SET TABLESPACE ${1:tablespace}"),
+        ("CLUSTER ON",       "set CLUSTER index",           "CLUSTER ON ${1:index_name}"),
+        ("SET WITHOUT CLUSTER", "remove CLUSTER",           "SET WITHOUT CLUSTER"),
+    ];
+    for (label, detail, snippet) in actions {
+        out.push(Item {
+            label: (*label).into(),
+            kind: ItemKind::Keyword,
+            detail: Some((*detail).into()),
+            description: Some("ALTER TABLE".into()),
+            documentation_md: None,
+            insert_text: (*snippet).into(),
+            is_snippet: true,
+            sort_priority: 0,
+        });
+    }
+}
+
 /// All known SQL types -- used inside CREATE TABLE column-type position.
 pub fn types_only(out: &mut Vec<Item>) {
     for (label, e) in kb::types() {

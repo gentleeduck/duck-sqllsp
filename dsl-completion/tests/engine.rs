@@ -861,6 +861,33 @@ fn alter_table_offers_existing_tables() {
 }
 
 #[test]
+fn alter_table_after_name_offers_sub_actions() {
+    let cat = catalog_with_users_and_orders();
+    let src = "ALTER TABLE users ";
+    let items = complete_at(src, src.len(), &cat);
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    for must in ["ADD COLUMN", "DROP COLUMN", "RENAME COLUMN", "ALTER COLUMN",
+                 "ADD CONSTRAINT", "DROP CONSTRAINT", "OWNER TO", "RENAME TO"] {
+        assert!(labels.contains(&must),
+            "ALTER TABLE users _ should surface `{must}`; got: {:?}", labels);
+    }
+    // Should NOT dump tables/columns/keywords at this position --
+    // exposing every column of every table here would drown the menu.
+    assert!(!labels.contains(&"users"),
+        "table list leaked into sub-action menu: {:?}", labels);
+}
+
+#[test]
+fn alter_table_with_if_exists_still_routes_to_sub_actions() {
+    let cat = catalog_with_users_and_orders();
+    let src = "ALTER TABLE IF EXISTS users ";
+    let items = complete_at(src, src.len(), &cat);
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(labels.contains(&"ADD COLUMN"),
+        "IF EXISTS guard should not break sub-action detection; got: {:?}", labels);
+}
+
+#[test]
 fn truncate_offers_existing_tables() {
     let cat = catalog_with_users_and_orders();
     let src = "TRUNCATE ";

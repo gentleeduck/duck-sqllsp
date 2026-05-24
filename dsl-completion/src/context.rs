@@ -22,6 +22,10 @@ pub enum Context {
     Projection,
     Predicate,
     Statement,
+    /// Cursor sits after `ALTER TABLE <name> ` -- expects a sub-action
+    /// (ADD COLUMN, DROP COLUMN, RENAME, ALTER COLUMN, ...). The table
+    /// name has already been chosen; the user is picking the operation.
+    AlterTableAction,
     General,
 }
 
@@ -31,6 +35,11 @@ pub fn detect(source: &str, offset: TextSize) -> Context {
 
     if let Some(ctx) = dot_context(before) {
         return ctx;
+    }
+    // Match before the broader ALTER TABLE -> Table rule so the sub-
+    // action context wins once a table name has been typed.
+    if after_alter_table_name(before) {
+        return Context::AlterTableAction;
     }
     if is_after_keyword(before, &["FROM", "JOIN", "INTO", "UPDATE", "TABLE", "INSERT INTO", "ALTER TABLE"]) {
         return Context::Table;
@@ -99,6 +108,40 @@ fn in_projection_list(before: &str) -> bool {
     // Need to actually be inside whitespace or after a comma in the list.
     let last = before.chars().rev().find(|c| !c.is_whitespace());
     matches!(last, Some(',') | Some('(') | None) || true
+}
+
+/// True when `before` looks like `... ALTER TABLE [IF EXISTS] [ONLY]
+/// <ident> [<partial-token>]` -- the table name is parsed and we are
+/// either right after it (with whitespace), or in the middle of typing
+/// the sub-action verb. Used to switch from `Table` completion (just
+/// after `ALTER TABLE`) to `AlterTableAction` once the user has named
+/// the table.
+fn after_alter_table_name(before: &str) -> bool {
+    // Strip the partial word under the cursor; the sub-action verb may
+    // be in progress (e.g. `ALTER TABLE users AD<cursor>`).
+    let cur: String = before
+        .chars()
+        .rev()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .collect::<String>()
+        .chars().rev().collect();
+    let cut = before.len() - cur.len();
+    let head = before[..cut].trim_end();
+    // Need at least one identifier (the table name) before us.
+    let table_chars: String = head
+        .chars()
+        .rev()
+        .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '"' || *c == '.')
+        .collect::<String>()
+        .chars().rev().collect();
+    if table_chars.is_empty() { return false; }
+    let cut2 = head.len() - table_chars.len();
+    let head2 = head[..cut2].trim_end().to_ascii_uppercase();
+    // The fragment before the table name must end with `ALTER TABLE`,
+    // optionally with the IF EXISTS / ONLY modifiers in between.
+    let head2 = head2.trim_end_matches("IF EXISTS").trim_end();
+    let head2 = head2.trim_end_matches("ONLY").trim_end();
+    head2.ends_with("ALTER TABLE")
 }
 
 fn at_statement_start(before: &str) -> bool {

@@ -80,6 +80,14 @@ pub enum Phase {
     AfterAlter,
     AfterDrop,
 
+    /// After `ALTER TABLE [IF EXISTS] [ONLY]` -- expect a table name.
+    /// Engine surfaces tables here.
+    AfterAlterTableExpectName,
+    /// After `ALTER TABLE <name>` -- expect a sub-action keyword
+    /// (ADD COLUMN, DROP COLUMN, RENAME, ALTER COLUMN, ...). Engine
+    /// emits the curated snippet list.
+    AfterAlterTableName,
+
     /// Cursor sits inside a `$$ ... $$` body (DO block or function body).
     /// PL/pgSQL keywords + functions + columns make sense here.
     PlpgsqlBody,
@@ -487,7 +495,20 @@ fn walk(toks: &[Tok<'_>]) -> Phase {
             (AfterDelete, _) => AfterDelete,
 
             // ----- DDL -----
-            (AfterCreate, _) | (AfterAlter, _) | (AfterDrop, _) => Unknown,
+            (AfterAlter, Tok::Word(w)) if upper(w) == "TABLE" => AfterAlterTableExpectName,
+            (AfterAlter, _) => Unknown,
+            (AfterCreate, _) | (AfterDrop, _) => Unknown,
+
+            // ALTER TABLE [IF EXISTS] [ONLY] <name>
+            (AfterAlterTableExpectName, Tok::Word(w)) => match upper(w).as_str() {
+                "IF" | "EXISTS" | "ONLY" => AfterAlterTableExpectName,
+                _ => AfterAlterTableName,
+            },
+            (AfterAlterTableExpectName, Tok::Punct('.')) => AfterAlterTableExpectName, // schema.name
+            (AfterAlterTableExpectName, _) => AfterAlterTableExpectName,
+
+            (AfterAlterTableName, Tok::Punct(';')) => Start,
+            (AfterAlterTableName, _) => AfterAlterTableName,
 
             // Reset on semicolon from anywhere.
             (_, Tok::Punct(';')) => Start,

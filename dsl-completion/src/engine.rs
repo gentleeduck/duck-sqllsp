@@ -385,6 +385,13 @@ fn route_phase(
             sources::db_types(cat, &mut out);
         }
 
+        Phase::AfterAlterTableExpectName => {
+            sources::tables(cat, &mut out);
+        }
+        Phase::AfterAlterTableName => {
+            sources::alter_table_actions(&mut out);
+        }
+
         Phase::AfterCreate | Phase::AfterAlter | Phase::AfterDrop | Phase::Unknown => {
             // Broad fallback: keywords + tables + columns + types + funcs.
             sources::keywords(&mut out);
