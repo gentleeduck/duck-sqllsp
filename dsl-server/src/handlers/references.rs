@@ -18,6 +18,7 @@ use tower_lsp::lsp_types::{Location, Position, Range, ReferenceParams};
 
 pub fn run(state: &ServerState, params: ReferenceParams) -> Option<Vec<Location>> {
     let cursor_uri = params.text_document_position.text_document.uri;
+    let _g = crate::handlers::perf::Guard::with_uri("references", &cursor_uri);
     let cursor_doc = state.documents.get(&cursor_uri)?;
     let offset = position::to_offset(&cursor_doc.rope, params.text_document_position.position);
     let token = token_at(&cursor_doc.text, offset)?;

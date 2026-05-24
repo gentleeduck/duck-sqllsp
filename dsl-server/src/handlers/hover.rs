@@ -10,6 +10,7 @@ use tower_lsp::lsp_types::{
 
 pub fn run(state: &ServerState, params: HoverParams) -> Option<Hover> {
     let uri = params.text_document_position_params.text_document.uri;
+    let _g = crate::handlers::perf::Guard::with_uri("hover", &uri);
     let doc = state.documents.get(&uri)?;
     if doc.too_large() { return None; }
     let offset = position::to_offset(&doc.rope, params.text_document_position_params.position);

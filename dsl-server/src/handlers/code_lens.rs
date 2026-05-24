@@ -16,6 +16,7 @@ use tower_lsp::lsp_types::{
 };
 
 pub fn run(state: &ServerState, params: CodeLensParams) -> Option<Vec<CodeLens>> {
+    let _g = crate::handlers::perf::Guard::with_uri("code_lens", &params.text_document.uri);
     let doc = state.documents.get(&params.text_document.uri)?;
     let cache = doc.parsed();
 

@@ -19,6 +19,7 @@ use tower_lsp::lsp_types::{
 
 pub fn run(state: &ServerState, params: SignatureHelpParams) -> Option<SignatureHelp> {
     let uri = params.text_document_position_params.text_document.uri;
+    let _g = crate::handlers::perf::Guard::with_uri("signature_help", &uri);
     let doc = state.documents.get(&uri)?;
     let offset = position::to_offset(&doc.rope, params.text_document_position_params.position);
     let pos: usize = offset.into();

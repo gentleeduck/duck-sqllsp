@@ -33,6 +33,7 @@ pub fn prepare(
 
 pub fn run(state: &ServerState, params: RenameParams) -> Option<WorkspaceEdit> {
     let cursor_uri = params.text_document_position.text_document.uri.clone();
+    let _g = crate::handlers::perf::Guard::with_uri("rename", &cursor_uri);
     let cursor_doc = state.documents.get(&cursor_uri)?;
     let offset = position::to_offset(&cursor_doc.rope, params.text_document_position.position);
     let (_, _, token) = token_range(&cursor_doc.text, offset)?;

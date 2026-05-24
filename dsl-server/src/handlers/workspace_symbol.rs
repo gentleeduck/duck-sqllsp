@@ -20,6 +20,7 @@ use tower_lsp::lsp_types::{
 };
 
 pub fn run(state: &ServerState, params: WorkspaceSymbolParams) -> Option<Vec<SymbolInformation>> {
+    let _g = crate::handlers::perf::Guard::new("workspace_symbol");
     let query = params.query.to_ascii_lowercase();
     let cat = state.catalog.read().clone();
     // Score every candidate so the best match floats to the top.

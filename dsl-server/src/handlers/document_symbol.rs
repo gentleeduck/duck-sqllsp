@@ -15,6 +15,7 @@ use tower_lsp::lsp_types::{
 };
 
 pub fn run(state: &ServerState, params: DocumentSymbolParams) -> Option<DocumentSymbolResponse> {
+    let _g = crate::handlers::perf::Guard::with_uri("document_symbol", &params.text_document.uri);
     let doc = state.documents.get(&params.text_document.uri)?;
     let cache = doc.parsed();
     let mut out = Vec::new();

@@ -19,6 +19,7 @@ use tower_lsp::lsp_types::{
 
 pub fn run(state: &ServerState, params: SelectionRangeParams) -> Option<Vec<SelectionRange>> {
     let uri = params.text_document.uri;
+    let _g = crate::handlers::perf::Guard::with_uri("selection_range", &uri);
     let doc = state.documents.get(&uri)?;
 
     let mut out = Vec::with_capacity(params.positions.len());

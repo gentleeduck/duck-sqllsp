@@ -11,6 +11,7 @@ use tower_lsp::lsp_types::{
 
 pub fn run(state: &ServerState, params: CompletionParams) -> Option<CompletionResponse> {
     let uri = params.text_document_position.text_document.uri;
+    let _g = crate::handlers::perf::Guard::with_uri("completion", &uri);
     let doc = state.documents.get(&uri)?;
     if doc.too_large() { return None; }
     let offset = position::to_offset(&doc.rope, params.text_document_position.position);

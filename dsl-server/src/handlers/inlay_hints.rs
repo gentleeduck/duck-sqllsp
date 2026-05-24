@@ -18,6 +18,7 @@ use tower_lsp::lsp_types::{
 
 pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint>> {
     let uri = params.text_document.uri;
+    let _g = crate::handlers::perf::Guard::with_uri("inlay_hints", &uri);
     let doc = state.documents.get(&uri)?;
     let live = state.catalog.read().clone();
     let cache = doc.parsed();

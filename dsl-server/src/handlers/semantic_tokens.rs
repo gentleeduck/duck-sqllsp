@@ -36,6 +36,7 @@ enum Tok {
 }
 
 pub fn run(state: &ServerState, params: SemanticTokensParams) -> Option<SemanticTokensResult> {
+    let _g = crate::handlers::perf::Guard::with_uri("semantic_tokens", &params.text_document.uri);
     let doc = state.documents.get(&params.text_document.uri)?;
     let cat = state.catalog.read().clone();
     let kw = dsl_knowledge::keywords();

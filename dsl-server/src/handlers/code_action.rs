@@ -17,6 +17,7 @@ use std::collections::HashMap;
 
 pub fn run(state: &ServerState, params: CodeActionParams) -> Option<CodeActionResponse> {
     let uri = params.text_document.uri;
+    let _g = crate::handlers::perf::Guard::with_uri("code_action", &uri);
     let doc = state.documents.get(&uri)?;
     let mut actions: Vec<CodeActionOrCommand> = Vec::new();
 

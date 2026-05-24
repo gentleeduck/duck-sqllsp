@@ -9,6 +9,7 @@ use tower_lsp::lsp_types::{DocumentFormattingParams, Position, Range, TextEdit};
 
 pub fn run(state: &ServerState, params: DocumentFormattingParams) -> Option<Vec<TextEdit>> {
     let uri = &params.text_document.uri;
+    let _g = crate::handlers::perf::Guard::with_uri("formatting", uri);
     let doc = state.documents.get(uri)?;
     let original = doc.text.clone();
     let cfg = state.config_snapshot();
