@@ -254,6 +254,86 @@ fn statement_snippets(out: &mut Vec<Item>) {
         is_snippet: true,
         sort_priority: 3,
     });
+    out.push(Item {
+        label: "addcol".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("ALTER TABLE ADD COLUMN".into()),
+        description: Some("snippet".into()),
+        documentation_md: Some("Add a new column.".into()),
+        insert_text: "ALTER TABLE ${1:table} ADD COLUMN ${2:name} ${3:type} ${4|NOT NULL,NULL|}${5: DEFAULT ${6:expr}};$0".into(),
+        is_snippet: true,
+        sort_priority: 3,
+    });
+    out.push(Item {
+        label: "rencol".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("ALTER TABLE RENAME COLUMN".into()),
+        description: Some("snippet".into()),
+        documentation_md: Some("Rename a column.".into()),
+        insert_text: "ALTER TABLE ${1:table} RENAME COLUMN ${2:old_name} TO ${3:new_name};$0".into(),
+        is_snippet: true,
+        sort_priority: 3,
+    });
+    out.push(Item {
+        label: "rentab".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("ALTER TABLE RENAME TO".into()),
+        description: Some("snippet".into()),
+        documentation_md: Some("Rename a table.".into()),
+        insert_text: "ALTER TABLE ${1:old_name} RENAME TO ${2:new_name};$0".into(),
+        is_snippet: true,
+        sort_priority: 3,
+    });
+    out.push(Item {
+        label: "copyin".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("COPY ... FROM CSV".into()),
+        description: Some("snippet".into()),
+        documentation_md: Some("Bulk load from a CSV file with HEADER + DELIMITER.".into()),
+        insert_text: "COPY ${1:table} (${2:col1, col2})\nFROM '${3:/path/to/file.csv}'\nWITH (FORMAT csv, HEADER true, DELIMITER ',');$0".into(),
+        is_snippet: true,
+        sort_priority: 3,
+    });
+    out.push(Item {
+        label: "copyout".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("COPY ... TO CSV".into()),
+        description: Some("snippet".into()),
+        documentation_md: Some("Export to a CSV file with HEADER.".into()),
+        insert_text: "COPY (SELECT ${1:*} FROM ${2:table})\nTO '${3:/path/to/file.csv}'\nWITH (FORMAT csv, HEADER true);$0".into(),
+        is_snippet: true,
+        sort_priority: 3,
+    });
+    out.push(Item {
+        label: "listen".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("LISTEN / UNLISTEN pair".into()),
+        description: Some("snippet".into()),
+        documentation_md: Some("LISTEN to a channel; remember to UNLISTEN on session end.".into()),
+        insert_text: "LISTEN ${1:channel};\n-- ... do work ...\nUNLISTEN ${1:channel};$0".into(),
+        is_snippet: true,
+        sort_priority: 3,
+    });
+    out.push(Item {
+        label: "notify".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("NOTIFY <channel>, '<payload>'".into()),
+        description: Some("snippet".into()),
+        documentation_md: Some("Send a notification on a channel.".into()),
+        insert_text: "NOTIFY ${1:channel}, '${2:payload}';$0".into(),
+        is_snippet: true,
+        sort_priority: 3,
+    });
+    out.push(Item {
+        label: "upsert".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("INSERT ... ON CONFLICT DO UPDATE".into()),
+        description: Some("snippet".into()),
+        documentation_md: Some("Insert or update on conflict (PG-native upsert).".into()),
+        insert_text: "INSERT INTO ${1:table} (${2:cols})\nVALUES (${3:vals})\nON CONFLICT (${4:conflict_col})\nDO UPDATE SET ${5:col} = EXCLUDED.${5:col};$0".into(),
+        is_snippet: true,
+        sort_priority: 3,
+    });
 }
 
 /// Keywords expected after a finished table reference: JOIN / WHERE /

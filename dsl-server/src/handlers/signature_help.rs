@@ -27,6 +27,15 @@ pub fn run(state: &ServerState, params: SignatureHelpParams) -> Option<Signature
     let (open_paren, arg_index) = find_enclosing_call(&doc.text, pos)?;
     let name = identifier_before(&doc.text, open_paren)?;
 
+    // INSERT INTO t (a, b, c) VALUES (|...) -- when the enclosing `(`
+    // belongs to a VALUES tuple, treat each declared column as a
+    // signature parameter. Active index = comma count from VALUES `(`.
+    if name.eq_ignore_ascii_case("VALUES") {
+        if let Some(sig) = insert_values_signature(&doc.text, &state.catalog.read(), open_paren, arg_index) {
+            return Some(sig);
+        }
+    }
+
     // Knowledge base first.
     let kb = dsl_knowledge::functions();
     if let Some(entry) = kb.get(name.to_ascii_lowercase().as_str()) {
@@ -150,6 +159,86 @@ fn find_enclosing_call(src: &str, cursor: usize) -> Option<(usize, usize)> {
         }
     }
     None
+}
+
+/// Build a signature for `INSERT INTO <table> (...) VALUES (|...)` by
+/// reading the explicit column list (when present) OR the table's
+/// catalog column order (positional INSERT). Returns None when we
+/// can't pin down a table.
+fn insert_values_signature(
+    src: &str,
+    catalog: &dsl_catalog::Catalog,
+    values_paren: usize,
+    arg_index: usize,
+) -> Option<SignatureHelp> {
+    // Walk back from `VALUES` to find `INSERT INTO <table> [(cols)]`.
+    let before = &src[..values_paren];
+    let upper = before.to_ascii_uppercase();
+    let insert_at = upper.rfind("INSERT INTO")?;
+    let after_kw = &src[insert_at + 11..values_paren];
+    let after_trim = after_kw.trim_start();
+    let after_offset = after_kw.len() - after_trim.len();
+    // Table name = first identifier token after INSERT INTO.
+    let table: String = after_trim.chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '.')
+        .collect();
+    if table.is_empty() { return None; }
+    let bare_table = table.rsplit('.').next().unwrap_or(&table).to_string();
+    // Optional explicit column list `(col1, col2, ...)`.
+    let after_table_start = after_offset + table.len();
+    let rest = &after_kw[after_table_start..];
+    let rest_trim = rest.trim_start();
+    let explicit_cols: Option<Vec<String>> = if rest_trim.starts_with('(') {
+        rest_trim[1..].find(')').map(|close_rel| {
+            rest_trim[1..1 + close_rel]
+                .split(',')
+                .map(|c| c.trim().trim_matches('"').to_string())
+                .filter(|c| !c.is_empty())
+                .collect()
+        })
+    } else {
+        None
+    };
+    // Source of param names + types: explicit col list (use catalog
+    // for types when available) OR catalog order for positional.
+    let t = catalog.find_table(None, &bare_table);
+    let params: Vec<(String, String)> = if let Some(cols) = explicit_cols {
+        cols.into_iter().map(|name| {
+            let ty = t.and_then(|t| t.columns.iter()
+                .find(|c| c.name.eq_ignore_ascii_case(&name))
+                .map(|c| c.data_type.clone())
+            ).unwrap_or_default();
+            (name, ty)
+        }).collect()
+    } else if let Some(t) = t {
+        t.columns.iter().map(|c| (c.name.clone(), c.data_type.clone())).collect()
+    } else {
+        return None;
+    };
+    if params.is_empty() { return None; }
+    // Render the signature label as a synthetic call:
+    //   VALUES(col1 type1, col2 type2, ...)
+    let parts: Vec<String> = params.iter().map(|(n, t)| {
+        if t.is_empty() { n.clone() } else { format!("{n} {t}") }
+    }).collect();
+    let label = format!("VALUES({})", parts.join(", "));
+    let parameters = parts.iter().map(|p| ParameterInformation {
+        label: ParameterLabel::Simple(p.clone()),
+        documentation: None,
+    }).collect();
+    let active = arg_index.min(params.len().saturating_sub(1));
+    Some(SignatureHelp {
+        signatures: vec![SignatureInformation {
+            label,
+            documentation: Some(tower_lsp::lsp_types::Documentation::String(
+                format!("Positional VALUES for `{bare_table}` -- column slot {active}.")
+            )),
+            parameters: Some(parameters),
+            active_parameter: Some(active as u32),
+        }],
+        active_signature: Some(0),
+        active_parameter: Some(active as u32),
+    })
 }
 
 fn identifier_before(src: &str, paren_pos: usize) -> Option<String> {

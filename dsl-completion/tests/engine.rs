@@ -896,6 +896,17 @@ fn json_path_completion_works_for_double_arrow() {
 }
 
 #[test]
+fn extra_dml_snippets_all_present() {
+    let cat = catalog_with_users_and_orders();
+    let items = complete_at("", 0, &cat);
+    for label in &["addcol", "rencol", "rentab", "copyin", "copyout", "listen", "notify", "upsert"] {
+        let it = items.iter().find(|i| i.label.eq_ignore_ascii_case(label))
+            .unwrap_or_else(|| panic!("missing snippet `{label}`"));
+        assert!(it.is_snippet, "{label} should be a snippet");
+    }
+}
+
+#[test]
 fn json_path_completion_returns_normal_in_plain_string() {
     let cat = catalog_with_users_and_orders();
     // Not in a `->'` context -- string literals get the normal menu.

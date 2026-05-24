@@ -290,6 +290,27 @@ fn completion_snippet_item_has_expands_to_preview() {
 }
 
 #[test]
+fn signature_help_for_insert_values_explicit_columns() {
+    use tower_lsp::lsp_types::{SignatureHelpParams, TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams};
+    let src = "INSERT INTO users (id, email) VALUES ();";
+    let (state, url) = state_with("file:///iv.sql", src);
+    // Cursor right after the opening `(` of VALUES.
+    let cur = src.find("VALUES (").unwrap() + 8;
+    let r = signature_help::run(&state, SignatureHelpParams {
+        text_document_position_params: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: url },
+            position: Position { line: 0, character: cur as u32 },
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        context: None,
+    }).expect("INSERT VALUES sig");
+    let sig = &r.signatures[0];
+    assert!(sig.label.contains("VALUES"), "label: {}", sig.label);
+    assert!(sig.label.contains("id"), "label should list id: {}", sig.label);
+    assert!(sig.label.contains("email"), "label should list email: {}", sig.label);
+}
+
+#[test]
 fn signature_help_for_char_length_renders_signature() {
     use tower_lsp::lsp_types::{SignatureHelpParams, TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams};
     let src = "SELECT char_length() FROM users;";
