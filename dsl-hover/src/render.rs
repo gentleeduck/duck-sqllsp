@@ -7,6 +7,71 @@
 
 use dsl_catalog::{Column, Constraint, ConstraintKind, Table, TableKind, Type, TypeKind};
 
+/// Render the table card + every catalog-wide attachment found via
+/// `cat` (inbound FKs from other tables, sequences owned by this
+/// table's columns). Used by the hover handler which has the full
+/// catalog in scope; resolver.rs (which doesn't) keeps calling
+/// `table()` for the bare card.
+pub fn table_with_catalog(t: &Table, cat: &dsl_catalog::Catalog) -> String {
+  let mut s = table(t);
+  let inbound = inbound_fks(t, cat);
+  if !inbound.is_empty() {
+    s.push_str("\n**Referenced by**\n\n");
+    s.push_str("```sql\n");
+    for line in inbound {
+      s.push_str(&line);
+      s.push('\n');
+    }
+    s.push_str("```\n");
+  }
+  let owned: Vec<&dsl_catalog::Sequence> = cat
+    .sequences
+    .iter()
+    .filter(|seq| {
+      let Some(owner) = &seq.owned_by_column else { return false };
+      let parts: Vec<&str> = owner.split('.').collect();
+      parts.len() >= 2 && parts[parts.len() - 2].eq_ignore_ascii_case(&t.name)
+    })
+    .collect();
+  if !owned.is_empty() {
+    s.push_str("\n**Sequences**\n\n");
+    s.push_str("```sql\n");
+    for seq in owned {
+      let cycle = if seq.cycle { " CYCLE" } else { "" };
+      s.push_str(&format!(
+        "CREATE SEQUENCE {}.{} AS {} START {} MIN {} MAX {} INCREMENT {}{};\n",
+        seq.schema, seq.name, seq.data_type, seq.start_value, seq.min_value, seq.max_value, seq.increment_by, cycle
+      ));
+      if let Some(o) = &seq.owned_by_column {
+        s.push_str(&format!("ALTER SEQUENCE {}.{} OWNED BY {};\n", seq.schema, seq.name, o));
+      }
+    }
+    s.push_str("```\n");
+  }
+  s
+}
+
+fn inbound_fks(t: &Table, cat: &dsl_catalog::Catalog) -> Vec<String> {
+  let mut out = Vec::new();
+  for other in cat.tables() {
+    if other.name.eq_ignore_ascii_case(&t.name) && other.schema.eq_ignore_ascii_case(&t.schema) {
+      continue;
+    }
+    for c in &other.constraints {
+      if !matches!(c.kind, ConstraintKind::ForeignKey) { continue; }
+      let Some(refs) = &c.references else { continue };
+      if !refs.table.eq_ignore_ascii_case(&t.name) { continue; }
+      let local = c.columns.join(", ");
+      let target = refs.columns.join(", ");
+      out.push(format!(
+        "-- FK: {}.{} ({}) -> {}.{} ({})",
+        other.schema, other.name, local, t.schema, t.name, target
+      ));
+    }
+  }
+  out
+}
+
 pub fn table(t: &Table) -> String {
   let fq = format!("{}.{}", t.schema, t.name);
   let kind = match t.kind {

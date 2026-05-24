@@ -191,12 +191,12 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
         return Some(render::column(t, c));
       }
       // 3rd segment is not a column -- still a valid table card.
-      return Some(render::table(t));
+      return Some(render::table_with_catalog(t, catalog));
     }
   }
   if let Some((left, right)) = token.split_once('.') {
     if let Some(t) = catalog.find_table(Some(left), right) {
-      return Some(render::table(t));
+      return Some(render::table_with_catalog(t, catalog));
     }
     if let Some(t) = catalog.find_table(None, left) {
       if let Some(c) = t.columns.iter().find(|c| c.name == right) {
