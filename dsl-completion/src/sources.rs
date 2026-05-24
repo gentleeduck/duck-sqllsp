@@ -140,6 +140,60 @@ pub fn statement_keywords(out: &mut Vec<Item>) {
         "SET", "SHOW", "COMMENT", "COPY", "CALL",
     ];
     emit_keyword_subset(out, KEEP);
+    statement_snippets(out);
+}
+
+/// Common multi-line scaffolds. These ride above the plain statement
+/// keywords because typing `ctable` / `fn` / `trig` is faster than
+/// hand-rolling the full skeleton every time.
+fn statement_snippets(out: &mut Vec<Item>) {
+    out.push(Item {
+        label: "ctable".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("CREATE TABLE skeleton".into()),
+        description: Some("snippet".into()),
+        documentation_md: Some(
+            "Expands to a CREATE TABLE with id PK, created_at, and a tab-stop \
+             for the table name and additional columns.".into()
+        ),
+        insert_text: "CREATE TABLE ${1:name} (\n    id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,\n    ${2:col} ${3:type} NOT NULL,\n    created_at timestamptz NOT NULL DEFAULT now()\n);$0".into(),
+        is_snippet: true,
+        sort_priority: 3,
+    });
+    out.push(Item {
+        label: "fn".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("CREATE OR REPLACE FUNCTION skeleton".into()),
+        description: Some("snippet".into()),
+        documentation_md: Some(
+            "Expands to a CREATE OR REPLACE FUNCTION with plpgsql body.".into()
+        ),
+        insert_text: "CREATE OR REPLACE FUNCTION ${1:name}(${2:args})\n    RETURNS ${3:void}\n    LANGUAGE plpgsql\nAS $$\nBEGIN\n    $0\nEND;\n$$;".into(),
+        is_snippet: true,
+        sort_priority: 3,
+    });
+    out.push(Item {
+        label: "trig".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("CREATE TRIGGER + handler function skeleton".into()),
+        description: Some("snippet".into()),
+        documentation_md: Some(
+            "Expands to a row-level AFTER trigger + matching plpgsql handler.".into()
+        ),
+        insert_text: "CREATE OR REPLACE FUNCTION ${1:handler}()\n    RETURNS TRIGGER\n    LANGUAGE plpgsql\nAS $$\nBEGIN\n    $0\n    RETURN NEW;\nEND;\n$$;\n\nCREATE TRIGGER ${2:trg_name}\n    AFTER INSERT OR UPDATE ON ${3:table}\n    FOR EACH ROW\n    EXECUTE FUNCTION ${1:handler}();".into(),
+        is_snippet: true,
+        sort_priority: 3,
+    });
+    out.push(Item {
+        label: "idx".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("CREATE INDEX skeleton".into()),
+        description: Some("snippet".into()),
+        documentation_md: Some("Index on a single column.".into()),
+        insert_text: "CREATE INDEX ${1:idx_name} ON ${2:table} (${3:col});$0".into(),
+        is_snippet: true,
+        sort_priority: 3,
+    });
 }
 
 /// Keywords expected after a finished table reference: JOIN / WHERE /

@@ -674,6 +674,56 @@ fn constraint_keyword_inserts_full_snippet_template() {
 }
 
 #[test]
+fn ctable_snippet_expands_create_table_skeleton() {
+    let cat = catalog_with_users_and_orders();
+    let src = "";
+    let items = complete_at(src, 0, &cat);
+    let it = items.iter().find(|i| i.label == "ctable").expect("ctable");
+    assert!(it.is_snippet);
+    assert!(it.insert_text.contains("CREATE TABLE ${1:name}"),
+        "got: {}", it.insert_text);
+    assert!(it.insert_text.contains("gen_random_uuid()"),
+        "expects PK + default");
+    assert!(it.insert_text.contains("created_at timestamptz NOT NULL DEFAULT now()"),
+        "expects created_at");
+}
+
+#[test]
+fn fn_snippet_expands_create_function_skeleton() {
+    let cat = catalog_with_users_and_orders();
+    let src = "";
+    let items = complete_at(src, 0, &cat);
+    let it = items.iter().find(|i| i.label == "fn").expect("fn");
+    assert!(it.is_snippet);
+    assert!(it.insert_text.contains("CREATE OR REPLACE FUNCTION ${1:name}"));
+    assert!(it.insert_text.contains("LANGUAGE plpgsql"));
+    assert!(it.insert_text.contains("BEGIN\n    $0"),
+        "tab-stop should land in BEGIN body");
+}
+
+#[test]
+fn trig_snippet_expands_trigger_with_handler() {
+    let cat = catalog_with_users_and_orders();
+    let src = "";
+    let items = complete_at(src, 0, &cat);
+    let it = items.iter().find(|i| i.label == "trig").expect("trig");
+    assert!(it.is_snippet);
+    assert!(it.insert_text.contains("CREATE TRIGGER"));
+    assert!(it.insert_text.contains("RETURNS TRIGGER"));
+    assert!(it.insert_text.contains("FOR EACH ROW"));
+}
+
+#[test]
+fn idx_snippet_expands_create_index() {
+    let cat = catalog_with_users_and_orders();
+    let src = "";
+    let items = complete_at(src, 0, &cat);
+    let it = items.iter().find(|i| i.label == "idx").expect("idx");
+    assert!(it.is_snippet);
+    assert!(it.insert_text.contains("CREATE INDEX ${1:idx_name}"));
+}
+
+#[test]
 fn functions_in_plpgsql_assign_rhs() {
     let cat = catalog_with_users_and_orders();
     let src = "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ DECLARE v text; BEGIN v := ";
