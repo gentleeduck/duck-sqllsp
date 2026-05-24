@@ -17,7 +17,111 @@ pub fn rewrite(source: &str, style: &CreateTableStyle) -> String {
     let stage3 = break_trigger_headers(&stage2);
     let stage4 = break_index_headers(&stage3);
     let stage5 = break_constraint_clauses(&stage4);
-    if style.group_indexes { collapse_index_runs(&stage5) } else { stage5 }
+    let stage6 = if style.group_indexes { collapse_index_runs(&stage5) } else { stage5 };
+    align_plpgsql_bodies(&stage6)
+}
+
+/// Re-indent statements inside `$$ ... $$` bodies. BEGIN / IF / LOOP /
+/// CASE bump the indent; the matching END / END IF / END LOOP /
+/// END CASE pop it. Statements are split on top-level `;` and emitted
+/// one per line.
+fn align_plpgsql_bodies(source: &str) -> String {
+    let bytes = source.as_bytes();
+    let n = bytes.len();
+    let mut out = String::with_capacity(n);
+    let mut i = 0;
+    while i < n {
+        // Look for `$$` opener that follows `AS ` (function body).
+        if i + 2 <= n && bytes[i] == b'$' && bytes[i + 1] == b'$' {
+            out.push_str("$$");
+            i += 2;
+            // Find matching `$$`.
+            let body_start = i;
+            let mut close = body_start;
+            while close + 2 <= n && !(bytes[close] == b'$' && bytes[close + 1] == b'$') {
+                close += 1;
+            }
+            if close + 2 > n {
+                out.push_str(&source[body_start..]);
+                return out;
+            }
+            let body = &source[body_start..close];
+            let aligned = align_body_text(body);
+            out.push_str(&aligned);
+            out.push_str("$$");
+            i = close + 2;
+            continue;
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
+}
+
+/// Split a PL/pgSQL body on top-level `;` and re-emit one statement
+/// per line at the current depth. BEGIN/IF/LOOP/CASE increment depth.
+fn align_body_text(body: &str) -> String {
+    let trimmed = body.trim_matches(|c: char| c == '\n' || c == '\r');
+    if trimmed.is_empty() { return body.to_string(); }
+    let bytes = trimmed.as_bytes();
+    let n = bytes.len();
+    let mut stmts: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    let mut i = 0;
+    while i < n {
+        match bytes[i] {
+            b'\'' => {
+                cur.push('\'');
+                i += 1;
+                while i < n && bytes[i] != b'\'' { cur.push(bytes[i] as char); i += 1; }
+                if i < n { cur.push('\''); i += 1; }
+            }
+            b'-' if i + 1 < n && bytes[i + 1] == b'-' => {
+                while i < n && bytes[i] != b'\n' { cur.push(bytes[i] as char); i += 1; }
+            }
+            b';' => {
+                cur.push(';');
+                let trimmed_stmt = cur.trim().to_string();
+                if !trimmed_stmt.is_empty() { stmts.push(trimmed_stmt); }
+                cur.clear();
+                i += 1;
+            }
+            _ => { cur.push(bytes[i] as char); i += 1; }
+        }
+    }
+    let tail = cur.trim().to_string();
+    if !tail.is_empty() { stmts.push(tail); }
+
+    let mut out = String::from("\n");
+    let mut depth: usize = 0;
+    for raw in &stmts {
+        let s = raw.trim();
+        let up = s.to_ascii_uppercase();
+        let dedent_first = up.starts_with("END")
+            || up.starts_with("ELSE")
+            || up.starts_with("ELSIF")
+            || up.starts_with("EXCEPTION ")
+            || up == "EXCEPTION;"
+            || up.starts_with("WHEN ");
+        let print_depth = if dedent_first { depth.saturating_sub(1) } else { depth };
+        for _ in 0..print_depth { out.push_str("  "); }
+        out.push_str(s);
+        out.push('\n');
+        // Indent for next stmt.
+        if up == "BEGIN;" || up.starts_with("IF ") || up.starts_with("LOOP")
+            || up.starts_with("FOR ") || up.starts_with("WHILE ")
+            || up.starts_with("CASE ") || up == "ELSE;"
+            || up.starts_with("ELSIF ") || up.starts_with("EXCEPTION ")
+            || up == "EXCEPTION;"
+        {
+            depth += 1;
+        }
+        if up.starts_with("END") && depth > 0 {
+            // Already dedented above; just pop.
+            depth -= 1;
+        }
+    }
+    out
 }
 
 /// sql-formatter collapses `CREATE [OR REPLACE] FUNCTION ... RETURNS X
