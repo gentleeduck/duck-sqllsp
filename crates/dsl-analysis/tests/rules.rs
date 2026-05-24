@@ -35,10 +35,22 @@ fn cat() -> Catalog {
         indexes: vec![], triggers: vec![], policies: vec![],
         comment: None,
     };
+    let flags = Table {
+        schema: "public".into(),
+        name: "flags".into(),
+        kind: TableKind::Table,
+        columns: vec![
+            Column { name: "id".into(),     data_type: "uuid".into(),    nullable: false, default: None, comment: None },
+            Column { name: "active".into(), data_type: "boolean".into(), nullable: false, default: None, comment: None },
+        ],
+        constraints: vec![],
+        indexes: vec![], triggers: vec![], policies: vec![],
+        comment: None,
+    };
     Catalog {
         version: CATALOG_VERSION,
         connection_id: "test".into(),
-        schemas: vec![Schema { name: "public".into(), tables: vec![users, orders] }],
+        schemas: vec![Schema { name: "public".into(), tables: vec![users, orders, flags] }],
         functions: vec![],
         types: vec![],
     }
@@ -2040,4 +2052,44 @@ fn sql123_quiet_for_e_prefixed() {
 fn sql123_quiet_for_plain_string_no_backslash() {
     let d = diags("SELECT 'hello world';");
     assert!(!d.iter().any(|x| x.code == "sql123"));
+}
+
+// ===== sql117 boolean column getting text literal ==========================
+
+#[test]
+fn sql117_flags_quoted_true_into_bool_column() {
+    let d = diags("INSERT INTO flags (id, active) VALUES ('00000000-0000-0000-0000-000000000000', 'true');");
+    assert!(d.iter().any(|x| x.code == "sql117"));
+}
+
+#[test]
+fn sql117_quiet_for_unquoted_bool() {
+    let d = diags("INSERT INTO flags (id, active) VALUES ('00000000-0000-0000-0000-000000000000', true);");
+    assert!(!d.iter().any(|x| x.code == "sql117"));
+}
+
+#[test]
+fn sql117_quiet_for_explicit_cast() {
+    let d = diags("INSERT INTO flags (id, active) VALUES ('00000000-0000-0000-0000-000000000000', 'true'::boolean);");
+    assert!(!d.iter().any(|x| x.code == "sql117"));
+}
+
+// ===== sql122 LIKE in CREATE INDEX/VIEW without COLLATE ====================
+
+#[test]
+fn sql122_flags_like_in_create_view() {
+    let d = diags("CREATE VIEW v AS SELECT * FROM users WHERE email LIKE 'a%';");
+    assert!(d.iter().any(|x| x.code == "sql122"));
+}
+
+#[test]
+fn sql122_quiet_for_ad_hoc_select() {
+    let d = diags("SELECT * FROM users WHERE email LIKE 'a%';");
+    assert!(!d.iter().any(|x| x.code == "sql122"));
+}
+
+#[test]
+fn sql122_quiet_when_collate_present() {
+    let d = diags("CREATE VIEW v AS SELECT * FROM users WHERE email COLLATE \"C\" LIKE 'a%';");
+    assert!(!d.iter().any(|x| x.code == "sql122"));
 }

@@ -7,6 +7,7 @@ pub mod backslash_in_string;
 pub mod bare_return_typed;
 pub mod between_reversed;
 pub mod bool_compare_equals;
+pub mod boolean_in_text_column;
 pub mod case_single_when;
 pub mod cast_text_to_int_in_where;
 pub mod char_length_vs_length;
@@ -35,6 +36,7 @@ pub mod join_no_on;
 pub mod jsonb_no_cast;
 pub mod jsonb_set_no_create;
 pub mod like_leading_wildcard;
+pub mod like_with_no_collation;
 pub mod like_without_wildcard;
 pub mod limit_without_order;
 pub mod lock_table_no_tx;
@@ -153,5 +155,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(distinct_after_group_by::Rule),
         Box::new(cast_text_to_int_in_where::Rule),
         Box::new(backslash_in_string::Rule),
+        Box::new(boolean_in_text_column::Rule),
+        Box::new(like_with_no_collation::Rule),
     ]
 }
