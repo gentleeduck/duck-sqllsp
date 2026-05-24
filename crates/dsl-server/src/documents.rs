@@ -64,7 +64,7 @@ impl Document {
         self.parse_cache
             .get_or_init(|| {
                 let file = dsl_parse::parse(&self.text, Dialect::Postgres);
-                let scopes = dsl_resolve::resolve(&file.statements);
+                let scopes = dsl_resolve::resolve_with_source(&file.statements, &self.text);
                 Arc::new(ParseCache { file, scopes })
             })
             .clone()
