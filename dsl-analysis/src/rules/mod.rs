@@ -22,6 +22,7 @@ pub mod char_n_type;
 pub mod column_default_volatile;
 pub mod copy_no_format;
 pub mod count_one_vs_star;
+pub mod count_star_returns_one;
 pub mod cte_missing_recursive;
 pub mod ddl_in_immutable;
 pub mod deep_case_nesting;
@@ -93,6 +94,7 @@ pub mod select_into_shape;
 pub mod single_stmt_transaction;
 pub mod select_star_insert;
 pub mod sql_lang_uses_new_old;
+pub mod text_int_arithmetic;
 pub mod time_with_timezone;
 pub mod timestamp_int_arithmetic;
 pub mod timestamp_without_tz;
@@ -201,7 +203,10 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(raise_message_no_args::Rule),
         Box::new(vacuum_in_transaction::Rule),
         Box::new(multiple_truncate_in_tx::Rule),
-        Box::new(alter_table_no_owner::Rule),
+        // sql129 alter_table_no_owner unregistered -- too noisy for
+        // teams that set ownership at DB level. Module retained for
+        // future opt-in via config.
+        // Box::new(alter_table_no_owner::Rule),
         Box::new(copy_no_format::Rule),
         Box::new(select_for_update_in_recursive_cte::Rule),
         Box::new(listen_unbounded::Rule),
@@ -227,5 +232,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(raise_using_errcode::Rule),
         Box::new(perform_for_pure_select::Rule),
         Box::new(trigger_stmt_uses_new::Rule),
+        Box::new(count_star_returns_one::Rule),
+        Box::new(text_int_arithmetic::Rule),
     ]
 }

@@ -2323,9 +2323,11 @@ fn sql130_quiet_for_combined_truncate() {
 // ===== sql129 CREATE TABLE without ALTER OWNER =============================
 
 #[test]
-fn sql129_flags_lone_create_table() {
+fn sql129_unregistered_does_not_fire() {
+    // sql129 alter_table_no_owner was unregistered (too noisy in
+    // practice). The rule module still exists for future opt-in.
     let d = diags("CREATE TABLE widgets (id uuid PRIMARY KEY);");
-    assert!(d.iter().any(|x| x.code == "sql129"));
+    assert!(!d.iter().any(|x| x.code == "sql129"));
 }
 
 #[test]
@@ -2724,6 +2726,115 @@ fn sql126_quiet_for_insert_in_plain_function() {
     let src = "CREATE FUNCTION audit() RETURNS void LANGUAGE plpgsql AS $$ BEGIN INSERT INTO audit_log (msg) VALUES ('event'); END $$;";
     let d = diags(src);
     assert!(!d.iter().any(|x| x.code == "sql126"));
+}
+
+// ===== sql154 count(*) returns 1 row even when WHERE matches none =========
+
+#[test]
+fn sql154_flags_count_star_with_where() {
+    let d = diags("SELECT count(*) FROM users WHERE id = '0';");
+    assert!(d.iter().any(|x| x.code == "sql154"));
+}
+
+#[test]
+fn sql154_quiet_when_group_by_present() {
+    let d = diags("SELECT count(*) FROM users WHERE id = '0' GROUP BY name;");
+    assert!(!d.iter().any(|x| x.code == "sql154"));
+}
+
+#[test]
+fn sql154_quiet_when_no_where() {
+    let d = diags("SELECT count(*) FROM users;");
+    assert!(!d.iter().any(|x| x.code == "sql154"));
+}
+
+// ===== sql164 string literal +/- int =====================================
+
+#[test]
+fn sql164_flags_string_plus_int() {
+    let d = diags("SELECT 'foo' + 1 FROM users;");
+    assert!(d.iter().any(|x| x.code == "sql164"));
+}
+
+#[test]
+fn sql164_quiet_for_concat() {
+    let d = diags("SELECT 'foo' || 1 FROM users;");
+    assert!(!d.iter().any(|x| x.code == "sql164"));
+}
+
+#[test]
+fn sql164_quiet_for_string_only() {
+    let d = diags("SELECT 'foo' FROM users;");
+    assert!(!d.iter().any(|x| x.code == "sql164"));
+}
+
+// ===== real-world golden tests =============================================
+// These assert the linter produces ZERO unexpected diagnostics on common
+// production patterns. If a future rule introduces a false positive on
+// any of these, the test fails immediately.
+
+#[test]
+fn golden_set_updated_at_trigger_zero_warnings() {
+    let src = r#"CREATE OR REPLACE FUNCTION set_updated_at ()
+    RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    NEW.updated_at := now();
+    RETURN NEW;
+END;
+$$;"#;
+    let d = diags(src);
+    assert!(d.is_empty(), "expected zero diagnostics, got: {:?}",
+        d.iter().map(|x| (&x.code, &x.message)).collect::<Vec<_>>());
+}
+
+#[test]
+fn golden_order_status_history_trigger_zero_warnings() {
+    let src = r#"CREATE OR REPLACE FUNCTION log_order_status_change ()
+    RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO order_status_history (order_id, old_status, new_status, changed_at)
+    VALUES (NEW.id, OLD.status, NEW.status, now());
+    RETURN NEW;
+END;
+$$;"#;
+    let d = diags(src);
+    assert!(d.is_empty(), "expected zero diagnostics, got: {:?}",
+        d.iter().map(|x| (&x.code, &x.message)).collect::<Vec<_>>());
+}
+
+#[test]
+fn golden_audit_log_table_zero_warnings() {
+    let src = r#"CREATE TABLE audit_log (
+    id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+    actor_id uuid NOT NULL,
+    action text NOT NULL,
+    target_table text NOT NULL,
+    target_id uuid,
+    payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now()
+);"#;
+    let d = diags(src);
+    let unexpected: Vec<_> = d.iter()
+        .filter(|x| !matches!(x.code, "sql028"))
+        .collect();
+    assert!(unexpected.is_empty(), "expected zero diagnostics, got: {:?}",
+        unexpected.iter().map(|x| (&x.code, &x.message)).collect::<Vec<_>>());
+}
+
+#[test]
+fn golden_user_roles_unique_pair_zero_warnings() {
+    let src = r#"CREATE TABLE user_roles (
+    user_id uuid NOT NULL,
+    role text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (user_id, role)
+);"#;
+    let d = diags(src);
+    let unexpected: Vec<_> = d.iter()
+        .filter(|x| !matches!(x.code, "sql028" | "sql046"))
+        .collect();
+    assert!(unexpected.is_empty(), "expected zero diagnostics, got: {:?}",
+        unexpected.iter().map(|x| (&x.code, &x.message)).collect::<Vec<_>>());
 }
 
 // ===== sql139 UNIQUE on nullable ==========================================
