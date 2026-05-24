@@ -2425,3 +2425,41 @@ fn sql140_quiet_when_only_new_referenced() {
     let d = diags("CREATE TRIGGER t AFTER INSERT ON users FOR EACH ROW WHEN (NEW.id IS NOT NULL) EXECUTE FUNCTION f();");
     assert!(!d.iter().any(|x| x.code == "sql140"));
 }
+
+// ===== sql141 ALTER TYPE ADD VALUE in transaction ==========================
+
+#[test]
+fn sql141_flags_alter_type_in_tx() {
+    let d = diags("BEGIN; ALTER TYPE color ADD VALUE 'red'; COMMIT;");
+    assert!(d.iter().any(|x| x.code == "sql141"));
+}
+
+#[test]
+fn sql141_quiet_for_bare_alter_type() {
+    let d = diags("ALTER TYPE color ADD VALUE 'red';");
+    assert!(!d.iter().any(|x| x.code == "sql141"));
+}
+
+// ===== sql133 GRANT ... WITH GRANT OPTION ==================================
+
+#[test]
+fn sql133_flags_with_grant_option() {
+    let d = diags("GRANT SELECT ON users TO app_user WITH GRANT OPTION;");
+    assert!(d.iter().any(|x| x.code == "sql133"));
+}
+
+#[test]
+fn sql133_quiet_for_plain_grant() {
+    let d = diags("GRANT SELECT ON users TO app_user;");
+    assert!(!d.iter().any(|x| x.code == "sql133"));
+}
+
+#[test]
+fn sql133_range_points_at_clause() {
+    let src = "GRANT SELECT ON users TO app_user WITH GRANT OPTION;";
+    let d = diags(src);
+    let hit = d.iter().find(|x| x.code == "sql133").expect("sql133");
+    let s: u32 = hit.range.start().into();
+    let e: u32 = hit.range.end().into();
+    assert_eq!(&src[s as usize..e as usize], "WITH GRANT OPTION");
+}

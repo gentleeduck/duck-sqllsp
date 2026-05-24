@@ -3,6 +3,7 @@
 //! New rules: add the module, then push an instance into [`all`].
 
 pub mod alter_table_no_owner;
+pub mod alter_type_add_value_in_tx;
 pub mod ambiguous_column;
 pub mod backslash_in_string;
 pub mod bare_return_typed;
@@ -27,6 +28,7 @@ pub mod exit_outside_loop;
 pub mod explain_analyze_in_dml;
 pub mod generate_series_no_alias;
 pub mod grant_to_public;
+pub mod grant_with_grant_option;
 pub mod group_by_all;
 pub mod group_by_position;
 pub mod group_by_required;
@@ -187,5 +189,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(listen_unbounded::Rule),
         Box::new(set_role_no_reset::Rule),
         Box::new(trigger_when_uses_old_in_insert::Rule),
+        Box::new(alter_type_add_value_in_tx::Rule),
+        Box::new(grant_with_grant_option::Rule),
     ]
 }
