@@ -68,6 +68,13 @@ impl LintRule for Rule {
       // Find column type from catalog.
       let Some(col) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(col_name)) else { continue };
       if !compatible(lit, &col.data_type) {
+        // Narrow the range to the offending literal: compute its
+        // byte offset relative to `body` via pointer arithmetic on
+        // the slice we got back from split_top_level_commas. Then
+        // shift by `start` (the stmt's start in the source) to get
+        // an absolute byte range. Falls back to stmt.range if the
+        // pointer math doesn't land inside body (shouldn't happen).
+        let abs_range = literal_range(body, raw_val, start).unwrap_or(stmt.range);
         out.push(Diagnostic {
           code: "sql039",
           severity: Severity::Error,
@@ -77,11 +84,30 @@ impl LintRule for Rule {
             col_name,
             col.data_type
           ),
-          range: stmt.range,
+          range: abs_range,
         });
       }
     }
   }
+}
+
+fn literal_range(body: &str, lit: &str, stmt_start: usize) -> Option<text_size::TextRange> {
+  let body_addr = body.as_ptr() as usize;
+  let lit_addr = lit.as_ptr() as usize;
+  if lit_addr < body_addr {
+    return None;
+  }
+  let rel = lit_addr - body_addr;
+  if rel + lit.len() > body.len() {
+    return None;
+  }
+  // Trim leading whitespace inside the slice so the range hugs the
+  // literal text, not the surrounding spaces from the comma split.
+  let lead_ws = lit.len() - lit.trim_start().len();
+  let trail_ws = lit.len() - lit.trim_end().len();
+  let abs_s = stmt_start + rel + lead_ws;
+  let abs_e = stmt_start + rel + lit.len() - trail_ws;
+  Some(text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()))
 }
 
 fn classify_literal(s: &str) -> LitKind {
