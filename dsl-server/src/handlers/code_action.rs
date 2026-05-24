@@ -39,6 +39,9 @@ pub fn run(state: &ServerState, params: CodeActionParams) -> Option<CodeActionRe
     in_to_any_action(&uri, &params.range, &doc.text, &mut actions);
     // Extract a SELECT subquery inside FROM into a WITH ... CTE.
     extract_subquery_to_cte_action(&uri, &params.range, &doc.text, &mut actions);
+    // Split `INSERT INTO t VALUES (...), (...), (...)` so each tuple
+    // sits on its own line -- easier to read in code-review.
+    split_values_rows_action(&uri, &params.range, &doc.text, &mut actions);
 
     if actions.is_empty() { return None; }
     Some(actions)
@@ -166,6 +169,81 @@ fn extract_subquery_to_cte_action(uri: &Url, range: &Range, text: &str, out: &mu
         disabled: None,
         data: None,
     }));
+}
+
+/// `INSERT INTO t VALUES (a, b), (c, d), (e, f)` ->
+/// `INSERT INTO t VALUES\n  (a, b),\n  (c, d),\n  (e, f)`.
+/// Fires when the cursor sits inside (or right after) a multi-tuple
+/// VALUES clause. Single-tuple inserts are left alone (would be noise).
+fn split_values_rows_action(uri: &Url, range: &Range, text: &str, out: &mut Vec<CodeActionOrCommand>) {
+    let Some(sel) = line_col_to_byte(text, range.start) else { return };
+    let upper = text.to_ascii_uppercase();
+    let bytes = text.as_bytes();
+    let mut search = 0;
+    while let Some(rel) = upper[search..].find("VALUES") {
+        let values_at = search + rel;
+        // Word-bound check + skip when followed by `_`.
+        let prev_ok = values_at == 0 || !is_id_char(bytes[values_at - 1] as char);
+        let next_ok = values_at + 6 == bytes.len() || !is_id_char(bytes[values_at + 6] as char);
+        if !(prev_ok && next_ok) { search = values_at + 6; continue; }
+        // Find the first tuple `(` after VALUES.
+        let mut j = values_at + 6;
+        while j < bytes.len() && bytes[j].is_ascii_whitespace() { j += 1; }
+        if j >= bytes.len() || bytes[j] != b'(' { search = values_at + 6; continue; }
+        // Walk all sibling tuples separated by `,` at depth 0.
+        let mut tuple_ranges = Vec::new();
+        let mut k = j;
+        loop {
+            if k >= bytes.len() || bytes[k] != b'(' { break; }
+            let Some(close) = matched_close(bytes, k) else { break };
+            tuple_ranges.push((k, close + 1));
+            let mut m = close + 1;
+            while m < bytes.len() && bytes[m].is_ascii_whitespace() { m += 1; }
+            if m >= bytes.len() || bytes[m] != b',' { break; }
+            m += 1;
+            while m < bytes.len() && bytes[m].is_ascii_whitespace() { m += 1; }
+            k = m;
+        }
+        let last_close = tuple_ranges.last().map(|(_, e)| *e).unwrap_or(j);
+        // Selection must overlap the VALUES region.
+        if sel < values_at || sel > last_close {
+            search = last_close;
+            continue;
+        }
+        // Single tuple -- nothing to split.
+        if tuple_ranges.len() < 2 { return; }
+        // Rewrite: each tuple on its own line, comma at end of prior.
+        let mut new_text = String::from("VALUES\n");
+        for (idx, (s, e)) in tuple_ranges.iter().enumerate() {
+            new_text.push_str("    ");
+            new_text.push_str(&text[*s..*e]);
+            if idx + 1 < tuple_ranges.len() { new_text.push(','); }
+            new_text.push('\n');
+        }
+        // Strip trailing newline so we don't drift past a following `;`.
+        if new_text.ends_with('\n') { new_text.pop(); }
+        let r = byte_range_to_lsp(text, values_at, last_close);
+        let mut changes = HashMap::new();
+        changes.insert(uri.clone(), vec![TextEdit {
+            range: r,
+            new_text,
+        }]);
+        out.push(CodeActionOrCommand::CodeAction(CodeAction {
+            title: "Split multi-row VALUES onto one row per line".into(),
+            kind: Some(CodeActionKind::REFACTOR),
+            diagnostics: None,
+            edit: Some(WorkspaceEdit {
+                changes: Some(changes),
+                document_changes: None,
+                change_annotations: None,
+            }),
+            command: None,
+            is_preferred: None,
+            disabled: None,
+            data: None,
+        }));
+        return;
+    }
 }
 
 fn matched_close(bytes: &[u8], open: usize) -> Option<usize> {

@@ -37,10 +37,13 @@ fn build_chain(text: &str, rope: &Rope, offset: usize) -> SelectionRange {
 
     let mut layers: Vec<(usize, usize)> = Vec::new();
     if let Some(r) = identifier_range(bytes, offset) { layers.push(r); }
-    if let Some(r) = paren_group(bytes, offset)    { layers.push(r); }
-    if let Some(r) = clause_range(bytes, offset)   { layers.push(r); }
-    if let Some(r) = statement_range(bytes, offset){ layers.push(r); }
-    layers.push((0, n));
+    if let Some(r) = string_contents(bytes, offset) { push_dedup(&mut layers, r); }
+    if let Some(r) = string_with_quotes(bytes, offset) { push_dedup(&mut layers, r); }
+    if let Some(r) = call_arg_range(bytes, offset)  { push_dedup(&mut layers, r); }
+    if let Some(r) = paren_group(bytes, offset)    { push_dedup(&mut layers, r); }
+    if let Some(r) = clause_range(bytes, offset)   { push_dedup(&mut layers, r); }
+    if let Some(r) = statement_range(bytes, offset){ push_dedup(&mut layers, r); }
+    push_dedup(&mut layers, (0, n));
 
     // Build outer-first so each new wrapping becomes the innermost node,
     // pointing outward via `parent`. Final `chain` is the innermost
@@ -183,4 +186,89 @@ fn byte_to_position(rope: &Rope, byte: usize) -> Position {
         bytes_seen += c.len_utf8();
     }
     Position { line: line as u32, character: utf16 }
+}
+
+/// Push a layer only if it's strictly wider than the previous one --
+/// avoids the chain stalling on duplicate ranges (e.g. when the
+/// identifier IS the whole call arg).
+fn push_dedup(layers: &mut Vec<(usize, usize)>, r: (usize, usize)) {
+    if let Some(&last) = layers.last() {
+        if last == r { return; }
+        // Skip ranges that aren't a strict superset of the last layer.
+        if r.0 > last.0 || r.1 < last.1 { return; }
+        if r.0 == last.0 && r.1 == last.1 { return; }
+    }
+    layers.push(r);
+}
+
+/// Cursor sitting inside `'...'` -- return the contents (exclusive of
+/// the quotes). When already on a quote, returns the contents too.
+fn string_contents(bytes: &[u8], offset: usize) -> Option<(usize, usize)> {
+    let (s, e) = string_with_quotes(bytes, offset)?;
+    if e <= s + 1 { return None; }
+    Some((s + 1, e - 1))
+}
+
+/// Cursor inside `'...'` -- return the range INCLUDING the surrounding
+/// quotes. Uses a forward scan from BOF to determine string state so
+/// we never mis-identify an apostrophe-in-a-comment as an opener.
+fn string_with_quotes(bytes: &[u8], offset: usize) -> Option<(usize, usize)> {
+    let n = bytes.len();
+    if offset > n { return None; }
+    // Count single-quotes from BOF up to `offset` to determine if we're
+    // inside a string. Odd count = inside.
+    let mut quotes = 0usize;
+    let mut last_open = None;
+    let mut i = 0;
+    while i < offset {
+        if bytes[i] == b'\'' {
+            if quotes % 2 == 0 { last_open = Some(i); }
+            quotes += 1;
+        }
+        i += 1;
+    }
+    if quotes % 2 == 0 { return None; }
+    let open = last_open?;
+    // Find the matching closing quote.
+    let mut j = open + 1;
+    while j < n && bytes[j] != b'\'' { j += 1; }
+    if j >= n { return None; }
+    Some((open, j + 1))
+}
+
+/// Cursor inside `fn(a, |b, c)` -- return the byte span of the active
+/// comma-separated argument. The chain then expands to the whole
+/// paren group at the next step.
+fn call_arg_range(bytes: &[u8], offset: usize) -> Option<(usize, usize)> {
+    let (open, close) = paren_group(bytes, offset)?;
+    // Walk inside the paren, split on top-level commas, find the slot
+    // containing `offset`.
+    let inside_start = open + 1;
+    let inside_end = close - 1;
+    if offset < inside_start || offset > inside_end { return None; }
+    let mut depth = 0i32;
+    let mut slot_start = inside_start;
+    let mut i = inside_start;
+    while i < inside_end {
+        match bytes[i] {
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            b'\'' => {
+                i += 1;
+                while i < inside_end && bytes[i] != b'\'' { i += 1; }
+            }
+            b',' if depth == 0 => {
+                if offset >= slot_start && offset <= i {
+                    return Some((slot_start, i));
+                }
+                slot_start = i + 1;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    if offset >= slot_start && offset <= inside_end {
+        return Some((slot_start, inside_end));
+    }
+    None
 }
