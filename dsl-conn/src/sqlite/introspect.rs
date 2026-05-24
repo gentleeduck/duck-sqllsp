@@ -79,6 +79,8 @@ pub async fn run(pool: &SqlitePool, spec: &ConnectionSpec) -> Result<Catalog, Dr
         functions: Vec::new(),
         types: Vec::new(),
         roles: Vec::new(),
+        sequences: Vec::new(),  // SQLite uses sqlite_sequence rows, not first-class sequence objects.
+        extensions: Vec::new(),
     })
 }
 

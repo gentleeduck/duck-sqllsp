@@ -12,8 +12,8 @@
 use crate::driver::DriverError;
 use crate::spec::ConnectionSpec;
 use dsl_catalog::{
-    Catalog, Column, Constraint, ConstraintKind, ConstraintRef, Function, FunctionArg, IndexDef,
-    Policy, Schema, Table, TableKind, Trigger, Type, TypeKind, CATALOG_VERSION,
+    Catalog, Column, Constraint, ConstraintKind, ConstraintRef, Extension, Function, FunctionArg,
+    IndexDef, Policy, Schema, Sequence, Table, TableKind, Trigger, Type, TypeKind, CATALOG_VERSION,
 };
 use sqlx::PgPool;
 use std::collections::BTreeMap;
@@ -420,6 +420,43 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
         roles = rows.into_iter().map(|(n,)| n).collect();
     }
 
+    // Sequences from `pg_sequences` (the documented user-visible view
+    // over `pg_class` + `pg_sequence`). Skips system schemas just like
+    // tables. `owned_by_column` is derived from `pg_depend` -- a
+    // sequence implicitly created by SERIAL or GENERATED AS IDENTITY
+    // hangs off the column via a `auto`-class dependency.
+    let mut sequences: Vec<Sequence> = Vec::new();
+    if let Ok(rows) = sqlx::query_as::<_, (
+        String, String, String, i64, i64, i64, i64, bool, Option<String>,
+    )>(SEQUENCES_SQL)
+        .fetch_all(pool)
+        .await
+    {
+        for (schema, name, data_type, start, min, max, inc, cycle, owned) in rows {
+            sequences.push(Sequence {
+                schema, name, data_type,
+                start_value: start, min_value: min, max_value: max,
+                increment_by: inc, cycle, owned_by_column: owned,
+                comment: None,
+            });
+        }
+    }
+
+    // Installed extensions from `pg_extension` joined to `pg_namespace`
+    // for the install schema. `pg_catalog` extensions (the bundled
+    // plpgsql) are not filtered -- some users care that it's there.
+    let mut extensions: Vec<Extension> = Vec::new();
+    if let Ok(rows) = sqlx::query_as::<_, (String, String, String, Option<String>)>(
+        EXTENSIONS_SQL,
+    )
+    .fetch_all(pool)
+    .await
+    {
+        for (name, schema, version, comment) in rows {
+            extensions.push(Extension { name, schema, version, comment });
+        }
+    }
+
     Ok(Catalog {
         version: CATALOG_VERSION,
         connection_id: spec.name.clone(),
@@ -427,8 +464,52 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
         functions,
         types,
         roles,
+        sequences,
+        extensions,
     })
 }
+
+const SEQUENCES_SQL: &str = "
+SELECT
+    s.schemaname::text AS schema,
+    s.sequencename::text AS name,
+    s.data_type::text AS data_type,
+    s.start_value::bigint AS start_value,
+    s.min_value::bigint AS min_value,
+    s.max_value::bigint AS max_value,
+    s.increment_by::bigint AS increment_by,
+    s.cycle AS cycle,
+    (
+        SELECT nsp.nspname || '.' || cls.relname || '.' || att.attname
+        FROM pg_depend d
+        JOIN pg_class cls ON cls.oid = d.refobjid
+        JOIN pg_namespace nsp ON nsp.oid = cls.relnamespace
+        JOIN pg_attribute att ON att.attrelid = d.refobjid AND att.attnum = d.refobjsubid
+        JOIN pg_class seqcls ON seqcls.oid = d.objid
+        JOIN pg_namespace seqnsp ON seqnsp.oid = seqcls.relnamespace
+        WHERE d.classid = 'pg_class'::regclass
+          AND d.refclassid = 'pg_class'::regclass
+          AND d.deptype IN ('a','i')
+          AND seqcls.relkind = 'S'
+          AND seqcls.relname = s.sequencename
+          AND seqnsp.nspname = s.schemaname
+        LIMIT 1
+    )::text AS owned_by_column
+FROM pg_sequences s
+WHERE s.schemaname NOT IN ('pg_catalog','information_schema','pg_toast')
+ORDER BY s.schemaname, s.sequencename
+";
+
+const EXTENSIONS_SQL: &str = "
+SELECT
+    e.extname::text         AS name,
+    n.nspname::text         AS schema,
+    e.extversion::text      AS version,
+    obj_description(e.oid, 'pg_extension')::text AS comment
+FROM pg_extension e
+JOIN pg_namespace n ON n.oid = e.extnamespace
+ORDER BY e.extname
+";
 
 /// Parse the output of `pg_get_function_identity_arguments`. The string
 /// looks like `name1 type1, name2 type2` (names optional). Splits on

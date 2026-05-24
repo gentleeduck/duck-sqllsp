@@ -195,6 +195,8 @@ pub async fn run(pool: &MySqlPool, spec: &ConnectionSpec) -> Result<Catalog, Dri
         functions: Vec::new(), // TODO: information_schema.routines
         types: Vec::new(),
         roles: Vec::new(),
+        sequences: Vec::new(),  // MySQL has no native sequences (AUTO_INCREMENT lives on columns).
+        extensions: Vec::new(), // MySQL has no PG-style extensions.
     })
 }
 
