@@ -37,6 +37,8 @@ fn catalog_with_users_and_orders() -> Catalog {
         functions: vec![],
         types: vec![],
         roles: vec![],
+        sequences: vec![],
+        extensions: vec![],
     }
 }
 

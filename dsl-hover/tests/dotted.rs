@@ -24,6 +24,8 @@ fn cat() -> Catalog {
         functions: vec![],
         types: vec![],
         roles: vec![],
+        sequences: vec![],
+        extensions: vec![],
     }
 }
 

@@ -227,6 +227,22 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
             if def.is_empty() { String::new() } else { format!("\n```sql\n{def}\n```\n") },
         ));
     }
+    if let Some(s) = catalog.find_sequence(None, token) {
+        let cycle = if s.cycle { "yes" } else { "no" };
+        let owner = s.owned_by_column.as_deref().unwrap_or("(standalone)");
+        return Some(format!(
+            "# `{}.{}`\n_sequence_\n\n- **type**: `{}`\n- **start**: `{}`\n- **min**: `{}`\n- **max**: `{}`\n- **increment**: `{}`\n- **cycle**: `{}`\n- **owned by**: `{}`\n",
+            s.schema, s.name, s.data_type,
+            s.start_value, s.min_value, s.max_value, s.increment_by, cycle, owner,
+        ));
+    }
+    if let Some(e) = catalog.extensions().find(|e| e.name.eq_ignore_ascii_case(token)) {
+        let comment = e.comment.as_deref().map(|c| format!("\n_{c}_\n")).unwrap_or_default();
+        return Some(format!(
+            "# `{}`\n_extension installed in `{}`_\n\n- **version**: `{}`\n{}",
+            e.name, e.schema, e.version, comment,
+        ));
+    }
     let cols = catalog.columns_named(token);
     if !cols.is_empty() {
         return Some(render::column_in_tables(&cols));

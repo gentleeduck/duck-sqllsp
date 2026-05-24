@@ -62,6 +62,8 @@ pub fn from_file(file: &ParsedFile) -> Catalog {
         functions: Vec::new(),
         types: Vec::new(),
         roles: Vec::new(),
+        sequences: Vec::new(),
+        extensions: Vec::new(),
     }
 }
 
