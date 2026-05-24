@@ -14,5 +14,5 @@ pub mod scope;
 pub mod resolver;
 
 pub use binding::Binding;
-pub use resolver::resolve;
+pub use resolver::{resolve, resolve_with_source};
 pub use scope::Scope;
