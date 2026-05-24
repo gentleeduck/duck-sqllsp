@@ -60,6 +60,7 @@ pub mod order_by_position;
 pub mod order_by_random;
 pub mod prefer_alias;
 pub mod raise_arg_count;
+pub mod raise_message_no_args;
 pub mod redundant_parens;
 pub mod reserved_word_identifier;
 pub mod return_type_literal;
@@ -73,6 +74,7 @@ pub mod select_star_insert;
 pub mod sql_lang_uses_new_old;
 pub mod time_with_timezone;
 pub mod timestamp_without_tz;
+pub mod transaction_isolation_no_set;
 pub mod trailing_comma_values;
 pub mod truncate_no_cascade;
 pub mod union_column_count;
@@ -167,5 +169,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(explain_analyze_in_dml::Rule),
         Box::new(grant_to_public::Rule),
         Box::new(update_from_no_pk_filter::Rule),
+        Box::new(transaction_isolation_no_set::Rule),
+        Box::new(raise_message_no_args::Rule),
     ]
 }
