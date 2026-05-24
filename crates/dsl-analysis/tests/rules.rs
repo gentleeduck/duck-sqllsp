@@ -2305,3 +2305,43 @@ fn sql130_quiet_for_combined_truncate() {
     let d = diags("BEGIN; TRUNCATE users, orders; COMMIT;");
     assert!(!d.iter().any(|x| x.code == "sql130"));
 }
+
+// ===== sql129 CREATE TABLE without ALTER OWNER =============================
+
+#[test]
+fn sql129_flags_lone_create_table() {
+    let d = diags("CREATE TABLE widgets (id uuid PRIMARY KEY);");
+    assert!(d.iter().any(|x| x.code == "sql129"));
+}
+
+#[test]
+fn sql129_quiet_when_alter_owner_follows() {
+    let d = diags("CREATE TABLE widgets (id uuid PRIMARY KEY); ALTER TABLE widgets OWNER TO app;");
+    assert!(!d.iter().any(|x| x.code == "sql129"));
+}
+
+#[test]
+fn sql129_quiet_for_non_table() {
+    let d = diags("CREATE INDEX idx_x ON widgets (id);");
+    assert!(!d.iter().any(|x| x.code == "sql129"));
+}
+
+// ===== sql136 COPY without FORMAT clause ===================================
+
+#[test]
+fn sql136_flags_bare_copy() {
+    let d = diags("COPY users FROM '/tmp/users.csv';");
+    assert!(d.iter().any(|x| x.code == "sql136"));
+}
+
+#[test]
+fn sql136_quiet_with_format_clause() {
+    let d = diags("COPY users FROM '/tmp/users.csv' WITH (FORMAT csv);");
+    assert!(!d.iter().any(|x| x.code == "sql136"));
+}
+
+#[test]
+fn sql136_quiet_with_csv_keyword() {
+    let d = diags("COPY users FROM '/tmp/users.csv' CSV;");
+    assert!(!d.iter().any(|x| x.code == "sql136"));
+}

@@ -2,6 +2,7 @@
 //!
 //! New rules: add the module, then push an instance into [`all`].
 
+pub mod alter_table_no_owner;
 pub mod ambiguous_column;
 pub mod backslash_in_string;
 pub mod bare_return_typed;
@@ -12,6 +13,7 @@ pub mod case_single_when;
 pub mod cast_text_to_int_in_where;
 pub mod char_length_vs_length;
 pub mod char_n_type;
+pub mod copy_no_format;
 pub mod count_one_vs_star;
 pub mod cte_missing_recursive;
 pub mod deep_case_nesting;
@@ -175,5 +177,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(raise_message_no_args::Rule),
         Box::new(vacuum_in_transaction::Rule),
         Box::new(multiple_truncate_in_tx::Rule),
+        Box::new(alter_table_no_owner::Rule),
+        Box::new(copy_no_format::Rule),
     ]
 }
