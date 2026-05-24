@@ -2717,3 +2717,62 @@ fn sql139_quiet_when_nulls_not_distinct() {
     let d = diags("CREATE TABLE x (email TEXT UNIQUE NULLS NOT DISTINCT);");
     assert!(!d.iter().any(|x| x.code == "sql139"));
 }
+
+// ===== regression: sql126 + sql045 must not fire on trigger funcs ==========
+
+#[test]
+fn sql126_quiet_on_assignment_to_updated_at_field() {
+    // `new.updated_at := now()` is a PL/pgSQL assignment to a record
+    // field. `UPDATE` appears inside the column name `updated_at` --
+    // word-bounded + statement-start matching must reject it.
+    let src = "CREATE OR REPLACE FUNCTION set_updated_at() RETURNS TRIGGER LANGUAGE plpgsql AS $$ BEGIN new.updated_at := now(); RETURN new; END $$;";
+    let d = diags(src);
+    assert!(!d.iter().any(|x| x.code == "sql126"),
+        "sql126 false-positive on assignment: {:?}",
+        d.iter().filter(|x| x.code == "sql126").collect::<Vec<_>>());
+}
+
+#[test]
+fn sql045_quiet_on_return_at_end_of_trigger_body() {
+    // `RETURN new;` is the natural last statement of a trigger fn.
+    // The token `new` is the RETURN argument, not the next stmt.
+    let src = "CREATE OR REPLACE FUNCTION set_updated_at() RETURNS TRIGGER LANGUAGE plpgsql AS $$ BEGIN new.updated_at := now(); RETURN new; END $$;";
+    let d = diags(src);
+    assert!(!d.iter().any(|x| x.code == "sql045"),
+        "sql045 false-positive on RETURN: {:?}",
+        d.iter().filter(|x| x.code == "sql045").collect::<Vec<_>>());
+}
+
+// ===== sql155 TRUNCATE RETURNING ===========================================
+
+#[test]
+fn sql155_flags_truncate_returning() {
+    let d = diags("TRUNCATE users RETURNING id;");
+    assert!(d.iter().any(|x| x.code == "sql155"));
+}
+
+#[test]
+fn sql155_quiet_for_bare_truncate() {
+    let d = diags("TRUNCATE users;");
+    assert!(!d.iter().any(|x| x.code == "sql155"));
+}
+
+// ===== sql138 ::text inside DISTINCT =======================================
+
+#[test]
+fn sql138_flags_distinct_cast_to_text() {
+    let d = diags("SELECT DISTINCT id::text FROM users;");
+    assert!(d.iter().any(|x| x.code == "sql138"));
+}
+
+#[test]
+fn sql138_quiet_for_distinct_on() {
+    let d = diags("SELECT DISTINCT ON (id) id::text FROM users;");
+    assert!(!d.iter().any(|x| x.code == "sql138"));
+}
+
+#[test]
+fn sql138_quiet_for_plain_distinct() {
+    let d = diags("SELECT DISTINCT id FROM users;");
+    assert!(!d.iter().any(|x| x.code == "sql138"));
+}

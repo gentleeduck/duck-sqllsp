@@ -41,67 +41,60 @@ impl LintRule for Rule {
         let bytes = stripped.as_bytes();
         let n = bytes.len();
         let mut depth = 0i32;
-        let mut last_unconditional: Option<usize> = None;
-        let mut last_was_terminator = false;
+        // State machine: Normal -> InTerminator (between RETURN/RAISE
+        // and its `;`) -> PostTerminator (after the `;`). Only fire
+        // when a non-noise word appears at depth==1 in PostTerminator.
+        #[derive(PartialEq, Eq)]
+        enum State { Normal, InTerminator, PostTerminator }
+        let mut state = State::Normal;
         let mut i = 0;
         while i < n {
-            // Skip whitespace.
             while i < n && bytes[i].is_ascii_whitespace() { i += 1; }
             if i >= n { break; }
-            // Read next token (word) or punctuation.
             if bytes[i].is_ascii_alphabetic() || bytes[i] == b'_' {
                 let s = i;
                 while i < n && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') { i += 1; }
                 let tok = &stripped[s..i];
                 match tok {
-                    "IF" | "LOOP" | "FOR" | "WHILE" | "BEGIN" => {
+                    "IF" | "LOOP" | "FOR" | "WHILE" | "BEGIN" | "CASE" => {
                         depth += 1;
-                        last_was_terminator = false;
+                        state = State::Normal;
                     }
                     "END" => {
                         depth -= 1;
-                        last_was_terminator = false;
+                        state = State::Normal;
                     }
-                    "RETURN" | "RAISE" => {
-                        if depth == 1 {
-                            last_unconditional = Some(s);
-                        }
-                        last_was_terminator = true;
+                    "RETURN" | "RAISE" if depth == 1 && state == State::Normal => {
+                        state = State::InTerminator;
                     }
                     _ => {
-                        if last_was_terminator
-                            && depth == 1
-                            && tok != "END"
-                            && tok != "EXCEPTION" // RAISE EXCEPTION continuation
-                            && tok != "NOTICE" && tok != "WARNING"
-                            && tok != "INFO" && tok != "LOG" && tok != "DEBUG"
-                            && tok != "USING"
-                        {
-                            if let Some(_) = last_unconditional.take() {
+                        if state == State::PostTerminator && depth == 1 {
+                            // EXCEPTION block / END / ELSE / ELSIF /
+                            // WHEN reset to Normal -- they're legitimate
+                            // continuations after RETURN.
+                            if matches!(tok, "EXCEPTION" | "WHEN" | "ELSE" | "ELSIF") {
+                                state = State::Normal;
+                            } else {
                                 let base = source.find(body_text).unwrap_or(start);
                                 let abs_start = base + s;
                                 let abs_end = base + i;
                                 out.push(Diagnostic {
                                     code: "sql045",
                                     severity: Severity::Hint,
-                                    message: format!(
-                                        "unreachable: this code follows an unconditional RETURN/RAISE EXCEPTION"
-                                    ),
+                                    message: "unreachable: this code follows an unconditional RETURN/RAISE EXCEPTION".into(),
                                     range: text_size::TextRange::new(
                                         (abs_start as u32).into(),
                                         (abs_end as u32).into(),
                                     ),
                                 });
-                                last_was_terminator = false;
-                                return; // one is plenty per function
+                                return;
                             }
                         }
                     }
                 }
             } else {
-                // Punctuation; reset terminator on `;` boundary tracker.
                 if bytes[i] == b';' {
-                    // statement terminator -- next token continues at top level
+                    if state == State::InTerminator { state = State::PostTerminator; }
                 }
                 if bytes[i] == b'\'' {
                     i += 1;

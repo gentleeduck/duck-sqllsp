@@ -13,6 +13,7 @@ pub mod bool_compare_equals;
 pub mod boolean_in_text_column;
 pub mod case_no_else;
 pub mod case_single_when;
+pub mod cast_text_in_distinct;
 pub mod cast_text_to_int_in_where;
 pub mod character_varying_no_limit;
 pub mod char_length_vs_length;
@@ -76,6 +77,7 @@ pub mod redundant_parens;
 pub mod reserved_word_identifier;
 pub mod return_type_literal;
 pub mod returning_no_assign;
+pub mod returning_with_truncate;
 pub mod row_count_after_dml;
 pub mod savepoint_no_release;
 pub mod select_for_update_in_recursive_cte;
@@ -211,5 +213,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(returning_no_assign::Rule),
         Box::new(row_count_after_dml::Rule),
         Box::new(unique_on_nullable::Rule),
+        Box::new(returning_with_truncate::Rule),
+        Box::new(cast_text_in_distinct::Rule),
     ]
 }
