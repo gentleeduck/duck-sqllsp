@@ -135,6 +135,13 @@ impl LanguageServer for Backend {
     Ok(handlers::on_type_formatting::run(&self.state, params))
   }
 
+  async fn goto_type_definition(
+    &self,
+    params: request::GotoTypeDefinitionParams,
+  ) -> Result<Option<request::GotoTypeDefinitionResponse>> {
+    Ok(handlers::type_definition::run(&self.state, params))
+  }
+
   async fn prepare_rename(&self, params: TextDocumentPositionParams) -> Result<Option<PrepareRenameResponse>> {
     Ok(handlers::rename::prepare(&self.state, params))
   }

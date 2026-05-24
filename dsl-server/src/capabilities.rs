@@ -37,6 +37,7 @@ pub fn server_capabilities() -> ServerCapabilities {
       work_done_progress_options: WorkDoneProgressOptions::default(),
     }),
     definition_provider: Some(OneOf::Left(true)),
+    type_definition_provider: Some(tower_lsp::lsp_types::TypeDefinitionProviderCapability::Simple(true)),
     document_symbol_provider: Some(OneOf::Left(true)),
     workspace_symbol_provider: Some(OneOf::Left(true)),
     selection_range_provider: Some(tower_lsp::lsp_types::SelectionRangeProviderCapability::Simple(true)),

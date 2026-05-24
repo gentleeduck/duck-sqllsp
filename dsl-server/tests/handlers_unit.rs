@@ -4,7 +4,8 @@ use dsl_server::{
   documents::DocumentStore,
   handlers::{
     code_action, completion, document_highlight, document_symbol, folding_range, hover, inlay_hints,
-    on_type_formatting, references, rename, selection_range, semantic_tokens, signature_help, workspace_symbol,
+    on_type_formatting, references, rename, selection_range, semantic_tokens, signature_help,
+    type_definition, workspace_symbol,
   },
   state::ServerState,
 };
@@ -301,6 +302,63 @@ fn folding_range_emits_block_comment_fold() {
     r.iter().any(|f| f.kind == Some(FoldingRangeKind::Comment) && f.start_line == 0 && f.end_line == 2),
     "missing comment fold: {r:?}"
   );
+}
+
+#[test]
+fn type_definition_jumps_to_create_type_for_cast_target() {
+  use tower_lsp::lsp_types::request::{GotoTypeDefinitionParams, GotoTypeDefinitionResponse};
+  use tower_lsp::lsp_types::{
+    TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams, PartialResultParams,
+  };
+  let src = "\
+CREATE TYPE mood AS ENUM ('happy', 'sad');
+SELECT 'happy'::mood;
+";
+  let (state, url) = state_with("file:///td.sql", src);
+  // Cursor on `mood` after `::` on line 1 (0-based).
+  let line1 = "SELECT 'happy'::mood;";
+  let cur_in_line = line1.find("::mood").unwrap() + 4;
+  let resp = type_definition::run(
+    &state,
+    GotoTypeDefinitionParams {
+      text_document_position_params: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url.clone() },
+        position: Position { line: 1, character: cur_in_line as u32 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  )
+  .expect("type-def");
+  let loc = match resp {
+    GotoTypeDefinitionResponse::Scalar(l) => l,
+    _ => panic!("expected scalar location"),
+  };
+  assert_eq!(loc.uri, url);
+  assert_eq!(loc.range.start.line, 0, "should jump to CREATE TYPE on line 0");
+}
+
+#[test]
+fn type_definition_returns_none_for_builtin_type() {
+  use tower_lsp::lsp_types::request::GotoTypeDefinitionParams;
+  use tower_lsp::lsp_types::{
+    TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams, PartialResultParams,
+  };
+  let src = "SELECT '1'::INT;";
+  let (state, url) = state_with("file:///tdb.sql", src);
+  let cur = src.find("::INT").unwrap() + 3;
+  let resp = type_definition::run(
+    &state,
+    GotoTypeDefinitionParams {
+      text_document_position_params: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        position: Position { line: 0, character: cur as u32 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  );
+  assert!(resp.is_none(), "no CREATE TYPE INT exists -> None");
 }
 
 #[test]
