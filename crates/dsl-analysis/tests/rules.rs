@@ -2007,3 +2007,37 @@ fn sql120_range_points_at_distinct() {
     let e: u32 = hit.range.end().into();
     assert_eq!(&src[s as usize..e as usize], "DISTINCT");
 }
+
+// ===== sql121 cast text to int in WHERE ====================================
+
+#[test]
+fn sql121_flags_text_cast_eq_int() {
+    let d = diags("SELECT * FROM users WHERE id::text = 5;");
+    assert!(d.iter().any(|x| x.code == "sql121"));
+}
+
+#[test]
+fn sql121_quiet_for_text_cast_eq_string() {
+    let d = diags("SELECT * FROM users WHERE id::text = '5';");
+    assert!(!d.iter().any(|x| x.code == "sql121"));
+}
+
+// ===== sql123 backslash in plain string ====================================
+
+#[test]
+fn sql123_flags_backslash_n() {
+    let d = diags("SELECT 'line1\\nline2';");
+    assert!(d.iter().any(|x| x.code == "sql123"));
+}
+
+#[test]
+fn sql123_quiet_for_e_prefixed() {
+    let d = diags("SELECT E'line1\\nline2';");
+    assert!(!d.iter().any(|x| x.code == "sql123"));
+}
+
+#[test]
+fn sql123_quiet_for_plain_string_no_backslash() {
+    let d = diags("SELECT 'hello world';");
+    assert!(!d.iter().any(|x| x.code == "sql123"));
+}
