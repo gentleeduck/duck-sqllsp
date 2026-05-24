@@ -771,19 +771,87 @@ fn name_followed_by_as_enum(src: &str, upper: &str, prefix: &str, name: &str) ->
 
 fn scan_functions(src: &str) -> Vec<Function> {
   let upper = src.to_ascii_uppercase();
+  let bytes = src.as_bytes();
   let mut out = Vec::new();
   for prefix in ["CREATE OR REPLACE FUNCTION ", "CREATE FUNCTION ", "CREATE PROCEDURE "] {
-    for name in scan_create_named_with_upper(src, &upper, prefix) {
+    let mut from = 0usize;
+    while let Some(rel) = upper[from..].find(prefix) {
+      let stmt_start = from + rel;
+      let after = stmt_start + prefix.len();
+      let mut k = after;
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+      let name_start = k;
+      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.') {
+        k += 1;
+      }
+      if k == name_start {
+        from = after;
+        continue;
+      }
+      let raw = &src[name_start..k];
+      let bare = raw.rsplit('.').next().unwrap_or(raw).to_string();
+      // Find the full DDL up to the matching `;` after the dollar-
+      // quoted body (or just up to the end of file if unterminated).
+      let stmt_end = find_function_end(src, k);
+      let full_ddl = src[stmt_start..stmt_end].trim().to_string();
       out.push(Function {
         schema: "public".into(),
-        name,
+        name: bare,
         arguments: Vec::<FunctionArg>::new(),
         return_type: "?".into(),
-        comment: Some("defined in current buffer".into()),
+        // Render layer reads `comment` for the source block when it
+        // starts with CREATE; ship the full DDL so the hover shows
+        // the body inline.
+        comment: Some(full_ddl),
       });
+      from = after;
     }
   }
   out
+}
+
+/// Walk from `pos` to the end of the CREATE FUNCTION statement.
+/// Respects the dollar-quoted body so `;` inside `$$ ... $$` doesn't
+/// terminate the scan prematurely.
+fn find_function_end(src: &str, start: usize) -> usize {
+  let bytes = src.as_bytes();
+  let n = bytes.len();
+  let mut i = start;
+  let mut in_dollar: Option<String> = None;
+  while i < n {
+    if let Some(tag) = &in_dollar {
+      if i + tag.len() <= n && &src[i..i + tag.len()] == tag.as_str() {
+        i += tag.len();
+        in_dollar = None;
+        continue;
+      }
+      i += 1;
+      continue;
+    }
+    let c = bytes[i];
+    if c == b'$' {
+      let mut j = i + 1;
+      while j < n && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') {
+        j += 1;
+      }
+      if j < n && bytes[j] == b'$' {
+        in_dollar = Some(src[i..=j].to_string());
+        i = j + 1;
+        continue;
+      }
+    }
+    if c == b';' {
+      return i + 1;
+    }
+    if c == b'\'' {
+      i += 1;
+      while i < n && bytes[i] != b'\'' { i += 1; }
+      i = (i + 1).min(n);
+      continue;
+    }
+    i += 1;
+  }
+  n
 }
 
 fn scan_roles(src: &str) -> Vec<String> {
