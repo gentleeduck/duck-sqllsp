@@ -2137,3 +2137,79 @@ fn sql124_quiet_for_non_self_referencing_cte() {
     let d = diags("WITH t AS (SELECT id FROM users) SELECT * FROM t;");
     assert!(!d.iter().any(|x| x.code == "sql124"));
 }
+
+// ===== sql125 EXPLAIN ANALYZE on DML =======================================
+
+#[test]
+fn sql125_flags_explain_analyze_update() {
+    let d = diags("EXPLAIN ANALYZE UPDATE users SET name = 'a' WHERE id = 1;");
+    assert!(d.iter().any(|x| x.code == "sql125"));
+}
+
+#[test]
+fn sql125_flags_explain_analyze_insert() {
+    let d = diags("EXPLAIN ANALYZE INSERT INTO users (email) VALUES ('a@b.com');");
+    assert!(d.iter().any(|x| x.code == "sql125"));
+}
+
+#[test]
+fn sql125_quiet_for_explain_analyze_select() {
+    let d = diags("EXPLAIN ANALYZE SELECT * FROM users;");
+    assert!(!d.iter().any(|x| x.code == "sql125"));
+}
+
+#[test]
+fn sql125_quiet_for_plain_explain() {
+    let d = diags("EXPLAIN UPDATE users SET name = 'a' WHERE id = 1;");
+    assert!(!d.iter().any(|x| x.code == "sql125"));
+}
+
+// ===== sql128 GRANT to PUBLIC ==============================================
+
+#[test]
+fn sql128_flags_grant_to_public() {
+    let d = diags("GRANT SELECT ON users TO PUBLIC;");
+    assert!(d.iter().any(|x| x.code == "sql128"));
+}
+
+#[test]
+fn sql128_quiet_for_grant_to_specific_role() {
+    let d = diags("GRANT SELECT ON users TO app_user;");
+    assert!(!d.iter().any(|x| x.code == "sql128"));
+}
+
+#[test]
+fn sql128_range_points_at_to_public() {
+    let src = "GRANT SELECT ON users TO PUBLIC;";
+    let d = diags(src);
+    let hit = d.iter().find(|x| x.code == "sql128").expect("sql128");
+    let s: u32 = hit.range.start().into();
+    let e: u32 = hit.range.end().into();
+    assert_eq!(&src[s as usize..e as usize], "TO PUBLIC");
+}
+
+// ===== sql127 UPDATE FROM without join condition ===========================
+
+#[test]
+fn sql127_flags_update_from_without_where() {
+    let d = diags("UPDATE users SET name = src.name FROM staging src;");
+    assert!(d.iter().any(|x| x.code == "sql127"));
+}
+
+#[test]
+fn sql127_flags_update_from_where_no_join_cond() {
+    let d = diags("UPDATE users SET name = 'x' FROM staging WHERE 1 = 1;");
+    assert!(d.iter().any(|x| x.code == "sql127"));
+}
+
+#[test]
+fn sql127_quiet_for_update_from_with_join_cond() {
+    let d = diags("UPDATE users SET name = src.name FROM staging src WHERE users.id = src.id;");
+    assert!(!d.iter().any(|x| x.code == "sql127"));
+}
+
+#[test]
+fn sql127_quiet_for_plain_update() {
+    let d = diags("UPDATE users SET name = 'x' WHERE id = 1;");
+    assert!(!d.iter().any(|x| x.code == "sql127"));
+}
