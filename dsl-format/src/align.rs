@@ -68,6 +68,15 @@ fn align_body_text(body: &str) -> String {
     let mut stmts: Vec<String> = Vec::new();
     let mut cur = String::new();
     let mut i = 0;
+    // PL/pgSQL block markers (BEGIN, DECLARE, EXCEPTION) appear on
+    // their own line WITHOUT a trailing semicolon. Treat them as
+    // statement boundaries too so the depth machine can react to them
+    // before the following statement gets emitted.
+    let flush = |cur: &mut String, stmts: &mut Vec<String>| {
+        let t = cur.trim().to_string();
+        if !t.is_empty() { stmts.push(t); }
+        cur.clear();
+    };
     while i < n {
         match bytes[i] {
             b'\'' => {
@@ -81,12 +90,46 @@ fn align_body_text(body: &str) -> String {
             }
             b';' => {
                 cur.push(';');
-                let trimmed_stmt = cur.trim().to_string();
-                if !trimmed_stmt.is_empty() { stmts.push(trimmed_stmt); }
-                cur.clear();
+                flush(&mut cur, &mut stmts);
                 i += 1;
             }
-            _ => { cur.push(bytes[i] as char); i += 1; }
+            _ => {
+                // Recognise bare block markers at the start of a fresh
+                // statement: BEGIN / DECLARE / EXCEPTION followed by
+                // whitespace (not `;`, not an identifier char).
+                if cur.trim().is_empty() {
+                    let mut matched = false;
+                    for marker in ["BEGIN", "DECLARE", "EXCEPTION"] {
+                        let w = marker.len();
+                        if i + w <= n {
+                            let head = &trimmed[i..i + w];
+                            if head.eq_ignore_ascii_case(marker)
+                                && (i + w == n
+                                    || !(bytes[i + w].is_ascii_alphanumeric() || bytes[i + w] == b'_'))
+                            {
+                                // Skip post-marker whitespace so we can
+                                // peek at the next byte cheaply.
+                                let mut k = i + w;
+                                while k < n && bytes[k].is_ascii_whitespace() { k += 1; }
+                                // If the user wrote `BEGIN;` explicitly,
+                                // fall through and let the `;` branch
+                                // emit the statement normally.
+                                if k < n && bytes[k] == b';' {
+                                    break;
+                                }
+                                cur.push_str(marker);
+                                flush(&mut cur, &mut stmts);
+                                i += w;
+                                matched = true;
+                                break;
+                            }
+                        }
+                    }
+                    if matched { continue; }
+                }
+                cur.push(bytes[i] as char);
+                i += 1;
+            }
         }
     }
     let tail = cur.trim().to_string();
@@ -100,19 +143,22 @@ fn align_body_text(body: &str) -> String {
         let dedent_first = up.starts_with("END")
             || up.starts_with("ELSE")
             || up.starts_with("ELSIF")
-            || up.starts_with("EXCEPTION ")
+            || up == "EXCEPTION"
             || up == "EXCEPTION;"
+            || up.starts_with("EXCEPTION ")
             || up.starts_with("WHEN ");
         let print_depth = if dedent_first { depth.saturating_sub(1) } else { depth };
         for _ in 0..print_depth { out.push_str("  "); }
         out.push_str(s);
         out.push('\n');
         // Indent for next stmt.
-        if up == "BEGIN;" || up.starts_with("IF ") || up.starts_with("LOOP")
+        if up == "BEGIN" || up == "BEGIN;" || up == "DECLARE"
+            || up.starts_with("IF ") || up.starts_with("LOOP")
             || up.starts_with("FOR ") || up.starts_with("WHILE ")
             || up.starts_with("CASE ") || up == "ELSE;"
-            || up.starts_with("ELSIF ") || up.starts_with("EXCEPTION ")
-            || up == "EXCEPTION;"
+            || up.starts_with("ELSIF ")
+            || up == "EXCEPTION" || up == "EXCEPTION;"
+            || up.starts_with("EXCEPTION ")
         {
             depth += 1;
         }
