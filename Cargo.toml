@@ -1,17 +1,17 @@
 [workspace]
 resolver = "3"
 members = [
-  "crates/dsl-knowledge",
-  "crates/dsl-parse",
-  "crates/dsl-resolve",
-  "crates/dsl-catalog",
-  "crates/dsl-completion",
-  "crates/dsl-hover",
-  "crates/dsl-conn",
-  "crates/dsl-analysis",
-  "crates/dsl-format",
-  "crates/dsl-server",
-  "crates/dsl-cli",
+  "dsl-knowledge",
+  "dsl-parse",
+  "dsl-resolve",
+  "dsl-catalog",
+  "dsl-completion",
+  "dsl-hover",
+  "dsl-conn",
+  "dsl-analysis",
+  "dsl-format",
+  "dsl-server",
+  "dsl-cli",
 ]
 
 [workspace.package]
@@ -29,16 +29,16 @@ categories = ["development-tools", "database"]
 
 [workspace.dependencies]
 # Workspace path entries
-dsl-knowledge  = { version = "0.1.0", path = "crates/dsl-knowledge" }
-dsl-parse      = { version = "0.1.0", path = "crates/dsl-parse" }
-dsl-resolve    = { version = "0.1.0", path = "crates/dsl-resolve" }
-dsl-catalog    = { version = "0.1.0", path = "crates/dsl-catalog" }
-dsl-conn       = { version = "0.1.0", path = "crates/dsl-conn" }
-dsl-analysis   = { version = "0.1.0", path = "crates/dsl-analysis" }
-dsl-completion = { version = "0.1.0", path = "crates/dsl-completion" }
-dsl-hover      = { version = "0.1.0", path = "crates/dsl-hover" }
-dsl-format     = { version = "0.1.0", path = "crates/dsl-format" }
-dsl-server     = { version = "0.1.0", path = "crates/dsl-server" }
+dsl-knowledge  = { version = "0.1.0", path = "dsl-knowledge" }
+dsl-parse      = { version = "0.1.0", path = "dsl-parse" }
+dsl-resolve    = { version = "0.1.0", path = "dsl-resolve" }
+dsl-catalog    = { version = "0.1.0", path = "dsl-catalog" }
+dsl-conn       = { version = "0.1.0", path = "dsl-conn" }
+dsl-analysis   = { version = "0.1.0", path = "dsl-analysis" }
+dsl-completion = { version = "0.1.0", path = "dsl-completion" }
+dsl-hover      = { version = "0.1.0", path = "dsl-hover" }
+dsl-format     = { version = "0.1.0", path = "dsl-format" }
+dsl-server     = { version = "0.1.0", path = "dsl-server" }
 
 # Async + LSP wire
 tokio          = { version = "1", features = ["full"] }
