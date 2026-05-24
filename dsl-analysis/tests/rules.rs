@@ -1630,12 +1630,61 @@ fn sql052_range_covers_like_pattern() {
 // ===== sql169 owner_to_unknown_role =======================================
 
 #[test]
-fn sql169_unregistered_does_not_fire() {
-  // sql169 owner_to_unknown_role was unregistered (too many false
-  // positive vectors: partial pg_roles visibility, cached catalogs,
-  // built-in roles hidden by some setups). Rule module retained for
-  // future opt-in.
+fn sql169_quiet_when_catalog_has_no_roles() {
+  // No catalog roles loaded -> can't validate; silent skip.
   let d = diags("ALTER TABLE users OWNER TO whatever;");
+  assert!(!d.iter().any(|x| x.code == "sql169"));
+}
+
+#[test]
+fn sql169_quiet_for_postgres_and_pg_internal_roles() {
+  // Run with a populated roles list so the rule activates.
+  let mut c = cat();
+  c.roles = vec!["app_owner".into()];
+  let file = parse("ALTER TABLE users OWNER TO postgres; ALTER TABLE users OWNER TO pg_read_all_data;", Dialect::Postgres);
+  let scopes = resolve_with_source(&file.statements, "ALTER TABLE users OWNER TO postgres; ALTER TABLE users OWNER TO pg_read_all_data;");
+  let d = run(
+    "ALTER TABLE users OWNER TO postgres; ALTER TABLE users OWNER TO pg_read_all_data;",
+    &file,
+    &scopes,
+    &c,
+  );
+  assert!(!d.iter().any(|x| x.code == "sql169"),
+          "postgres + pg_* roles are whitelisted; got: {d:?}");
+}
+
+#[test]
+fn sql169_quiet_for_known_role() {
+  let mut c = cat();
+  c.roles = vec!["app_owner".into(), "readonly".into()];
+  let src = "ALTER TABLE users OWNER TO app_owner;";
+  let file = parse(src, Dialect::Postgres);
+  let scopes = resolve_with_source(&file.statements, src);
+  let d = run(src, &file, &scopes, &c);
+  assert!(!d.iter().any(|x| x.code == "sql169"));
+}
+
+#[test]
+fn sql169_fires_for_unknown_role() {
+  let mut c = cat();
+  c.roles = vec!["app_owner".into()];
+  let src = "ALTER TABLE users OWNER TO not_a_real_role;";
+  let file = parse(src, Dialect::Postgres);
+  let scopes = resolve_with_source(&file.statements, src);
+  let d = run(src, &file, &scopes, &c);
+  let sql169s: Vec<_> = d.iter().filter(|x| x.code == "sql169").collect();
+  assert_eq!(sql169s.len(), 1, "expected one sql169 hit; got: {d:?}");
+  assert!(sql169s[0].message.contains("not_a_real_role"));
+}
+
+#[test]
+fn sql169_quiet_for_current_user_built_in() {
+  let mut c = cat();
+  c.roles = vec!["app_owner".into()];
+  let src = "ALTER TABLE users OWNER TO CURRENT_USER;";
+  let file = parse(src, Dialect::Postgres);
+  let scopes = resolve_with_source(&file.statements, src);
+  let d = run(src, &file, &scopes, &c);
   assert!(!d.iter().any(|x| x.code == "sql169"));
 }
 
