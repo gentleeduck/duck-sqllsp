@@ -2,6 +2,18 @@
 
 Thin VS Code client for [duck-sqllsp](https://github.com/gentleeduck/duck-sqllsp) -- a Postgres / MySQL / SQLite Language Server written in Rust.
 
+## Upgrading from 0.1.0
+
+If you see `command 'duckSqllsp.addConnection' not found` (or similar for any
+other command), you have an older .vsix installed. Uninstall and reinstall:
+
+```bash
+code --uninstall-extension wildduck.duck-sqllsp-vscode
+code --install-extension vscode-extension/duck-sqllsp-vscode-0.1.1.vsix
+```
+
+Then reload the VS Code window (`Developer: Reload Window` in the palette).
+
 ## What you get
 
 - Context-aware completion (tables, columns, functions, types, roles, GRANT privileges, ALTER TABLE sub-actions, snippet expansions).
