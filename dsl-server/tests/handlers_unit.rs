@@ -404,6 +404,38 @@ fn completion_snippet_item_has_expands_to_preview() {
 }
 
 #[test]
+fn code_action_exists_to_lateral() {
+    use tower_lsp::lsp_types::{
+        CodeActionContext, CodeActionParams, PartialResultParams, Range,
+        TextDocumentIdentifier, WorkDoneProgressParams,
+    };
+    let src = "SELECT u.id FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id);";
+    let (state, url) = state_with("file:///el.sql", src);
+    // Cursor inside the EXISTS subquery body.
+    let cur = src.find("SELECT 1 FROM").unwrap() + 5;
+    let line_col = Position { line: 0, character: cur as u32 };
+    let r = code_action::run(&state, CodeActionParams {
+        text_document: TextDocumentIdentifier { uri: url.clone() },
+        range: Range { start: line_col, end: line_col },
+        context: CodeActionContext { diagnostics: vec![], only: None, trigger_kind: None },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+    }).expect("actions");
+    let lateral = r.iter().find_map(|a| match a {
+        tower_lsp::lsp_types::CodeActionOrCommand::CodeAction(ca)
+            if ca.title.contains("LATERAL") => ca.edit.clone(),
+        _ => None,
+    }).expect("expected LATERAL action");
+    let edits = lateral.changes.unwrap().remove(&url).unwrap();
+    assert_eq!(edits.len(), 2, "expected 2 edits (EXISTS->TRUE + JOIN insert)");
+    let new_texts: Vec<&str> = edits.iter().map(|e| e.new_text.as_str()).collect();
+    assert!(new_texts.iter().any(|t| t.contains("TRUE")), "missing TRUE edit");
+    assert!(new_texts.iter().any(|t| t.contains("CROSS JOIN LATERAL")
+                                  && t.contains("SELECT 1 FROM orders o")),
+            "missing LATERAL join edit; got: {new_texts:?}");
+}
+
+#[test]
 fn code_action_explain_analyze_wrap() {
     use tower_lsp::lsp_types::{
         CodeActionContext, CodeActionParams, CodeActionResponse,

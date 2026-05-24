@@ -39,6 +39,10 @@ pub fn run(state: &ServerState, params: CodeActionParams) -> Option<CodeActionRe
     in_to_any_action(&uri, &params.range, &doc.text, &mut actions);
     // Extract a SELECT subquery inside FROM into a WITH ... CTE.
     extract_subquery_to_cte_action(&uri, &params.range, &doc.text, &mut actions);
+    // Convert an EXISTS-subquery inside a WHERE clause into a
+    // LATERAL join. Cursor must sit inside the `(SELECT ...)` paren
+    // that follows the EXISTS keyword.
+    exists_to_lateral_action(&uri, &params.range, &doc.text, &mut actions);
     // Split `INSERT INTO t VALUES (...), (...), (...)` so each tuple
     // sits on its own line -- easier to read in code-review.
     split_values_rows_action(&uri, &params.range, &doc.text, &mut actions);
@@ -175,6 +179,119 @@ fn extract_subquery_to_cte_action(uri: &Url, range: &Range, text: &str, out: &mu
         disabled: None,
         data: None,
     }));
+}
+
+/// `WHERE EXISTS (SELECT ... FROM t WHERE t.fk = outer.pk)` ->
+/// `... CROSS JOIN LATERAL (SELECT ... FROM t WHERE t.fk = outer.pk) ex_lat`
+/// + replace the `EXISTS (...)` predicate with `TRUE` so the join's
+/// row-multiplying behaviour gives the same set semantics as EXISTS.
+///
+/// LATERAL lets the subquery reference outer columns, so correlated
+/// EXISTS folds cleanly. Cursor must sit inside the EXISTS subquery's
+/// paren for the action to surface.
+fn exists_to_lateral_action(uri: &Url, range: &Range, text: &str, out: &mut Vec<CodeActionOrCommand>) {
+    let Some(sel) = line_col_to_byte(text, range.start) else { return };
+    let bytes = text.as_bytes();
+    let n = bytes.len();
+
+    // Walk back from cursor to find the most-recent `(`.
+    let mut paren_open = sel;
+    while paren_open > 0 && bytes[paren_open - 1] != b'(' { paren_open -= 1; }
+    if paren_open == 0 { return; }
+    let inner_start = paren_open;
+    let Some(close) = matched_close(bytes, paren_open - 1) else { return };
+    if sel > close { return; }
+
+    // Inner must be a SELECT.
+    let inner = &text[inner_start..close];
+    if !inner.trim_start().to_ascii_uppercase().starts_with("SELECT") { return; }
+
+    // The token immediately before `(` must be EXISTS.
+    let before = text[..paren_open - 1].trim_end();
+    if !before.to_ascii_uppercase().ends_with("EXISTS") { return; }
+    let exists_start = before.len() - "EXISTS".len();
+
+    // Locate the enclosing statement so we can find its FROM clause.
+    let stmt_start = text[..paren_open].rfind(';').map(|i| {
+        let mut j = i + 1;
+        while j < n && bytes[j].is_ascii_whitespace() { j += 1; }
+        j
+    }).unwrap_or(0);
+    let stmt_end = {
+        let mut k = close + 1;
+        while k < n && bytes[k] != b';' { k += 1; }
+        k
+    };
+
+    // Find the outer FROM clause and the end of its table list (= start
+    // of WHERE / GROUP / ORDER / HAVING / LIMIT / etc).
+    let stmt = &text[stmt_start..stmt_end];
+    let upper_stmt = stmt.to_ascii_uppercase();
+    let from_at = match upper_stmt.find(" FROM ") {
+        Some(i) => stmt_start + i + 6, // start of the first table name
+        None => return,
+    };
+    let stop_keywords = [
+        " WHERE ", " GROUP ", " ORDER ", " LIMIT ", " HAVING ", " OFFSET ", " RETURNING ",
+    ];
+    let from_tail = &text[from_at..stmt_end];
+    let from_tail_upper = from_tail.to_ascii_uppercase();
+    let from_end_rel = stop_keywords
+        .iter()
+        .filter_map(|kw| from_tail_upper.find(kw))
+        .min()
+        .unwrap_or(from_tail.len());
+    let from_end = from_at + from_end_rel;
+    // Don't fire if the cursor isn't actually inside this statement's WHERE
+    // (i.e. the EXISTS sits before the FROM clause -- shouldn't happen, but
+    // guard against a SELECT-in-projection EXISTS).
+    if exists_start < from_end { return; }
+
+    // Generate a unique alias to avoid clobbering an existing one.
+    let alias = pick_lateral_alias(text);
+    let join_text = format!(" CROSS JOIN LATERAL ({}) {}", inner.trim(), alias);
+
+    let mut edits = Vec::new();
+    // 1. Replace `EXISTS (...)` (inclusive parens) with `TRUE`.
+    edits.push(TextEdit {
+        range: byte_range_to_lsp(text, stmt_start + exists_start, close + 1),
+        new_text: "TRUE".into(),
+    });
+    // 2. Inject the LATERAL join at the end of the FROM table list.
+    edits.push(TextEdit {
+        range: byte_range_to_lsp(text, from_end, from_end),
+        new_text: join_text,
+    });
+
+    let mut changes = HashMap::new();
+    changes.insert(uri.clone(), edits);
+    out.push(CodeActionOrCommand::CodeAction(CodeAction {
+        title: "Convert EXISTS subquery to LATERAL join".into(),
+        kind: Some(CodeActionKind::REFACTOR_REWRITE),
+        diagnostics: None,
+        edit: Some(WorkspaceEdit {
+            changes: Some(changes),
+            document_changes: None,
+            change_annotations: None,
+        }),
+        command: None,
+        is_preferred: None,
+        disabled: None,
+        data: None,
+    }));
+}
+
+/// Pick a short alias not present in `text` (case-insensitive). Falls
+/// back to a numbered suffix if `ex_lat` is already taken.
+fn pick_lateral_alias(text: &str) -> String {
+    let upper = text.to_ascii_uppercase();
+    let base = "ex_lat";
+    if !upper.contains(&base.to_ascii_uppercase()) { return base.into(); }
+    for n in 2..=99 {
+        let cand = format!("{base}{n}");
+        if !upper.contains(&cand.to_ascii_uppercase()) { return cand; }
+    }
+    "ex_lat".into()
 }
 
 /// `INSERT INTO t VALUES (a, b), (c, d), (e, f)` ->
