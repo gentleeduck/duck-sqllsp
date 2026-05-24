@@ -119,6 +119,7 @@ pub mod unreachable_after_return;
 pub mod unresolved_table;
 pub mod update_from_no_pk_filter;
 pub mod update_set_no_change;
+pub mod update_set_type_literal;
 pub mod update_set_unknown_col;
 pub mod vacuum_in_transaction;
 
@@ -252,5 +253,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     // a CURRENT_USER / SESSION_USER / CURRENT_ROLE built-in.
     Box::new(owner_to_unknown_role::Rule),
     Box::new(plpgsql_assign_type::Rule),
+    Box::new(update_set_type_literal::Rule),
   ]
 }
