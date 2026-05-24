@@ -111,8 +111,8 @@ pub fn run(state: &ServerState, params: WorkspaceSymbolParams) -> Option<Vec<Sym
 fn collect_table_locations(state: &ServerState) -> Vec<(String, Location)> {
     let mut out = Vec::new();
     for (uri, doc) in state.documents.snapshot() {
-        let parsed = dsl_parse::parse(&doc.text, dsl_parse::Dialect::Postgres);
-        for s in &parsed.statements {
+        let cache = doc.parsed();
+        for s in &cache.file.statements {
             if let StatementKind::CreateTable(ct) = &s.kind {
                 out.push((
                     ct.table.name.clone(),
