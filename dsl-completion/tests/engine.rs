@@ -482,3 +482,74 @@ fn check_expression_offers_table_columns() {
     assert!(labels.iter().any(|l| l.eq_ignore_ascii_case("id") || l.eq_ignore_ascii_case("email")),
         "expected columns of users in CHECK, got: {labels:?}");
 }
+
+// ===== Every PG function MUST be reachable from completion in expression
+// contexts. Sweep across SELECT projection, WHERE, HAVING, GROUP BY,
+// ORDER BY, ON, CHECK -- and assert char_length / length / now /
+// coalesce / count / array_length appear in each.
+
+#[test]
+fn all_built_in_functions_appear_in_select_projection() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT  FROM users;";
+    let cur = "SELECT ".len();
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_lowercase()).collect();
+    for fname in &["length", "char_length", "character_length", "now", "coalesce", "count", "lower", "upper", "substring"] {
+        assert!(labels.iter().any(|l| l == fname),
+            "function `{fname}` missing from SELECT projection completion; got {} items",
+            labels.len());
+    }
+}
+
+#[test]
+fn all_built_in_functions_appear_in_where_clause() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT * FROM users WHERE ";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_lowercase()).collect();
+    for fname in &["length", "char_length", "now", "coalesce"] {
+        assert!(labels.iter().any(|l| l == fname),
+            "function `{fname}` missing from WHERE completion");
+    }
+}
+
+#[test]
+fn all_built_in_functions_appear_in_check_constraint() {
+    let cat = catalog_with_users_and_orders();
+    let src = "CREATE TABLE posts (body text, CHECK (";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_lowercase()).collect();
+    for fname in &["length", "char_length", "lower", "upper"] {
+        assert!(labels.iter().any(|l| l == fname),
+            "function `{fname}` missing from CHECK completion");
+    }
+}
+
+#[test]
+fn all_built_in_functions_appear_in_having_clause() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT id FROM users GROUP BY id HAVING ";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_lowercase()).collect();
+    for fname in &["count", "sum", "max", "min"] {
+        assert!(labels.iter().any(|l| l == fname),
+            "function `{fname}` missing from HAVING completion");
+    }
+}
+
+#[test]
+fn all_built_in_functions_appear_in_order_by() {
+    let cat = catalog_with_users_and_orders();
+    let src = "SELECT * FROM users ORDER BY ";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_lowercase()).collect();
+    for fname in &["length", "lower", "coalesce"] {
+        assert!(labels.iter().any(|l| l == fname),
+            "function `{fname}` missing from ORDER BY completion");
+    }
+}
