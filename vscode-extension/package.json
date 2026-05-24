@@ -33,44 +33,59 @@
     "onLanguage:postgres",
     "onLanguage:plpgsql",
     "onLanguage:plsql",
-    "workspaceContains:**/*.sql"
+    "workspaceContains:**/*.sql",
+    "onView:duckSqllsp.connections",
+    "onCommand:duckSqllsp.addConnection",
+    "onCommand:duckSqllsp.listConnections",
+    "onCommand:duckSqllsp.setActiveConnection",
+    "onCommand:duckSqllsp.removeConnection",
+    "onCommand:duckSqllsp.refreshCatalog",
+    "onCommand:duckSqllsp.restartServer",
+    "onCommand:duckSqllsp.showLogs"
   ],
   "contributes": {
     "commands": [
       {
         "command": "duckSqllsp.addConnection",
-        "title": "duck-sqllsp: Add Connection",
-        "category": "duck-sqllsp"
+        "title": "Add Connection",
+        "category": "duck-sqllsp",
+        "icon": "$(add)"
       },
       {
         "command": "duckSqllsp.listConnections",
-        "title": "duck-sqllsp: List Connections",
-        "category": "duck-sqllsp"
+        "title": "List Connections",
+        "category": "duck-sqllsp",
+        "icon": "$(list-unordered)"
       },
       {
         "command": "duckSqllsp.setActiveConnection",
-        "title": "duck-sqllsp: Set Active Connection",
-        "category": "duck-sqllsp"
+        "title": "Set Active Connection",
+        "category": "duck-sqllsp",
+        "icon": "$(check)"
       },
       {
         "command": "duckSqllsp.removeConnection",
-        "title": "duck-sqllsp: Remove Connection",
-        "category": "duck-sqllsp"
+        "title": "Remove Connection",
+        "category": "duck-sqllsp",
+        "icon": "$(trash)"
       },
       {
         "command": "duckSqllsp.refreshCatalog",
-        "title": "duck-sqllsp: Refresh Catalog",
-        "category": "duck-sqllsp"
+        "title": "Refresh Catalog",
+        "category": "duck-sqllsp",
+        "icon": "$(refresh)"
       },
       {
         "command": "duckSqllsp.restartServer",
-        "title": "duck-sqllsp: Restart Server",
-        "category": "duck-sqllsp"
+        "title": "Restart Server",
+        "category": "duck-sqllsp",
+        "icon": "$(debug-restart)"
       },
       {
         "command": "duckSqllsp.showLogs",
-        "title": "duck-sqllsp: Show Logs",
-        "category": "duck-sqllsp"
+        "title": "Show Logs",
+        "category": "duck-sqllsp",
+        "icon": "$(output)"
       }
     ],
     "viewsContainers": {
@@ -97,23 +112,34 @@
         {
           "command": "duckSqllsp.addConnection",
           "when": "view == duckSqllsp.connections",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
           "command": "duckSqllsp.refreshCatalog",
           "when": "view == duckSqllsp.connections",
-          "group": "navigation"
+          "group": "navigation@2"
+        },
+        {
+          "command": "duckSqllsp.restartServer",
+          "when": "view == duckSqllsp.connections",
+          "group": "navigation@3"
+        },
+        {
+          "command": "duckSqllsp.showLogs",
+          "when": "view == duckSqllsp.connections",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
         {
           "command": "duckSqllsp.setActiveConnection",
           "when": "view == duckSqllsp.connections && viewItem == connection",
-          "group": "inline"
+          "group": "inline@1"
         },
         {
           "command": "duckSqllsp.removeConnection",
-          "when": "view == duckSqllsp.connections && viewItem == connection"
+          "when": "view == duckSqllsp.connections && viewItem == connection",
+          "group": "inline@2"
         }
       ]
     },

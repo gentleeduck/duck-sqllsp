@@ -38,11 +38,18 @@ export class ConnectionItem extends vscode.TreeItem {
     public readonly spec: ConnectionSpec,
     public readonly active: boolean,
   ) {
-    const label = active ? `$(check) ${spec.name}` : spec.name;
-    super(label, vscode.TreeItemCollapsibleState.None);
+    super(spec.name, vscode.TreeItemCollapsibleState.None);
     this.tooltip = spec.url || "(no URL)";
-    this.description = spec.kind;
+    // Show kind + source tag (e.g. `postgres - nvim`) so the user
+    // knows where each entry came from.
+    const src = spec.source === "nvim" ? " - nvim" : spec.source === "toml" ? " - toml" : "";
+    this.description = `${spec.kind}${src}`;
     this.contextValue = spec.url ? "connection" : "empty";
-    this.iconPath = new vscode.ThemeIcon(active ? "circle-filled" : "circle-outline");
+    // Filled circle for active, plug icon for inactive (matches the
+    // "plug into a DB" metaphor the user is already familiar with).
+    this.iconPath = new vscode.ThemeIcon(
+      active ? "pass-filled" : "plug",
+      active ? new vscode.ThemeColor("charts.green") : undefined,
+    );
   }
 }
