@@ -2,7 +2,7 @@
   "name": "duck-sqllsp-vscode",
   "displayName": "duck-sqllsp",
   "description": "SQL Language Server for Postgres (and MySQL / SQLite) -- completion, hover, diagnostics, formatting, inlay hints, refactors. Works offline; richer when a DB is connected.",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "publisher": "wildduck",
   "license": "MIT",
   "repository": {

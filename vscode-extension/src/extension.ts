@@ -81,6 +81,13 @@ export function activate(context: ExtensionContext) {
           schemaProvider?.refresh();
         }
       }),
+      // Auto-refresh the schema tree on every SQL buffer save so new
+      // CREATE TABLE / FUNCTION / etc show up without manual refresh.
+      workspace.onDidSaveTextDocument((doc) => {
+        if (doc.languageId === "sql" || doc.fileName.endsWith(".sql")) {
+          schemaProvider?.refresh();
+        }
+      }),
     );
   } catch (e: any) {
     outputChannel.appendLine(`[ext] connectionsProvider failed: ${e?.stack ?? e}`);
