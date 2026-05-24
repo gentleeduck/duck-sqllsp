@@ -170,6 +170,13 @@ impl LanguageServer for Backend {
     Ok(handlers::call_hierarchy::outgoing(&self.state, params))
   }
 
+  async fn execute_command(
+    &self,
+    params: ExecuteCommandParams,
+  ) -> Result<Option<serde_json::Value>> {
+    Ok(handlers::execute_command::run(&self.state, params).await)
+  }
+
   async fn prepare_rename(&self, params: TextDocumentPositionParams) -> Result<Option<PrepareRenameResponse>> {
     Ok(handlers::rename::prepare(&self.state, params))
   }

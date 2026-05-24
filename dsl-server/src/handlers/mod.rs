@@ -5,6 +5,7 @@ pub mod completion;
 pub mod definition;
 pub mod document_highlight;
 pub mod document_symbol;
+pub mod execute_command;
 pub mod folding_range;
 pub mod formatting;
 pub mod hover;

@@ -53,6 +53,10 @@ pub fn server_capabilities() -> ServerCapabilities {
     folding_range_provider: Some(tower_lsp::lsp_types::FoldingRangeProviderCapability::Simple(true)),
     linked_editing_range_provider: Some(tower_lsp::lsp_types::LinkedEditingRangeServerCapabilities::Simple(true)),
     call_hierarchy_provider: Some(tower_lsp::lsp_types::CallHierarchyServerCapability::Simple(true)),
+    execute_command_provider: Some(tower_lsp::lsp_types::ExecuteCommandOptions {
+      commands: crate::handlers::execute_command::SUPPORTED.iter().map(|s| s.to_string()).collect(),
+      work_done_progress_options: tower_lsp::lsp_types::WorkDoneProgressOptions::default(),
+    }),
     rename_provider: Some(OneOf::Right(RenameOptions {
       prepare_provider: Some(true),
       work_done_progress_options: WorkDoneProgressOptions::default(),
