@@ -21,7 +21,8 @@
 
 use dsl_catalog::{
   CATALOG_VERSION, Catalog, Column, Constraint, ConstraintKind, ConstraintRef, Extension,
-  Function, FunctionArg, IndexDef, Schema, Sequence, Table, TableKind, Trigger, Type, TypeKind,
+  Function, FunctionArg, IndexDef, Policy, Schema, Sequence, Table, TableKind, Trigger, Type,
+  TypeKind,
 };
 use dsl_parse::{ParsedFile, StatementKind};
 
@@ -110,6 +111,7 @@ pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
   let table_comments = scan_table_comments(source);
   let indexes_by_table = scan_indexes(source);
   let triggers_by_table = scan_triggers(source);
+  let policies_by_table = scan_policies(source);
   for schema in cat.schemas.iter_mut() {
     for table in schema.tables.iter_mut() {
       table.constraints = scan_constraints_for(source, &table.name);
@@ -123,6 +125,9 @@ pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
       if let Some(trgs) = triggers_by_table.get(&key) {
         table.triggers = trgs.clone();
       }
+      if let Some(pols) = policies_by_table.get(&key) {
+        table.policies = pols.clone();
+      }
       for col in table.columns.iter_mut() {
         let ckey = format!("{}.{}", table.name.to_ascii_lowercase(), col.name.to_ascii_lowercase());
         if let Some(c) = comments_by_col.get(&ckey) {
@@ -132,6 +137,91 @@ pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
     }
   }
   cat
+}
+
+/// `CREATE [OR REPLACE] POLICY <name> ON <tbl>
+///   [AS {PERMISSIVE|RESTRICTIVE}]
+///   [FOR {ALL|SELECT|INSERT|UPDATE|DELETE}]
+///   [TO <roles>]
+///   [USING (<expr>)]
+///   [WITH CHECK (<expr>)]`
+/// -> map<table_lower, Vec<Policy>>.
+fn scan_policies(src: &str) -> std::collections::HashMap<String, Vec<Policy>> {
+  let upper = src.to_ascii_uppercase();
+  let bytes = src.as_bytes();
+  let mut out: std::collections::HashMap<String, Vec<Policy>> = std::collections::HashMap::new();
+  for needle in ["CREATE OR REPLACE POLICY ", "CREATE POLICY "] {
+    let mut from = 0usize;
+    while let Some(rel) = upper[from..].find(needle) {
+      let after = from + rel + needle.len();
+      let mut k = after;
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+      let name_start = k;
+      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'"') {
+        k += 1;
+      }
+      let name = src[name_start..k].trim_matches('"').to_string();
+      let stmt_end = src[after..].find(';').map(|i| after + i).unwrap_or(src.len());
+      let stmt = &src[after..stmt_end];
+      let stmt_upper = stmt.to_ascii_uppercase();
+      let tbl = if let Some(on_at) = stmt_upper.find(" ON ") {
+        let rest = &stmt[on_at + 4..];
+        let lead = rest.len() - rest.trim_start().len();
+        let raw = &rest[lead..];
+        let id_end = raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(raw.len());
+        raw[..id_end].rsplit('.').next().unwrap_or(&raw[..id_end]).trim_matches('"').to_ascii_lowercase()
+      } else {
+        from = after;
+        continue;
+      };
+      let permissive = if stmt_upper.contains("RESTRICTIVE") { "RESTRICTIVE" } else { "PERMISSIVE" };
+      let command = ["ALL", "SELECT", "INSERT", "UPDATE", "DELETE"]
+        .iter()
+        .find(|c| stmt_upper.contains(&format!(" FOR {c}")))
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "ALL".into());
+      let roles = if let Some(to_at) = stmt_upper.find(" TO ") {
+        let rest = &stmt[to_at + 4..];
+        let end = rest.find(|c: char| c == ';' || c == '\n').unwrap_or(rest.len());
+        let raw = rest[..end].trim();
+        // Trim trailing clauses like USING / WITH CHECK.
+        let raw_upper = raw.to_ascii_uppercase();
+        let cut = ["USING", "WITH CHECK"]
+          .iter()
+          .filter_map(|kw| raw_upper.find(kw))
+          .min()
+          .unwrap_or(raw.len());
+        raw[..cut].trim().to_string()
+      } else {
+        "PUBLIC".into()
+      };
+      let using_expr = extract_paren_after(stmt, "USING");
+      let check_expr = extract_paren_after(stmt, "WITH CHECK");
+      out.entry(tbl).or_default().push(Policy {
+        name,
+        permissive: permissive.to_string(),
+        roles,
+        command,
+        using_expr,
+        check_expr,
+      });
+      from = after;
+    }
+  }
+  out
+}
+
+fn extract_paren_after(stmt: &str, kw: &str) -> Option<String> {
+  let upper = stmt.to_ascii_uppercase();
+  let at = upper.find(kw)?;
+  let after = at + kw.len();
+  let rest_bytes = stmt.as_bytes();
+  let mut k = after;
+  while k < rest_bytes.len() && rest_bytes[k].is_ascii_whitespace() { k += 1; }
+  if k >= rest_bytes.len() || rest_bytes[k] != b'(' { return None; }
+  let close = match_paren(rest_bytes, k);
+  if close >= rest_bytes.len() { return None; }
+  Some(stmt[k + 1..close].trim().to_string())
 }
 
 /// `COMMENT ON TABLE <tbl> IS '<text>'` -> map<table_lower, text>.
