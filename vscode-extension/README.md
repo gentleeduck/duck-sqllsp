@@ -52,3 +52,15 @@ To package a `.vsix`:
 ```bash
 npm run package
 ```
+
+## Troubleshooting
+
+Completion / hover not showing? Walk through these:
+
+1. **Open the status bar entry** -- bottom right, `database` icon. Hover it for the current state (`starting…` / `connected: <name>` / `offline mode` / `error: …`). Click to restart.
+2. **Open the Output panel and pick `duck-sqllsp`** from the dropdown. The activation log shows the exact command the extension spawned and any LSP error.
+3. **Confirm the binary is on PATH**: `which duck-sqllsp` in a terminal. If not, set the absolute path in `duckSqllsp.serverPath` (User or Workspace settings).
+4. **File must be recognised as SQL**: bottom-right language indicator should read `SQL`. `.sql`, `.pgsql`, `.psql` are auto-detected by the extension; for an untitled buffer choose "Change Language Mode" -> SQL.
+5. **Without a DB connection** completion still works offline (tables / functions / sequences / types / roles harvested from the buffer plus default offline roles). Add a connection through the Connections sidebar entry for live introspection.
+6. **Restart the server** with `Cmd/Ctrl+Shift+P` -> `duck-sqllsp: Restart Server` after editing `.duck-sqllsp.toml` or changing connection.
+

@@ -28,15 +28,12 @@
   ],
   "main": "./out/extension.js",
   "activationEvents": [
+    "onStartupFinished",
     "onLanguage:sql",
     "onLanguage:postgres",
-    "workspaceContains:**/*.sql",
-    "onCommand:duckSqllsp.addConnection",
-    "onCommand:duckSqllsp.listConnections",
-    "onCommand:duckSqllsp.setActiveConnection",
-    "onCommand:duckSqllsp.removeConnection",
-    "onCommand:duckSqllsp.refreshCatalog",
-    "onCommand:duckSqllsp.restartServer"
+    "onLanguage:plpgsql",
+    "onLanguage:plsql",
+    "workspaceContains:**/*.sql"
   ],
   "contributes": {
     "commands": [
@@ -68,6 +65,11 @@
       {
         "command": "duckSqllsp.restartServer",
         "title": "duck-sqllsp: Restart Server",
+        "category": "duck-sqllsp"
+      },
+      {
+        "command": "duckSqllsp.showLogs",
+        "title": "duck-sqllsp: Show Logs",
         "category": "duck-sqllsp"
       }
     ],

@@ -1,9 +1,13 @@
+import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import { ExtensionContext, commands, window, workspace } from "vscode";
 import {
+  CloseAction,
+  ErrorAction,
   LanguageClient,
   LanguageClientOptions,
+  RevealOutputChannelOn,
   ServerOptions,
   TransportKind,
 } from "vscode-languageclient/node";
@@ -17,10 +21,27 @@ import { ConnectionItem, ConnectionsProvider } from "./tree";
 
 let client: LanguageClient | undefined;
 let connectionsProvider: ConnectionsProvider | undefined;
+let statusItem: vscode.StatusBarItem | undefined;
+let outputChannel: vscode.OutputChannel | undefined;
+let traceChannel: vscode.OutputChannel | undefined;
 
 export function activate(context: ExtensionContext) {
+  outputChannel = window.createOutputChannel("duck-sqllsp");
+  traceChannel = window.createOutputChannel("duck-sqllsp trace");
+  outputChannel.appendLine("[ext] duck-sqllsp activating");
+
   connectionsProvider = new ConnectionsProvider();
+
+  statusItem = window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  statusItem.text = "$(database) duck-sqllsp";
+  statusItem.tooltip = "duck-sqllsp LSP status -- click to restart";
+  statusItem.command = "duckSqllsp.restartServer";
+  statusItem.show();
+
   context.subscriptions.push(
+    outputChannel,
+    traceChannel,
+    statusItem,
     window.registerTreeDataProvider("duckSqllsp.connections", connectionsProvider),
     commands.registerCommand("duckSqllsp.addConnection", addConnection),
     commands.registerCommand("duckSqllsp.listConnections", listConnections),
@@ -28,6 +49,7 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand("duckSqllsp.removeConnection", removeConnection),
     commands.registerCommand("duckSqllsp.refreshCatalog", refreshCatalog),
     commands.registerCommand("duckSqllsp.restartServer", restartServer),
+    commands.registerCommand("duckSqllsp.showLogs", () => outputChannel?.show(true)),
     workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("duckSqllsp")) {
         connectionsProvider?.refresh();
@@ -35,21 +57,41 @@ export function activate(context: ExtensionContext) {
     }),
   );
 
-  startClient(context);
+  startClient(context).catch((err) => {
+    outputChannel?.appendLine(`[ext] failed to start client: ${err}`);
+    window.showErrorMessage(`duck-sqllsp failed to start: ${err.message ?? err}`);
+    setStatus("error", "failed to start");
+  });
 }
 
-function startClient(context: ExtensionContext) {
+async function startClient(context: ExtensionContext) {
   const config = workspace.getConfiguration("duckSqllsp");
-  const serverBin = config.get<string>("serverPath", "duck-sqllsp");
+  const configuredBin = config.get<string>("serverPath", "duck-sqllsp");
   const activeConnection = config.get<string>("activeConnection", "")
     || loadConfig().active
     || undefined;
+
+  const serverBin = await resolveServerBin(configuredBin);
+  if (!serverBin) {
+    const msg = `duck-sqllsp binary not found. Tried PATH and \`${configuredBin}\`. Set \`duckSqllsp.serverPath\` to the full path.`;
+    outputChannel?.appendLine(`[ext] ${msg}`);
+    window.showErrorMessage(msg, "Show Logs").then((c) => { if (c === "Show Logs") outputChannel?.show(true); });
+    setStatus("error", "binary missing");
+    return;
+  }
+  outputChannel?.appendLine(`[ext] spawning: ${serverBin} server`);
 
   const serverOptions: ServerOptions = {
     run: {
       command: serverBin,
       args: ["server"],
       transport: TransportKind.stdio,
+      options: {
+        env: {
+          ...process.env,
+          RUST_LOG: process.env.RUST_LOG ?? "info",
+        },
+      },
     },
     debug: {
       command: serverBin,
@@ -58,17 +100,25 @@ function startClient(context: ExtensionContext) {
       options: {
         env: {
           ...process.env,
-          RUST_LOG: "info,dsl_server::perf=debug",
+          RUST_LOG: "debug,dsl_server::perf=debug",
         },
       },
     },
   };
 
   const clientOptions: LanguageClientOptions = {
+    // Be generous with the selector so completion / hover fire on any
+    // SQL-ish buffer the editor recognises -- some installations use
+    // `postgres`, `plsql`, or even just `sql`.
     documentSelector: [
       { scheme: "file", language: "sql" },
       { scheme: "file", language: "postgres" },
+      { scheme: "file", language: "plpgsql" },
+      { scheme: "file", language: "plsql" },
       { scheme: "untitled", language: "sql" },
+      { scheme: "file", pattern: "**/*.sql" },
+      { scheme: "file", pattern: "**/*.pgsql" },
+      { scheme: "file", pattern: "**/*.psql" },
     ],
     synchronize: {
       fileEvents: workspace.createFileSystemWatcher("**/{.duck-sqllsp.toml,.duck-sqllsp.json}"),
@@ -79,8 +129,23 @@ function startClient(context: ExtensionContext) {
         activeConnection,
       },
     },
-    traceOutputChannel: window.createOutputChannel("duck-sqllsp trace"),
-    outputChannel: window.createOutputChannel("duck-sqllsp"),
+    traceOutputChannel: traceChannel,
+    outputChannel: outputChannel,
+    // Surface the output channel on any LSP error so users see what
+    // went wrong without having to dig through Output dropdowns.
+    revealOutputChannelOn: RevealOutputChannelOn.Error,
+    errorHandler: {
+      error: (err, msg, count) => {
+        outputChannel?.appendLine(`[client] error #${count}: ${err.message}`);
+        setStatus("error", err.message);
+        return { action: ErrorAction.Continue };
+      },
+      closed: () => {
+        outputChannel?.appendLine("[client] connection closed");
+        setStatus("error", "server closed");
+        return { action: CloseAction.DoNotRestart };
+      },
+    },
   };
 
   client = new LanguageClient(
@@ -91,7 +156,55 @@ function startClient(context: ExtensionContext) {
   );
 
   context.subscriptions.push({ dispose: () => { void client?.stop(); } });
-  void client.start();
+  setStatus("starting", "starting...");
+  try {
+    await client.start();
+    setStatus("ready", activeConnection ? `connected: ${activeConnection}` : "offline mode");
+    outputChannel?.appendLine("[ext] client started");
+  } catch (err: any) {
+    setStatus("error", err?.message ?? "start failed");
+    outputChannel?.appendLine(`[ext] client.start() rejected: ${err?.stack ?? err}`);
+    window.showErrorMessage(`duck-sqllsp could not connect: ${err?.message ?? err}`);
+  }
+}
+
+/// Try to locate the duck-sqllsp binary.
+///   * Absolute path -> check it exists.
+///   * Bare name -> probe ~/.local/bin, ~/.cargo/bin, /usr/local/bin,
+///     /usr/bin, and finally trust the configured name (PATH-resolved
+///     at spawn time).
+async function resolveServerBin(configured: string): Promise<string | undefined> {
+  // Expand `~` and `${env:VAR}`.
+  const expand = (p: string) =>
+    p.replace(/^~(?=$|\/|\\)/, process.env.HOME ?? "~")
+      .replace(/\$\{env:([A-Za-z_][A-Za-z_0-9]*)\}/g, (_, k) => process.env[k] ?? "");
+  const candidate = expand(configured);
+  if (path.isAbsolute(candidate)) {
+    return fs.existsSync(candidate) ? candidate : undefined;
+  }
+  // Already on PATH? Try a quick `which`-style probe.
+  const probe = [
+    path.join(process.env.HOME ?? "", ".local", "bin", candidate),
+    path.join(process.env.HOME ?? "", ".cargo", "bin", candidate),
+    "/usr/local/bin/" + candidate,
+    "/opt/homebrew/bin/" + candidate,
+    "/usr/bin/" + candidate,
+  ];
+  for (const p of probe) {
+    if (fs.existsSync(p)) {
+      outputChannel?.appendLine(`[ext] resolved bare \`${configured}\` -> ${p}`);
+      return p;
+    }
+  }
+  // Fall back to the bare name; OS PATH lookup might still succeed.
+  return candidate;
+}
+
+function setStatus(state: "ready" | "starting" | "error", detail: string) {
+  if (!statusItem) return;
+  const prefix = state === "ready" ? "$(database)" : state === "starting" ? "$(sync~spin)" : "$(error)";
+  statusItem.text = `${prefix} duck-sqllsp`;
+  statusItem.tooltip = `duck-sqllsp -- ${detail}\nClick to restart server`;
 }
 
 // -------- Commands --------------------------------------------------
@@ -222,16 +335,21 @@ async function removeConnection(item?: ConnectionItem): Promise<void> {
 }
 
 async function refreshCatalog(): Promise<void> {
-  // The server picks up config changes via workspace/didChangeConfiguration
-  // -- nudge a restart so the new active connection takes effect.
   await restartServer();
 }
 
 async function restartServer(): Promise<void> {
   if (!client) return;
+  setStatus("starting", "restarting...");
   await client.stop();
-  void client.start();
-  window.showInformationMessage("duck-sqllsp server restarted");
+  try {
+    await client.start();
+    setStatus("ready", "restarted");
+    window.showInformationMessage("duck-sqllsp server restarted");
+  } catch (err: any) {
+    setStatus("error", err?.message ?? "restart failed");
+    window.showErrorMessage(`duck-sqllsp restart failed: ${err?.message ?? err}`);
+  }
 }
 
 export function deactivate(): Thenable<void> | undefined {
