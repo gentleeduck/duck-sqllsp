@@ -37,7 +37,7 @@ jobs:
           # which fires napi-prebuilds and ultimately npm publish.
           token: ${{ secrets.GH_PAT }}
 
-      - uses: pnpm/action-setup@v3
+      - uses: pnpm/action-setup@v6
         with:
           version: 10
 
