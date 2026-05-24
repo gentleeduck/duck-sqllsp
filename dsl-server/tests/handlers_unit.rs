@@ -2,7 +2,7 @@
 
 use dsl_server::{
     documents::DocumentStore,
-    handlers::{code_action, completion, document_symbol, hover, inlay_hints, references, rename, selection_range, semantic_tokens, signature_help, workspace_symbol},
+    handlers::{code_action, completion, document_highlight, document_symbol, hover, inlay_hints, references, rename, selection_range, semantic_tokens, signature_help, workspace_symbol},
     state::ServerState,
 };
 use tower_lsp::lsp_types::{
@@ -149,6 +149,51 @@ fn changed_update_invalidates_parse_cache() {
     store.update(&url, "SELECT 2;".into(), 2);
     let after = store.get(&url).unwrap().parsed();
     assert!(!std::sync::Arc::ptr_eq(&before, &after), "real edit should reparse");
+}
+
+#[test]
+fn document_highlight_marks_every_occurrence_in_buffer() {
+    use tower_lsp::lsp_types::{
+        DocumentHighlightParams, TextDocumentIdentifier, TextDocumentPositionParams,
+        WorkDoneProgressParams, PartialResultParams,
+    };
+    let src = "SELECT id FROM users WHERE users.id = 1;";
+    let (state, url) = state_with("file:///dh.sql", src);
+    let cur = src.find("users").unwrap() + 2; // inside the first `users`
+    let hl = document_highlight::run(&state, DocumentHighlightParams {
+        text_document_position_params: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: url },
+            position: Position { line: 0, character: cur as u32 },
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+    }).expect("highlights");
+    assert_eq!(hl.len(), 2, "expected both `users` occurrences highlighted");
+    for h in &hl {
+        assert_eq!(h.kind, Some(tower_lsp::lsp_types::DocumentHighlightKind::TEXT));
+    }
+}
+
+#[test]
+fn document_highlight_excludes_string_literal_match() {
+    // Identifier `users` in a string literal must NOT be highlighted
+    // -- same scanner as references / rename.
+    use tower_lsp::lsp_types::{
+        DocumentHighlightParams, TextDocumentIdentifier, TextDocumentPositionParams,
+        WorkDoneProgressParams, PartialResultParams,
+    };
+    let src = "SELECT 'users' FROM users;";
+    let (state, url) = state_with("file:///dh2.sql", src);
+    let cur = src.find("FROM users").unwrap() + 5;
+    let hl = document_highlight::run(&state, DocumentHighlightParams {
+        text_document_position_params: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: url },
+            position: Position { line: 0, character: cur as u32 },
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+    }).expect("highlights");
+    assert_eq!(hl.len(), 1, "string literal `'users'` should be excluded");
 }
 
 #[test]

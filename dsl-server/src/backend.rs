@@ -144,6 +144,13 @@ impl LanguageServer for Backend {
         Ok(handlers::references::run(&self.state, params))
     }
 
+    async fn document_highlight(
+        &self,
+        params: DocumentHighlightParams,
+    ) -> Result<Option<Vec<DocumentHighlight>>> {
+        Ok(handlers::document_highlight::run(&self.state, params))
+    }
+
     async fn prepare_rename(
         &self,
         params: TextDocumentPositionParams,
