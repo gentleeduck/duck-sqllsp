@@ -122,6 +122,12 @@
         "aliases": ["SQL", "PostgreSQL", "pgsql"]
       }
     ],
+    "snippets": [
+      {
+        "language": "sql",
+        "path": "./snippets/sql.json"
+      }
+    ],
     "configuration": {
       "type": "object",
       "title": "duck-sqllsp",

@@ -1,0 +1,132 @@
+{
+  "SELECT FROM WHERE": {
+    "prefix": "sfw",
+    "body": [
+      "SELECT ${1:*}",
+      "FROM ${2:table}",
+      "WHERE ${3:condition};$0"
+    ],
+    "description": "Basic SELECT with WHERE clause"
+  },
+  "SELECT with JOIN": {
+    "prefix": "sjoin",
+    "body": [
+      "SELECT ${1:*}",
+      "FROM ${2:left_table} l",
+      "JOIN ${3:right_table} r ON l.${4:id} = r.${5:left_id}",
+      "WHERE ${6:condition};$0"
+    ],
+    "description": "SELECT with a single JOIN"
+  },
+  "Common Table Expression": {
+    "prefix": "cte",
+    "body": [
+      "WITH ${1:cte_name} AS (",
+      "  SELECT ${2:cols}",
+      "  FROM ${3:source}",
+      ")",
+      "SELECT * FROM ${1:cte_name};$0"
+    ],
+    "description": "WITH ... AS (...) SELECT"
+  },
+  "Recursive CTE": {
+    "prefix": "rcte",
+    "body": [
+      "WITH RECURSIVE ${1:walk} AS (",
+      "  -- anchor",
+      "  SELECT ${2:cols} FROM ${3:source} WHERE ${4:base_cond}",
+      "  UNION ALL",
+      "  -- step",
+      "  SELECT ${2:cols} FROM ${3:source} s JOIN ${1:walk} w ON s.${5:parent_id} = w.${6:id}",
+      ")",
+      "SELECT * FROM ${1:walk};$0"
+    ],
+    "description": "WITH RECURSIVE for graphs / hierarchies"
+  },
+  "CREATE TABLE skeleton": {
+    "prefix": "ctab",
+    "body": [
+      "CREATE TABLE ${1:table_name} (",
+      "  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),",
+      "  ${2:name}        TEXT        NOT NULL,",
+      "  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),",
+      "  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()",
+      ");$0"
+    ],
+    "description": "CREATE TABLE with id + timestamps"
+  },
+  "CREATE FUNCTION (plpgsql)": {
+    "prefix": "cfn",
+    "body": [
+      "CREATE OR REPLACE FUNCTION ${1:fn_name}(${2:p_arg ${3:int}})",
+      "RETURNS ${4:void}",
+      "LANGUAGE plpgsql",
+      "AS \\$\\$",
+      "BEGIN",
+      "  ${0:-- body}",
+      "END;",
+      "\\$\\$;"
+    ],
+    "description": "PL/pgSQL function skeleton"
+  },
+  "CREATE TRIGGER (row-level)": {
+    "prefix": "ctrig",
+    "body": [
+      "CREATE OR REPLACE FUNCTION ${1:trigger_fn}() RETURNS TRIGGER LANGUAGE plpgsql AS \\$\\$",
+      "BEGIN",
+      "  NEW.${2:updated_at} := now();",
+      "  RETURN NEW;",
+      "END;",
+      "\\$\\$;",
+      "",
+      "CREATE TRIGGER ${3:trigger_name}",
+      "BEFORE UPDATE ON ${4:table_name}",
+      "FOR EACH ROW EXECUTE FUNCTION ${1:trigger_fn}();$0"
+    ],
+    "description": "row-level UPDATE trigger + handler fn pair"
+  },
+  "CREATE INDEX": {
+    "prefix": "cidx",
+    "body": [
+      "CREATE ${1|INDEX,UNIQUE INDEX|} ${2:ix_name} ON ${3:table_name} (${4:column});$0"
+    ],
+    "description": "CREATE INDEX one-liner"
+  },
+  "INSERT INTO ... VALUES": {
+    "prefix": "ins",
+    "body": [
+      "INSERT INTO ${1:table_name} (${2:cols})",
+      "VALUES (${3:vals});$0"
+    ],
+    "description": "INSERT skeleton"
+  },
+  "INSERT ON CONFLICT (upsert)": {
+    "prefix": "upsert",
+    "body": [
+      "INSERT INTO ${1:table_name} (${2:cols})",
+      "VALUES (${3:vals})",
+      "ON CONFLICT (${4:conflict_col}) DO UPDATE",
+      "SET ${5:col} = EXCLUDED.${5:col};$0"
+    ],
+    "description": "INSERT ... ON CONFLICT DO UPDATE"
+  },
+  "UPDATE with RETURNING": {
+    "prefix": "upd",
+    "body": [
+      "UPDATE ${1:table_name}",
+      "SET ${2:col} = ${3:value}",
+      "WHERE ${4:condition}",
+      "RETURNING ${5:*};$0"
+    ],
+    "description": "UPDATE ... RETURNING"
+  },
+  "DELETE with RETURNING": {
+    "prefix": "del",
+    "body": [
+      "DELETE FROM ${1:table_name}",
+      "WHERE ${2:condition}",
+      "RETURNING ${3:*};$0"
+    ],
+    "description": "DELETE ... RETURNING"
+  }
+}
