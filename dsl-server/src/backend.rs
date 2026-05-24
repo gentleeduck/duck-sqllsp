@@ -158,6 +158,13 @@ impl LanguageServer for Backend {
         Ok(handlers::folding_range::run(&self.state, params))
     }
 
+    async fn on_type_formatting(
+        &self,
+        params: DocumentOnTypeFormattingParams,
+    ) -> Result<Option<Vec<TextEdit>>> {
+        Ok(handlers::on_type_formatting::run(&self.state, params))
+    }
+
     async fn prepare_rename(
         &self,
         params: TextDocumentPositionParams,

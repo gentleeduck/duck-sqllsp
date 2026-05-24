@@ -44,6 +44,10 @@ pub fn server_capabilities() -> ServerCapabilities {
         inlay_hint_provider: Some(tower_lsp::lsp_types::OneOf::Left(true)),
         code_lens_provider: Some(CodeLensOptions { resolve_provider: Some(false) }),
         document_formatting_provider: Some(OneOf::Left(true)),
+        document_on_type_formatting_provider: Some(tower_lsp::lsp_types::DocumentOnTypeFormattingOptions {
+            first_trigger_character: "\n".into(),
+            more_trigger_character: None,
+        }),
         references_provider: Some(OneOf::Left(true)),
         document_highlight_provider: Some(OneOf::Left(true)),
         folding_range_provider: Some(tower_lsp::lsp_types::FoldingRangeProviderCapability::Simple(true)),

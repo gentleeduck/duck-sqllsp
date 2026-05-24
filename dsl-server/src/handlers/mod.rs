@@ -6,6 +6,7 @@ pub mod document_highlight;
 pub mod document_symbol;
 pub mod folding_range;
 pub mod formatting;
+pub mod on_type_formatting;
 pub mod hover;
 pub mod position;
 pub mod references;

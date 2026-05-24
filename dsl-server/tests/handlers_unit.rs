@@ -2,7 +2,7 @@
 
 use dsl_server::{
     documents::DocumentStore,
-    handlers::{code_action, completion, document_highlight, document_symbol, folding_range, hover, inlay_hints, references, rename, selection_range, semantic_tokens, signature_help, workspace_symbol},
+    handlers::{code_action, completion, document_highlight, document_symbol, folding_range, hover, inlay_hints, on_type_formatting, references, rename, selection_range, semantic_tokens, signature_help, workspace_symbol},
     state::ServerState,
 };
 use tower_lsp::lsp_types::{
@@ -149,6 +149,80 @@ fn changed_update_invalidates_parse_cache() {
     store.update(&url, "SELECT 2;".into(), 2);
     let after = store.get(&url).unwrap().parsed();
     assert!(!std::sync::Arc::ptr_eq(&before, &after), "real edit should reparse");
+}
+
+#[test]
+fn on_type_formatting_indents_after_open_paren() {
+    use tower_lsp::lsp_types::{
+        DocumentOnTypeFormattingParams, FormattingOptions, TextDocumentIdentifier,
+        TextDocumentPositionParams,
+    };
+    // After `CREATE TABLE foo (\n` the new line should pick up two
+    // spaces of indent (default tab_size=2, insert_spaces=true).
+    let src = "CREATE TABLE foo (\n";
+    let (state, url) = state_with("file:///ot.sql", src);
+    let edits = on_type_formatting::run(&state, DocumentOnTypeFormattingParams {
+        text_document_position: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: url },
+            position: Position { line: 1, character: 0 },
+        },
+        ch: "\n".into(),
+        options: FormattingOptions {
+            tab_size: 2,
+            insert_spaces: true,
+            ..Default::default()
+        },
+    }).expect("edit");
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].new_text, "  ", "expected 2 spaces after `(`");
+}
+
+#[test]
+fn on_type_formatting_indents_after_begin_keyword() {
+    use tower_lsp::lsp_types::{
+        DocumentOnTypeFormattingParams, FormattingOptions, TextDocumentIdentifier,
+        TextDocumentPositionParams,
+    };
+    let src = "DO $$ BEGIN\n";
+    let (state, url) = state_with("file:///oi.sql", src);
+    let edits = on_type_formatting::run(&state, DocumentOnTypeFormattingParams {
+        text_document_position: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: url },
+            position: Position { line: 1, character: 0 },
+        },
+        ch: "\n".into(),
+        options: FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            ..Default::default()
+        },
+    }).expect("edit");
+    assert_eq!(edits[0].new_text, "    ", "BEGIN keyword should indent +1 unit");
+}
+
+#[test]
+fn on_type_formatting_keeps_indent_on_plain_wrap() {
+    use tower_lsp::lsp_types::{
+        DocumentOnTypeFormattingParams, FormattingOptions, TextDocumentIdentifier,
+        TextDocumentPositionParams,
+    };
+    // Inside an already-indented body, plain text + newline keeps
+    // the current indentation rather than adding more.
+    let src = "    SELECT id\n";
+    let (state, url) = state_with("file:///op.sql", src);
+    let edits = on_type_formatting::run(&state, DocumentOnTypeFormattingParams {
+        text_document_position: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: url },
+            position: Position { line: 1, character: 0 },
+        },
+        ch: "\n".into(),
+        options: FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            ..Default::default()
+        },
+    }).expect("edit");
+    assert_eq!(edits[0].new_text, "    ", "plain wrap preserves existing indent");
 }
 
 #[test]
