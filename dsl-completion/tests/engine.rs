@@ -659,6 +659,21 @@ fn non_function_items_are_not_snippets() {
 }
 
 #[test]
+fn constraint_keyword_inserts_full_snippet_template() {
+    let cat = catalog_with_users_and_orders();
+    // Inside a CREATE TABLE body, fresh entry position.
+    let src = "CREATE TABLE t (id uuid, ";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    let c = items.iter().find(|i| i.label == "CONSTRAINT").expect("CONSTRAINT");
+    assert!(c.is_snippet, "CONSTRAINT should be a snippet");
+    assert!(c.insert_text.contains("${1:name}"), "expects name placeholder");
+    assert!(c.insert_text.contains("PRIMARY KEY,UNIQUE,FOREIGN KEY,CHECK"),
+        "expects kind choice; got: {}", c.insert_text);
+    assert!(c.insert_text.contains("${3:col}"), "expects column-list placeholder");
+}
+
+#[test]
 fn functions_in_plpgsql_assign_rhs() {
     let cat = catalog_with_users_and_orders();
     let src = "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ DECLARE v text; BEGIN v := ";

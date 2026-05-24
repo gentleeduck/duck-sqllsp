@@ -180,9 +180,26 @@ pub fn column_constraint_keywords(out: &mut Vec<Item>) {
 /// in lieu of a fresh column name.
 pub fn create_table_entry_starters(out: &mut Vec<Item>) {
     const KEEP: &[&str] = &[
-        "CONSTRAINT", "PRIMARY KEY", "FOREIGN KEY", "UNIQUE", "CHECK", "LIKE",
+        "PRIMARY KEY", "FOREIGN KEY", "UNIQUE", "CHECK", "LIKE",
     ];
     emit_keyword_subset(out, KEEP);
+    // CONSTRAINT gets a snippet template so the user only types the
+    // constraint name, picks the kind, and types the column list.
+    out.push(Item {
+        label: "CONSTRAINT".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("CONSTRAINT <name> <kind> (<cols>)".into()),
+        description: Some("named constraint".into()),
+        documentation_md: Some(
+            "Insert a named constraint. After the snippet expands you fill in:\n\n\
+             1. constraint name\n\
+             2. constraint kind (`PRIMARY KEY` / `UNIQUE` / `FOREIGN KEY` / `CHECK`)\n\
+             3. column list".into()
+        ),
+        insert_text: "CONSTRAINT ${1:name} ${2|PRIMARY KEY,UNIQUE,FOREIGN KEY,CHECK|} (${3:col})$0".into(),
+        is_snippet: true,
+        sort_priority: 4,
+    });
 }
 
 /// Constraint-kind keywords that follow `CONSTRAINT <name>`.
