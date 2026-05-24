@@ -921,6 +921,46 @@ fn revoke_routes_same_as_grant() {
 }
 
 #[test]
+fn owner_to_surfaces_catalog_roles() {
+  let cat = catalog_with_users_and_orders();
+  let src = "ALTER TABLE users OWNER TO ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(
+    labels.contains(&"PUBLIC"),
+    "OWNER TO should surface PUBLIC pseudo-role; got: {labels:?}"
+  );
+  assert!(
+    labels.contains(&"postgres"),
+    "OWNER TO should surface built-in roles"
+  );
+}
+
+#[test]
+fn alter_schema_owner_to_surfaces_roles() {
+  let cat = catalog_with_users_and_orders();
+  let src = "ALTER SCHEMA public OWNER TO ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(
+    labels.contains(&"PUBLIC"),
+    "ALTER SCHEMA OWNER TO should surface roles; got: {labels:?}"
+  );
+}
+
+#[test]
+fn set_role_surfaces_catalog_roles() {
+  let cat = catalog_with_users_and_orders();
+  let src = "SET ROLE ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(
+    labels.contains(&"postgres"),
+    "SET ROLE should surface roles; got: {labels:?}"
+  );
+}
+
+#[test]
 fn revoke_from_surfaces_roles() {
   let cat = catalog_with_users_and_orders();
   let src = "REVOKE SELECT ON users FROM ";

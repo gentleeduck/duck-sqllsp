@@ -277,6 +277,47 @@ fn is_word_cont(c: char) -> bool {
 /// True when the cursor sits immediately after `::` (possibly with a
 /// partial type-name word in between). Skips whitespace between the
 /// colons and the word so `now() ::` and `now()::DAT` both qualify.
+/// True when the cursor sits in the role-name slot of an
+/// `ALTER ... OWNER TO ` clause. Walks back from `pos` over any
+/// in-progress ASCII identifier characters and whitespace, then
+/// verifies the preceding tokens are `OWNER TO`. Bails out on any
+/// non-ASCII byte (we don't expect role names to be non-ASCII; the
+/// preceding `OWNER TO` keywords are pure ASCII).
+fn after_owner_to(src: &str, pos: usize) -> bool {
+  let bytes = src.as_bytes();
+  let mut i = pos.min(bytes.len());
+  while i > 0 && bytes[i - 1].is_ascii() && is_word_cont(bytes[i - 1] as char) {
+    i -= 1;
+  }
+  while i > 0 && bytes[i - 1].is_ascii() && bytes[i - 1].is_ascii_whitespace() {
+    i -= 1;
+  }
+  if i < 2 || !src.is_char_boundary(i) { return false; }
+  if !src[..i].to_ascii_uppercase().ends_with("TO") { return false; }
+  let pre_end = i - 2;
+  if !src.is_char_boundary(pre_end) { return false; }
+  let pre = src[..pre_end].trim_end();
+  pre.to_ascii_uppercase().ends_with("OWNER")
+}
+
+/// True when the cursor sits in the role-name slot of `SET ROLE`.
+fn after_set_role(src: &str, pos: usize) -> bool {
+  let bytes = src.as_bytes();
+  let mut i = pos.min(bytes.len());
+  while i > 0 && bytes[i - 1].is_ascii() && is_word_cont(bytes[i - 1] as char) {
+    i -= 1;
+  }
+  while i > 0 && bytes[i - 1].is_ascii() && bytes[i - 1].is_ascii_whitespace() {
+    i -= 1;
+  }
+  if i < 4 || !src.is_char_boundary(i) { return false; }
+  if !src[..i].to_ascii_uppercase().ends_with("ROLE") { return false; }
+  let pre_end = i - 4;
+  if !src.is_char_boundary(pre_end) { return false; }
+  let pre = src[..pre_end].trim_end();
+  pre.to_ascii_uppercase().ends_with("SET")
+}
+
 fn after_double_colon(src: &str, pos: usize) -> bool {
   let bytes = src.as_bytes();
   let mut i = pos;
@@ -323,6 +364,20 @@ pub fn detect(src: &str, offset: TextSize) -> Phase {
   // the user has started typing a partial type name after the colons.
   if after_double_colon(src, pos) {
     return Phase::CastType;
+  }
+
+  // `OWNER TO` slot: ALTER TABLE/SCHEMA/SEQUENCE/FUNCTION/DATABASE/
+  // TYPE/INDEX/VIEW/MATERIALIZED VIEW/DOMAIN/COLLATION ... OWNER TO
+  // <cursor>. Routes to the role-list slot used by GRANT TO.
+  if after_owner_to(src, pos) {
+    return Phase::AfterGrantTo;
+  }
+
+  // `SET ROLE <cursor>` and `RESET ROLE` -- session role switch.
+  // SET ROLE expects a role; RESET ROLE has no completion target
+  // (handled by Phase::Unknown fallback).
+  if after_set_role(src, pos) {
+    return Phase::AfterGrantTo;
   }
 
   // Inside an unclosed dollar-quoted block: cursor is in a PL/pgSQL
