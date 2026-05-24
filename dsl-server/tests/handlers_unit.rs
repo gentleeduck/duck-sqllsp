@@ -152,6 +152,34 @@ fn changed_update_invalidates_parse_cache() {
 }
 
 #[test]
+fn rename_rewrites_every_open_buffer() {
+    use tower_lsp::lsp_types::{
+        RenameParams, TextDocumentIdentifier, TextDocumentPositionParams,
+        WorkDoneProgressParams,
+    };
+    let state = ServerState::new();
+    let schema: Url = "file:///s.sql".parse().unwrap();
+    let query: Url  = "file:///q.sql".parse().unwrap();
+    state.documents.open(schema.clone(), "CREATE TABLE products (id INT);".into(), 1);
+    state.documents.open(query.clone(),  "SELECT * FROM products WHERE products.id = 1;".into(), 1);
+
+    let edit = rename::run(&state, RenameParams {
+        text_document_position: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: schema.clone() },
+            position: Position { line: 0, character: 16 },
+        },
+        new_name: "items".into(),
+        work_done_progress_params: WorkDoneProgressParams::default(),
+    }).expect("workspace edit");
+    let changes = edit.changes.expect("changes");
+    assert!(changes.contains_key(&schema), "schema buffer should be edited");
+    assert!(changes.contains_key(&query),  "query buffer should be edited");
+    assert_eq!(changes[&schema].len(), 1);
+    assert_eq!(changes[&query].len(),  2, "FROM + WHERE qualifier");
+    for e in &changes[&query] { assert_eq!(e.new_text, "items"); }
+}
+
+#[test]
 fn references_walks_every_open_buffer() {
     use tower_lsp::lsp_types::{
         PartialResultParams, ReferenceContext, ReferenceParams, TextDocumentIdentifier,

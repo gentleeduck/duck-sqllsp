@@ -1,10 +1,10 @@
 //! `textDocument/rename` + `textDocument/prepareRename`.
 //!
-//! Buffer-scoped rename: every whole-word occurrence of the identifier
-//! under the cursor is rewritten. Strings, comments, and dollar-quoted
-//! bodies are skipped (see `references::find_word_occurrences`). For a
-//! global rename across files we would need cross-file analysis -- not
-//! in scope yet.
+//! Workspace-scoped rename: every whole-word occurrence of the
+//! identifier under the cursor is rewritten across every open buffer.
+//! Strings, comments, and dollar-quoted bodies are skipped (see
+//! `references::find_word_occurrences`). The cursor's document is
+//! always included.
 
 use crate::handlers::{position, references};
 use crate::state::ServerState;
@@ -32,26 +32,31 @@ pub fn prepare(
 }
 
 pub fn run(state: &ServerState, params: RenameParams) -> Option<WorkspaceEdit> {
-    let uri = params.text_document_position.text_document.uri.clone();
-    let doc = state.documents.get(&uri)?;
-    let offset = position::to_offset(&doc.rope, params.text_document_position.position);
-    let (_, _, token) = token_range(&doc.text, offset)?;
+    let cursor_uri = params.text_document_position.text_document.uri.clone();
+    let cursor_doc = state.documents.get(&cursor_uri)?;
+    let offset = position::to_offset(&cursor_doc.rope, params.text_document_position.position);
+    let (_, _, token) = token_range(&cursor_doc.text, offset)?;
     if !is_valid_identifier(&params.new_name) { return None; }
 
-    let edits: Vec<TextEdit> = references::find_word_occurrences(&doc.text, &token)
-        .into_iter()
-        .map(|(s, e)| TextEdit {
-            range: Range {
-                start: byte_to_position(&doc.rope, s),
-                end:   byte_to_position(&doc.rope, e),
-            },
-            new_text: params.new_name.clone(),
-        })
-        .collect();
-    if edits.is_empty() { return None; }
-
-    let mut changes = HashMap::new();
-    changes.insert(uri, edits);
+    // Walk every open buffer so a rename across split-file migrations
+    // /seed scripts updates them in one operation.
+    let mut changes: HashMap<_, Vec<TextEdit>> = HashMap::new();
+    for (uri, doc) in state.documents.snapshot() {
+        let edits: Vec<TextEdit> = references::find_word_occurrences(&doc.text, &token)
+            .into_iter()
+            .map(|(s, e)| TextEdit {
+                range: Range {
+                    start: byte_to_position(&doc.rope, s),
+                    end:   byte_to_position(&doc.rope, e),
+                },
+                new_text: params.new_name.clone(),
+            })
+            .collect();
+        if !edits.is_empty() {
+            changes.insert(uri, edits);
+        }
+    }
+    if changes.is_empty() { return None; }
     Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None })
 }
 
