@@ -20,7 +20,15 @@ use tower_lsp::lsp_types::{Location, Position, Range, SymbolInformation, SymbolK
 pub fn run(state: &ServerState, params: WorkspaceSymbolParams) -> Option<Vec<SymbolInformation>> {
   let _g = crate::handlers::perf::Guard::new("workspace_symbol");
   let query = params.query.to_ascii_lowercase();
-  let cat = state.catalog.read().clone();
+  // Merge live catalog with workspace-wide buffer-derived catalog so
+  // sequences / extensions / types / roles defined only in open files
+  // show up in workspace symbol search too.
+  let live = state.catalog.read().clone();
+  let cat = state.documents.snapshot().into_iter().fold(live, |acc, (_, doc)| {
+    let cache = doc.parsed();
+    let derived = dsl_completion::source_tables::from_source(&cache.file, &doc.text);
+    dsl_completion::source_tables::merge(&acc, &derived)
+  });
   // Score every candidate so the best match floats to the top.
   // (score, SymbolInformation) -- sort descending by score.
   let mut scored: Vec<(i32, SymbolInformation)> = Vec::new();
@@ -108,6 +116,101 @@ pub fn run(state: &ServerState, params: WorkspaceSymbolParams) -> Option<Vec<Sym
       location: loc,
       container_name: Some(f.schema.clone()),
     });
+  }
+
+  // Sequences -- merged catalog includes both live (pg_sequences) and
+  // buffer-derived (CREATE SEQUENCE in any open file).
+  for s in cat.sequences() {
+    if !query.is_empty() && !s.name.to_ascii_lowercase().contains(&query) {
+      continue;
+    }
+    #[allow(deprecated)]
+    out.push(SymbolInformation {
+      name: format!("{}.{}", s.schema, s.name),
+      kind: SymbolKind::EVENT, // closest SymbolKind for an integer generator
+      tags: None,
+      deprecated: None,
+      location: Location { uri: synthetic.clone(), range: blank },
+      container_name: Some(s.schema.clone()),
+    });
+  }
+
+  // Types (enums / domains / composites).
+  for t in cat.types() {
+    if !query.is_empty() && !t.name.to_ascii_lowercase().contains(&query) {
+      continue;
+    }
+    #[allow(deprecated)]
+    out.push(SymbolInformation {
+      name: format!("{}.{}", t.schema, t.name),
+      kind: SymbolKind::ENUM,
+      tags: None,
+      deprecated: None,
+      location: Location { uri: synthetic.clone(), range: blank },
+      container_name: Some(t.schema.clone()),
+    });
+  }
+
+  // Extensions.
+  for e in cat.extensions() {
+    if !query.is_empty() && !e.name.to_ascii_lowercase().contains(&query) {
+      continue;
+    }
+    #[allow(deprecated)]
+    out.push(SymbolInformation {
+      name: e.name.clone(),
+      kind: SymbolKind::PACKAGE,
+      tags: None,
+      deprecated: None,
+      location: Location { uri: synthetic.clone(), range: blank },
+      container_name: Some(e.schema.clone()),
+    });
+  }
+
+  // Policies + triggers + indexes (per-table collections in catalog).
+  for t in cat.tables() {
+    for p in &t.policies {
+      if !query.is_empty() && !p.name.to_ascii_lowercase().contains(&query) {
+        continue;
+      }
+      #[allow(deprecated)]
+      out.push(SymbolInformation {
+        name: format!("{}.{}.{}", t.schema, t.name, p.name),
+        kind: SymbolKind::KEY, // RLS policy -- KEY is the closest visual cue
+        tags: None,
+        deprecated: None,
+        location: Location { uri: synthetic.clone(), range: blank },
+        container_name: Some(format!("{}.{}", t.schema, t.name)),
+      });
+    }
+    for tr in &t.triggers {
+      if !query.is_empty() && !tr.name.to_ascii_lowercase().contains(&query) {
+        continue;
+      }
+      #[allow(deprecated)]
+      out.push(SymbolInformation {
+        name: format!("{}.{}.{}", t.schema, t.name, tr.name),
+        kind: SymbolKind::EVENT,
+        tags: None,
+        deprecated: None,
+        location: Location { uri: synthetic.clone(), range: blank },
+        container_name: Some(format!("{}.{}", t.schema, t.name)),
+      });
+    }
+    for i in &t.indexes {
+      if !query.is_empty() && !i.name.to_ascii_lowercase().contains(&query) {
+        continue;
+      }
+      #[allow(deprecated)]
+      out.push(SymbolInformation {
+        name: format!("{}.{}.{}", t.schema, t.name, i.name),
+        kind: SymbolKind::FIELD, // indexes act like indexed projections of fields
+        tags: None,
+        deprecated: None,
+        location: Location { uri: synthetic.clone(), range: blank },
+        container_name: Some(format!("{}.{}", t.schema, t.name)),
+      });
+    }
   }
 
   if out.is_empty() { None } else { Some(out) }

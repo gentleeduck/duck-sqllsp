@@ -835,7 +835,39 @@ fn workspace_symbol_surfaces_buffer_table() {
     },
   )
   .expect("symbols");
-  assert!(syms.iter().any(|s| s.name == "accounts"));
+  // Catalog merge can present the table as either bare or fully
+  // qualified depending on which branch surfaces it first; both are
+  // valid for the purpose of "user typed accounts and the editor
+  // showed something useful".
+  assert!(
+    syms.iter().any(|s| s.name == "accounts" || s.name.ends_with(".accounts")),
+    "expected `accounts` symbol; got: {:?}",
+    syms.iter().map(|s| s.name.as_str()).collect::<Vec<_>>()
+  );
+}
+
+#[test]
+fn workspace_symbol_surfaces_buffer_sequence_type_extension() {
+  use tower_lsp::lsp_types::{PartialResultParams, WorkDoneProgressParams, WorkspaceSymbolParams};
+  let src = "\
+CREATE SEQUENCE my_seq;
+CREATE TYPE mood AS ENUM ('happy', 'sad');
+CREATE EXTENSION pgcrypto;
+";
+  let (state, _url) = state_with("file:///wsx.sql", src);
+  let syms = workspace_symbol::run(
+    &state,
+    WorkspaceSymbolParams {
+      query: "".into(),
+      partial_result_params: PartialResultParams::default(),
+      work_done_progress_params: WorkDoneProgressParams::default(),
+    },
+  )
+  .expect("symbols");
+  let names: Vec<&str> = syms.iter().map(|s| s.name.as_str()).collect();
+  assert!(names.iter().any(|n| n.ends_with("my_seq")), "missing sequence: {names:?}");
+  assert!(names.iter().any(|n| n.ends_with("mood")), "missing type: {names:?}");
+  assert!(names.iter().any(|n| n == &"pgcrypto"), "missing extension: {names:?}");
 }
 
 #[test]
