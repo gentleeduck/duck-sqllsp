@@ -4,7 +4,7 @@
 //! as inherent methods on `Catalog` for ergonomic call sites:
 //! `catalog.find_table(Some("public"), "users")`.
 
-use crate::model::{Catalog, Column, Table, Type};
+use crate::model::{Catalog, Column, IndexDef, Policy, Table, Trigger, Type};
 
 impl Catalog {
     pub fn tables(&self) -> impl Iterator<Item = &Table> {
@@ -47,5 +47,37 @@ impl Catalog {
         self.types().find(|t| {
             t.name == name && schema.is_none_or(|s| t.schema == s)
         })
+    }
+
+    /// Find a row-level security policy by name, plus its target table.
+    /// Policies live on tables in the model, so the lookup scans every
+    /// table's policy list.
+    pub fn find_policy(&self, name: &str) -> Option<(&Table, &Policy)> {
+        for t in self.tables() {
+            if let Some(p) = t.policies.iter().find(|p| p.name == name) {
+                return Some((t, p));
+            }
+        }
+        None
+    }
+
+    /// Find a trigger by name, plus its target table.
+    pub fn find_trigger(&self, name: &str) -> Option<(&Table, &Trigger)> {
+        for t in self.tables() {
+            if let Some(tr) = t.triggers.iter().find(|tr| tr.name == name) {
+                return Some((t, tr));
+            }
+        }
+        None
+    }
+
+    /// Find an index by name, plus its target table.
+    pub fn find_index(&self, name: &str) -> Option<(&Table, &IndexDef)> {
+        for t in self.tables() {
+            if let Some(i) = t.indexes.iter().find(|i| i.name == name) {
+                return Some((t, i));
+            }
+        }
+        None
     }
 }

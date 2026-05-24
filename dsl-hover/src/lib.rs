@@ -191,6 +191,30 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
     if let Some(ty) = catalog.find_type(None, token) {
         return Some(render::user_type(ty));
     }
+    if let Some((t, p)) = catalog.find_policy(token) {
+        return Some(format!(
+            "# `{}`\n_RLS policy on `{}.{}`_\n\n- **command**: `{}`\n- **roles**: `{}`\n- **permissive**: `{}`{}{}\n",
+            p.name, t.schema, t.name, p.command, p.roles, p.permissive,
+            p.using_expr.as_ref().map(|e| format!("\n- **USING**: `{e}`")).unwrap_or_default(),
+            p.check_expr.as_ref().map(|e| format!("\n- **WITH CHECK**: `{e}`")).unwrap_or_default(),
+        ));
+    }
+    if let Some((t, tr)) = catalog.find_trigger(token) {
+        return Some(format!(
+            "# `{}`\n_trigger on `{}.{}`_\n\n- **timing**: `{}`\n- **event**: `{}`\n- **granularity**: `{}`\n- **executes**: `{}`\n",
+            tr.name, t.schema, t.name,
+            tr.timing, tr.event, tr.granularity, tr.function,
+        ));
+    }
+    if let Some((t, i)) = catalog.find_index(token) {
+        let def = i.definition.as_deref().unwrap_or("");
+        return Some(format!(
+            "# `{}`\n_index on `{}.{}`_\n\n- **columns**: `{}`\n- **unique**: `{}`\n{}",
+            i.name, t.schema, t.name,
+            i.columns.join(", "), i.unique,
+            if def.is_empty() { String::new() } else { format!("\n```sql\n{def}\n```\n") },
+        ));
+    }
     let cols = catalog.columns_named(token);
     if !cols.is_empty() {
         return Some(render::column_in_tables(&cols));
