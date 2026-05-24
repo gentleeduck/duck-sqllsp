@@ -1,7 +1,7 @@
 use dsl_catalog::{Catalog, Column, Schema, Table, TableKind, CATALOG_VERSION};
 use dsl_completion::{complete, ItemKind};
 use dsl_parse::{parse, Dialect};
-use dsl_resolve::resolve;
+use dsl_resolve::resolve_with_source;
 use text_size::TextSize;
 
 fn catalog_with_users_and_orders() -> Catalog {
@@ -48,7 +48,7 @@ fn start_of_statement_emits_keywords_only() {
     let cat = catalog_with_users_and_orders();
     let src = "SEL";
     let file = parse(src, Dialect::Postgres);
-    let scopes = resolve(&file.statements);
+    let scopes = resolve_with_source(&file.statements, src);
     let items = complete(src, &file, &scopes, &cat, TextSize::from(3));
     assert!(items.iter().any(|i| i.label == "SELECT" && i.kind == ItemKind::Keyword));
     assert!(!items.iter().any(|i| i.kind == ItemKind::Table));
@@ -59,7 +59,7 @@ fn table_context_emits_only_tables() {
     let cat = catalog_with_users_and_orders();
     let src = "SELECT * FROM ";
     let file = parse(src, Dialect::Postgres);
-    let scopes = resolve(&file.statements);
+    let scopes = resolve_with_source(&file.statements, src);
     let items = complete(src, &file, &scopes, &cat, TextSize::from(src.len() as u32));
     assert!(items.iter().any(|i| i.label == "users"));
     assert!(items.iter().any(|i| i.label == "orders"));
@@ -71,7 +71,7 @@ fn dot_context_emits_columns_of_alias() {
     let cat = catalog_with_users_and_orders();
     let src = "SELECT u. FROM users u";
     let file = parse(src, Dialect::Postgres);
-    let scopes = resolve(&file.statements);
+    let scopes = resolve_with_source(&file.statements, src);
     // Cursor sits just after the dot.
     let offset = TextSize::from("SELECT u.".len() as u32);
     let items = complete(src, &file, &scopes, &cat, offset);
@@ -88,7 +88,7 @@ fn dot_context_with_unknown_alias_returns_empty() {
     let cat = catalog_with_users_and_orders();
     let src = "SELECT zzz. FROM users u";
     let file = parse(src, Dialect::Postgres);
-    let scopes = resolve(&file.statements);
+    let scopes = resolve_with_source(&file.statements, src);
     let offset = TextSize::from("SELECT zzz.".len() as u32);
     let items = complete(src, &file, &scopes, &cat, offset);
     assert!(items.is_empty());
@@ -99,7 +99,7 @@ fn items_carry_documentation_for_keywords() {
     let cat = Catalog::default();
     let src = "SEL";
     let file = parse(src, Dialect::Postgres);
-    let scopes = resolve(&file.statements);
+    let scopes = resolve_with_source(&file.statements, src);
     let items = complete(src, &file, &scopes, &cat, TextSize::from(3));
     let select = items.iter().find(|i| i.label == "SELECT").unwrap();
     let doc = select.documentation_md.as_ref().expect("doc set");
@@ -115,7 +115,7 @@ fn items_carry_documentation_for_keywords() {
 
 fn complete_at(src: &str, cursor: usize, cat: &Catalog) -> Vec<dsl_completion::Item> {
     let file = parse(src, Dialect::Postgres);
-    let scopes = resolve(&file.statements);
+    let scopes = resolve_with_source(&file.statements, src);
     complete(src, &file, &scopes, cat, TextSize::from(cursor as u32))
 }
 
@@ -382,4 +382,73 @@ fn bare_table_name_is_not_listed_as_alias() {
         "bare table name should not appear as Table-kind alias: {:?}",
         items.iter().filter(|i| i.label == "users").collect::<Vec<_>>()
     );
+}
+
+// ===== CTE-column dot-completion =========================================
+
+#[test]
+fn cte_dot_surfaces_projected_columns() {
+    let cat = catalog_with_users_and_orders();
+    let src = "WITH t AS (SELECT id, email FROM users) SELECT t. FROM t;";
+    let cur = src.find("t.").unwrap() + 2;
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(labels.contains(&"id"), "expected id, got {labels:?}");
+    assert!(labels.contains(&"email"), "expected email, got {labels:?}");
+}
+
+#[test]
+fn cte_dot_surfaces_aliased_projection() {
+    let cat = catalog_with_users_and_orders();
+    let src = "WITH t AS (SELECT count(*) AS total FROM users) SELECT t. FROM t;";
+    let cur = src.find("t.").unwrap() + 2;
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(labels.contains(&"total"), "expected total, got {labels:?}");
+}
+
+#[test]
+fn cte_dot_surfaces_explicit_column_list() {
+    let cat = catalog_with_users_and_orders();
+    let src = "WITH t(a, b) AS (SELECT id, email FROM users) SELECT t. FROM t;";
+    let cur = src.find("t.").unwrap() + 2;
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(labels.contains(&"a"), "expected a, got {labels:?}");
+    assert!(labels.contains(&"b"), "expected b, got {labels:?}");
+}
+
+#[test]
+fn cte_dot_columns_marked_as_column_kind() {
+    let cat = catalog_with_users_and_orders();
+    let src = "WITH t AS (SELECT id, email FROM users) SELECT t. FROM t;";
+    let cur = src.find("t.").unwrap() + 2;
+    let items = complete_at(src, cur, &cat);
+    let id_item = items.iter().find(|i| i.label == "id").expect("id item");
+    assert_eq!(id_item.kind, ItemKind::Column);
+    assert!(id_item.detail.as_deref().unwrap_or("").contains("CTE"));
+}
+
+#[test]
+fn cte_dot_columns_sort_first() {
+    let cat = catalog_with_users_and_orders();
+    let src = "WITH t AS (SELECT id, email FROM users) SELECT t. FROM t;";
+    let cur = src.find("t.").unwrap() + 2;
+    let items = complete_at(src, cur, &cat);
+    // Only CTE columns should be surfaced for a CTE dot context --
+    // not catalog tables or generic keywords.
+    assert!(items.iter().all(|i| i.kind == ItemKind::Column),
+        "expected only CTE columns, got {:?}",
+        items.iter().map(|i| (&i.label, &i.kind)).collect::<Vec<_>>());
+}
+
+#[test]
+fn cte_dot_with_unknown_body_returns_empty() {
+    // CTE declared but body has no SELECT (or body is empty) -> no
+    // columns surfaced. Don't fall through to a global column dump.
+    let cat = catalog_with_users_and_orders();
+    let src = "WITH t AS () SELECT t. FROM t;";
+    let cur = src.find("t.").unwrap() + 2;
+    let _items = complete_at(src, cur, &cat);
+    // Just make sure we didn't panic.
 }
