@@ -2385,3 +2385,43 @@ fn sql137_quiet_when_unlisten_star_follows() {
     let d = diags("LISTEN events; SELECT 1; UNLISTEN *;");
     assert!(!d.iter().any(|x| x.code == "sql137"));
 }
+
+// ===== sql135 SET ROLE without RESET ROLE ==================================
+
+#[test]
+fn sql135_flags_bare_set_role() {
+    let d = diags("BEGIN; SET ROLE admin; UPDATE users SET name = 'x'; COMMIT;");
+    assert!(d.iter().any(|x| x.code == "sql135"));
+}
+
+#[test]
+fn sql135_quiet_with_reset() {
+    let d = diags("BEGIN; SET ROLE admin; UPDATE users SET name = 'x'; RESET ROLE; COMMIT;");
+    assert!(!d.iter().any(|x| x.code == "sql135"));
+}
+
+#[test]
+fn sql135_quiet_with_set_role_none() {
+    let d = diags("BEGIN; SET ROLE admin; UPDATE users SET name = 'x'; SET ROLE NONE; COMMIT;");
+    assert!(!d.iter().any(|x| x.code == "sql135"));
+}
+
+// ===== sql140 INSERT trigger WHEN references OLD ===========================
+
+#[test]
+fn sql140_flags_old_in_insert_trigger() {
+    let d = diags("CREATE TRIGGER t AFTER INSERT ON users FOR EACH ROW WHEN (OLD.id IS NULL) EXECUTE FUNCTION f();");
+    assert!(d.iter().any(|x| x.code == "sql140"));
+}
+
+#[test]
+fn sql140_quiet_for_update_trigger() {
+    let d = diags("CREATE TRIGGER t AFTER UPDATE ON users FOR EACH ROW WHEN (OLD.id IS NULL) EXECUTE FUNCTION f();");
+    assert!(!d.iter().any(|x| x.code == "sql140"));
+}
+
+#[test]
+fn sql140_quiet_when_only_new_referenced() {
+    let d = diags("CREATE TRIGGER t AFTER INSERT ON users FOR EACH ROW WHEN (NEW.id IS NOT NULL) EXECUTE FUNCTION f();");
+    assert!(!d.iter().any(|x| x.code == "sql140"));
+}
