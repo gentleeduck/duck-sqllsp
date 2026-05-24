@@ -71,6 +71,7 @@ pub mod nullif_same_args;
 pub mod numeric_no_precision;
 pub mod order_by_position;
 pub mod order_by_random;
+pub mod perform_for_pure_select;
 pub mod prefer_alias;
 pub mod raise_arg_count;
 pub mod raise_message_no_args;
@@ -96,6 +97,7 @@ pub mod time_with_timezone;
 pub mod timestamp_int_arithmetic;
 pub mod timestamp_without_tz;
 pub mod transaction_isolation_no_set;
+pub mod trigger_stmt_uses_new;
 pub mod trigger_when_uses_new_in_delete;
 pub mod trigger_when_uses_old_in_insert;
 pub mod trailing_comma_values;
@@ -223,5 +225,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(timestamp_int_arithmetic::Rule),
         Box::new(advisory_lock_no_unlock::Rule),
         Box::new(raise_using_errcode::Rule),
+        Box::new(perform_for_pure_select::Rule),
+        Box::new(trigger_stmt_uses_new::Rule),
     ]
 }

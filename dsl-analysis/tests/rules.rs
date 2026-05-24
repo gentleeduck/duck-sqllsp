@@ -2926,6 +2926,46 @@ fn sql157_quiet_when_quoted() {
     assert!(!d.iter().any(|x| x.code == "sql157"));
 }
 
+// ===== sql158 PERFORM <pure expression> ===================================
+
+#[test]
+fn sql158_flags_perform_pure_function_call() {
+    let d = diags("CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN PERFORM 1 + 1; END $$;");
+    assert!(d.iter().any(|x| x.code == "sql158"));
+}
+
+#[test]
+fn sql158_quiet_for_perform_with_side_effect() {
+    let d = diags("CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_notify('chan', 'msg'); END $$;");
+    assert!(!d.iter().any(|x| x.code == "sql158"));
+}
+
+#[test]
+fn sql158_quiet_for_perform_with_from() {
+    let d = diags("CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN PERFORM id FROM users; END $$;");
+    assert!(!d.iter().any(|x| x.code == "sql158"));
+}
+
+// ===== sql159 statement-level trigger references NEW/OLD ==================
+
+#[test]
+fn sql159_flags_stmt_trigger_using_new() {
+    let d = diags("CREATE TRIGGER t AFTER INSERT ON users FOR EACH STATEMENT WHEN (NEW.id IS NOT NULL) EXECUTE FUNCTION f();");
+    assert!(d.iter().any(|x| x.code == "sql159"));
+}
+
+#[test]
+fn sql159_quiet_for_row_trigger() {
+    let d = diags("CREATE TRIGGER t AFTER INSERT ON users FOR EACH ROW WHEN (NEW.id IS NOT NULL) EXECUTE FUNCTION f();");
+    assert!(!d.iter().any(|x| x.code == "sql159"));
+}
+
+#[test]
+fn sql159_quiet_for_stmt_trigger_no_new_old() {
+    let d = diags("CREATE TRIGGER t AFTER INSERT ON users FOR EACH STATEMENT EXECUTE FUNCTION f();");
+    assert!(!d.iter().any(|x| x.code == "sql159"));
+}
+
 // ===== regression: ENTIRE user trigger fn must produce zero warnings ======
 
 #[test]
