@@ -110,34 +110,81 @@ fn build_documentation(
     }))
 }
 
-fn render_snippet_preview(snippet: &str) -> String {
+/// Render an LSP snippet string as a previewable SQL fragment.
+///
+/// Recognises:
+///   * `${n:label}`            -> `label`              (uses default text)
+///   * `${n|a,b,c|}`           -> `a`                  (uses first choice)
+///   * `${n}`                  -> ``                   (drops placeholder)
+///   * `$0` / `$1` ...         -> ``                   (drops tabstop)
+///
+/// Brace and pipe matching is depth-aware so a choice with nested
+/// placeholders (`${1|TYPE ${2:type},SET DEFAULT ${3:expr}|}`) is
+/// parsed as one outer placeholder rather than tripping over the inner
+/// `}`. Recurses on the chosen text so the inner placeholders also get
+/// rendered.
+pub(crate) fn render_snippet_preview(snippet: &str) -> String {
     let bytes = snippet.as_bytes();
     let n = bytes.len();
     let mut out = String::with_capacity(n);
     let mut i = 0;
     while i < n {
         if bytes[i] == b'$' && i + 1 < n {
-            // `${...}` form
             if bytes[i + 1] == b'{' {
-                // Find matching `}`.
-                let mut j = i + 2;
-                while j < n && bytes[j] != b'}' { j += 1; }
-                if j < n {
-                    let body = &snippet[i + 2..j];
-                    // `n:label` -> label. `n|a,b,c|` -> a. `n` -> ``.
-                    if let Some(colon) = body.find(':') {
-                        out.push_str(&body[colon + 1..]);
-                    } else if let Some(pipe_open) = body.find('|') {
-                        let inside = &body[pipe_open + 1..];
-                        let inside = inside.trim_end_matches('|');
-                        let first = inside.split(',').next().unwrap_or("");
-                        out.push_str(first);
+                // Balanced match: walk forward counting `{` and `}`,
+                // skipping past nested `${...}` bodies.
+                let body_start = i + 2;
+                let mut depth = 1i32;
+                let mut j = body_start;
+                while j < n && depth > 0 {
+                    match bytes[j] {
+                        b'{' => depth += 1,
+                        b'}' => {
+                            depth -= 1;
+                            if depth == 0 { break; }
+                        }
+                        _ => {}
                     }
+                    j += 1;
+                }
+                if j < n {
+                    let body = &snippet[body_start..j];
+                    // Split off the leading `n` (digits) -- doesn't matter
+                    // for rendering; the choice payload starts at the
+                    // first `:` or `|` that is not inside a nested `${}`.
+                    let payload_start = body
+                        .as_bytes()
+                        .iter()
+                        .position(|&b| !b.is_ascii_digit())
+                        .unwrap_or(body.len());
+                    let payload = &body[payload_start..];
+                    let chosen: String = if let Some(rest) = payload.strip_prefix(':') {
+                        rest.into()
+                    } else if let Some(rest) = payload.strip_prefix('|') {
+                        // `|a,b,c|` -- pick the first top-level alternative.
+                        let mut depth2 = 0i32;
+                        let mut end = 0usize;
+                        let bs = rest.as_bytes();
+                        for (k, &b) in bs.iter().enumerate() {
+                            match b {
+                                b'{' => depth2 += 1,
+                                b'}' => depth2 -= 1,
+                                b',' if depth2 == 0 => { end = k; break; }
+                                b'|' if depth2 == 0 => { end = k; break; }
+                                _ => {}
+                            }
+                            if k == bs.len() - 1 { end = k + 1; }
+                        }
+                        rest[..end].into()
+                    } else {
+                        String::new()
+                    };
+                    out.push_str(&render_snippet_preview(&chosen));
                     i = j + 1;
                     continue;
                 }
             }
-            // Bare `$0` / `$1` etc — skip the digit(s).
+            // Bare `$0` / `$1` -- skip the digit(s).
             let mut j = i + 1;
             while j < n && bytes[j].is_ascii_digit() { j += 1; }
             i = j;
@@ -160,5 +207,39 @@ fn kind(k: ItemKind) -> CompletionItemKind {
         ItemKind::Schema => CompletionItemKind::MODULE,
         ItemKind::Variable => CompletionItemKind::VARIABLE,
         ItemKind::Parameter => CompletionItemKind::VARIABLE,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::render_snippet_preview;
+
+    #[test]
+    fn renders_default_text_placeholder() {
+        assert_eq!(render_snippet_preview("SELECT ${1:col} FROM ${2:tbl};"),
+                   "SELECT col FROM tbl;");
+    }
+
+    #[test]
+    fn renders_first_choice_from_simple_chooser() {
+        assert_eq!(render_snippet_preview("${1|ASC,DESC|}"), "ASC");
+    }
+
+    #[test]
+    fn renders_nested_choices_with_inner_placeholders() {
+        // Real ALTER COLUMN snippet shipped in dsl-completion::sources.
+        let snippet = "ALTER COLUMN ${1:name} ${2|TYPE ${3:type},SET DEFAULT ${4:expr},DROP DEFAULT|}";
+        let preview = render_snippet_preview(snippet);
+        assert_eq!(preview, "ALTER COLUMN name TYPE type");
+    }
+
+    #[test]
+    fn strips_bare_tabstops() {
+        assert_eq!(render_snippet_preview("SELECT 1$0;"), "SELECT 1;");
+    }
+
+    #[test]
+    fn empty_placeholder_drops_with_no_text() {
+        assert_eq!(render_snippet_preview("a ${1} b"), "a  b");
     }
 }
