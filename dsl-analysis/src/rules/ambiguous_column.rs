@@ -41,6 +41,16 @@ impl LintRule for Rule {
                         hits.push(b.alias.clone());
                     }
                 }
+                // Same name might also be a CTE column. Check there too
+                // so `SELECT id FROM users JOIN t ON ...` flags when `id`
+                // exists in both `users.columns` and CTE `t`'s projection.
+                if let Some(cte_cols) = scope.cte_columns_of(&b.alias) {
+                    if !cte_cols.is_empty() && cte_cols.iter().any(|c| c == &name) {
+                        if !hits.contains(&b.alias) {
+                            hits.push(b.alias.clone());
+                        }
+                    }
+                }
             }
             if hits.len() > 1 {
                 out.push(Diagnostic {

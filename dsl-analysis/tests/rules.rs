@@ -2593,3 +2593,47 @@ fn sql148_quiet_for_empty_brackets_type() {
     let d = diags("CREATE TABLE x (xs int[]);");
     assert!(!d.iter().any(|x| x.code == "sql148"));
 }
+
+// ===== sql144 DELETE trigger references NEW ================================
+
+#[test]
+fn sql144_flags_new_in_delete_trigger() {
+    let d = diags("CREATE TRIGGER t AFTER DELETE ON users FOR EACH ROW WHEN (NEW.id IS NOT NULL) EXECUTE FUNCTION f();");
+    assert!(d.iter().any(|x| x.code == "sql144"));
+}
+
+#[test]
+fn sql144_quiet_for_update_trigger() {
+    let d = diags("CREATE TRIGGER t AFTER UPDATE ON users FOR EACH ROW WHEN (NEW.id IS NOT NULL) EXECUTE FUNCTION f();");
+    assert!(!d.iter().any(|x| x.code == "sql144"));
+}
+
+#[test]
+fn sql144_quiet_when_only_old_referenced() {
+    let d = diags("CREATE TRIGGER t AFTER DELETE ON users FOR EACH ROW WHEN (OLD.id IS NOT NULL) EXECUTE FUNCTION f();");
+    assert!(!d.iter().any(|x| x.code == "sql144"));
+}
+
+// ===== sql150 CASE without ELSE ============================================
+
+#[test]
+fn sql150_flags_case_no_else() {
+    let d = diags("SELECT CASE WHEN id > 0 THEN 'pos' END FROM users;");
+    assert!(d.iter().any(|x| x.code == "sql150"));
+}
+
+#[test]
+fn sql150_quiet_when_else_present() {
+    let d = diags("SELECT CASE WHEN id > 0 THEN 'pos' ELSE 'np' END FROM users;");
+    assert!(!d.iter().any(|x| x.code == "sql150"));
+}
+
+#[test]
+fn sql150_range_points_at_case_keyword() {
+    let src = "SELECT CASE WHEN id > 0 THEN 'pos' END FROM users;";
+    let d = diags(src);
+    let hit = d.iter().find(|x| x.code == "sql150").expect("sql150");
+    let s: u32 = hit.range.start().into();
+    let e: u32 = hit.range.end().into();
+    assert_eq!(&src[s as usize..e as usize].to_ascii_uppercase(), "CASE");
+}

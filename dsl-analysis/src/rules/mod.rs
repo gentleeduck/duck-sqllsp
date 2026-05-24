@@ -11,6 +11,7 @@ pub mod bare_return_typed;
 pub mod between_reversed;
 pub mod bool_compare_equals;
 pub mod boolean_in_text_column;
+pub mod case_no_else;
 pub mod case_single_when;
 pub mod cast_text_to_int_in_where;
 pub mod character_varying_no_limit;
@@ -87,6 +88,7 @@ pub mod sql_lang_uses_new_old;
 pub mod time_with_timezone;
 pub mod timestamp_without_tz;
 pub mod transaction_isolation_no_set;
+pub mod trigger_when_uses_new_in_delete;
 pub mod trigger_when_uses_old_in_insert;
 pub mod trailing_comma_values;
 pub mod truncate_no_cascade;
@@ -199,5 +201,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(column_default_volatile::Rule),
         Box::new(character_varying_no_limit::Rule),
         Box::new(array_subscript_zero::Rule),
+        Box::new(trigger_when_uses_new_in_delete::Rule),
+        Box::new(case_no_else::Rule),
     ]
 }
