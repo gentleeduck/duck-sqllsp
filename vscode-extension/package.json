@@ -1,0 +1,163 @@
+{
+  "name": "duck-sqllsp-vscode",
+  "displayName": "duck-sqllsp",
+  "description": "SQL Language Server for Postgres (and MySQL / SQLite) -- completion, hover, diagnostics, formatting, inlay hints, refactors. Works offline; richer when a DB is connected.",
+  "version": "0.1.0",
+  "publisher": "wildduck",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gentleeduck/duck-sqllsp"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Formatters",
+    "Snippets",
+    "Other"
+  ],
+  "keywords": [
+    "sql",
+    "postgres",
+    "postgresql",
+    "lsp",
+    "language-server"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:sql",
+    "onLanguage:postgres",
+    "workspaceContains:**/*.sql",
+    "onCommand:duckSqllsp.addConnection",
+    "onCommand:duckSqllsp.listConnections",
+    "onCommand:duckSqllsp.setActiveConnection",
+    "onCommand:duckSqllsp.removeConnection",
+    "onCommand:duckSqllsp.refreshCatalog",
+    "onCommand:duckSqllsp.restartServer"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "duckSqllsp.addConnection",
+        "title": "duck-sqllsp: Add Connection",
+        "category": "duck-sqllsp"
+      },
+      {
+        "command": "duckSqllsp.listConnections",
+        "title": "duck-sqllsp: List Connections",
+        "category": "duck-sqllsp"
+      },
+      {
+        "command": "duckSqllsp.setActiveConnection",
+        "title": "duck-sqllsp: Set Active Connection",
+        "category": "duck-sqllsp"
+      },
+      {
+        "command": "duckSqllsp.removeConnection",
+        "title": "duck-sqllsp: Remove Connection",
+        "category": "duck-sqllsp"
+      },
+      {
+        "command": "duckSqllsp.refreshCatalog",
+        "title": "duck-sqllsp: Refresh Catalog",
+        "category": "duck-sqllsp"
+      },
+      {
+        "command": "duckSqllsp.restartServer",
+        "title": "duck-sqllsp: Restart Server",
+        "category": "duck-sqllsp"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "duck-sqllsp",
+          "title": "duck-sqllsp",
+          "icon": "$(database)"
+        }
+      ]
+    },
+    "views": {
+      "duck-sqllsp": [
+        {
+          "id": "duckSqllsp.connections",
+          "name": "Connections",
+          "icon": "$(database)",
+          "contextualTitle": "duck-sqllsp"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "duckSqllsp.addConnection",
+          "when": "view == duckSqllsp.connections",
+          "group": "navigation"
+        },
+        {
+          "command": "duckSqllsp.refreshCatalog",
+          "when": "view == duckSqllsp.connections",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "duckSqllsp.setActiveConnection",
+          "when": "view == duckSqllsp.connections && viewItem == connection",
+          "group": "inline"
+        },
+        {
+          "command": "duckSqllsp.removeConnection",
+          "when": "view == duckSqllsp.connections && viewItem == connection"
+        }
+      ]
+    },
+    "languages": [
+      {
+        "id": "sql",
+        "extensions": [".sql", ".pgsql", ".psql"],
+        "aliases": ["SQL", "PostgreSQL", "pgsql"]
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "duck-sqllsp",
+      "properties": {
+        "duckSqllsp.serverPath": {
+          "type": "string",
+          "default": "duck-sqllsp",
+          "description": "Path to the duck-sqllsp binary. Use absolute path if not on PATH."
+        },
+        "duckSqllsp.trace.server": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Trace LSP traffic between client and server (output -> 'duck-sqllsp' channel)."
+        },
+        "duckSqllsp.activeConnection": {
+          "type": "string",
+          "default": "",
+          "description": "Named connection to use for live catalog introspection. Leave blank for offline-only mode (buffer-derived catalog still works)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.4.0",
+    "@vscode/vsce": "^2.24.0"
+  }
+}
