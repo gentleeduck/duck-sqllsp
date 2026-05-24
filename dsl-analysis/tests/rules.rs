@@ -2699,6 +2699,33 @@ fn sql126_quiet_when_returning_into_present() {
     assert!(!d.iter().any(|x| x.code == "sql126"));
 }
 
+#[test]
+fn sql126_quiet_for_insert_in_trigger_function() {
+    // Fire-and-forget INSERT inside a trigger function body --
+    // ROW_COUNT here is meaningless, the audit row always exists.
+    let src = r#"CREATE OR REPLACE FUNCTION log_order_status_change ()
+    RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO order_status_history (order_id, old_status, new_status, changed_at)
+    VALUES (NEW.id, OLD.status, NEW.status, now());
+    RETURN NEW;
+END;
+$$;"#;
+    let d = diags(src);
+    assert!(!d.iter().any(|x| x.code == "sql126"),
+        "INSERT in trigger fn shouldn't trigger sql126; got: {:?}",
+        d.iter().filter(|x| x.code == "sql126").map(|x| &x.message).collect::<Vec<_>>());
+}
+
+#[test]
+fn sql126_quiet_for_insert_in_plain_function() {
+    // INSERT in any plpgsql body now passes silently (fire-and-forget
+    // is the common case). Only UPDATE/DELETE trigger sql126.
+    let src = "CREATE FUNCTION audit() RETURNS void LANGUAGE plpgsql AS $$ BEGIN INSERT INTO audit_log (msg) VALUES ('event'); END $$;";
+    let d = diags(src);
+    assert!(!d.iter().any(|x| x.code == "sql126"));
+}
+
 // ===== sql139 UNIQUE on nullable ==========================================
 
 #[test]

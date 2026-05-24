@@ -26,6 +26,10 @@ impl LintRule for Rule {
         let body = &source[start..end];
         let upper = body.to_ascii_uppercase();
         if !upper.contains("LANGUAGE PLPGSQL") { return; }
+        // Trigger functions (RETURNS TRIGGER) are usually fire-and-forget
+        // -- ROW_COUNT on side-effect INSERTs to audit / history tables
+        // is meaningless. Skip them.
+        if upper.contains("RETURNS TRIGGER") { return; }
         // Look for the function body $$ ... $$.
         let Some(open) = body.find("$$") else { return };
         let Some(close_rel) = body[open + 2..].find("$$") else { return };
@@ -37,7 +41,10 @@ impl LintRule for Rule {
         // of body) so that subqueries / CTE arms / `INSERT INTO ... ON
         // CONFLICT DO UPDATE` clauses don't trigger.
         let mut dml_at: Option<(usize, &'static str)> = None;
-        for kw in ["UPDATE", "DELETE", "INSERT"] {
+        // Drop INSERT -- INSERTs are typically fire-and-forget; the
+        // common pattern that *does* need ROW_COUNT is UPDATE/DELETE
+        // where the caller wants to know whether any row matched.
+        for kw in ["UPDATE", "DELETE"] {
             let body_bytes = body_up.as_bytes();
             let n = body_up.len();
             let w = kw.len();
