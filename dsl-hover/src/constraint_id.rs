@@ -102,14 +102,22 @@ fn find_in_catalog<'a>(token: &str, catalog: &'a Catalog) -> Option<Found<'a>> {
 }
 
 fn render_known(token: &str, kind: Kind, found: Found<'_>) -> String {
+    // Plain markdown structure: heading, bold kind label, the
+    // location, then a fenced ```sql block. **Bold** instead of
+    // _italic_ for the kind label because some nvim colorschemes
+    // render italic ranges with the same highlight as block-quoted
+    // text -- the SQL fence then inherits the italic background and
+    // the user sees the whole card as one washed-out colour. Bold
+    // uses a distinct highlight group and isolates from the code
+    // block below.
     let mut s = String::new();
-    s.push_str(&format!("# `{token}`\n_{kind_label}_\n\n", kind_label = kind.label()));
+    s.push_str(&format!("# `{token}`\n\n**{kind_label}**\n\n", kind_label = kind.label()));
     match found {
         Found::Constraint(t, c) => {
             s.push_str(&format!("on `{}.{}`\n\n", t.schema, t.name));
             s.push_str("```sql\n");
             s.push_str(&render_constraint(c));
-            s.push_str("\n```\n");
+            s.push_str("\n```\n\n");
         }
         Found::Index(t, i) => {
             s.push_str(&format!("on `{}.{}`\n\n", t.schema, t.name));
@@ -126,7 +134,7 @@ fn render_known(token: &str, kind: Kind, found: Found<'_>) -> String {
                     i.name, t.schema, t.name, i.columns.join(", ")
                 ));
             }
-            s.push_str("\n```\n");
+            s.push_str("\n```\n\n");
         }
         Found::Trigger(t, tg) => {
             s.push_str(&format!("on `{}.{}`\n\n", t.schema, t.name));
@@ -135,7 +143,7 @@ fn render_known(token: &str, kind: Kind, found: Found<'_>) -> String {
                 "CREATE TRIGGER {} {} {} ON {}.{} FOR EACH {} EXECUTE FUNCTION {}();",
                 tg.name, tg.timing, tg.event, t.schema, t.name, tg.granularity, tg.function
             ));
-            s.push_str("\n```\n");
+            s.push_str("\n```\n\n");
         }
     }
     s
@@ -152,7 +160,7 @@ fn render_unknown(token: &str, kind: Kind) -> String {
         Kind::Trigger     => "Convention: tg_<table>_<event>",
     };
     format!(
-        "# `{token}`\n_{kind_label} (identifier)_\n\nNo matching object in the catalog yet.\n\n{hint}\n",
+        "# `{token}`\n\n**{kind_label}** (identifier)\n\nNo matching object in the catalog yet.\n\n{hint}\n",
         kind_label = kind.label(),
     )
 }

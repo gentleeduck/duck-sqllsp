@@ -52,11 +52,17 @@ impl LintRule for Rule {
                     k = j + 2;
                     continue;
                 }
+                // Narrow to the NULL token inside the VALUES tuple.
+                let abs_start = start + i + 1 + k;
+                let abs_end = abs_start + 4;
                 out.push(Diagnostic {
                     code: "sql061",
                     severity: Severity::Hint,
                     message: "NULL in VALUES without explicit cast -- prefer `NULL::<type>` for predictable type inference".into(),
-                    range: stmt.range,
+                    range: text_size::TextRange::new(
+                        (abs_start as u32).into(),
+                        (abs_end as u32).into(),
+                    ),
                 });
                 return;
             }

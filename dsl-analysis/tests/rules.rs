@@ -1576,6 +1576,88 @@ fn sql001_range_is_narrower_than_statement() {
         "diag range {} should be << statement {}", diag_len, stmt_len);
 }
 
+// ===== batch-51 range-narrow regressions =================================
+
+#[test]
+fn sql013_range_narrows_to_update_keyword() {
+    let src = "UPDATE users SET name = 'x';";
+    let d = diags(src);
+    let hit = d.iter().find(|x| x.code == "sql013").expect("sql013");
+    let s: u32 = hit.range.start().into();
+    let e: u32 = hit.range.end().into();
+    assert_eq!(&src[s as usize..e as usize], "UPDATE");
+}
+
+#[test]
+fn sql013_range_narrows_to_delete_keyword() {
+    let src = "DELETE FROM users;";
+    let d = diags(src);
+    let hit = d.iter().find(|x| x.code == "sql013").expect("sql013");
+    let s: u32 = hit.range.start().into();
+    let e: u32 = hit.range.end().into();
+    assert_eq!(&src[s as usize..e as usize], "DELETE");
+}
+
+#[test]
+fn sql051_range_narrows_to_limit_keyword() {
+    let src = "SELECT * FROM users LIMIT 10;";
+    let d = diags(src);
+    let hit = d.iter().find(|x| x.code == "sql051").expect("sql051");
+    let s: u32 = hit.range.start().into();
+    let e: u32 = hit.range.end().into();
+    assert_eq!(&src[s as usize..e as usize], "LIMIT");
+}
+
+#[test]
+fn sql048_range_narrows_to_insert_into() {
+    let src = "INSERT INTO users VALUES ('a', 'b');";
+    let d = diags(src);
+    let hit = d.iter().find(|x| x.code == "sql048").expect("sql048");
+    let s: u32 = hit.range.start().into();
+    let e: u32 = hit.range.end().into();
+    assert_eq!(&src[s as usize..e as usize], "INSERT INTO");
+}
+
+#[test]
+fn sql014_range_narrows_to_from_keyword() {
+    let src = "SELECT * FROM users, orders;";
+    let d = diags(src);
+    let hit = d.iter().find(|x| x.code == "sql014").expect("sql014");
+    let s: u32 = hit.range.start().into();
+    let e: u32 = hit.range.end().into();
+    assert_eq!(&src[s as usize..e as usize], "FROM");
+}
+
+#[test]
+fn sql016_range_narrows_to_star() {
+    let src = "INSERT INTO orders SELECT * FROM users;";
+    let d = diags(src);
+    let hit = d.iter().find(|x| x.code == "sql016").expect("sql016");
+    let s: u32 = hit.range.start().into();
+    let e: u32 = hit.range.end().into();
+    assert_eq!(&src[s as usize..e as usize], "*");
+}
+
+#[test]
+fn sql061_range_narrows_to_null_token() {
+    let src = "INSERT INTO users (id, email) VALUES (NULL, 'a@b.com');";
+    let d = diags(src);
+    let hit = d.iter().find(|x| x.code == "sql061").expect("sql061");
+    let s: u32 = hit.range.start().into();
+    let e: u32 = hit.range.end().into();
+    assert_eq!(&src[s as usize..e as usize], "NULL");
+}
+
+#[test]
+fn sql052_range_covers_like_pattern() {
+    let src = "SELECT * FROM users WHERE email LIKE 'literal';";
+    let d = diags(src);
+    let hit = d.iter().find(|x| x.code == "sql052").expect("sql052");
+    let s: u32 = hit.range.start().into();
+    let e: u32 = hit.range.end().into();
+    assert_eq!(&src[s as usize..e as usize], "LIKE 'literal'");
+}
+
 // ===== sql089 multiple RAISE EXCEPTION =====================================
 
 #[test]

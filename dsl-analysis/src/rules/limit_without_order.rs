@@ -37,11 +37,18 @@ impl LintRule for Rule {
         if upper.contains(" LIMIT 1") && !upper.contains(" LIMIT 10") {
             return;
         }
+        // Narrow the diagnostic to the LIMIT keyword itself.
+        let rel = upper.find("LIMIT").unwrap_or(0);
+        let abs_start = start + rel;
+        let abs_end = abs_start + 5;
         out.push(Diagnostic {
             code: "sql051",
             severity: Severity::Warning,
             message: "LIMIT without ORDER BY -- row selection is non-deterministic".into(),
-            range: stmt.range,
+            range: text_size::TextRange::new(
+                (abs_start as u32).into(),
+                (abs_end as u32).into(),
+            ),
         });
     }
 }

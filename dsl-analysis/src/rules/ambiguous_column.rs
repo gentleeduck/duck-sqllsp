@@ -5,6 +5,7 @@ use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::{Expr, Projection, SelectStmt, Statement, StatementKind};
 use dsl_resolve::Scope;
+use text_size::TextRange;
 
 pub struct Rule;
 
@@ -22,10 +23,10 @@ impl LintRule for Rule {
     ) {
         if scope.is_empty() || catalog.tables().next().is_none() { return; }
         let StatementKind::Select(s) = &stmt.kind else { return; };
-        let mut refs: Vec<(Option<String>, String)> = Vec::new();
+        let mut refs: Vec<(Option<String>, String, TextRange)> = Vec::new();
         collect(s, &mut refs);
 
-        for (qualifier, name) in refs {
+        for (qualifier, name, col_range) in refs {
             if qualifier.is_some() { continue; } // Already qualified.
             // Dedup by underlying table: dsl-resolve binds each table
             // twice (once by alias, once by bare name) so we'd otherwise
@@ -53,6 +54,11 @@ impl LintRule for Rule {
                 }
             }
             if hits.len() > 1 {
+                let range = if col_range.len() > text_size::TextSize::from(0) {
+                    col_range
+                } else {
+                    stmt.range
+                };
                 out.push(Diagnostic {
                     code: "sql003",
                     severity: Severity::Error,
@@ -60,14 +66,14 @@ impl LintRule for Rule {
                         "ambiguous column `{name}`: appears in [{}]; qualify with the table alias",
                         hits.join(", ")
                     ),
-                    range: stmt.range,
+                    range,
                 });
             }
         }
     }
 }
 
-fn collect(s: &SelectStmt, out: &mut Vec<(Option<String>, String)>) {
+fn collect(s: &SelectStmt, out: &mut Vec<(Option<String>, String, TextRange)>) {
     for p in &s.projections {
         if let Projection::Expr { expr, .. } = p {
             walk(expr, out);
@@ -79,9 +85,9 @@ fn collect(s: &SelectStmt, out: &mut Vec<(Option<String>, String)>) {
     }
 }
 
-fn walk(e: &Expr, out: &mut Vec<(Option<String>, String)>) {
+fn walk(e: &Expr, out: &mut Vec<(Option<String>, String, TextRange)>) {
     match e {
-        Expr::Column { qualifier, name, .. } => out.push((qualifier.clone(), name.clone())),
+        Expr::Column { qualifier, name, range } => out.push((qualifier.clone(), name.clone(), *range)),
         Expr::BinaryOp { left, right, .. } => { walk(left, out); walk(right, out); }
         Expr::Call { args, .. } => { for a in args { walk(a, out); } }
         _ => {}

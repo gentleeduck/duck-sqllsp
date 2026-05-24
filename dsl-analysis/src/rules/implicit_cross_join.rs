@@ -16,7 +16,7 @@ impl LintRule for Rule {
 
     fn check(
         &self,
-        _source: &str,
+        source: &str,
         stmt: &Statement,
         _scope: &Scope,
         _catalog: &Catalog,
@@ -55,6 +55,18 @@ impl LintRule for Rule {
 
         if covered < s.from.len() {
             let _ = names; // kept for future richer message
+            // Narrow to the FROM keyword in the source.
+            let stmt_start: usize = u32::from(stmt.range.start()) as usize;
+            let stmt_end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
+            let upper = source[stmt_start..stmt_end].to_ascii_uppercase();
+            let range = upper.find(" FROM ").map(|r| {
+                let abs_start = stmt_start + r + 1;
+                let abs_end = abs_start + 4;
+                text_size::TextRange::new(
+                    (abs_start as u32).into(),
+                    (abs_end as u32).into(),
+                )
+            }).unwrap_or(stmt.range);
             out.push(Diagnostic {
                 code: "sql014",
                 severity: Severity::Warning,
@@ -62,7 +74,7 @@ impl LintRule for Rule {
                     "implicit cross join: {} tables in FROM but no predicate joins them all -- use explicit JOIN ... ON",
                     s.from.len()
                 ),
-                range: stmt.range,
+                range,
             });
         }
     }

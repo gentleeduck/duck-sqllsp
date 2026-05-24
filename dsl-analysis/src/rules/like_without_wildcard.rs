@@ -51,13 +51,18 @@ impl LintRule for Rule {
                     if k < n {
                         let pat = &body[str_start..k];
                         if !pat.contains('%') && !pat.contains('_') {
+                            let abs_start = start + i;
+                            let abs_end = start + k + 1;
                             out.push(Diagnostic {
                                 code: "sql052",
                                 severity: Severity::Hint,
                                 message: format!(
                                     "`LIKE '{pat}'` has no wildcards -- use `=` for a literal match"
                                 ),
-                                range: stmt.range,
+                                range: text_size::TextRange::new(
+                                    (abs_start as u32).into(),
+                                    (abs_end as u32).into(),
+                                ),
                             });
                             return;
                         }

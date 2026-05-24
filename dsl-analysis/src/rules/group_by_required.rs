@@ -58,6 +58,21 @@ impl LintRule for Rule {
         if missing.is_empty() { return; }
 
         let names: Vec<&str> = missing.iter().map(|s| s.as_str()).collect();
+        // Narrow the diagnostic to the first missing column in source.
+        let body = &source[start as usize..end];
+        let range = names.first().and_then(|n| {
+            // Find the bare column reference in the projection text.
+            let body_lower = body.to_ascii_lowercase();
+            let needle = n.to_ascii_lowercase();
+            body_lower.find(&needle).map(|r| {
+                let abs_start = start as usize + r;
+                let abs_end = abs_start + needle.len();
+                text_size::TextRange::new(
+                    (abs_start as u32).into(),
+                    (abs_end as u32).into(),
+                )
+            })
+        }).unwrap_or(stmt.range);
         out.push(Diagnostic {
             code: "sql017",
             severity: Severity::Warning,
@@ -67,7 +82,7 @@ impl LintRule for Rule {
                 names.join(", "),
                 if missing.len() == 1 { "s" } else { "" },
             ),
-            range: stmt.range,
+            range,
         });
     }
 }

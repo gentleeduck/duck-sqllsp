@@ -38,6 +38,10 @@ impl LintRule for Rule {
             // Skip whitespace then check for `*` immediately.
             let trimmed = after.trim_start();
             if trimmed.starts_with('*') {
+                let leading_ws = after.len() - trimmed.len();
+                let star_rel = sel + 6 + leading_ws;
+                let abs_start = start as usize + star_rel;
+                let abs_end = abs_start + 1;
                 out.push(Diagnostic {
                     code: "sql016",
                     severity: Severity::Warning,
@@ -45,7 +49,10 @@ impl LintRule for Rule {
                         "INSERT ... SELECT * is fragile -- a column added to the source silently \
                          misaligns the destination. List the source columns explicitly."
                             .into(),
-                    range: stmt.range,
+                    range: text_size::TextRange::new(
+                        (abs_start as u32).into(),
+                        (abs_end as u32).into(),
+                    ),
                 });
             }
         }
