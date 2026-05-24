@@ -48,6 +48,7 @@ pub mod missing_primary_key;
 pub mod missing_trigger_return;
 pub mod multi_raise_exception;
 pub mod multi_where;
+pub mod multiple_truncate_in_tx;
 pub mod mutating_without_where;
 pub mod negative_limit_offset;
 pub mod not_in_subquery;
@@ -84,6 +85,7 @@ pub mod unreachable_after_return;
 pub mod unresolved_table;
 pub mod update_from_no_pk_filter;
 pub mod update_set_unknown_col;
+pub mod vacuum_in_transaction;
 
 use crate::LintRule;
 
@@ -171,5 +173,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(update_from_no_pk_filter::Rule),
         Box::new(transaction_isolation_no_set::Rule),
         Box::new(raise_message_no_args::Rule),
+        Box::new(vacuum_in_transaction::Rule),
+        Box::new(multiple_truncate_in_tx::Rule),
     ]
 }
