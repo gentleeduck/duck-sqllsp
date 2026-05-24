@@ -122,6 +122,7 @@ pub mod update_set_no_change;
 pub mod update_set_type_literal;
 pub mod update_set_unknown_col;
 pub mod vacuum_in_transaction;
+pub mod where_type_literal;
 
 use crate::LintRule;
 
@@ -254,5 +255,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(owner_to_unknown_role::Rule),
     Box::new(plpgsql_assign_type::Rule),
     Box::new(update_set_type_literal::Rule),
+    Box::new(where_type_literal::Rule),
   ]
 }
