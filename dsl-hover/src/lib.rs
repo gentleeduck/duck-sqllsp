@@ -154,6 +154,12 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
     if let Some(md) = scope_column_lookup(source, offset, &tok, catalog) {
       return Some(md);
     }
+    // Role hover -- only resolves when the cursor sits in a role-name
+    // slot (OWNER TO, GRANT/REVOKE TO/FROM, SET ROLE, ...) so that a
+    // column / table / etc named the same thing wins elsewhere.
+    if let Some(md) = role_hover(source, offset, &tok, catalog) {
+      return Some(md);
+    }
     if let Some(md) = catalog_lookup(&tok, catalog) {
       return Some(md);
     }
@@ -255,6 +261,65 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
     return Some(render::column_in_tables(&cols));
   }
   None
+}
+
+/// Hover card for a role name. Active only when the cursor is in a
+/// role-name slot (OWNER TO, GRANT ... TO, REVOKE ... FROM, SET ROLE,
+/// CREATE POLICY ... TO) -- elsewhere a token that happens to share a
+/// name with a role shouldn't be hijacked. Surfaces:
+///   * Catalog membership status (known / unknown / built-in).
+///   * Source: live catalog vs convention whitelist.
+fn role_hover(source: &str, offset: TextSize, token: &str, catalog: &Catalog) -> Option<String> {
+  let pos: usize = u32::from(offset) as usize;
+  if !near_role_slot(source, pos) { return None; }
+  let role_norm = token.to_ascii_lowercase();
+  let in_catalog = catalog.roles.iter().any(|r| r.eq_ignore_ascii_case(&role_norm));
+  let is_builtin_postgres = role_norm == "postgres";
+  let is_pg_internal = role_norm.starts_with("pg_");
+  let is_pseudo = role_norm == "public";
+  let is_session_kw = matches!(
+    role_norm.as_str(),
+    "current_user" | "session_user" | "current_role"
+  );
+
+  let label = if is_pseudo {
+    "_pseudo-role_ -- every existing role and every future role"
+  } else if is_session_kw {
+    "_session built-in_ -- resolves to the role that owns this connection"
+  } else if is_builtin_postgres {
+    "_bootstrap superuser_ -- created at initdb time"
+  } else if is_pg_internal {
+    "_built-in group role_ -- created by initdb / Postgres extensions"
+  } else if in_catalog {
+    "_role_ -- present in pg_roles"
+  } else if catalog.roles.is_empty() {
+    "_role_ -- catalog not loaded (offline?), cannot verify"
+  } else {
+    "_role_ -- **not found** in pg_roles (sql169 will flag this)"
+  };
+  Some(format!("# `{token}`\n{label}\n"))
+}
+
+/// True when the cursor's surrounding tokens look like a role-name slot
+/// in a DDL or session statement. Inspects up to ~60 chars before the
+/// cursor for one of the role-introducing keyword phrases.
+fn near_role_slot(source: &str, pos: usize) -> bool {
+  let take = 60usize.min(pos);
+  let start = pos.saturating_sub(take);
+  // Snap to a char boundary so the slice doesn't panic on multi-byte
+  // chars in a free-form comment / string above the cursor.
+  let mut start = start;
+  while start < pos && !source.is_char_boundary(start) { start += 1; }
+  let mut end = pos;
+  while end > start && !source.is_char_boundary(end) { end -= 1; }
+  let window = source[start..end].to_ascii_uppercase();
+  for kw in [
+    "OWNER TO", "GRANT", "REVOKE", "SET ROLE", "RESET ROLE",
+    "POLICY", " TO ", " FROM ",
+  ] {
+    if window.contains(kw) { return true; }
+  }
+  false
 }
 
 /// Find the CREATE TABLE body that encloses `offset` and resolve the
