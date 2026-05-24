@@ -16,9 +16,9 @@ use tower_lsp::lsp_types::{
 
 pub fn run(state: &ServerState, params: DocumentSymbolParams) -> Option<DocumentSymbolResponse> {
     let doc = state.documents.get(&params.text_document.uri)?;
-    let parsed = dsl_parse::parse(&doc.text, dsl_parse::Dialect::Postgres);
+    let cache = doc.parsed();
     let mut out = Vec::new();
-    for s in &parsed.statements {
+    for s in &cache.file.statements {
         if let Some(sym) = symbol_for(s, &doc.text, &doc.rope) {
             out.push(sym);
         }
