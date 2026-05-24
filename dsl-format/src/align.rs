@@ -140,31 +140,39 @@ fn align_body_text(body: &str) -> String {
     for raw in &stmts {
         let s = raw.trim();
         let up = s.to_ascii_uppercase();
-        let dedent_first = up.starts_with("END")
+        // DECLARE / BEGIN / EXCEPTION / END are peer-level section
+        // markers of the *same* PL/pgSQL block: each one closes the
+        // prior section and opens its own. Treat them as dedent-first
+        // when we're inside the prior section's depth.
+        let is_section = up == "DECLARE" || up == "BEGIN" || up == "BEGIN;"
+            || up == "EXCEPTION" || up == "EXCEPTION;"
+            || up.starts_with("EXCEPTION ");
+        let is_end = up.starts_with("END");
+        let dedent_first = is_section
+            || is_end
             || up.starts_with("ELSE")
             || up.starts_with("ELSIF")
-            || up == "EXCEPTION"
-            || up == "EXCEPTION;"
-            || up.starts_with("EXCEPTION ")
             || up.starts_with("WHEN ");
         let print_depth = if dedent_first { depth.saturating_sub(1) } else { depth };
         for _ in 0..print_depth { out.push_str("  "); }
         out.push_str(s);
         out.push('\n');
-        // Indent for next stmt.
-        if up == "BEGIN" || up == "BEGIN;" || up == "DECLARE"
-            || up.starts_with("IF ") || up.starts_with("LOOP")
+        // Adjust depth for the NEXT statement.
+        // Section markers (DECLARE/BEGIN/EXCEPTION) and control-flow
+        // openers (IF/LOOP/FOR/WHILE/CASE/ELSE/ELSIF) reset to the
+        // peer level then bump for their body.
+        if is_section {
+            // Close prior section + open new one => stay at print_depth + 1.
+            depth = print_depth + 1;
+        } else if up.starts_with("IF ") || up.starts_with("LOOP")
             || up.starts_with("FOR ") || up.starts_with("WHILE ")
             || up.starts_with("CASE ") || up == "ELSE;"
             || up.starts_with("ELSIF ")
-            || up == "EXCEPTION" || up == "EXCEPTION;"
-            || up.starts_with("EXCEPTION ")
         {
             depth += 1;
-        }
-        if up.starts_with("END") && depth > 0 {
-            // Already dedented above; just pop.
-            depth -= 1;
+        } else if is_end {
+            // Close the block this END terminates.
+            depth = print_depth;
         }
     }
     out

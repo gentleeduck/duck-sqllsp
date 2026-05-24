@@ -81,6 +81,7 @@ pub mod raise_message_no_args;
 pub mod raise_using_errcode;
 pub mod redundant_index_on_pk;
 pub mod redundant_parens;
+pub mod redundant_unique_index;
 pub mod reserved_word_identifier;
 pub mod return_type_literal;
 pub mod returning_no_assign;
@@ -242,5 +243,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
         Box::new(row_constructor_single::Rule),
         Box::new(redundant_index_on_pk::Rule),
         Box::new(begin_no_lock_mode::Rule),
+        Box::new(redundant_unique_index::Rule),
     ]
 }

@@ -65,3 +65,22 @@ fn body_indents_declare_then_begin() {
     assert!(out.contains("  RETURN n;"),
         "RETURN not indented; got:\n{out}");
 }
+
+#[test]
+fn declare_begin_end_are_peer_level_at_depth_zero() {
+    // User-reported: DECLARE / BEGIN / END must share the same indent
+    // depth (the function-body opener level). Vars inside DECLARE,
+    // stmts inside BEGIN, all at depth+1.
+    let input = "CREATE OR REPLACE FUNCTION apply_discount(p_subtotal NUMERIC, p_promo_id UUID) RETURNS NUMERIC STABLE LANGUAGE plpgsql AS $$\nDECLARE\n    result NUMERIC;\n    promo promo_codes;\nBEGIN\n    IF p_promo_id IS NULL THEN\n        RETURN p_subtotal;\n    END IF;\n    RETURN coalesce(result, 0);\nEND;\n$$;";
+    let out = aligned(input);
+    // DECLARE / BEGIN / END at col 0 (no leading spaces on their line).
+    for marker in ["\nDECLARE\n", "\nBEGIN\n", "\nEND;\n"] {
+        assert!(out.contains(marker),
+            "expected `{}` to be at col 0; got:\n{out}", marker.trim());
+    }
+    // Vars + stmts at col 2 (depth 1).
+    assert!(out.contains("  result NUMERIC;"),
+        "DECLARE var not at depth 1; got:\n{out}");
+    assert!(out.contains("  RETURN coalesce(result, 0);"),
+        "BEGIN-body RETURN not at depth 1; got:\n{out}");
+}
