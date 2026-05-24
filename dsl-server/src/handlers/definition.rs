@@ -111,7 +111,78 @@ pub fn run(state: &ServerState, params: GotoDefinitionParams) -> Option<GotoDefi
     }
   }
 
+  // Disk fallback: walk every .sql file in the workspace root so
+  // go-def resolves into files the user hasn't opened yet.
+  if let Some(root) = state.workspace_root.read().clone() {
+    if let Some(loc) = find_in_workspace_files(&root, &token) {
+      return Some(GotoDefinitionResponse::Scalar(loc));
+    }
+  }
+
   None
+}
+
+fn find_in_workspace_files(root: &std::path::Path, name: &str) -> Option<tower_lsp::lsp_types::Location> {
+  const DDL_NAMES: &[&str] = &[
+    "CREATE OR REPLACE FUNCTION", "CREATE FUNCTION",
+    "CREATE OR REPLACE PROCEDURE", "CREATE PROCEDURE",
+    "CREATE OR REPLACE TRIGGER", "CREATE TRIGGER",
+    "CREATE OR REPLACE VIEW", "CREATE VIEW",
+    "CREATE MATERIALIZED VIEW",
+    "CREATE UNIQUE INDEX IF NOT EXISTS", "CREATE UNIQUE INDEX",
+    "CREATE INDEX IF NOT EXISTS", "CREATE INDEX",
+    "CREATE TABLE IF NOT EXISTS", "CREATE TEMPORARY TABLE",
+    "CREATE TEMP TABLE", "CREATE TABLE",
+    "CREATE SEQUENCE IF NOT EXISTS", "CREATE SEQUENCE",
+    "CREATE TYPE", "CREATE DOMAIN",
+    "CREATE SCHEMA IF NOT EXISTS", "CREATE SCHEMA",
+    "CREATE EXTENSION IF NOT EXISTS", "CREATE EXTENSION",
+    "CREATE OR REPLACE POLICY", "CREATE POLICY",
+    "CREATE OR REPLACE AGGREGATE", "CREATE AGGREGATE",
+    "CREATE ROLE", "CREATE USER", "CREATE GROUP",
+  ];
+  let mut count = 0usize;
+  let result = std::sync::Arc::new(std::sync::Mutex::new(None::<tower_lsp::lsp_types::Location>));
+  let res2 = result.clone();
+  walk_sql(root, 5000, &mut count, &mut |path| {
+    if res2.lock().ok().and_then(|g| g.clone()).is_some() {
+      return;
+    }
+    let Ok(text) = std::fs::read_to_string(path) else { return };
+    let upper = text.to_ascii_uppercase();
+    for needle in DDL_NAMES {
+      if let Some(r) = find_def_name(&upper, &text, needle, name) {
+        let rope = ropey::Rope::from_str(&text);
+        let Ok(uri) = tower_lsp::lsp_types::Url::from_file_path(path) else { return };
+        let loc = tower_lsp::lsp_types::Location { uri, range: to_lsp_range(&rope, r) };
+        if let Ok(mut g) = res2.lock() { *g = Some(loc); }
+        return;
+      }
+    }
+  });
+  result.lock().ok().and_then(|g| g.clone())
+}
+
+fn walk_sql(root: &std::path::Path, cap: usize, count: &mut usize, f: &mut impl FnMut(&std::path::Path)) {
+  if *count >= cap { return; }
+  let Ok(rd) = std::fs::read_dir(root) else { return };
+  for entry in rd.flatten() {
+    if *count >= cap { return; }
+    let path = entry.path();
+    if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+      if name.starts_with('.') || matches!(name, "node_modules" | "target" | "dist" | "build" | "vendor" | "out") {
+        continue;
+      }
+    }
+    if path.is_dir() {
+      walk_sql(&path, cap, count, f);
+    } else if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+      if matches!(ext.to_ascii_lowercase().as_str(), "sql" | "pgsql" | "psql") {
+        *count += 1;
+        f(&path);
+      }
+    }
+  }
 }
 
 fn scalar(uri: tower_lsp::lsp_types::Url, rope: &Rope, r: TextRange) -> GotoDefinitionResponse {
