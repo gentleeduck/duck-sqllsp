@@ -29,5 +29,62 @@ pub use style::{CreateTableStyle, FormatterStyle};
 pub fn format(input: &str, fmt_style: &FormatterStyle, ct_style: &CreateTableStyle) -> String {
     let after_external = external::run_sql_formatter(input, fmt_style)
         .unwrap_or_else(|| input.to_string());
-    align::rewrite(&after_external, ct_style)
+    let after_align = align::rewrite(&after_external, ct_style);
+    normalize_blank_lines(&after_align)
+}
+
+/// Collapse runs of >=2 blank lines down to a single blank line and
+/// strip trailing blank lines entirely, ensuring the output ends with
+/// exactly one `\n`. Common editor hygiene that every formatter is
+/// expected to do.
+fn normalize_blank_lines(input: &str) -> String {
+    let mut out: Vec<&str> = Vec::with_capacity(input.lines().count());
+    let mut prev_blank = false;
+    for line in input.lines() {
+        let blank = line.chars().all(|c| c.is_whitespace());
+        if blank && prev_blank { continue; }
+        out.push(line);
+        prev_blank = blank;
+    }
+    while out.last().map_or(false, |l| l.chars().all(|c| c.is_whitespace())) {
+        out.pop();
+    }
+    let mut s = out.join("\n");
+    if !s.is_empty() { s.push('\n'); }
+    s
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collapses_consecutive_blank_lines() {
+        let input = "SELECT 1;\n\n\n\nSELECT 2;\n";
+        assert_eq!(normalize_blank_lines(input), "SELECT 1;\n\nSELECT 2;\n");
+    }
+
+    #[test]
+    fn strips_trailing_blank_lines() {
+        let input = "SELECT 1;\n\n\n\n";
+        assert_eq!(normalize_blank_lines(input), "SELECT 1;\n");
+    }
+
+    #[test]
+    fn preserves_single_blank_separator() {
+        let input = "SELECT 1;\n\nSELECT 2;\n";
+        assert_eq!(normalize_blank_lines(input), "SELECT 1;\n\nSELECT 2;\n");
+    }
+
+    #[test]
+    fn ensures_trailing_newline() {
+        let input = "SELECT 1;";
+        assert_eq!(normalize_blank_lines(input), "SELECT 1;\n");
+    }
+
+    #[test]
+    fn empty_input_stays_empty() {
+        assert_eq!(normalize_blank_lines(""), "");
+        assert_eq!(normalize_blank_lines("\n\n\n"), "");
+    }
 }

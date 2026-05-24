@@ -71,6 +71,12 @@ pub fn hover_with(
     if let Some(md) = sequence_ref_at(source, offset) {
         return Some(md);
     }
+    // Cursor on an argument literal inside `fn(arg, arg)`. Surface
+    // the function's signature with the current parameter highlighted
+    // so the user knows "I'm filling slot 2 of substring(text, int, int)".
+    if let Some(md) = function_arg_at(source, offset) {
+        return Some(md);
+    }
 
     if let Some(tok) = token::token_at(source, offset) {
         // Dotted token `a.b` -- narrow to the side under the cursor.
@@ -710,6 +716,107 @@ fn stmt_end(source: &str, mut i: usize) -> usize {
         }
     }
     n
+}
+
+/// Cursor on a literal / identifier inside a function-call argument
+/// list. Walks back to the enclosing `(`, reads the function name,
+/// looks up the signature in the knowledge base, and renders a card
+/// pointing at the active parameter slot. Returns None when the
+/// cursor is not inside a call OR the function is unknown.
+fn function_arg_at(source: &str, offset: TextSize) -> Option<String> {
+    let pos: usize = u32::from(offset) as usize;
+    let bytes = source.as_bytes();
+    let n = bytes.len();
+    if pos > n { return None; }
+    // First, determine whether the cursor is currently inside a `'...'`
+    // string by counting unescaped single-quotes from the start of the
+    // statement up to `pos`. Odd count = inside a string -- walk back
+    // past the opening quote before the depth/comma scan.
+    let mut quotes = 0usize;
+    let mut j = 0;
+    while j < pos {
+        if bytes[j] == b'\'' { quotes += 1; }
+        j += 1;
+    }
+    let mut i = pos;
+    if quotes % 2 == 1 {
+        while i > 0 && bytes[i - 1] != b'\'' { i -= 1; }
+        if i > 0 { i -= 1; } // skip the opening `'`
+    }
+    // Now walk back through non-string content, counting commas at the
+    // enclosing depth and looking for the unmatched `(`.
+    let mut depth = 0i32;
+    let mut commas = 0usize;
+    let mut in_string: Option<u8> = None;
+    while i > 0 {
+        i -= 1;
+        let b = bytes[i];
+        if let Some(q) = in_string {
+            if b == q { in_string = None; }
+            continue;
+        }
+        match b {
+            b')' => depth += 1,
+            b'(' => {
+                if depth == 0 { break; }
+                depth -= 1;
+            }
+            b',' if depth == 0 => commas += 1,
+            b'\'' => in_string = Some(b'\''),
+            _ => {}
+        }
+    }
+    if i == 0 && bytes.first() != Some(&b'(') { return None; }
+    // i is at the `(`. Find identifier immediately before it.
+    let mut end = i;
+    while end > 0 && bytes[end - 1].is_ascii_whitespace() { end -= 1; }
+    let mut start = end;
+    while start > 0 {
+        let c = bytes[start - 1] as char;
+        if c.is_alphanumeric() || c == '_' || c == '.' { start -= 1; } else { break; }
+    }
+    if start == end { return None; }
+    let name = source[start..end].to_string();
+    let bare = name.rsplit('.').next().unwrap_or(&name).to_string();
+    let entry = dsl_knowledge::functions().get(bare.to_ascii_lowercase().as_str())?;
+    let sig = entry.signature?;
+    // Parse the signature `fn(p1 t1, p2 t2) -> ret` to surface each
+    // parameter name on its own line and mark the active one.
+    let params = parse_signature_params(sig);
+    let mut lines = Vec::new();
+    lines.push(format!("-- function call: {bare}"));
+    lines.push(format!("-- signature: {sig}"));
+    lines.push(String::new());
+    for (idx, p) in params.iter().enumerate() {
+        let marker = if idx == commas { ">>" } else { "  " };
+        lines.push(format!("{marker} {p}"));
+    }
+    Some(format!("```sql\n{}\n```\n", lines.join("\n")))
+}
+
+fn parse_signature_params(sig: &str) -> Vec<String> {
+    let open = match sig.find('(') { Some(i) => i + 1, None => return Vec::new() };
+    let close = match sig.rfind(')') { Some(i) => i, None => sig.len() };
+    if close <= open { return Vec::new(); }
+    let body = &sig[open..close];
+    let mut out = Vec::new();
+    let bytes = body.as_bytes();
+    let mut depth = 0i32;
+    let mut start = 0usize;
+    for (i, &b) in bytes.iter().enumerate() {
+        match b {
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            b',' if depth == 0 => {
+                out.push(body[start..i].trim().to_string());
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    let tail = body[start..].trim();
+    if !tail.is_empty() { out.push(tail.to_string()); }
+    out
 }
 
 /// `nextval('seq')`, `currval('seq')`, `setval('seq', 1)` — when the

@@ -179,6 +179,30 @@ fn hover_on_sequence_in_setval() {
     assert!(md.contains("thing_seq"));
 }
 
+// ===== hover on function-call argument literals ============================
+
+#[test]
+fn hover_on_arg_literal_inside_coalesce_marks_active_param() {
+    // Cursor sits on the second arg (`'fallback'`).
+    let src = "SELECT coalesce(name, 'fallback') FROM users;";
+    let cur = src.find("'fallback'").unwrap() + 2;
+    let md = hover_at(src, cur).expect("arg hover");
+    assert!(md.contains("coalesce"), "expected fn name in card; got: {md}");
+    assert!(md.contains(">>"),
+        "expected `>>` active-marker; got: {md}");
+}
+
+#[test]
+fn hover_on_arg_literal_outside_call_returns_no_arg_card() {
+    let src = "SELECT 1 FROM users;";
+    let cur = src.find("1").unwrap();
+    let md = hover_at(src, cur);
+    if let Some(md) = md {
+        assert!(!md.contains("function call:"),
+            "should not be a function-arg card: {md}");
+    }
+}
+
 #[test]
 fn hover_on_non_sequence_string_returns_no_seq_card() {
     let src = "SELECT * FROM users WHERE name = 'admin';";
