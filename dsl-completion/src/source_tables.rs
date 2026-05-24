@@ -20,8 +20,8 @@
 //! (constraints, indexes, comments).
 
 use dsl_catalog::{
-  CATALOG_VERSION, Catalog, Column, Extension, Function, FunctionArg, Schema, Sequence, Table,
-  TableKind, Type, TypeKind,
+  CATALOG_VERSION, Catalog, Column, Constraint, ConstraintKind, ConstraintRef, Extension,
+  Function, FunctionArg, Schema, Sequence, Table, TableKind, Type, TypeKind,
 };
 use dsl_parse::{ParsedFile, StatementKind};
 
@@ -98,8 +98,260 @@ pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
   cat.extensions = scan_extensions(source);
   cat.functions = scan_functions(source);
   cat.roles = scan_roles(source);
+  // Walk every CREATE TABLE body and pull inline + table-level
+  // PRIMARY KEY / UNIQUE / FOREIGN KEY constraints from the source.
+  // The AST doesn't carry these (CreateTableStmt::columns only has
+  // name + type + nullable + default), so this text-scan is how
+  // offline mode learns about FKs at all.
+  for schema in cat.schemas.iter_mut() {
+    for table in schema.tables.iter_mut() {
+      table.constraints = scan_constraints_for(source, &table.name);
+    }
+  }
   cat
 }
+
+/// Locate the CREATE TABLE body for `name` and pull out every
+/// PK/UNIQUE/FK constraint we can spot. Both inline-on-column and
+/// table-level forms. Forgiving -- text-scan, not a real parser.
+fn scan_constraints_for(src: &str, name: &str) -> Vec<Constraint> {
+  let upper = src.to_ascii_uppercase();
+  let mut out: Vec<Constraint> = Vec::new();
+  for needle in ["CREATE TABLE IF NOT EXISTS ", "CREATE TEMP TABLE ", "CREATE TEMPORARY TABLE ", "CREATE TABLE "] {
+    let mut from = 0usize;
+    while let Some(rel) = upper[from..].find(needle) {
+      let after = from + rel + needle.len();
+      let bytes = src.as_bytes();
+      let mut k = after;
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1;
+      }
+      let id_start = k;
+      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') {
+        k += 1;
+      }
+      let raw = &src[id_start..k];
+      let bare = raw.rsplit('.').next().unwrap_or(raw).trim_matches('"');
+      if !bare.eq_ignore_ascii_case(name) {
+        from = after;
+        continue;
+      }
+      while k < bytes.len() && bytes[k] != b'(' {
+        k += 1;
+      }
+      if k >= bytes.len() {
+        return out;
+      }
+      let body_start = k + 1;
+      let body_end = match_paren(bytes, k);
+      let body = &src[body_start..body_end];
+      out.extend(parse_constraints(body));
+      return out;
+    }
+  }
+  out
+}
+
+fn match_paren(bytes: &[u8], open: usize) -> usize {
+  let n = bytes.len();
+  let mut depth = 0i32;
+  let mut i = open;
+  while i < n {
+    match bytes[i] {
+      b'(' => depth += 1,
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return i;
+        }
+      }
+      b'\'' => {
+        i += 1;
+        while i < n && bytes[i] != b'\'' {
+          i += 1;
+        }
+      }
+      _ => {}
+    }
+    i += 1;
+  }
+  n
+}
+
+fn parse_constraints(body: &str) -> Vec<Constraint> {
+  let mut out = Vec::new();
+  for entry in split_top_commas(body) {
+    let trimmed = entry.trim();
+    if trimmed.is_empty() {
+      continue;
+    }
+    let upper = trimmed.to_ascii_uppercase();
+    // Table-level: PRIMARY KEY (...), UNIQUE (...), FOREIGN KEY (...) REFERENCES ...
+    if upper.starts_with("PRIMARY KEY") {
+      if let Some(cols) = paren_csv(trimmed) {
+        out.push(Constraint {
+          name: "pk".into(),
+          kind: ConstraintKind::PrimaryKey,
+          columns: cols,
+          references: None,
+          definition: Some(trimmed.to_string()),
+        });
+      }
+      continue;
+    }
+    if upper.starts_with("UNIQUE") {
+      if let Some(cols) = paren_csv(trimmed) {
+        out.push(Constraint {
+          name: "uniq".into(),
+          kind: ConstraintKind::Unique,
+          columns: cols,
+          references: None,
+          definition: Some(trimmed.to_string()),
+        });
+      }
+      continue;
+    }
+    if upper.starts_with("FOREIGN KEY") {
+      if let (Some(local), Some(refs)) = (paren_csv(trimmed), parse_references(trimmed)) {
+        out.push(Constraint {
+          name: "fk".into(),
+          kind: ConstraintKind::ForeignKey,
+          columns: local,
+          references: Some(refs),
+          definition: Some(trimmed.to_string()),
+        });
+      }
+      continue;
+    }
+    if upper.starts_with("CHECK") {
+      out.push(Constraint {
+        name: "ck".into(),
+        kind: ConstraintKind::Check,
+        columns: Vec::new(),
+        references: None,
+        definition: Some(trimmed.to_string()),
+      });
+      continue;
+    }
+    if upper.starts_with("CONSTRAINT") {
+      // CONSTRAINT <name> {PK|UNIQUE|FK|CHECK} ...
+      let rest = trimmed[10..].trim_start();
+      let name_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+      let cname = rest[..name_end].trim_matches('"').to_string();
+      let body = rest[name_end..].trim_start();
+      let body_upper = body.to_ascii_uppercase();
+      if body_upper.starts_with("PRIMARY KEY") {
+        out.push(Constraint {
+          name: cname,
+          kind: ConstraintKind::PrimaryKey,
+          columns: paren_csv(body).unwrap_or_default(),
+          references: None,
+          definition: Some(body.to_string()),
+        });
+      } else if body_upper.starts_with("UNIQUE") {
+        out.push(Constraint {
+          name: cname,
+          kind: ConstraintKind::Unique,
+          columns: paren_csv(body).unwrap_or_default(),
+          references: None,
+          definition: Some(body.to_string()),
+        });
+      } else if body_upper.starts_with("FOREIGN KEY") {
+        out.push(Constraint {
+          name: cname,
+          kind: ConstraintKind::ForeignKey,
+          columns: paren_csv(body).unwrap_or_default(),
+          references: parse_references(body),
+          definition: Some(body.to_string()),
+        });
+      } else if body_upper.starts_with("CHECK") {
+        out.push(Constraint {
+          name: cname,
+          kind: ConstraintKind::Check,
+          columns: Vec::new(),
+          references: None,
+          definition: Some(body.to_string()),
+        });
+      }
+      continue;
+    }
+    // Inline column form: `<col> <type> ... [PRIMARY KEY] [REFERENCES ...]`
+    let col = trimmed.split_whitespace().next().unwrap_or("").trim_matches('"').to_string();
+    if col.is_empty() {
+      continue;
+    }
+    if upper.contains(" PRIMARY KEY") || upper.contains("\tPRIMARY KEY") {
+      out.push(Constraint {
+        name: format!("pk_{col}"),
+        kind: ConstraintKind::PrimaryKey,
+        columns: vec![col.clone()],
+        references: None,
+        definition: Some(trimmed.to_string()),
+      });
+    }
+    if upper.contains("UNIQUE") && !upper.starts_with("UNIQUE") {
+      out.push(Constraint {
+        name: format!("uniq_{col}"),
+        kind: ConstraintKind::Unique,
+        columns: vec![col.clone()],
+        references: None,
+        definition: Some(trimmed.to_string()),
+      });
+    }
+    if let Some(refs) = inline_references(trimmed) {
+      out.push(Constraint {
+        name: format!("fk_{col}"),
+        kind: ConstraintKind::ForeignKey,
+        columns: vec![col],
+        references: Some(refs),
+        definition: Some(trimmed.to_string()),
+      });
+    }
+  }
+  out
+}
+
+/// `(col1, col2)` -> `["col1", "col2"]`. None if no first `(`.
+fn paren_csv(s: &str) -> Option<Vec<String>> {
+  let open = s.find('(')?;
+  let close = match_paren(s.as_bytes(), open);
+  if close >= s.len() {
+    return None;
+  }
+  Some(
+    s[open + 1..close]
+      .split(',')
+      .map(|c| c.trim().trim_matches('"').to_string())
+      .filter(|c| !c.is_empty())
+      .collect(),
+  )
+}
+
+/// `REFERENCES <tbl>(<col>)` or `REFERENCES <schema>.<tbl>(<col>)`.
+fn parse_references(s: &str) -> Option<ConstraintRef> {
+  let upper = s.to_ascii_uppercase();
+  let at = upper.find("REFERENCES")?;
+  let rest = s[at + "REFERENCES".len()..].trim_start();
+  let name_end = rest
+    .find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"')
+    .unwrap_or(rest.len());
+  let raw = rest[..name_end].trim_matches('"');
+  let (schema, table) = if let Some(dot) = raw.find('.') {
+    (raw[..dot].trim_matches('"').to_string(), raw[dot + 1..].trim_matches('"').to_string())
+  } else {
+    ("public".into(), raw.to_string())
+  };
+  let cols = paren_csv(&rest[name_end..]).unwrap_or_default();
+  Some(ConstraintRef { schema, table, columns: cols })
+}
+
+fn inline_references(s: &str) -> Option<ConstraintRef> {
+  if !s.to_ascii_uppercase().contains("REFERENCES") {
+    return None;
+  }
+  parse_references(s)
+}
+
 
 /// The conventional roles that exist in any fresh Postgres install.
 /// Returned as a Vec so callers can union them into the offline cat.
