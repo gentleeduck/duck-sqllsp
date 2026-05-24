@@ -37,7 +37,9 @@ pub fn run(state: &ServerState, params: RenameParams) -> Option<WorkspaceEdit> {
   // Walk every open buffer so a rename across split-file migrations
   // /seed scripts updates them in one operation.
   let mut changes: HashMap<_, Vec<TextEdit>> = HashMap::new();
+  let mut seen: std::collections::HashSet<tower_lsp::lsp_types::Url> = std::collections::HashSet::new();
   for (uri, doc) in state.documents.snapshot() {
+    seen.insert(uri.clone());
     let edits: Vec<TextEdit> = references::find_word_occurrences(&doc.text, &token)
       .into_iter()
       .map(|(s, e)| TextEdit {
@@ -49,10 +51,55 @@ pub fn run(state: &ServerState, params: RenameParams) -> Option<WorkspaceEdit> {
       changes.insert(uri, edits);
     }
   }
+  // Disk fallback: walk every workspace .sql that isn't open and
+  // rewrite there too. Editor will apply the TextEdits via
+  // WorkspaceEdit.changes on the closed files; client opens / edits /
+  // saves them transparently.
+  if let Some(root) = state.workspace_root.read().clone() {
+    let mut count = 0usize;
+    walk_sql_files(&root, 5000, &mut count, &mut |path| {
+      let Ok(uri) = tower_lsp::lsp_types::Url::from_file_path(path) else { return };
+      if seen.contains(&uri) { return; }
+      let Ok(text) = std::fs::read_to_string(path) else { return };
+      let rope = Rope::from_str(&text);
+      let edits: Vec<TextEdit> = references::find_word_occurrences(&text, &token)
+        .into_iter()
+        .map(|(s, e)| TextEdit {
+          range: Range { start: byte_to_position(&rope, s), end: byte_to_position(&rope, e) },
+          new_text: params.new_name.clone(),
+        })
+        .collect();
+      if !edits.is_empty() {
+        changes.insert(uri, edits);
+      }
+    });
+  }
   if changes.is_empty() {
     return None;
   }
   Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None })
+}
+
+fn walk_sql_files(root: &std::path::Path, cap: usize, count: &mut usize, f: &mut impl FnMut(&std::path::Path)) {
+  if *count >= cap { return; }
+  let Ok(rd) = std::fs::read_dir(root) else { return };
+  for entry in rd.flatten() {
+    if *count >= cap { return; }
+    let path = entry.path();
+    if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+      if name.starts_with('.') || matches!(name, "node_modules" | "target" | "dist" | "build" | "vendor" | "out") {
+        continue;
+      }
+    }
+    if path.is_dir() {
+      walk_sql_files(&path, cap, count, f);
+    } else if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+      if matches!(ext.to_ascii_lowercase().as_str(), "sql" | "pgsql" | "psql") {
+        *count += 1;
+        f(&path);
+      }
+    }
+  }
 }
 
 fn token_range(src: &str, offset: text_size::TextSize) -> Option<(usize, usize, String)> {
