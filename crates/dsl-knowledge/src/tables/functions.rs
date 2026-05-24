@@ -67,8 +67,14 @@ pub fn build() -> HashMap<&'static str, Entry> {
        "WHERE lower(email) = 'a@x.io'", pg("functions-string.html"));
     f!("upper", "upper(text) -> text", "Convert to uppercase.",
        "SELECT upper(country_code) FROM users;", pg("functions-string.html"));
-    f!("length", "length(text) -> int", "Character count.",
+    f!("length", "length(text) -> int", "Character count (bytes for non-UTF8 / bytea).",
        "WHERE length(name) > 0", pg("functions-string.html"));
+    f!("char_length", "char_length(text) -> int",
+       "Character count -- counts characters, not bytes. Alias: `character_length`.",
+       "SELECT char_length(name) FROM users;", pg("functions-string.html"));
+    f!("character_length", "character_length(text) -> int",
+       "Character count -- SQL-standard spelling, same as `char_length`.",
+       "SELECT character_length(name) FROM users;", pg("functions-string.html"));
     f!("substring", "substring(text FROM start [FOR len]) -> text",
        "Slice a string. 1-based.",
        "SELECT substring(email FROM 1 FOR 3) FROM users;",

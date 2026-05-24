@@ -2118,6 +2118,20 @@ fn sql118_range_points_at_into() {
     assert_eq!(&src[s as usize..e as usize], "INTO");
 }
 
+#[test]
+fn sql118_quiet_inside_plpgsql_body() {
+    let src = "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ DECLARE v users; BEGIN SELECT * INTO v FROM users; END $$;";
+    let d = diags(src);
+    assert!(!d.iter().any(|x| x.code == "sql118"));
+}
+
+#[test]
+fn sql118_quiet_inside_do_block() {
+    let src = "DO $$ DECLARE v users; BEGIN SELECT * INTO v FROM users; END $$;";
+    let d = diags(src);
+    assert!(!d.iter().any(|x| x.code == "sql118"));
+}
+
 // ===== sql124 CTE missing RECURSIVE ========================================
 
 #[test]
