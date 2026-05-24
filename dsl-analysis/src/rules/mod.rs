@@ -75,6 +75,7 @@ pub mod numeric_no_precision;
 pub mod order_by_position;
 pub mod order_by_random;
 pub mod owner_to_unknown_role;
+pub mod plpgsql_assign_type;
 pub mod perform_for_pure_select;
 pub mod prefer_alias;
 pub mod raise_arg_count;
@@ -250,5 +251,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     // neither in the catalog nor in the postgres/pg_* whitelist nor
     // a CURRENT_USER / SESSION_USER / CURRENT_ROLE built-in.
     Box::new(owner_to_unknown_role::Rule),
+    Box::new(plpgsql_assign_type::Rule),
   ]
 }

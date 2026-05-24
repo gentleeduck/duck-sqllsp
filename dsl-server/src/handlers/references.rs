@@ -26,7 +26,9 @@ pub fn run(state: &ServerState, params: ReferenceParams) -> Option<Vec<Location>
   // Walk every open buffer, not just the cursor's, so refs follow
   // the schema across split-file migrations and seed scripts.
   let mut out = Vec::new();
+  let mut seen_uris: std::collections::HashSet<tower_lsp::lsp_types::Url> = std::collections::HashSet::new();
   for (uri, doc) in state.documents.snapshot() {
+    seen_uris.insert(uri.clone());
     for (start, end) in find_word_occurrences(&doc.text, &token) {
       out.push(Location {
         uri: uri.clone(),
@@ -34,7 +36,47 @@ pub fn run(state: &ServerState, params: ReferenceParams) -> Option<Vec<Location>
       });
     }
   }
+  // Disk fallback: walk every .sql in the workspace root that isn't
+  // already an open buffer. Lets `Find All References` surface usages
+  // in files the user hasn't opened yet.
+  if let Some(root) = state.workspace_root.read().clone() {
+    let mut count = 0usize;
+    walk_sql_files(&root, 5000, &mut count, &mut |path| {
+      let Ok(uri) = tower_lsp::lsp_types::Url::from_file_path(path) else { return };
+      if seen_uris.contains(&uri) { return; }
+      let Ok(text) = std::fs::read_to_string(path) else { return };
+      let rope = Rope::from_str(&text);
+      for (start, end) in find_word_occurrences(&text, &token) {
+        out.push(Location {
+          uri: uri.clone(),
+          range: Range { start: byte_to_position(&rope, start), end: byte_to_position(&rope, end) },
+        });
+      }
+    });
+  }
   if out.is_empty() { None } else { Some(out) }
+}
+
+fn walk_sql_files(root: &std::path::Path, cap: usize, count: &mut usize, f: &mut impl FnMut(&std::path::Path)) {
+  if *count >= cap { return; }
+  let Ok(rd) = std::fs::read_dir(root) else { return };
+  for entry in rd.flatten() {
+    if *count >= cap { return; }
+    let path = entry.path();
+    if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+      if name.starts_with('.') || matches!(name, "node_modules" | "target" | "dist" | "build" | "vendor" | "out") {
+        continue;
+      }
+    }
+    if path.is_dir() {
+      walk_sql_files(&path, cap, count, f);
+    } else if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+      if matches!(ext.to_ascii_lowercase().as_str(), "sql" | "pgsql" | "psql") {
+        *count += 1;
+        f(&path);
+      }
+    }
+  }
 }
 
 fn token_at(src: &str, offset: text_size::TextSize) -> Option<String> {
