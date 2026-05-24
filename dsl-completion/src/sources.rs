@@ -194,6 +194,66 @@ fn statement_snippets(out: &mut Vec<Item>) {
         is_snippet: true,
         sort_priority: 3,
     });
+    out.push(Item {
+        label: "view".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("CREATE VIEW skeleton".into()),
+        description: Some("snippet".into()),
+        documentation_md: Some("CREATE OR REPLACE VIEW with a body.".into()),
+        insert_text: "CREATE OR REPLACE VIEW ${1:name} AS\nSELECT $0\nFROM ${2:table};".into(),
+        is_snippet: true,
+        sort_priority: 3,
+    });
+    out.push(Item {
+        label: "mat".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("CREATE MATERIALIZED VIEW skeleton".into()),
+        description: Some("snippet".into()),
+        documentation_md: Some("Materialised view + REFRESH hint.".into()),
+        insert_text: "CREATE MATERIALIZED VIEW ${1:name} AS\nSELECT $0\nFROM ${2:table}\nWITH DATA;".into(),
+        is_snippet: true,
+        sort_priority: 3,
+    });
+    out.push(Item {
+        label: "enum".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("CREATE TYPE ... AS ENUM skeleton".into()),
+        description: Some("snippet".into()),
+        documentation_md: Some("Enum type with a couple of starter values.".into()),
+        insert_text: "CREATE TYPE ${1:name} AS ENUM (\n    '${2:value_a}',\n    '${3:value_b}'\n);$0".into(),
+        is_snippet: true,
+        sort_priority: 3,
+    });
+    out.push(Item {
+        label: "dom".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("CREATE DOMAIN skeleton".into()),
+        description: Some("snippet".into()),
+        documentation_md: Some("Domain over an underlying type with optional CHECK.".into()),
+        insert_text: "CREATE DOMAIN ${1:name} AS ${2:text}\n    CHECK (VALUE ${3:~ '^.+$'});$0".into(),
+        is_snippet: true,
+        sort_priority: 3,
+    });
+    out.push(Item {
+        label: "pol".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("CREATE POLICY skeleton".into()),
+        description: Some("snippet".into()),
+        documentation_md: Some("Row-level security policy.".into()),
+        insert_text: "CREATE POLICY ${1:name} ON ${2:table}\n    FOR ${3|ALL,SELECT,INSERT,UPDATE,DELETE|}\n    TO ${4:role}\n    USING (${5:true});$0".into(),
+        is_snippet: true,
+        sort_priority: 3,
+    });
+    out.push(Item {
+        label: "do".into(),
+        kind: ItemKind::Keyword,
+        detail: Some("DO $$ ... $$ anonymous block".into()),
+        description: Some("snippet".into()),
+        documentation_md: Some("Anonymous plpgsql block (no function declaration).".into()),
+        insert_text: "DO $$\nBEGIN\n    $0\nEND;\n$$;".into(),
+        is_snippet: true,
+        sort_priority: 3,
+    });
 }
 
 /// Keywords expected after a finished table reference: JOIN / WHERE /

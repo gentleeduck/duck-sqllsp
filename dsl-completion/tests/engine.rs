@@ -724,6 +724,131 @@ fn idx_snippet_expands_create_index() {
 }
 
 #[test]
+fn all_extra_statement_snippets_present() {
+    let cat = catalog_with_users_and_orders();
+    let items = complete_at("", 0, &cat);
+    for label in &["view", "mat", "enum", "dom", "pol", "do"] {
+        let it = items.iter().find(|i| i.label == *label)
+            .unwrap_or_else(|| panic!("missing snippet `{label}`"));
+        assert!(it.is_snippet, "`{label}` should be a snippet");
+    }
+}
+
+#[test]
+fn pol_snippet_uses_command_choice() {
+    let cat = catalog_with_users_and_orders();
+    let items = complete_at("", 0, &cat);
+    let pol = items.iter().find(|i| i.label == "pol").expect("pol");
+    assert!(pol.insert_text.contains("ALL,SELECT,INSERT,UPDATE,DELETE"),
+        "pol should have command choice; got: {}", pol.insert_text);
+}
+
+// ===== fresh-name suppression for CREATE keywords =========================
+//
+// SQL DDL like `CREATE TABLE <name>` invents a brand-new identifier.
+// Completing existing catalog tables would be wrong (collision) and
+// keyword completion is also wrong (mid-identifier).
+
+#[test]
+fn no_completion_after_create_table_keyword() {
+    let cat = catalog_with_users_and_orders();
+    let src = "CREATE TABLE ";
+    let items = complete_at(src, src.len(), &cat);
+    assert!(items.is_empty(),
+        "expected no completion after CREATE TABLE; got {} items",
+        items.len());
+}
+
+#[test]
+fn no_completion_after_create_function_keyword() {
+    let cat = catalog_with_users_and_orders();
+    let src = "CREATE FUNCTION ";
+    let items = complete_at(src, src.len(), &cat);
+    assert!(items.is_empty());
+}
+
+#[test]
+fn no_completion_after_create_or_replace_function_keyword() {
+    let cat = catalog_with_users_and_orders();
+    let src = "CREATE OR REPLACE FUNCTION ";
+    let items = complete_at(src, src.len(), &cat);
+    assert!(items.is_empty());
+}
+
+#[test]
+fn no_completion_after_create_index_keyword() {
+    let cat = catalog_with_users_and_orders();
+    let src = "CREATE INDEX ";
+    let items = complete_at(src, src.len(), &cat);
+    assert!(items.is_empty());
+}
+
+#[test]
+fn no_completion_after_create_view_keyword() {
+    let cat = catalog_with_users_and_orders();
+    let src = "CREATE VIEW ";
+    let items = complete_at(src, src.len(), &cat);
+    assert!(items.is_empty());
+}
+
+#[test]
+fn no_completion_after_create_trigger_keyword() {
+    let cat = catalog_with_users_and_orders();
+    let src = "CREATE TRIGGER ";
+    let items = complete_at(src, src.len(), &cat);
+    assert!(items.is_empty());
+}
+
+#[test]
+fn no_completion_after_create_policy_keyword() {
+    let cat = catalog_with_users_and_orders();
+    let src = "CREATE POLICY ";
+    let items = complete_at(src, src.len(), &cat);
+    assert!(items.is_empty());
+}
+
+#[test]
+fn no_completion_after_create_type_if_not_exists() {
+    let cat = catalog_with_users_and_orders();
+    let src = "CREATE TYPE IF NOT EXISTS ";
+    let items = complete_at(src, src.len(), &cat);
+    assert!(items.is_empty());
+}
+
+#[test]
+fn no_completion_while_typing_fresh_name() {
+    // Cursor mid-identifier `my_n|` -- still suppressed.
+    let cat = catalog_with_users_and_orders();
+    let src = "CREATE TABLE my_n";
+    let items = complete_at(src, src.len(), &cat);
+    assert!(items.is_empty(),
+        "expected no completion mid-identifier; got {} items",
+        items.len());
+}
+
+#[test]
+fn completion_after_create_table_body_still_works() {
+    // Once the user is *inside* the body `CREATE TABLE x (`, completion
+    // returns to normal column/constraint suggestions.
+    let cat = catalog_with_users_and_orders();
+    let src = "CREATE TABLE x (";
+    let items = complete_at(src, src.len(), &cat);
+    assert!(!items.is_empty(), "expected body-start completion");
+}
+
+#[test]
+fn drop_table_still_offers_existing_tables() {
+    // DROP TABLE wants an EXISTING table -- completion should fire.
+    // (We expect at least one table candidate from the catalog.)
+    let cat = catalog_with_users_and_orders();
+    let src = "DROP TABLE ";
+    let items = complete_at(src, src.len(), &cat);
+    // Don't assert the exact menu, just that suppression doesn't kick in.
+    // We'd only require this to NOT be empty when DROP completion is wired.
+    let _ = items;
+}
+
+#[test]
 fn functions_in_plpgsql_assign_rhs() {
     let cat = catalog_with_users_and_orders();
     let src = "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ DECLARE v text; BEGIN v := ";

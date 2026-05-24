@@ -39,6 +39,14 @@ pub fn complete(
     let off = floor_char_boundary(source, raw_off.min(source.len()));
     let offset = TextSize::from(off as u32);
 
+    // Hard-suppress completion when the cursor sits at the "fresh
+    // name" slot after a `CREATE [OR REPLACE] <KIND>` keyword. The
+    // user is naming a brand-new object; no existing catalog symbol or
+    // keyword is a sensible suggestion there.
+    if at_fresh_name_slot(source, offset) {
+        return Vec::new();
+    }
+
     // Merge live catalog with in-file CREATE TABLE definitions.
     let derived = source_tables::from_file(file);
     let cat = source_tables::merge(catalog, &derived);
@@ -495,6 +503,83 @@ fn floor_char_boundary(s: &str, byte: usize) -> usize {
     let mut b = byte.min(s.len());
     while b > 0 && !s.is_char_boundary(b) { b -= 1; }
     b
+}
+
+/// True when the cursor is at a "fresh name" slot -- i.e. immediately
+/// after a `CREATE [OR REPLACE] <KIND> [IF NOT EXISTS]` keyword (or
+/// while typing the name itself). SQL DDL invents these names, so the
+/// LSP should offer NO completion candidates -- existing catalog
+/// names would be wrong (collision) and keyword suggestions would
+/// also be wrong (the user is mid-identifier).
+fn at_fresh_name_slot(source: &str, offset: TextSize) -> bool {
+    let pos: usize = u32::from(offset) as usize;
+    let pos = pos.min(source.len());
+    // Look backwards across the current statement only (last `;`).
+    let stmt_start = source[..pos].rfind(';').map(|i| i + 1).unwrap_or(0);
+    let before = &source[stmt_start..pos];
+    let upper = before.to_ascii_uppercase();
+    // Trim leading whitespace + skip the partial identifier the user
+    // is currently typing (the "fresh name" itself).
+    let bytes = upper.as_bytes();
+    let n = bytes.len();
+    let mut end = n;
+    // Skip the identifier being typed (alphanumeric + underscore).
+    while end > 0 && (bytes[end - 1].is_ascii_alphanumeric() || bytes[end - 1] == b'_') {
+        end -= 1;
+    }
+    let lead = &upper[..end].trim_end();
+    // Allow optional `IF NOT EXISTS` before the name.
+    let lead = lead.strip_suffix("IF NOT EXISTS").unwrap_or(lead).trim_end();
+    // Patterns that announce a fresh DDL object name:
+    const PATTERNS: &[&str] = &[
+        "CREATE TABLE",
+        "CREATE TEMP TABLE",
+        "CREATE TEMPORARY TABLE",
+        "CREATE UNLOGGED TABLE",
+        "CREATE GLOBAL TABLE",
+        "CREATE LOCAL TABLE",
+        "CREATE VIEW",
+        "CREATE OR REPLACE VIEW",
+        "CREATE MATERIALIZED VIEW",
+        "CREATE FUNCTION",
+        "CREATE OR REPLACE FUNCTION",
+        "CREATE PROCEDURE",
+        "CREATE OR REPLACE PROCEDURE",
+        "CREATE INDEX",
+        "CREATE UNIQUE INDEX",
+        "CREATE SCHEMA",
+        "CREATE SEQUENCE",
+        "CREATE TYPE",
+        "CREATE DOMAIN",
+        "CREATE TRIGGER",
+        "CREATE OR REPLACE TRIGGER",
+        "CREATE POLICY",
+        "CREATE EXTENSION",
+        "CREATE ROLE",
+        "CREATE USER",
+        "CREATE GROUP",
+        "CREATE DATABASE",
+        "CREATE TABLESPACE",
+        "CREATE LANGUAGE",
+        "CREATE AGGREGATE",
+        "CREATE CAST",
+        "CREATE COLLATION",
+        "CREATE CONVERSION",
+        "CREATE OPERATOR",
+        "CREATE RULE",
+        "CREATE PUBLICATION",
+        "CREATE SUBSCRIPTION",
+        "CREATE FOREIGN TABLE",
+        "CREATE FOREIGN DATA WRAPPER",
+        "CREATE SERVER",
+        "CREATE USER MAPPING",
+        "CREATE TEXT SEARCH CONFIGURATION",
+        "CREATE TEXT SEARCH DICTIONARY",
+        "CREATE TEXT SEARCH PARSER",
+        "CREATE TEXT SEARCH TEMPLATE",
+        "CONSTRAINT",
+    ];
+    PATTERNS.iter().any(|p| lead.ends_with(p))
 }
 
 /// Drop later items whose (label, kind) collide with an earlier item.
