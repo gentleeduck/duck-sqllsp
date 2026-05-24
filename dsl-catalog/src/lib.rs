@@ -9,11 +9,11 @@
 //! On-disk format is a versioned JSON file per connection, kept under the
 //! user's XDG cache directory. See [`persist::cache_path_for`].
 
-pub mod model;
-pub mod store;
-pub mod persist;
 pub mod lookup;
+pub mod model;
+pub mod persist;
+pub mod store;
 
 pub use model::*;
-pub use persist::{cache_path_for, load, load_from, save, PersistError, CATALOG_VERSION};
+pub use persist::{CATALOG_VERSION, PersistError, cache_path_for, load, load_from, save};
 pub use store::CatalogStore;

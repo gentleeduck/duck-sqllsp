@@ -18,32 +18,23 @@ use sqlparser::parser::Parser;
 /// Entry point. Identical signature to the crate-level `parse`; the
 /// feature flag in `lib.rs` decides whether to call this.
 pub fn parse(source: &str, dialect: Dialect) -> ParsedFile {
-    let d = dialect_pick::pick(dialect);
-    let mut statements = Vec::new();
-    let mut errors = Vec::new();
+  let d = dialect_pick::pick(dialect);
+  let mut statements = Vec::new();
+  let mut errors = Vec::new();
 
-    for (chunk, range) in split_statements(source) {
-        match Parser::parse_sql(&*d, &chunk) {
-            Ok(parsed) => {
-                for stmt in parsed {
-                    statements.push(Statement {
-                        range,
-                        kind: convert::statement(stmt, &chunk),
-                    });
-                }
-            }
-            Err(e) => {
-                errors.push(ParseError {
-                    range,
-                    message: e.to_string(),
-                });
-                statements.push(Statement {
-                    range,
-                    kind: StatementKind::Unknown { text: chunk },
-                });
-            }
+  for (chunk, range) in split_statements(source) {
+    match Parser::parse_sql(&*d, &chunk) {
+      Ok(parsed) => {
+        for stmt in parsed {
+          statements.push(Statement { range, kind: convert::statement(stmt, &chunk) });
         }
+      },
+      Err(e) => {
+        errors.push(ParseError { range, message: e.to_string() });
+        statements.push(Statement { range, kind: StatementKind::Unknown { text: chunk } });
+      },
     }
+  }
 
-    ParsedFile { statements, errors }
+  ParsedFile { statements, errors }
 }

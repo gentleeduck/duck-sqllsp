@@ -10,53 +10,54 @@ use dsl_resolve::Scope;
 pub struct Rule;
 
 impl LintRule for Rule {
-    fn code(&self) -> &'static str { "sql168" }
-    fn default_severity(&self) -> Severity { Severity::Hint }
+  fn code(&self) -> &'static str {
+    "sql168"
+  }
+  fn default_severity(&self) -> Severity {
+    Severity::Hint
+  }
 
-    fn check(
-        &self,
-        source: &str,
-        stmt: &Statement,
-        _scope: &Scope,
-        catalog: &Catalog,
-        out: &mut Vec<Diagnostic>,
-    ) {
-        if !matches!(stmt.kind, StatementKind::Unknown { .. }) { return; }
-        let start: usize = u32::from(stmt.range.start()) as usize;
-        let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-        let body = &source[start..end];
-        let upper = body.to_ascii_uppercase();
-        let trimmed = upper.trim_start();
-        if !trimmed.starts_with("CREATE UNIQUE INDEX") { return; }
-        let Some(on_at) = upper.find(" ON ") else { return };
-        let after_on = body[on_at + 4..].trim_start();
-        let tbl: String = after_on.chars()
-            .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '.')
-            .collect();
-        let bare_tbl = tbl.rsplit('.').next().unwrap_or(&tbl).to_string();
-        if bare_tbl.is_empty() { return; }
-        let Some(open) = body.find('(') else { return };
-        let Some(close) = body[open + 1..].find(')') else { return };
-        let list = &body[open + 1..open + 1 + close];
-        let idx_cols: Vec<String> = list.split(',')
-            .map(|s| s.trim().trim_matches('"').to_ascii_lowercase())
-            .collect();
-        let Some(t) = catalog.find_table(None, &bare_tbl) else { return };
-        // Find any UNIQUE / PK constraint with the exact same col set.
-        for c in &t.constraints {
-            if !matches!(c.kind, dsl_catalog::ConstraintKind::Unique | dsl_catalog::ConstraintKind::PrimaryKey) {
-                continue;
-            }
-            if c.columns.len() != idx_cols.len() { continue; }
-            let cols_lower: Vec<String> = c.columns.iter().map(|c| c.to_ascii_lowercase()).collect();
-            if cols_lower.iter().all(|cc| idx_cols.contains(cc)) {
-                let kind_name = match c.kind {
-                    dsl_catalog::ConstraintKind::PrimaryKey => "PRIMARY KEY",
-                    _ => "UNIQUE",
-                };
-                let abs_start = start;
-                let abs_end = start + on_at;
-                out.push(Diagnostic {
+  fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
+    if !matches!(stmt.kind, StatementKind::Unknown { .. }) {
+      return;
+    }
+    let start: usize = u32::from(stmt.range.start()) as usize;
+    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
+    let body = &source[start..end];
+    let upper = body.to_ascii_uppercase();
+    let trimmed = upper.trim_start();
+    if !trimmed.starts_with("CREATE UNIQUE INDEX") {
+      return;
+    }
+    let Some(on_at) = upper.find(" ON ") else { return };
+    let after_on = body[on_at + 4..].trim_start();
+    let tbl: String = after_on.chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '.').collect();
+    let bare_tbl = tbl.rsplit('.').next().unwrap_or(&tbl).to_string();
+    if bare_tbl.is_empty() {
+      return;
+    }
+    let Some(open) = body.find('(') else { return };
+    let Some(close) = body[open + 1..].find(')') else { return };
+    let list = &body[open + 1..open + 1 + close];
+    let idx_cols: Vec<String> = list.split(',').map(|s| s.trim().trim_matches('"').to_ascii_lowercase()).collect();
+    let Some(t) = catalog.find_table(None, &bare_tbl) else { return };
+    // Find any UNIQUE / PK constraint with the exact same col set.
+    for c in &t.constraints {
+      if !matches!(c.kind, dsl_catalog::ConstraintKind::Unique | dsl_catalog::ConstraintKind::PrimaryKey) {
+        continue;
+      }
+      if c.columns.len() != idx_cols.len() {
+        continue;
+      }
+      let cols_lower: Vec<String> = c.columns.iter().map(|c| c.to_ascii_lowercase()).collect();
+      if cols_lower.iter().all(|cc| idx_cols.contains(cc)) {
+        let kind_name = match c.kind {
+          dsl_catalog::ConstraintKind::PrimaryKey => "PRIMARY KEY",
+          _ => "UNIQUE",
+        };
+        let abs_start = start;
+        let abs_end = start + on_at;
+        out.push(Diagnostic {
                     code: "sql168",
                     severity: Severity::Hint,
                     message: format!("CREATE UNIQUE INDEX on `{bare_tbl}({})` -- the existing {kind_name} constraint already creates a unique index on the same columns", list.trim()),
@@ -65,8 +66,8 @@ impl LintRule for Rule {
                         (abs_end as u32).into(),
                     ),
                 });
-                return;
-            }
-        }
+        return;
+      }
     }
+  }
 }

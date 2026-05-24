@@ -532,6 +532,7 @@ dependencies = [
  "text-size",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
  "toml",
  "tower-lsp",
  "tracing",
@@ -2303,6 +2304,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
+ "futures-util",
  "pin-project-lite",
  "tokio",
 ]

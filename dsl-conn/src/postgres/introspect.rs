@@ -12,8 +12,8 @@
 use crate::driver::DriverError;
 use crate::spec::ConnectionSpec;
 use dsl_catalog::{
-    Catalog, Column, Constraint, ConstraintKind, ConstraintRef, Extension, Function, FunctionArg,
-    IndexDef, Policy, Schema, Sequence, Table, TableKind, Trigger, Type, TypeKind, CATALOG_VERSION,
+  CATALOG_VERSION, Catalog, Column, Constraint, ConstraintKind, ConstraintRef, Extension, Function, FunctionArg,
+  IndexDef, Policy, Schema, Sequence, Table, TableKind, Trigger, Type, TypeKind,
 };
 use sqlx::PgPool;
 use std::collections::BTreeMap;
@@ -178,295 +178,273 @@ ORDER BY n.nspname, p.proname
 ";
 
 pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, DriverError> {
-    let map_err = |e: sqlx::Error| DriverError::Introspect(e.to_string());
+  let map_err = |e: sqlx::Error| DriverError::Introspect(e.to_string());
 
-    // Schemas
-    let schema_rows: Vec<(String,)> = sqlx::query_as(SCHEMAS_SQL)
-        .fetch_all(pool)
-        .await
-        .map_err(map_err)?;
-    let mut schemas: BTreeMap<String, Schema> = schema_rows
-        .into_iter()
-        .map(|(name,)| (name.clone(), Schema { name, tables: Vec::new() }))
-        .collect();
+  // Schemas
+  let schema_rows: Vec<(String,)> = sqlx::query_as(SCHEMAS_SQL).fetch_all(pool).await.map_err(map_err)?;
+  let mut schemas: BTreeMap<String, Schema> =
+    schema_rows.into_iter().map(|(name,)| (name.clone(), Schema { name, tables: Vec::new() })).collect();
 
-    // Tables
-    let table_rows: Vec<(String, String, String)> = sqlx::query_as(TABLES_SQL)
-        .fetch_all(pool)
-        .await
-        .map_err(map_err)?;
-    // (schema, name) -> table index inside Catalog.schemas[s].tables[i].
-    let mut table_index: BTreeMap<(String, String), (String, usize)> = BTreeMap::new();
-    for (schema_name, table_name, table_type) in table_rows {
-        let entry = schemas
-            .entry(schema_name.clone())
-            .or_insert_with(|| Schema { name: schema_name.clone(), tables: Vec::new() });
-        let kind = match table_type.as_str() {
-            "VIEW" => TableKind::View,
-            "MATERIALIZED VIEW" => TableKind::MaterializedView,
-            _ => TableKind::Table,
-        };
-        let idx = entry.tables.len();
-        entry.tables.push(Table {
-            schema: schema_name.clone(),
-            name: table_name.clone(),
-            kind,
-            columns: Vec::new(),
-            constraints: Vec::new(),
-            indexes: Vec::new(),
-            triggers: Vec::new(),
-            policies: Vec::new(),
+  // Tables
+  let table_rows: Vec<(String, String, String)> = sqlx::query_as(TABLES_SQL).fetch_all(pool).await.map_err(map_err)?;
+  // (schema, name) -> table index inside Catalog.schemas[s].tables[i].
+  let mut table_index: BTreeMap<(String, String), (String, usize)> = BTreeMap::new();
+  for (schema_name, table_name, table_type) in table_rows {
+    let entry =
+      schemas.entry(schema_name.clone()).or_insert_with(|| Schema { name: schema_name.clone(), tables: Vec::new() });
+    let kind = match table_type.as_str() {
+      "VIEW" => TableKind::View,
+      "MATERIALIZED VIEW" => TableKind::MaterializedView,
+      _ => TableKind::Table,
+    };
+    let idx = entry.tables.len();
+    entry.tables.push(Table {
+      schema: schema_name.clone(),
+      name: table_name.clone(),
+      kind,
+      columns: Vec::new(),
+      constraints: Vec::new(),
+      indexes: Vec::new(),
+      triggers: Vec::new(),
+      policies: Vec::new(),
+      comment: None,
+    });
+    table_index.insert((schema_name, table_name), (entry.name.clone(), idx));
+  }
+
+  // Columns
+  let column_rows: Vec<(String, String, String, String, String, Option<String>)> =
+    sqlx::query_as(COLUMNS_SQL).fetch_all(pool).await.map_err(map_err)?;
+  for (schema_name, table_name, column_name, data_type, is_nullable, default) in column_rows {
+    if let Some((_, idx)) = table_index.get(&(schema_name.clone(), table_name.clone())) {
+      if let Some(s) = schemas.get_mut(&schema_name) {
+        if let Some(t) = s.tables.get_mut(*idx) {
+          t.columns.push(Column {
+            name: column_name,
+            data_type,
+            nullable: is_nullable == "YES",
+            default,
             comment: None,
-        });
-        table_index.insert((schema_name, table_name), (entry.name.clone(), idx));
+          });
+        }
+      }
     }
+  }
 
-    // Columns
-    let column_rows: Vec<(String, String, String, String, String, Option<String>)> =
-        sqlx::query_as(COLUMNS_SQL)
-            .fetch_all(pool)
-            .await
-            .map_err(map_err)?;
-    for (schema_name, table_name, column_name, data_type, is_nullable, default) in column_rows {
-        if let Some((_, idx)) = table_index.get(&(schema_name.clone(), table_name.clone())) {
-            if let Some(s) = schemas.get_mut(&schema_name) {
-                if let Some(t) = s.tables.get_mut(*idx) {
-                    t.columns.push(Column {
-                        name: column_name,
-                        data_type,
-                        nullable: is_nullable == "YES",
-                        default,
-                        comment: None,
-                    });
-                }
+  // Constraints: one row per constraint with comma-separated column /
+  // ref-column lists. `kind` is the single-char `pg_constraint.contype`
+  // value (`p`, `f`, `u`, `c`). CHECK constraints carry the body in
+  // `check_expr` (we stash it on the Constraint's `name` if the
+  // catalog ever wants it -- for now it's discarded except for the
+  // hover via the constraint identifier render).
+  let constraint_rows = sqlx::query_as::<
+    _,
+    (
+      String,         // schema
+      String,         // table
+      String,         // name
+      String,         // kind (p/f/u/c)
+      Option<String>, // columns (csv)
+      Option<String>, // ref_schema
+      Option<String>, // ref_table
+      Option<String>, // ref_columns (csv)
+      Option<String>, // check_expr
+    ),
+  >(CONSTRAINTS_SQL)
+  .fetch_all(pool)
+  .await;
+  match constraint_rows {
+    Ok(rows) => {
+      for (schema, table_name, name, kind_str, columns, ref_schema, ref_table, ref_columns, check_expr) in rows {
+        let kind = match kind_str.as_str() {
+          "p" => ConstraintKind::PrimaryKey,
+          "f" => ConstraintKind::ForeignKey,
+          "u" => ConstraintKind::Unique,
+          "c" => ConstraintKind::Check,
+          _ => continue,
+        };
+        let cols: Vec<String> =
+          columns.map(|s| s.split(',').map(|p| p.trim().to_string()).collect()).unwrap_or_default();
+        let ref_cols: Vec<String> =
+          ref_columns.map(|s| s.split(',').map(|p| p.trim().to_string()).collect()).unwrap_or_default();
+        let references = match (ref_schema, ref_table) {
+          (Some(rs), Some(rt)) => Some(ConstraintRef { schema: rs, table: rt, columns: ref_cols }),
+          _ => None,
+        };
+        if let Some((_, idx)) = table_index.get(&(schema.clone(), table_name.clone())) {
+          if let Some(s) = schemas.get_mut(&schema) {
+            if let Some(t) = s.tables.get_mut(*idx) {
+              t.constraints.push(Constraint { name, kind, columns: cols, references, definition: check_expr });
             }
+          }
         }
-    }
+      }
+    },
+    Err(_) => {},
+  }
 
-    // Constraints: one row per constraint with comma-separated column /
-    // ref-column lists. `kind` is the single-char `pg_constraint.contype`
-    // value (`p`, `f`, `u`, `c`). CHECK constraints carry the body in
-    // `check_expr` (we stash it on the Constraint's `name` if the
-    // catalog ever wants it -- for now it's discarded except for the
-    // hover via the constraint identifier render).
-    let constraint_rows = sqlx::query_as::<_, (
-        String,             // schema
-        String,             // table
-        String,             // name
-        String,             // kind (p/f/u/c)
-        Option<String>,     // columns (csv)
-        Option<String>,     // ref_schema
-        Option<String>,     // ref_table
-        Option<String>,     // ref_columns (csv)
-        Option<String>,     // check_expr
-    )>(CONSTRAINTS_SQL)
-        .fetch_all(pool)
-        .await;
-    match constraint_rows {
-        Ok(rows) => for (schema, table_name, name, kind_str, columns, ref_schema, ref_table, ref_columns, check_expr) in rows {
-            let kind = match kind_str.as_str() {
-                "p" => ConstraintKind::PrimaryKey,
-                "f" => ConstraintKind::ForeignKey,
-                "u" => ConstraintKind::Unique,
-                "c" => ConstraintKind::Check,
-                _ => continue,
-            };
-            let cols: Vec<String> = columns
-                .map(|s| s.split(',').map(|p| p.trim().to_string()).collect())
-                .unwrap_or_default();
-            let ref_cols: Vec<String> = ref_columns
-                .map(|s| s.split(',').map(|p| p.trim().to_string()).collect())
-                .unwrap_or_default();
-            let references = match (ref_schema, ref_table) {
-                (Some(rs), Some(rt)) => Some(ConstraintRef { schema: rs, table: rt, columns: ref_cols }),
-                _ => None,
-            };
-            if let Some((_, idx)) = table_index.get(&(schema.clone(), table_name.clone())) {
-                if let Some(s) = schemas.get_mut(&schema) {
-                    if let Some(t) = s.tables.get_mut(*idx) {
-                        t.constraints.push(Constraint {
-                            name,
-                            kind,
-                            columns: cols,
-                            references,
-                            definition: check_expr,
-                        });
-                    }
-                }
-            }
-        }
-        Err(_) => {}
+  // Indexes (excluding the implicit primary-key / unique indexes already
+  // covered by the constraints query). pg_index gives us indkey for
+  // column ordering; pg_get_indexdef would be nicer but harder to
+  // partition into per-column rows.
+  if let Ok(rows) =
+    sqlx::query_as::<_, (String, String, String, String, bool, String)>(INDEXES_SQL).fetch_all(pool).await
+  {
+    let mut grouped: BTreeMap<(String, String, String), (Vec<String>, bool, String)> = BTreeMap::new();
+    for (schema, table, idx_name, column, unique, definition) in rows {
+      let entry = grouped.entry((schema, table, idx_name)).or_default();
+      entry.0.push(column);
+      entry.1 = unique;
+      entry.2 = definition;
     }
-
-    // Indexes (excluding the implicit primary-key / unique indexes already
-    // covered by the constraints query). pg_index gives us indkey for
-    // column ordering; pg_get_indexdef would be nicer but harder to
-    // partition into per-column rows.
-    if let Ok(rows) = sqlx::query_as::<_, (String, String, String, String, bool, String)>(INDEXES_SQL)
-        .fetch_all(pool)
-        .await
-    {
-        let mut grouped: BTreeMap<(String, String, String), (Vec<String>, bool, String)> = BTreeMap::new();
-        for (schema, table, idx_name, column, unique, definition) in rows {
-            let entry = grouped.entry((schema, table, idx_name)).or_default();
-            entry.0.push(column);
-            entry.1 = unique;
-            entry.2 = definition;
-        }
-        for ((schema, table_name, name), (cols, unique, definition)) in grouped {
-            if let Some((_, idx)) = table_index.get(&(schema.clone(), table_name.clone())) {
-                if let Some(s) = schemas.get_mut(&schema) {
-                    if let Some(t) = s.tables.get_mut(*idx) {
-                        t.indexes.push(IndexDef {
-                            name, columns: cols, unique,
-                            definition: if definition.is_empty() { None } else { Some(definition) },
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    // Triggers.
-    if let Ok(rows) = sqlx::query_as::<_, (String, String, String, String, String, String, String)>(TRIGGERS_SQL)
-        .fetch_all(pool)
-        .await
-    {
-        for (schema, table_name, name, timing, event, granularity, function) in rows {
-            if let Some((_, idx)) = table_index.get(&(schema.clone(), table_name.clone())) {
-                if let Some(s) = schemas.get_mut(&schema) {
-                    if let Some(t) = s.tables.get_mut(*idx) {
-                        t.triggers.push(Trigger { name, timing, event, granularity, function });
-                    }
-                }
-            }
-        }
-    }
-
-    // Policies (best-effort). `pg_policies` requires no special perms.
-    if let Ok(rows) = sqlx::query_as::<_, (String, String, String, bool, String, String, Option<String>, Option<String>)>(POLICIES_SQL)
-        .fetch_all(pool)
-        .await
-    {
-        for (schema, table_name, name, permissive, roles, command, using_expr, check_expr) in rows {
-            if let Some((_, idx)) = table_index.get(&(schema.clone(), table_name.clone())) {
-                if let Some(s) = schemas.get_mut(&schema) {
-                    if let Some(t) = s.tables.get_mut(*idx) {
-                        t.policies.push(Policy {
-                            name,
-                            permissive: if permissive { "PERMISSIVE".into() } else { "RESTRICTIVE".into() },
-                            roles,
-                            command,
-                            using_expr,
-                            check_expr,
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    // Functions. Best-effort: if the user lacks privileges or the
-    // server is older than 9.0 we just leave the list empty rather than
-    // failing the whole introspection.
-    let mut functions: Vec<Function> = Vec::new();
-    if let Ok(rows) = sqlx::query_as::<_, (String, String, String, String, String)>(FUNCTIONS_SQL)
-        .fetch_all(pool)
-        .await
-    {
-        for (schema, name, args, result, def) in rows {
-            let arguments = parse_args(&args);
-            functions.push(Function {
-                schema,
-                name,
-                arguments,
-                return_type: result,
-                // We stash the full DDL in `comment` so dsl-hover can
-                // render it without changing the catalog schema. The
-                // rendered output prefixes a "Source" heading, so users
-                // can tell apart this from a docstring.
-                comment: if def.is_empty() { None } else { Some(def) },
+    for ((schema, table_name, name), (cols, unique, definition)) in grouped {
+      if let Some((_, idx)) = table_index.get(&(schema.clone(), table_name.clone())) {
+        if let Some(s) = schemas.get_mut(&schema) {
+          if let Some(t) = s.tables.get_mut(*idx) {
+            t.indexes.push(IndexDef {
+              name,
+              columns: cols,
+              unique,
+              definition: if definition.is_empty() { None } else { Some(definition) },
             });
+          }
         }
+      }
     }
+  }
 
-    // Types (enum / domain / composite). Best-effort -- empty on error.
-    let mut types: Vec<Type> = Vec::new();
-    if let Ok(rows) = sqlx::query_as::<_, (String, String, String)>(TYPES_SQL)
-        .fetch_all(pool)
-        .await
-    {
-        for (schema, name, kind_char) in rows {
-            let kind = match kind_char.as_str() {
-                "e" => TypeKind::Enum,
-                "d" => TypeKind::Domain,
-                "c" => TypeKind::Composite,
-                _   => continue,
-            };
-            types.push(Type { schema, name, kind });
+  // Triggers.
+  if let Ok(rows) =
+    sqlx::query_as::<_, (String, String, String, String, String, String, String)>(TRIGGERS_SQL).fetch_all(pool).await
+  {
+    for (schema, table_name, name, timing, event, granularity, function) in rows {
+      if let Some((_, idx)) = table_index.get(&(schema.clone(), table_name.clone())) {
+        if let Some(s) = schemas.get_mut(&schema) {
+          if let Some(t) = s.tables.get_mut(*idx) {
+            t.triggers.push(Trigger { name, timing, event, granularity, function });
+          }
         }
+      }
     }
+  }
 
-    // Roles -- consumed by sql169 owner_to_unknown_role and by
-    // completion / hover of GRANT TO / OWNER TO. Skip rolname starting
-    // with `pg_` (built-in PG internal roles).
-    let mut roles: Vec<String> = Vec::new();
-    if let Ok(rows) = sqlx::query_as::<_, (String,)>(
-        "SELECT rolname FROM pg_roles ORDER BY rolname"
-    )
-    .fetch_all(pool)
-    .await
-    {
-        roles = rows.into_iter().map(|(n,)| n).collect();
-    }
-
-    // Sequences from `pg_sequences` (the documented user-visible view
-    // over `pg_class` + `pg_sequence`). Skips system schemas just like
-    // tables. `owned_by_column` is derived from `pg_depend` -- a
-    // sequence implicitly created by SERIAL or GENERATED AS IDENTITY
-    // hangs off the column via a `auto`-class dependency.
-    let mut sequences: Vec<Sequence> = Vec::new();
-    if let Ok(rows) = sqlx::query_as::<_, (
-        String, String, String, i64, i64, i64, i64, bool, Option<String>,
-    )>(SEQUENCES_SQL)
-        .fetch_all(pool)
-        .await
-    {
-        for (schema, name, data_type, start, min, max, inc, cycle, owned) in rows {
-            sequences.push(Sequence {
-                schema, name, data_type,
-                start_value: start, min_value: min, max_value: max,
-                increment_by: inc, cycle, owned_by_column: owned,
-                comment: None,
+  // Policies (best-effort). `pg_policies` requires no special perms.
+  if let Ok(rows) =
+    sqlx::query_as::<_, (String, String, String, bool, String, String, Option<String>, Option<String>)>(POLICIES_SQL)
+      .fetch_all(pool)
+      .await
+  {
+    for (schema, table_name, name, permissive, roles, command, using_expr, check_expr) in rows {
+      if let Some((_, idx)) = table_index.get(&(schema.clone(), table_name.clone())) {
+        if let Some(s) = schemas.get_mut(&schema) {
+          if let Some(t) = s.tables.get_mut(*idx) {
+            t.policies.push(Policy {
+              name,
+              permissive: if permissive { "PERMISSIVE".into() } else { "RESTRICTIVE".into() },
+              roles,
+              command,
+              using_expr,
+              check_expr,
             });
+          }
         }
+      }
     }
+  }
 
-    // Installed extensions from `pg_extension` joined to `pg_namespace`
-    // for the install schema. `pg_catalog` extensions (the bundled
-    // plpgsql) are not filtered -- some users care that it's there.
-    let mut extensions: Vec<Extension> = Vec::new();
-    if let Ok(rows) = sqlx::query_as::<_, (String, String, String, Option<String>)>(
-        EXTENSIONS_SQL,
-    )
-    .fetch_all(pool)
-    .await
-    {
-        for (name, schema, version, comment) in rows {
-            extensions.push(Extension { name, schema, version, comment });
-        }
+  // Functions. Best-effort: if the user lacks privileges or the
+  // server is older than 9.0 we just leave the list empty rather than
+  // failing the whole introspection.
+  let mut functions: Vec<Function> = Vec::new();
+  if let Ok(rows) = sqlx::query_as::<_, (String, String, String, String, String)>(FUNCTIONS_SQL).fetch_all(pool).await {
+    for (schema, name, args, result, def) in rows {
+      let arguments = parse_args(&args);
+      functions.push(Function {
+        schema,
+        name,
+        arguments,
+        return_type: result,
+        // We stash the full DDL in `comment` so dsl-hover can
+        // render it without changing the catalog schema. The
+        // rendered output prefixes a "Source" heading, so users
+        // can tell apart this from a docstring.
+        comment: if def.is_empty() { None } else { Some(def) },
+      });
     }
+  }
 
-    Ok(Catalog {
-        version: CATALOG_VERSION,
-        connection_id: spec.name.clone(),
-        schemas: schemas.into_values().collect(),
-        functions,
-        types,
-        roles,
-        sequences,
-        extensions,
-    })
+  // Types (enum / domain / composite). Best-effort -- empty on error.
+  let mut types: Vec<Type> = Vec::new();
+  if let Ok(rows) = sqlx::query_as::<_, (String, String, String)>(TYPES_SQL).fetch_all(pool).await {
+    for (schema, name, kind_char) in rows {
+      let kind = match kind_char.as_str() {
+        "e" => TypeKind::Enum,
+        "d" => TypeKind::Domain,
+        "c" => TypeKind::Composite,
+        _ => continue,
+      };
+      types.push(Type { schema, name, kind });
+    }
+  }
+
+  // Roles -- consumed by sql169 owner_to_unknown_role and by
+  // completion / hover of GRANT TO / OWNER TO. Skip rolname starting
+  // with `pg_` (built-in PG internal roles).
+  let mut roles: Vec<String> = Vec::new();
+  if let Ok(rows) =
+    sqlx::query_as::<_, (String,)>("SELECT rolname FROM pg_roles ORDER BY rolname").fetch_all(pool).await
+  {
+    roles = rows.into_iter().map(|(n,)| n).collect();
+  }
+
+  // Sequences from `pg_sequences` (the documented user-visible view
+  // over `pg_class` + `pg_sequence`). Skips system schemas just like
+  // tables. `owned_by_column` is derived from `pg_depend` -- a
+  // sequence implicitly created by SERIAL or GENERATED AS IDENTITY
+  // hangs off the column via a `auto`-class dependency.
+  let mut sequences: Vec<Sequence> = Vec::new();
+  if let Ok(rows) =
+    sqlx::query_as::<_, (String, String, String, i64, i64, i64, i64, bool, Option<String>)>(SEQUENCES_SQL)
+      .fetch_all(pool)
+      .await
+  {
+    for (schema, name, data_type, start, min, max, inc, cycle, owned) in rows {
+      sequences.push(Sequence {
+        schema,
+        name,
+        data_type,
+        start_value: start,
+        min_value: min,
+        max_value: max,
+        increment_by: inc,
+        cycle,
+        owned_by_column: owned,
+        comment: None,
+      });
+    }
+  }
+
+  // Installed extensions from `pg_extension` joined to `pg_namespace`
+  // for the install schema. `pg_catalog` extensions (the bundled
+  // plpgsql) are not filtered -- some users care that it's there.
+  let mut extensions: Vec<Extension> = Vec::new();
+  if let Ok(rows) = sqlx::query_as::<_, (String, String, String, Option<String>)>(EXTENSIONS_SQL).fetch_all(pool).await
+  {
+    for (name, schema, version, comment) in rows {
+      extensions.push(Extension { name, schema, version, comment });
+    }
+  }
+
+  Ok(Catalog {
+    version: CATALOG_VERSION,
+    connection_id: spec.name.clone(),
+    schemas: schemas.into_values().collect(),
+    functions,
+    types,
+    roles,
+    sequences,
+    extensions,
+  })
 }
 
 const SEQUENCES_SQL: &str = "
@@ -515,51 +493,52 @@ ORDER BY e.extname
 /// looks like `name1 type1, name2 type2` (names optional). Splits on
 /// top-level commas; nested parens (e.g. `numeric(10,2)`) are respected.
 fn parse_args(s: &str) -> Vec<FunctionArg> {
-    if s.trim().is_empty() { return Vec::new(); }
-    let mut out = Vec::new();
-    let mut depth: i32 = 0;
-    let mut start = 0usize;
-    for (i, ch) in s.char_indices() {
-        match ch {
-            '(' => depth += 1,
-            ')' => depth -= 1,
-            ',' if depth == 0 => {
-                push_arg(&s[start..i], &mut out);
-                start = i + 1;
-            }
-            _ => {}
-        }
+  if s.trim().is_empty() {
+    return Vec::new();
+  }
+  let mut out = Vec::new();
+  let mut depth: i32 = 0;
+  let mut start = 0usize;
+  for (i, ch) in s.char_indices() {
+    match ch {
+      '(' => depth += 1,
+      ')' => depth -= 1,
+      ',' if depth == 0 => {
+        push_arg(&s[start..i], &mut out);
+        start = i + 1;
+      },
+      _ => {},
     }
-    push_arg(&s[start..], &mut out);
-    out
+  }
+  push_arg(&s[start..], &mut out);
+  out
 }
 
 fn push_arg(raw: &str, out: &mut Vec<FunctionArg>) {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() { return; }
-    // "name type" -> (Some(name), type). Otherwise just (None, trimmed).
-    if let Some((head, rest)) = trimmed.split_once(char::is_whitespace) {
-        let head_upper = head.to_ascii_uppercase();
-        // pg may prefix arg modes (IN / OUT / INOUT / VARIADIC). Treat
-        // those as a no-op; the name is still the next token.
-        if matches!(head_upper.as_str(), "IN" | "OUT" | "INOUT" | "VARIADIC") {
-            if let Some((name, ty)) = rest.trim_start().split_once(char::is_whitespace) {
-                out.push(FunctionArg { name: Some(name.into()), data_type: ty.trim().into() });
-                return;
-            }
-            out.push(FunctionArg { name: None, data_type: rest.trim().into() });
-            return;
-        }
-        // Type may itself contain spaces (e.g. "character varying").
-        // Heuristic: if `head` looks like an identifier and `rest`
-        // starts with a recognised data-type word, treat head as name.
-        if head.chars().all(|c| c.is_alphanumeric() || c == '_') {
-            out.push(FunctionArg {
-                name: Some(head.into()),
-                data_type: rest.trim().into(),
-            });
-            return;
-        }
+  let trimmed = raw.trim();
+  if trimmed.is_empty() {
+    return;
+  }
+  // "name type" -> (Some(name), type). Otherwise just (None, trimmed).
+  if let Some((head, rest)) = trimmed.split_once(char::is_whitespace) {
+    let head_upper = head.to_ascii_uppercase();
+    // pg may prefix arg modes (IN / OUT / INOUT / VARIADIC). Treat
+    // those as a no-op; the name is still the next token.
+    if matches!(head_upper.as_str(), "IN" | "OUT" | "INOUT" | "VARIADIC") {
+      if let Some((name, ty)) = rest.trim_start().split_once(char::is_whitespace) {
+        out.push(FunctionArg { name: Some(name.into()), data_type: ty.trim().into() });
+        return;
+      }
+      out.push(FunctionArg { name: None, data_type: rest.trim().into() });
+      return;
     }
-    out.push(FunctionArg { name: None, data_type: trimmed.into() });
+    // Type may itself contain spaces (e.g. "character varying").
+    // Heuristic: if `head` looks like an identifier and `rest`
+    // starts with a recognised data-type word, treat head as name.
+    if head.chars().all(|c| c.is_alphanumeric() || c == '_') {
+      out.push(FunctionArg { name: Some(head.into()), data_type: rest.trim().into() });
+      return;
+    }
+  }
+  out.push(FunctionArg { name: None, data_type: trimmed.into() });
 }

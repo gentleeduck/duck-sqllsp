@@ -13,87 +13,103 @@ use dsl_resolve::Scope;
 pub struct Rule;
 
 impl LintRule for Rule {
-    fn code(&self) -> &'static str { "sql038" }
-    fn default_severity(&self) -> Severity { Severity::Error }
+  fn code(&self) -> &'static str {
+    "sql038"
+  }
+  fn default_severity(&self) -> Severity {
+    Severity::Error
+  }
 
-    fn check(
-        &self,
-        source: &str,
-        stmt: &Statement,
-        _scope: &Scope,
-        _catalog: &Catalog,
-        out: &mut Vec<Diagnostic>,
-    ) {
-        let StatementKind::Insert(i) = &stmt.kind else { return; };
-        if i.columns.is_empty() { return; }
-        let start: usize = u32::from(stmt.range.start()) as usize;
-        let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-        let body = &source[start..end];
-        let upper = body.to_ascii_uppercase();
-
-        // Find each `VALUES (...)` tuple after the col list. Count
-        // top-level commas inside the paren list -> count of values.
-        let bytes = body.as_bytes();
-        let n = bytes.len();
-        let values_kw = upper.find("VALUES");
-        let Some(values_at) = values_kw else { return; };
-        let mut k = values_at + 6;
-        while k < n && bytes[k].is_ascii_whitespace() { k += 1; }
-        if k >= n || bytes[k] != b'(' { return; }
-        let Some(tuple_end) = match_paren(bytes, k) else { return; };
-        let tuple = &body[k + 1..tuple_end];
-        let value_count = top_level_comma_count(tuple) + 1;
-        let col_count = i.columns.len();
-        if value_count != col_count {
-            out.push(Diagnostic {
-                code: "sql038",
-                severity: Severity::Error,
-                message: format!(
-                    "INSERT has {col_count} target column(s) but {value_count} value(s) in VALUES"
-                ),
-                range: stmt.range,
-            });
-        }
+  fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
+    let StatementKind::Insert(i) = &stmt.kind else {
+      return;
+    };
+    if i.columns.is_empty() {
+      return;
     }
+    let start: usize = u32::from(stmt.range.start()) as usize;
+    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
+    let body = &source[start..end];
+    let upper = body.to_ascii_uppercase();
+
+    // Find each `VALUES (...)` tuple after the col list. Count
+    // top-level commas inside the paren list -> count of values.
+    let bytes = body.as_bytes();
+    let n = bytes.len();
+    let values_kw = upper.find("VALUES");
+    let Some(values_at) = values_kw else {
+      return;
+    };
+    let mut k = values_at + 6;
+    while k < n && bytes[k].is_ascii_whitespace() {
+      k += 1;
+    }
+    if k >= n || bytes[k] != b'(' {
+      return;
+    }
+    let Some(tuple_end) = match_paren(bytes, k) else {
+      return;
+    };
+    let tuple = &body[k + 1..tuple_end];
+    let value_count = top_level_comma_count(tuple) + 1;
+    let col_count = i.columns.len();
+    if value_count != col_count {
+      out.push(Diagnostic {
+        code: "sql038",
+        severity: Severity::Error,
+        message: format!("INSERT has {col_count} target column(s) but {value_count} value(s) in VALUES"),
+        range: stmt.range,
+      });
+    }
+  }
 }
 
 fn match_paren(bytes: &[u8], open: usize) -> Option<usize> {
-    let n = bytes.len();
-    let mut depth = 0i32;
-    let mut i = open;
-    while i < n {
-        match bytes[i] {
-            b'(' => depth += 1,
-            b')' => { depth -= 1; if depth == 0 { return Some(i); } }
-            b'\'' => {
-                i += 1;
-                while i < n && bytes[i] != b'\'' { i += 1; }
-            }
-            _ => {}
+  let n = bytes.len();
+  let mut depth = 0i32;
+  let mut i = open;
+  while i < n {
+    match bytes[i] {
+      b'(' => depth += 1,
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
         }
+      },
+      b'\'' => {
         i += 1;
+        while i < n && bytes[i] != b'\'' {
+          i += 1;
+        }
+      },
+      _ => {},
     }
-    None
+    i += 1;
+  }
+  None
 }
 
 fn top_level_comma_count(s: &str) -> usize {
-    let bytes = s.as_bytes();
-    let n = bytes.len();
-    let mut count = 0usize;
-    let mut depth = 0i32;
-    let mut i = 0;
-    while i < n {
-        match bytes[i] {
-            b'(' => depth += 1,
-            b')' => depth -= 1,
-            b'\'' => {
-                i += 1;
-                while i < n && bytes[i] != b'\'' { i += 1; }
-            }
-            b',' if depth == 0 => count += 1,
-            _ => {}
-        }
+  let bytes = s.as_bytes();
+  let n = bytes.len();
+  let mut count = 0usize;
+  let mut depth = 0i32;
+  let mut i = 0;
+  while i < n {
+    match bytes[i] {
+      b'(' => depth += 1,
+      b')' => depth -= 1,
+      b'\'' => {
         i += 1;
+        while i < n && bytes[i] != b'\'' {
+          i += 1;
+        }
+      },
+      b',' if depth == 0 => count += 1,
+      _ => {},
     }
-    count
+    i += 1;
+  }
+  count
 }

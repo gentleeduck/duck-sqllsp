@@ -13,53 +13,48 @@ use text_size::TextRange;
 pub struct Rule;
 
 impl LintRule for Rule {
-    fn code(&self) -> &'static str { "sql015" }
-    fn default_severity(&self) -> Severity { Severity::Warning }
+  fn code(&self) -> &'static str {
+    "sql015"
+  }
+  fn default_severity(&self) -> Severity {
+    Severity::Warning
+  }
 
-    fn check(
-        &self,
-        source: &str,
-        stmt: &Statement,
-        _scope: &Scope,
-        _catalog: &Catalog,
-        out: &mut Vec<Diagnostic>,
-    ) {
-        let range: TextRange = stmt.range;
-        let start: u32 = range.start().into();
-        let end: u32 = range.end().into();
-        let slice = &source[start as usize..end.min(source.len() as u32) as usize];
+  fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
+    let range: TextRange = stmt.range;
+    let start: u32 = range.start().into();
+    let end: u32 = range.end().into();
+    let slice = &source[start as usize..end.min(source.len() as u32) as usize];
 
-        for pat in ["= NULL", "=NULL", "<> NULL", "<>NULL", "!= NULL", "!=NULL"] {
-            if find_outside_strings(slice, pat).is_some() {
-                out.push(Diagnostic {
-                    code: "sql015",
-                    severity: Severity::Warning,
-                    message: format!(
-                        "comparison `{pat}` always yields NULL; use `IS NULL` or `IS NOT NULL`"
-                    ),
-                    range,
-                });
-                break; // one report per statement is enough
-            }
-        }
+    for pat in ["= NULL", "=NULL", "<> NULL", "<>NULL", "!= NULL", "!=NULL"] {
+      if find_outside_strings(slice, pat).is_some() {
+        out.push(Diagnostic {
+          code: "sql015",
+          severity: Severity::Warning,
+          message: format!("comparison `{pat}` always yields NULL; use `IS NULL` or `IS NOT NULL`"),
+          range,
+        });
+        break; // one report per statement is enough
+      }
     }
+  }
 }
 
 fn find_outside_strings(s: &str, needle: &str) -> Option<usize> {
-    let upper = s.to_ascii_uppercase();
-    let needle_upper = needle.to_ascii_uppercase();
-    let bytes = s.as_bytes();
-    let mut in_single = false;
-    let mut i = 0;
-    while i + needle_upper.len() <= bytes.len() {
-        let c = bytes[i] as char;
-        if c == '\'' && (i == 0 || bytes[i - 1] != b'\\') {
-            in_single = !in_single;
-        }
-        if !in_single && upper[i..].starts_with(&needle_upper) {
-            return Some(i);
-        }
-        i += 1;
+  let upper = s.to_ascii_uppercase();
+  let needle_upper = needle.to_ascii_uppercase();
+  let bytes = s.as_bytes();
+  let mut in_single = false;
+  let mut i = 0;
+  while i + needle_upper.len() <= bytes.len() {
+    let c = bytes[i] as char;
+    if c == '\'' && (i == 0 || bytes[i - 1] != b'\\') {
+      in_single = !in_single;
     }
-    None
+    if !in_single && upper[i..].starts_with(&needle_upper) {
+      return Some(i);
+    }
+    i += 1;
+  }
+  None
 }

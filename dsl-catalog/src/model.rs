@@ -4,187 +4,190 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Catalog {
-    pub version: u32,
-    pub connection_id: String,
-    pub schemas: Vec<Schema>,
-    pub functions: Vec<Function>,
-    /// User-defined types (enum / domain / composite). Populated by
-    /// PG introspection from `pg_type` + `information_schema.domains`
-    /// + `pg_class` (composites). Default empty so older on-disk
-    /// catalog snapshots continue to deserialise.
-    #[serde(default)]
-    pub types: Vec<Type>,
-    /// Role names from `pg_roles` -- consumed by sql169
-    /// owner_to_unknown_role and by completion / hover of GRANT TO /
-    /// OWNER TO. Default empty so cached catalogs remain forward-
-    /// compatible.
-    #[serde(default)]
-    pub roles: Vec<String>,
-    /// Sequences from `pg_sequences`. Hover / completion / nextval()
-    /// argument validation use these. Default empty so older snapshots
-    /// stay forward-compatible.
-    #[serde(default)]
-    pub sequences: Vec<Sequence>,
-    /// Installed extensions from `pg_extension`. Lets hover annotate
-    /// `CREATE EXTENSION` and lets sql checks for known extensions
-    /// (pgcrypto, uuid-ossp, postgis...) know what is available.
-    #[serde(default)]
-    pub extensions: Vec<Extension>,
+  pub version: u32,
+  pub connection_id: String,
+  pub schemas: Vec<Schema>,
+  pub functions: Vec<Function>,
+  /// User-defined types (enum / domain / composite). Populated by
+  /// PG introspection from `pg_type` + `information_schema.domains`
+  /// + `pg_class` (composites). Default empty so older on-disk
+  /// catalog snapshots continue to deserialise.
+  #[serde(default)]
+  pub types: Vec<Type>,
+  /// Role names from `pg_roles` -- consumed by sql169
+  /// owner_to_unknown_role and by completion / hover of GRANT TO /
+  /// OWNER TO. Default empty so cached catalogs remain forward-
+  /// compatible.
+  #[serde(default)]
+  pub roles: Vec<String>,
+  /// Sequences from `pg_sequences`. Hover / completion / nextval()
+  /// argument validation use these. Default empty so older snapshots
+  /// stay forward-compatible.
+  #[serde(default)]
+  pub sequences: Vec<Sequence>,
+  /// Installed extensions from `pg_extension`. Lets hover annotate
+  /// `CREATE EXTENSION` and lets sql checks for known extensions
+  /// (pgcrypto, uuid-ossp, postgis...) know what is available.
+  #[serde(default)]
+  pub extensions: Vec<Extension>,
 }
 
 /// Sequence object. Mirrors the columns of `pg_sequences`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Sequence {
-    pub schema: String,
-    pub name: String,
-    /// `bigint` / `integer` / `smallint`.
-    pub data_type: String,
-    pub start_value: i64,
-    pub min_value: i64,
-    pub max_value: i64,
-    pub increment_by: i64,
-    pub cycle: bool,
-    /// True when this sequence is owned by a column (created
-    /// implicitly by SERIAL / BIGSERIAL / GENERATED AS IDENTITY).
-    pub owned_by_column: Option<String>,
-    #[serde(default)]
-    pub comment: Option<String>,
+  pub schema: String,
+  pub name: String,
+  /// `bigint` / `integer` / `smallint`.
+  pub data_type: String,
+  pub start_value: i64,
+  pub min_value: i64,
+  pub max_value: i64,
+  pub increment_by: i64,
+  pub cycle: bool,
+  /// True when this sequence is owned by a column (created
+  /// implicitly by SERIAL / BIGSERIAL / GENERATED AS IDENTITY).
+  pub owned_by_column: Option<String>,
+  #[serde(default)]
+  pub comment: Option<String>,
 }
 
 /// Installed Postgres extension. Mirrors `pg_extension` joined with
 /// `pg_namespace` for the install schema.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Extension {
-    pub name: String,
-    pub schema: String,
-    pub version: String,
-    #[serde(default)]
-    pub comment: Option<String>,
+  pub name: String,
+  pub schema: String,
+  pub version: String,
+  #[serde(default)]
+  pub comment: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Schema {
-    pub name: String,
-    pub tables: Vec<Table>,
+  pub name: String,
+  pub tables: Vec<Table>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Table {
-    pub schema: String,
-    pub name: String,
-    pub kind: TableKind,
-    pub columns: Vec<Column>,
-    pub constraints: Vec<Constraint>,
-    pub indexes: Vec<IndexDef>,
-    #[serde(default)]
-    pub triggers: Vec<Trigger>,
-    #[serde(default)]
-    pub policies: Vec<Policy>,
-    #[serde(default)]
-    pub comment: Option<String>,
+  pub schema: String,
+  pub name: String,
+  pub kind: TableKind,
+  pub columns: Vec<Column>,
+  pub constraints: Vec<Constraint>,
+  pub indexes: Vec<IndexDef>,
+  #[serde(default)]
+  pub triggers: Vec<Trigger>,
+  #[serde(default)]
+  pub policies: Vec<Policy>,
+  #[serde(default)]
+  pub comment: Option<String>,
 }
 
 /// Row-level security policy attached to a table. Mirrors `pg_policies`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Policy {
-    pub name: String,
-    /// PERMISSIVE / RESTRICTIVE.
-    pub permissive: String,
-    /// Comma-separated role list, or `PUBLIC`.
-    pub roles: String,
-    /// ALL / SELECT / INSERT / UPDATE / DELETE.
-    pub command: String,
-    /// USING expression text.
-    pub using_expr: Option<String>,
-    /// WITH CHECK expression text.
-    pub check_expr: Option<String>,
+  pub name: String,
+  /// PERMISSIVE / RESTRICTIVE.
+  pub permissive: String,
+  /// Comma-separated role list, or `PUBLIC`.
+  pub roles: String,
+  /// ALL / SELECT / INSERT / UPDATE / DELETE.
+  pub command: String,
+  /// USING expression text.
+  pub using_expr: Option<String>,
+  /// WITH CHECK expression text.
+  pub check_expr: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Trigger {
-    pub name: String,
-    /// BEFORE / AFTER / INSTEAD OF
-    pub timing: String,
-    /// INSERT / UPDATE / DELETE / TRUNCATE -- space-joined when multiple.
-    pub event: String,
-    /// ROW or STATEMENT
-    pub granularity: String,
-    /// schema.function_name
-    pub function: String,
+  pub name: String,
+  /// BEFORE / AFTER / INSTEAD OF
+  pub timing: String,
+  /// INSERT / UPDATE / DELETE / TRUNCATE -- space-joined when multiple.
+  pub event: String,
+  /// ROW or STATEMENT
+  pub granularity: String,
+  /// schema.function_name
+  pub function: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TableKind {
-    Table,
-    View,
-    MaterializedView,
+  Table,
+  View,
+  MaterializedView,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Column {
-    pub name: String,
-    pub data_type: String,
-    pub nullable: bool,
-    #[serde(default)]
-    pub default: Option<String>,
-    #[serde(default)]
-    pub comment: Option<String>,
+  pub name: String,
+  pub data_type: String,
+  pub nullable: bool,
+  #[serde(default)]
+  pub default: Option<String>,
+  #[serde(default)]
+  pub comment: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Constraint {
-    pub name: String,
-    pub kind: ConstraintKind,
-    pub columns: Vec<String>,
-    #[serde(default)]
-    pub references: Option<ConstraintRef>,
-    /// `pg_get_constraintdef(con.oid)` -- the full DDL fragment. Holds the
-    /// CHECK body, the FK action clauses, etc. Used by hover; never None
-    /// for entries fetched from Postgres but Option-typed so older
-    /// catalog snapshots still deserialise.
-    #[serde(default)]
-    pub definition: Option<String>,
+  pub name: String,
+  pub kind: ConstraintKind,
+  pub columns: Vec<String>,
+  #[serde(default)]
+  pub references: Option<ConstraintRef>,
+  /// `pg_get_constraintdef(con.oid)` -- the full DDL fragment. Holds the
+  /// CHECK body, the FK action clauses, etc. Used by hover; never None
+  /// for entries fetched from Postgres but Option-typed so older
+  /// catalog snapshots still deserialise.
+  #[serde(default)]
+  pub definition: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConstraintKind {
-    PrimaryKey, ForeignKey, Unique, Check,
+  PrimaryKey,
+  ForeignKey,
+  Unique,
+  Check,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConstraintRef {
-    pub schema: String,
-    pub table: String,
-    pub columns: Vec<String>,
+  pub schema: String,
+  pub table: String,
+  pub columns: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexDef {
-    pub name: String,
-    pub columns: Vec<String>,
-    pub unique: bool,
-    /// `pg_get_indexdef(oid)` -- the CREATE INDEX text. Used by hover to
-    /// show the full definition (column list, method, partial WHERE).
-    #[serde(default)]
-    pub definition: Option<String>,
+  pub name: String,
+  pub columns: Vec<String>,
+  pub unique: bool,
+  /// `pg_get_indexdef(oid)` -- the CREATE INDEX text. Used by hover to
+  /// show the full definition (column list, method, partial WHERE).
+  #[serde(default)]
+  pub definition: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Function {
-    pub schema: String,
-    pub name: String,
-    pub arguments: Vec<FunctionArg>,
-    pub return_type: String,
-    #[serde(default)]
-    pub comment: Option<String>,
+  pub schema: String,
+  pub name: String,
+  pub arguments: Vec<FunctionArg>,
+  pub return_type: String,
+  #[serde(default)]
+  pub comment: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionArg {
-    pub name: Option<String>,
-    pub data_type: String,
+  pub name: Option<String>,
+  pub data_type: String,
 }
 
 /// User-defined type. Mirrors the three CREATE TYPE flavours Postgres
@@ -192,18 +195,18 @@ pub struct FunctionArg {
 /// range / shell / base types we don't model yet.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Type {
-    pub schema: String,
-    pub name: String,
-    pub kind: TypeKind,
+  pub schema: String,
+  pub name: String,
+  pub kind: TypeKind,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TypeKind {
-    /// `CREATE TYPE x AS ENUM (...)`.
-    Enum,
-    /// `CREATE DOMAIN x AS base CHECK (...)`.
-    Domain,
-    /// `CREATE TYPE x AS (field1 type1, ...)`.
-    Composite,
+  /// `CREATE TYPE x AS ENUM (...)`.
+  Enum,
+  /// `CREATE DOMAIN x AS base CHECK (...)`.
+  Domain,
+  /// `CREATE TYPE x AS (field1 type1, ...)`.
+  Composite,
 }

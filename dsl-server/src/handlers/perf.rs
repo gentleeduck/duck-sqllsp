@@ -12,39 +12,39 @@ use std::time::Instant;
 use tower_lsp::lsp_types::Url;
 
 pub struct Guard {
-    name: &'static str,
-    uri: Option<Url>,
-    start: Instant,
+  name: &'static str,
+  uri: Option<Url>,
+  start: Instant,
 }
 
 impl Guard {
-    pub fn new(name: &'static str) -> Self {
-        Self { name, uri: None, start: Instant::now() }
-    }
+  pub fn new(name: &'static str) -> Self {
+    Self { name, uri: None, start: Instant::now() }
+  }
 
-    pub fn with_uri(name: &'static str, uri: &Url) -> Self {
-        Self { name, uri: Some(uri.clone()), start: Instant::now() }
-    }
+  pub fn with_uri(name: &'static str, uri: &Url) -> Self {
+    Self { name, uri: Some(uri.clone()), start: Instant::now() }
+  }
 }
 
 impl Drop for Guard {
-    fn drop(&mut self) {
-        let us = self.start.elapsed().as_micros();
-        // `target` filters; one log line per handler call.
-        match &self.uri {
-            Some(u) => tracing::info!(
-                target: "dsl_server::perf",
-                handler = self.name,
-                uri = %u,
-                us = %us,
-                "handler done",
-            ),
-            None => tracing::info!(
-                target: "dsl_server::perf",
-                handler = self.name,
-                us = %us,
-                "handler done",
-            ),
-        }
+  fn drop(&mut self) {
+    let us = self.start.elapsed().as_micros();
+    // `target` filters; one log line per handler call.
+    match &self.uri {
+      Some(u) => tracing::info!(
+          target: "dsl_server::perf",
+          handler = self.name,
+          uri = %u,
+          us = %us,
+          "handler done",
+      ),
+      None => tracing::info!(
+          target: "dsl_server::perf",
+          handler = self.name,
+          us = %us,
+          "handler done",
+      ),
     }
+  }
 }

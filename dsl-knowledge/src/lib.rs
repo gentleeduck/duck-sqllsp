@@ -9,8 +9,8 @@
 //! All data lives under `tables/`; the `lib.rs` surface is intentionally tiny.
 
 pub mod entry;
-pub mod tables;
 pub mod render;
+pub mod tables;
 
 pub use entry::{Entry, Kind, PG_DOCS_BASE};
 pub use render::{render_markdown, wrap_paragraphs};

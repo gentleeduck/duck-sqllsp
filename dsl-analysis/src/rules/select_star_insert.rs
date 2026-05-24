@@ -13,48 +13,43 @@ use dsl_resolve::Scope;
 pub struct Rule;
 
 impl LintRule for Rule {
-    fn code(&self) -> &'static str { "sql016" }
-    fn default_severity(&self) -> Severity { Severity::Warning }
+  fn code(&self) -> &'static str {
+    "sql016"
+  }
+  fn default_severity(&self) -> Severity {
+    Severity::Warning
+  }
 
-    fn check(
-        &self,
-        source: &str,
-        stmt: &Statement,
-        _scope: &Scope,
-        _catalog: &Catalog,
-        out: &mut Vec<Diagnostic>,
-    ) {
-        if !matches!(stmt.kind, StatementKind::Insert(_)) { return; }
-
-        let start: u32 = stmt.range.start().into();
-        let end: u32 = stmt.range.end().into();
-        let slice = &source[start as usize..end.min(source.len() as u32) as usize];
-        let upper = slice.to_ascii_uppercase();
-
-        // Quick text scan: must contain "SELECT" + "*" with no other
-        // identifiers between them (cheap signal for `SELECT * FROM ...`).
-        if let Some(sel) = upper.find("SELECT") {
-            let after = &upper[sel + 6..];
-            // Skip whitespace then check for `*` immediately.
-            let trimmed = after.trim_start();
-            if trimmed.starts_with('*') {
-                let leading_ws = after.len() - trimmed.len();
-                let star_rel = sel + 6 + leading_ws;
-                let abs_start = start as usize + star_rel;
-                let abs_end = abs_start + 1;
-                out.push(Diagnostic {
-                    code: "sql016",
-                    severity: Severity::Warning,
-                    message:
-                        "INSERT ... SELECT * is fragile -- a column added to the source silently \
-                         misaligns the destination. List the source columns explicitly."
-                            .into(),
-                    range: text_size::TextRange::new(
-                        (abs_start as u32).into(),
-                        (abs_end as u32).into(),
-                    ),
-                });
-            }
-        }
+  fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
+    if !matches!(stmt.kind, StatementKind::Insert(_)) {
+      return;
     }
+
+    let start: u32 = stmt.range.start().into();
+    let end: u32 = stmt.range.end().into();
+    let slice = &source[start as usize..end.min(source.len() as u32) as usize];
+    let upper = slice.to_ascii_uppercase();
+
+    // Quick text scan: must contain "SELECT" + "*" with no other
+    // identifiers between them (cheap signal for `SELECT * FROM ...`).
+    if let Some(sel) = upper.find("SELECT") {
+      let after = &upper[sel + 6..];
+      // Skip whitespace then check for `*` immediately.
+      let trimmed = after.trim_start();
+      if trimmed.starts_with('*') {
+        let leading_ws = after.len() - trimmed.len();
+        let star_rel = sel + 6 + leading_ws;
+        let abs_start = start as usize + star_rel;
+        let abs_end = abs_start + 1;
+        out.push(Diagnostic {
+          code: "sql016",
+          severity: Severity::Warning,
+          message: "INSERT ... SELECT * is fragile -- a column added to the source silently \
+                         misaligns the destination. List the source columns explicitly."
+            .into(),
+          range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+        });
+      }
+    }
+  }
 }

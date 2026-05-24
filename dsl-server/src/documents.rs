@@ -18,114 +18,106 @@ pub const MAX_DOC_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Clone, Default)]
 pub struct DocumentStore {
-    docs: Arc<DashMap<Url, Document>>,
+  docs: Arc<DashMap<Url, Document>>,
 }
 
 #[derive(Clone)]
 pub struct Document {
-    pub uri: Url,
-    pub text: String,
-    pub version: i32,
-    pub rope: Rope,
-    /// Lazily-populated parse + scope cache. Cleared on every update --
-    /// the first heavy handler after didChange pays the parse cost, the
-    /// rest reuse it. Wrapped in `Arc` so clones from `DashMap::get`
-    /// don't re-run the parser.
-    parse_cache: Arc<OnceLock<Arc<ParseCache>>>,
+  pub uri: Url,
+  pub text: String,
+  pub version: i32,
+  pub rope: Rope,
+  /// Lazily-populated parse + scope cache. Cleared on every update --
+  /// the first heavy handler after didChange pays the parse cost, the
+  /// rest reuse it. Wrapped in `Arc` so clones from `DashMap::get`
+  /// don't re-run the parser.
+  parse_cache: Arc<OnceLock<Arc<ParseCache>>>,
 }
 
 pub struct ParseCache {
-    pub file: ParsedFile,
-    pub scopes: Vec<Scope>,
-    /// `Document.version` that the cache was built from. Handlers can
-    /// compare this against the current `DocumentStore` snapshot to
-    /// detect mid-flight cancellation -- if a newer `didChange` came
-    /// in, drop the in-flight result instead of shipping stale data.
-    pub version: i32,
+  pub file: ParsedFile,
+  pub scopes: Vec<Scope>,
+  /// `Document.version` that the cache was built from. Handlers can
+  /// compare this against the current `DocumentStore` snapshot to
+  /// detect mid-flight cancellation -- if a newer `didChange` came
+  /// in, drop the in-flight result instead of shipping stale data.
+  pub version: i32,
 }
 
 impl Document {
-    pub fn new(uri: Url, text: String, version: i32) -> Self {
-        let rope = Rope::from_str(&text);
-        Self {
-            uri,
-            text,
-            version,
-            rope,
-            parse_cache: Arc::new(OnceLock::new()),
-        }
-    }
+  pub fn new(uri: Url, text: String, version: i32) -> Self {
+    let rope = Rope::from_str(&text);
+    Self { uri, text, version, rope, parse_cache: Arc::new(OnceLock::new()) }
+  }
 
-    /// True when the document exceeds [`MAX_DOC_BYTES`] -- heavy handlers
-    /// should bail early in that case.
-    pub fn too_large(&self) -> bool {
-        self.text.len() > MAX_DOC_BYTES
-    }
+  /// True when the document exceeds [`MAX_DOC_BYTES`] -- heavy handlers
+  /// should bail early in that case.
+  pub fn too_large(&self) -> bool {
+    self.text.len() > MAX_DOC_BYTES
+  }
 
-    /// Parsed AST + per-statement scopes for this document. First call
-    /// runs the parser/resolver; subsequent calls return the cached
-    /// value. Cleared on every `DocumentStore::update`.
-    pub fn parsed(&self) -> Arc<ParseCache> {
-        let version = self.version;
-        self.parse_cache
-            .get_or_init(|| {
-                let file = dsl_parse::parse(&self.text, Dialect::Postgres);
-                let scopes = dsl_resolve::resolve_with_source(&file.statements, &self.text);
-                Arc::new(ParseCache { file, scopes, version })
-            })
-            .clone()
-    }
+  /// Parsed AST + per-statement scopes for this document. First call
+  /// runs the parser/resolver; subsequent calls return the cached
+  /// value. Cleared on every `DocumentStore::update`.
+  pub fn parsed(&self) -> Arc<ParseCache> {
+    let version = self.version;
+    self
+      .parse_cache
+      .get_or_init(|| {
+        let file = dsl_parse::parse(&self.text, Dialect::Postgres);
+        let scopes = dsl_resolve::resolve_with_source(&file.statements, &self.text);
+        Arc::new(ParseCache { file, scopes, version })
+      })
+      .clone()
+  }
 }
 
 impl DocumentStore {
-    /// True when the current document version is newer than `version`.
-    /// Heavy async handlers (diagnostics) compare the version their
-    /// parse cache was built from against this; if newer, the request
-    /// is effectively cancelled by a fresher didChange and we should
-    /// drop the in-flight result.
-    pub fn is_stale(&self, uri: &Url, version: i32) -> bool {
-        self.docs.get(uri).map(|d| d.version > version).unwrap_or(true)
-    }
+  /// True when the current document version is newer than `version`.
+  /// Heavy async handlers (diagnostics) compare the version their
+  /// parse cache was built from against this; if newer, the request
+  /// is effectively cancelled by a fresher didChange and we should
+  /// drop the in-flight result.
+  pub fn is_stale(&self, uri: &Url, version: i32) -> bool {
+    self.docs.get(uri).map(|d| d.version > version).unwrap_or(true)
+  }
 }
 
 impl DocumentStore {
-    pub fn open(&self, uri: Url, text: String, version: i32) {
-        self.docs.insert(uri.clone(), Document::new(uri, text, version));
-    }
+  pub fn open(&self, uri: Url, text: String, version: i32) {
+    self.docs.insert(uri.clone(), Document::new(uri, text, version));
+  }
 
-    pub fn update(&self, uri: &Url, text: String, version: i32) {
-        if let Some(mut d) = self.docs.get_mut(uri) {
-            // Incremental fast-path: editors regularly re-send an
-            // identical full buffer (format-on-save with no diff, save
-            // hooks, autosave-on-blur). Skip rope rebuild + parse
-            // invalidation when bytes are unchanged -- only bump the
-            // version. Any in-flight handler keyed to the old version
-            // is correct for the new one too.
-            if d.text == text {
-                d.version = version;
-                return;
-            }
-            d.text = text;
-            d.rope = Rope::from_str(&d.text);
-            d.version = version;
-            d.parse_cache = Arc::new(OnceLock::new());
-        }
+  pub fn update(&self, uri: &Url, text: String, version: i32) {
+    if let Some(mut d) = self.docs.get_mut(uri) {
+      // Incremental fast-path: editors regularly re-send an
+      // identical full buffer (format-on-save with no diff, save
+      // hooks, autosave-on-blur). Skip rope rebuild + parse
+      // invalidation when bytes are unchanged -- only bump the
+      // version. Any in-flight handler keyed to the old version
+      // is correct for the new one too.
+      if d.text == text {
+        d.version = version;
+        return;
+      }
+      d.text = text;
+      d.rope = Rope::from_str(&d.text);
+      d.version = version;
+      d.parse_cache = Arc::new(OnceLock::new());
     }
+  }
 
-    pub fn close(&self, uri: &Url) {
-        self.docs.remove(uri);
-    }
+  pub fn close(&self, uri: &Url) {
+    self.docs.remove(uri);
+  }
 
-    pub fn get(&self, uri: &Url) -> Option<Document> {
-        self.docs.get(uri).map(|r| r.clone())
-    }
+  pub fn get(&self, uri: &Url) -> Option<Document> {
+    self.docs.get(uri).map(|r| r.clone())
+  }
 
-    /// Snapshot of all open URIs paired with their documents. Used by
-    /// workspace-scoped handlers (`workspace/symbol`, project-wide refs).
-    pub fn snapshot(&self) -> Vec<(Url, Document)> {
-        self.docs
-            .iter()
-            .map(|r| (r.key().clone(), r.value().clone()))
-            .collect()
-    }
+  /// Snapshot of all open URIs paired with their documents. Used by
+  /// workspace-scoped handlers (`workspace/symbol`, project-wide refs).
+  pub fn snapshot(&self) -> Vec<(Url, Document)> {
+    self.docs.iter().map(|r| (r.key().clone(), r.value().clone())).collect()
+  }
 }

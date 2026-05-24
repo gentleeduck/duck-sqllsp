@@ -12,6 +12,6 @@ use serde::Serialize;
 /// [`errors`](ParsedFile::errors).
 #[derive(Debug, Clone, Serialize)]
 pub struct ParsedFile {
-    pub statements: Vec<Statement>,
-    pub errors: Vec<ParseError>,
+  pub statements: Vec<Statement>,
+  pub errors: Vec<ParseError>,
 }

@@ -4,9 +4,9 @@
 /// duck-sqllsp's primary target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Dialect {
-    #[default]
-    Postgres,
-    MySql,
-    SQLite,
-    Generic,
+  #[default]
+  Postgres,
+  MySql,
+  SQLite,
+  Generic,
 }

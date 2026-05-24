@@ -17,30 +17,30 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
 pub fn keywords() -> &'static HashMap<&'static str, Entry> {
-    static MAP: Lazy<HashMap<&'static str, Entry>> = Lazy::new(keywords::build);
-    &MAP
+  static MAP: Lazy<HashMap<&'static str, Entry>> = Lazy::new(keywords::build);
+  &MAP
 }
 
 pub fn types() -> &'static HashMap<&'static str, Entry> {
-    static MAP: Lazy<HashMap<&'static str, Entry>> = Lazy::new(types::build);
-    &MAP
+  static MAP: Lazy<HashMap<&'static str, Entry>> = Lazy::new(types::build);
+  &MAP
 }
 
 pub fn functions() -> &'static HashMap<&'static str, Entry> {
-    static MAP: Lazy<HashMap<&'static str, Entry>> = Lazy::new(functions::build);
-    &MAP
+  static MAP: Lazy<HashMap<&'static str, Entry>> = Lazy::new(functions::build);
+  &MAP
 }
 
 /// Try keyword (uppercase), then type (uppercase), then function (lowercase).
 /// Returns the first match.
 pub fn lookup(token: &str) -> Option<&'static Entry> {
-    let upper = token.to_ascii_uppercase();
-    if let Some(e) = keywords().get(upper.as_str()) {
-        return Some(e);
-    }
-    if let Some(e) = types().get(upper.as_str()) {
-        return Some(e);
-    }
-    let lower = token.to_ascii_lowercase();
-    functions().get(lower.as_str())
+  let upper = token.to_ascii_uppercase();
+  if let Some(e) = keywords().get(upper.as_str()) {
+    return Some(e);
+  }
+  if let Some(e) = types().get(upper.as_str()) {
+    return Some(e);
+  }
+  let lower = token.to_ascii_lowercase();
+  functions().get(lower.as_str())
 }

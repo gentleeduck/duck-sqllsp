@@ -29,26 +29,20 @@ pub use parsed_file::ParsedFile;
 /// collected into [`ParsedFile::errors`]. The real Postgres parser
 /// (`pg_query`) is the default; `sqlparser` is the pure-Rust fallback.
 pub fn parse(source: &str, dialect: Dialect) -> ParsedFile {
-    #[cfg(feature = "pg_query_backend")]
-    {
-        return backend::pg_query::parse(source, dialect);
+  #[cfg(feature = "pg_query_backend")]
+  {
+    return backend::pg_query::parse(source, dialect);
+  }
+  #[cfg(all(not(feature = "pg_query_backend"), feature = "sqlparser"))]
+  {
+    return backend::sqlparser::parse(source, dialect);
+  }
+  #[cfg(all(not(feature = "pg_query_backend"), not(feature = "sqlparser")))]
+  {
+    let range = text_size::TextRange::up_to(text_size::TextSize::of(source));
+    ParsedFile {
+      statements: vec![Statement { range, kind: StatementKind::Unknown { text: source.to_string() } }],
+      errors: vec![ParseError { range, message: "no parser backend enabled".into() }],
     }
-    #[cfg(all(not(feature = "pg_query_backend"), feature = "sqlparser"))]
-    {
-        return backend::sqlparser::parse(source, dialect);
-    }
-    #[cfg(all(not(feature = "pg_query_backend"), not(feature = "sqlparser")))]
-    {
-        let range = text_size::TextRange::up_to(text_size::TextSize::of(source));
-        ParsedFile {
-            statements: vec![Statement {
-                range,
-                kind: StatementKind::Unknown { text: source.to_string() },
-            }],
-            errors: vec![ParseError {
-                range,
-                message: "no parser backend enabled".into(),
-            }],
-        }
-    }
+  }
 }

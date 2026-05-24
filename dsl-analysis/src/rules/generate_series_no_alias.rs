@@ -9,85 +9,111 @@ use dsl_resolve::Scope;
 pub struct Rule;
 
 impl LintRule for Rule {
-    fn code(&self) -> &'static str { "sql112" }
-    fn default_severity(&self) -> Severity { Severity::Hint }
+  fn code(&self) -> &'static str {
+    "sql112"
+  }
+  fn default_severity(&self) -> Severity {
+    Severity::Hint
+  }
 
-    fn check(
-        &self,
-        source: &str,
-        stmt: &Statement,
-        _scope: &Scope,
-        _catalog: &Catalog,
-        out: &mut Vec<Diagnostic>,
-    ) {
-        let start: usize = u32::from(stmt.range.start()) as usize;
-        let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-        let body = &source[start..end];
-        let upper = body.to_ascii_uppercase();
-        let bytes = upper.as_bytes();
-        let n = bytes.len();
-        let mut i = 0;
-        while i + 15 <= n {
-            if &upper[i..i + 15] == "GENERATE_SERIES"
-                && (i == 0 || !is_word(bytes[i - 1] as char))
-            {
-                let mut j = i + 15;
-                while j < n && bytes[j].is_ascii_whitespace() { j += 1; }
-                if j < n && bytes[j] == b'(' {
-                    // Find matching close paren accounting for nesting.
-                    let mut depth = 0i32;
-                    let mut k = j;
-                    while k < n {
-                        match bytes[k] {
-                            b'(' => depth += 1,
-                            b')' => { depth -= 1; if depth == 0 { break; } }
-                            _ => {}
-                        }
-                        k += 1;
-                    }
-                    if k >= n { return; }
-                    // After ), skip ws -- if next token is AS or an
-                    // identifier (not a keyword like WHERE/CROSS/...),
-                    // there's an alias.
-                    let mut m = k + 1;
-                    while m < n && bytes[m].is_ascii_whitespace() { m += 1; }
-                    let alias_ok = if m + 2 <= n && &upper[m..m + 2] == "AS"
-                        && (m + 2 == n || !is_word(bytes[m + 2] as char))
-                    {
-                        true
-                    } else if m < n && is_word(bytes[m] as char) {
-                        // Identifier follows -- check it's not a clause kw.
-                        let id_start = m;
-                        let mut id_end = m;
-                        while id_end < n && is_word(bytes[id_end] as char) { id_end += 1; }
-                        let id = &upper[id_start..id_end];
-                        !matches!(id, "WHERE" | "CROSS" | "JOIN" | "INNER" | "LEFT" | "RIGHT" | "FULL"
-                            | "ON" | "USING" | "GROUP" | "ORDER" | "LIMIT" | "OFFSET" | "HAVING"
-                            | "WINDOW" | "UNION" | "INTERSECT" | "EXCEPT" | "FETCH" | "FOR" | "RETURNING")
-                    } else {
-                        false
-                    };
-                    if !alias_ok {
-                        let abs_start = start + i;
-                        let abs_end = start + k + 1;
-                        out.push(Diagnostic {
-                            code: "sql112",
-                            severity: Severity::Hint,
-                            message: "generate_series in FROM without alias -- queries are clearer with `AS series(n)`".into(),
-                            range: text_size::TextRange::new(
-                                (abs_start as u32).into(),
-                                (abs_end as u32).into(),
-                            ),
-                        });
-                        return;
-                    }
-                    i = k + 1;
-                    continue;
-                }
-            }
-            i += 1;
+  fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
+    let start: usize = u32::from(stmt.range.start()) as usize;
+    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
+    let body = &source[start..end];
+    let upper = body.to_ascii_uppercase();
+    let bytes = upper.as_bytes();
+    let n = bytes.len();
+    let mut i = 0;
+    while i + 15 <= n {
+      if &upper[i..i + 15] == "GENERATE_SERIES" && (i == 0 || !is_word(bytes[i - 1] as char)) {
+        let mut j = i + 15;
+        while j < n && bytes[j].is_ascii_whitespace() {
+          j += 1;
         }
+        if j < n && bytes[j] == b'(' {
+          // Find matching close paren accounting for nesting.
+          let mut depth = 0i32;
+          let mut k = j;
+          while k < n {
+            match bytes[k] {
+              b'(' => depth += 1,
+              b')' => {
+                depth -= 1;
+                if depth == 0 {
+                  break;
+                }
+              },
+              _ => {},
+            }
+            k += 1;
+          }
+          if k >= n {
+            return;
+          }
+          // After ), skip ws -- if next token is AS or an
+          // identifier (not a keyword like WHERE/CROSS/...),
+          // there's an alias.
+          let mut m = k + 1;
+          while m < n && bytes[m].is_ascii_whitespace() {
+            m += 1;
+          }
+          let alias_ok = if m + 2 <= n && &upper[m..m + 2] == "AS" && (m + 2 == n || !is_word(bytes[m + 2] as char)) {
+            true
+          } else if m < n && is_word(bytes[m] as char) {
+            // Identifier follows -- check it's not a clause kw.
+            let id_start = m;
+            let mut id_end = m;
+            while id_end < n && is_word(bytes[id_end] as char) {
+              id_end += 1;
+            }
+            let id = &upper[id_start..id_end];
+            !matches!(
+              id,
+              "WHERE"
+                | "CROSS"
+                | "JOIN"
+                | "INNER"
+                | "LEFT"
+                | "RIGHT"
+                | "FULL"
+                | "ON"
+                | "USING"
+                | "GROUP"
+                | "ORDER"
+                | "LIMIT"
+                | "OFFSET"
+                | "HAVING"
+                | "WINDOW"
+                | "UNION"
+                | "INTERSECT"
+                | "EXCEPT"
+                | "FETCH"
+                | "FOR"
+                | "RETURNING"
+            )
+          } else {
+            false
+          };
+          if !alias_ok {
+            let abs_start = start + i;
+            let abs_end = start + k + 1;
+            out.push(Diagnostic {
+              code: "sql112",
+              severity: Severity::Hint,
+              message: "generate_series in FROM without alias -- queries are clearer with `AS series(n)`".into(),
+              range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+            });
+            return;
+          }
+          i = k + 1;
+          continue;
+        }
+      }
+      i += 1;
     }
+  }
 }
 
-fn is_word(c: char) -> bool { c.is_alphanumeric() || c == '_' }
+fn is_word(c: char) -> bool {
+  c.is_alphanumeric() || c == '_'
+}

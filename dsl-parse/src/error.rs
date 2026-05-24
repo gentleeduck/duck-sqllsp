@@ -7,6 +7,6 @@ use thiserror::Error;
 #[derive(Debug, Clone, Serialize, Error)]
 #[error("parse error at {range:?}: {message}")]
 pub struct ParseError {
-    pub range: TextRange,
-    pub message: String,
+  pub range: TextRange,
+  pub message: String,
 }

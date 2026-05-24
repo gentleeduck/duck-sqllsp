@@ -10,8 +10,8 @@
 //!   - [`resolve`] -- resolve every statement in a parsed file.
 
 pub mod binding;
-pub mod scope;
 pub mod resolver;
+pub mod scope;
 
 pub use binding::Binding;
 pub use resolver::{resolve, resolve_with_source};

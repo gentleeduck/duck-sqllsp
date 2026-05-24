@@ -12,64 +12,67 @@ use dsl_resolve::Scope;
 pub struct Rule;
 
 impl LintRule for Rule {
-    fn code(&self) -> &'static str { "sql145" }
-    fn default_severity(&self) -> Severity { Severity::Hint }
+  fn code(&self) -> &'static str {
+    "sql145"
+  }
+  fn default_severity(&self) -> Severity {
+    Severity::Hint
+  }
 
-    fn check(
-        &self,
-        source: &str,
-        stmt: &Statement,
-        _scope: &Scope,
-        _catalog: &Catalog,
-        out: &mut Vec<Diagnostic>,
-    ) {
-        let start: usize = u32::from(stmt.range.start()) as usize;
-        let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-        let body = &source[start..end];
-        let upper = body.to_ascii_uppercase();
-        let trimmed = upper.trim_start();
-        if !(trimmed.starts_with("CREATE TABLE") || trimmed.starts_with("ALTER TABLE")) { return; }
-        let bytes = upper.as_bytes();
-        let n = bytes.len();
-        let mut i = 0;
-        while i + 7 <= n {
-            if &upper[i..i + 7] == "DEFAULT"
-                && (i == 0 || !is_word(bytes[i - 1] as char))
-                && (i + 7 == n || !is_word(bytes[i + 7] as char))
-            {
-                let mut j = i + 7;
-                while j < n && bytes[j].is_ascii_whitespace() { j += 1; }
-                let arg_start = j;
-                while j < n && (is_word(bytes[j] as char) || bytes[j] == b'(' || bytes[j] == b')') {
-                    j += 1;
-                }
-                let arg = &upper[arg_start..j];
-                // Whitelist the well-known volatile-by-design defaults:
-                // gen_random_uuid, uuid_generate_v*, now, current_*,
-                // clock_timestamp, nextval -- these are the *intended*
-                // uses of a volatile default. Only flag random() (almost
-                // never what you want as a default).
-                let volatile = arg.starts_with("RANDOM(");
-                if volatile {
-                    let abs_start = start + i;
-                    let abs_end = start + j;
-                    out.push(Diagnostic {
-                        code: "sql145",
-                        severity: Severity::Hint,
-                        message: format!("DEFAULT `{}` is volatile -- the column gets a fresh value per inserted row, not a single fixed value", &body[arg_start..j]),
-                        range: text_size::TextRange::new(
-                            (abs_start as u32).into(),
-                            (abs_end as u32).into(),
-                        ),
-                    });
-                    return;
-                }
-                i = j;
-                continue;
-            }
-            i += 1;
-        }
+  fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
+    let start: usize = u32::from(stmt.range.start()) as usize;
+    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
+    let body = &source[start..end];
+    let upper = body.to_ascii_uppercase();
+    let trimmed = upper.trim_start();
+    if !(trimmed.starts_with("CREATE TABLE") || trimmed.starts_with("ALTER TABLE")) {
+      return;
     }
+    let bytes = upper.as_bytes();
+    let n = bytes.len();
+    let mut i = 0;
+    while i + 7 <= n {
+      if &upper[i..i + 7] == "DEFAULT"
+        && (i == 0 || !is_word(bytes[i - 1] as char))
+        && (i + 7 == n || !is_word(bytes[i + 7] as char))
+      {
+        let mut j = i + 7;
+        while j < n && bytes[j].is_ascii_whitespace() {
+          j += 1;
+        }
+        let arg_start = j;
+        while j < n && (is_word(bytes[j] as char) || bytes[j] == b'(' || bytes[j] == b')') {
+          j += 1;
+        }
+        let arg = &upper[arg_start..j];
+        // Whitelist the well-known volatile-by-design defaults:
+        // gen_random_uuid, uuid_generate_v*, now, current_*,
+        // clock_timestamp, nextval -- these are the *intended*
+        // uses of a volatile default. Only flag random() (almost
+        // never what you want as a default).
+        let volatile = arg.starts_with("RANDOM(");
+        if volatile {
+          let abs_start = start + i;
+          let abs_end = start + j;
+          out.push(Diagnostic {
+            code: "sql145",
+            severity: Severity::Hint,
+            message: format!(
+              "DEFAULT `{}` is volatile -- the column gets a fresh value per inserted row, not a single fixed value",
+              &body[arg_start..j]
+            ),
+            range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+          });
+          return;
+        }
+        i = j;
+        continue;
+      }
+      i += 1;
+    }
+  }
 }
 
-fn is_word(c: char) -> bool { c.is_alphanumeric() || c == '_' }
+fn is_word(c: char) -> bool {
+  c.is_alphanumeric() || c == '_'
+}

@@ -18,43 +18,31 @@ use crate::parsed_file::ParsedFile;
 use crate::split::split_statements;
 
 pub fn parse(source: &str, _dialect: Dialect) -> ParsedFile {
-    let mut statements = Vec::new();
-    let mut errors = Vec::new();
+  let mut statements = Vec::new();
+  let mut errors = Vec::new();
 
-    for (chunk, range) in split_statements(source) {
-        match pg_query::parse(&chunk) {
-            Ok(result) => {
-                let chunk_owned = chunk.clone();
-                let mut emitted = false;
-                for raw in &result.protobuf.stmts {
-                    if let Some(stmt_node) = raw.stmt.as_ref().and_then(|s| s.node.as_ref()) {
-                        emitted = true;
-                        statements.push(Statement {
-                            range,
-                            kind: convert::statement(stmt_node, &chunk_owned),
-                        });
-                    }
-                }
-                if !emitted {
-                    // Empty parse (whitespace / comments only).
-                    statements.push(Statement {
-                        range,
-                        kind: StatementKind::Unknown { text: chunk_owned },
-                    });
-                }
-            }
-            Err(e) => {
-                errors.push(ParseError {
-                    range,
-                    message: format!("pg_query: {e}"),
-                });
-                statements.push(Statement {
-                    range,
-                    kind: StatementKind::Unknown { text: chunk },
-                });
-            }
+  for (chunk, range) in split_statements(source) {
+    match pg_query::parse(&chunk) {
+      Ok(result) => {
+        let chunk_owned = chunk.clone();
+        let mut emitted = false;
+        for raw in &result.protobuf.stmts {
+          if let Some(stmt_node) = raw.stmt.as_ref().and_then(|s| s.node.as_ref()) {
+            emitted = true;
+            statements.push(Statement { range, kind: convert::statement(stmt_node, &chunk_owned) });
+          }
         }
+        if !emitted {
+          // Empty parse (whitespace / comments only).
+          statements.push(Statement { range, kind: StatementKind::Unknown { text: chunk_owned } });
+        }
+      },
+      Err(e) => {
+        errors.push(ParseError { range, message: format!("pg_query: {e}") });
+        statements.push(Statement { range, kind: StatementKind::Unknown { text: chunk } });
+      },
     }
+  }
 
-    ParsedFile { statements, errors }
+  ParsedFile { statements, errors }
 }

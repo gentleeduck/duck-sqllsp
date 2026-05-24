@@ -11,51 +11,50 @@ use dsl_resolve::Scope;
 pub struct Rule;
 
 impl LintRule for Rule {
-    fn code(&self) -> &'static str { "sql166" }
-    fn default_severity(&self) -> Severity { Severity::Hint }
+  fn code(&self) -> &'static str {
+    "sql166"
+  }
+  fn default_severity(&self) -> Severity {
+    Severity::Hint
+  }
 
-    fn check(
-        &self,
-        source: &str,
-        stmt: &Statement,
-        _scope: &Scope,
-        _catalog: &Catalog,
-        out: &mut Vec<Diagnostic>,
-    ) {
-        let start: usize = u32::from(stmt.range.start()) as usize;
-        let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-        let body = &source[start..end];
-        let upper = body.to_ascii_uppercase();
-        let bytes = body.as_bytes();
-        let n = bytes.len();
-        let mut i = 0;
-        while i + 4 <= n {
-            if &upper[i..i + 4] == "ROW("
-                && (i == 0 || !is_word(bytes[i - 1] as char))
-            {
-                // Walk inside the parens, counting top-level commas.
-                let inner_start = i + 4;
-                let mut j = inner_start;
-                let mut depth = 1i32;
-                let mut commas = 0;
-                while j < n && depth > 0 {
-                    match bytes[j] {
-                        b'(' => depth += 1,
-                        b')' => depth -= 1,
-                        b',' if depth == 1 => commas += 1,
-                        b'\'' => {
-                            j += 1;
-                            while j < n && bytes[j] != b'\'' { j += 1; }
-                        }
-                        _ => {}
-                    }
-                    if depth == 0 { break; }
-                    j += 1;
-                }
-                if commas == 0 && j > inner_start + 1 {
-                    let abs_start = start + i;
-                    let abs_end = start + j + 1;
-                    out.push(Diagnostic {
+  fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
+    let start: usize = u32::from(stmt.range.start()) as usize;
+    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
+    let body = &source[start..end];
+    let upper = body.to_ascii_uppercase();
+    let bytes = body.as_bytes();
+    let n = bytes.len();
+    let mut i = 0;
+    while i + 4 <= n {
+      if &upper[i..i + 4] == "ROW(" && (i == 0 || !is_word(bytes[i - 1] as char)) {
+        // Walk inside the parens, counting top-level commas.
+        let inner_start = i + 4;
+        let mut j = inner_start;
+        let mut depth = 1i32;
+        let mut commas = 0;
+        while j < n && depth > 0 {
+          match bytes[j] {
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            b',' if depth == 1 => commas += 1,
+            b'\'' => {
+              j += 1;
+              while j < n && bytes[j] != b'\'' {
+                j += 1;
+              }
+            },
+            _ => {},
+          }
+          if depth == 0 {
+            break;
+          }
+          j += 1;
+        }
+        if commas == 0 && j > inner_start + 1 {
+          let abs_start = start + i;
+          let abs_end = start + j + 1;
+          out.push(Diagnostic {
                         code: "sql166",
                         severity: Severity::Hint,
                         message: "ROW(x) with a single element is just x -- drop the ROW() wrapper, or add more elements to make it a real row constructor".into(),
@@ -64,14 +63,16 @@ impl LintRule for Rule {
                             (abs_end as u32).into(),
                         ),
                     });
-                    return;
-                }
-                i = j.saturating_add(1);
-                continue;
-            }
-            i += 1;
+          return;
         }
+        i = j.saturating_add(1);
+        continue;
+      }
+      i += 1;
     }
+  }
 }
 
-fn is_word(c: char) -> bool { c.is_alphanumeric() || c == '_' }
+fn is_word(c: char) -> bool {
+  c.is_alphanumeric() || c == '_'
+}
