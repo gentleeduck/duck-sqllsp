@@ -2259,3 +2259,49 @@ fn sql131_quiet_for_escaped_percent() {
     let d = diags("CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RAISE NOTICE '100%%'; END $$;");
     assert!(!d.iter().any(|x| x.code == "sql131"));
 }
+
+// ===== sql134 VACUUM in transaction ========================================
+
+#[test]
+fn sql134_flags_vacuum_inside_begin() {
+    let d = diags("BEGIN; VACUUM users; COMMIT;");
+    assert!(d.iter().any(|x| x.code == "sql134"));
+}
+
+#[test]
+fn sql134_flags_reindex_inside_begin() {
+    let d = diags("BEGIN; REINDEX TABLE users; COMMIT;");
+    assert!(d.iter().any(|x| x.code == "sql134"));
+}
+
+#[test]
+fn sql134_quiet_for_bare_vacuum() {
+    let d = diags("VACUUM users;");
+    assert!(!d.iter().any(|x| x.code == "sql134"));
+}
+
+#[test]
+fn sql134_quiet_after_commit() {
+    let d = diags("BEGIN; SELECT 1; COMMIT; VACUUM users;");
+    assert!(!d.iter().any(|x| x.code == "sql134"));
+}
+
+// ===== sql130 multiple TRUNCATE in transaction =============================
+
+#[test]
+fn sql130_flags_second_truncate_in_tx() {
+    let d = diags("BEGIN; TRUNCATE users; TRUNCATE orders; COMMIT;");
+    assert!(d.iter().any(|x| x.code == "sql130"));
+}
+
+#[test]
+fn sql130_quiet_for_single_truncate() {
+    let d = diags("BEGIN; TRUNCATE users; COMMIT;");
+    assert!(!d.iter().any(|x| x.code == "sql130"));
+}
+
+#[test]
+fn sql130_quiet_for_combined_truncate() {
+    let d = diags("BEGIN; TRUNCATE users, orders; COMMIT;");
+    assert!(!d.iter().any(|x| x.code == "sql130"));
+}
