@@ -85,11 +85,21 @@ fn hover_returns_keyword_docs() {
         work_done_progress_params: WorkDoneProgressParams::default(),
     });
     let h = resp.expect("hover result");
-    let md = match h.contents {
+    // Hover now ships as MarkedString[] when the content has fenced
+    // SQL; falls back to Markup for plain markdown. Either way the
+    // serialised text should contain the keyword doc.
+    let text = match h.contents {
         tower_lsp::lsp_types::HoverContents::Markup(m) => m.value,
-        _ => panic!("expected markup"),
+        tower_lsp::lsp_types::HoverContents::Array(parts) => parts.into_iter().map(|p| match p {
+            tower_lsp::lsp_types::MarkedString::String(s) => s,
+            tower_lsp::lsp_types::MarkedString::LanguageString(ls) => ls.value,
+        }).collect::<Vec<_>>().join("\n"),
+        tower_lsp::lsp_types::HoverContents::Scalar(p) => match p {
+            tower_lsp::lsp_types::MarkedString::String(s) => s,
+            tower_lsp::lsp_types::MarkedString::LanguageString(ls) => ls.value,
+        },
     };
-    assert!(md.contains("Retrieve"));
+    assert!(text.contains("Retrieve"), "got: {text}");
 }
 
 #[test]

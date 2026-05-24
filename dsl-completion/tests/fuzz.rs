@@ -28,6 +28,7 @@ fn cat() -> Catalog {
         }],
         functions: vec![],
         types: vec![],
+        roles: vec![],
     }
 }
 

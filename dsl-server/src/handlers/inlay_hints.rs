@@ -38,6 +38,56 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
         .collect();
 
     let mut hints: Vec<InlayHint> = Vec::new();
+
+    // INSERT INTO t (a, b) VALUES (1, 'x')
+    //  -> phantom `: int4` / `: text` next to each VALUES literal.
+    // INSERT INTO t VALUES (1, 'x', ...)
+    //  -> phantom `: column_name` next to each positional value
+    //     (no column list, so the hint surfaces what column gets it).
+    for stmt in &parsed.statements {
+        let StatementKind::Insert(ins) = &stmt.kind else { continue };
+        let target = &ins.table;
+        let cols: Vec<(String, String)> = if let Some(t) = cat.find_table(target.schema.as_deref(), &target.name) {
+            t.columns.iter().map(|c| (c.name.clone(), c.data_type.clone())).collect()
+        } else if let Some((_, cs)) = buffer_tables.iter().find(|(n, _)| n.eq_ignore_ascii_case(&target.name)) {
+            cs.iter().map(|n| (n.clone(), String::new())).collect()
+        } else {
+            continue;
+        };
+        if cols.is_empty() { continue; }
+        // Map ins.columns -> Vec<(name, type)>; empty cols list means
+        // positional, use the catalog order.
+        let ordered: Vec<(String, String)> = if ins.columns.is_empty() {
+            cols.clone()
+        } else {
+            ins.columns.iter().filter_map(|name| {
+                cols.iter().find(|(n, _)| n.eq_ignore_ascii_case(name)).cloned()
+            }).collect()
+        };
+        let positional = ins.columns.is_empty();
+        for (idx, lit_byte) in find_values_literals(&doc.text, stmt.range).into_iter().enumerate() {
+            let Some((col_name, col_type)) = ordered.get(idx) else { break };
+            let label = if positional {
+                format!(" : {col_name}")
+            } else if col_type.is_empty() {
+                continue
+            } else {
+                format!(" : {col_type}")
+            };
+            let pos = byte_to_position(&doc.rope, lit_byte);
+            hints.push(InlayHint {
+                position: pos,
+                label: InlayHintLabel::String(label),
+                kind: Some(InlayHintKind::TYPE),
+                text_edits: None,
+                tooltip: None,
+                padding_left: Some(false),
+                padding_right: Some(false),
+                data: None,
+            });
+        }
+    }
+
     for stmt in &parsed.statements {
         let StatementKind::Select(sel) = &stmt.kind else { continue };
         // Only emit when SELECT *.
@@ -70,6 +120,62 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
         }
     }
     if hints.is_empty() { None } else { Some(hints) }
+}
+
+/// Locate the byte position right *after* each top-level literal in the
+/// first VALUES tuple of an INSERT statement. Skips nested parens and
+/// quoted strings.
+fn find_values_literals(source: &str, range: TextRange) -> Vec<usize> {
+    let s: u32 = range.start().into();
+    let e: u32 = range.end().into();
+    let start = s as usize;
+    let end = (e as usize).min(source.len());
+    let slice = &source[start..end];
+    let upper = slice.to_ascii_uppercase();
+    let Some(values_at) = upper.find("VALUES") else { return Vec::new() };
+    let bytes = slice.as_bytes();
+    let n = bytes.len();
+    let mut k = values_at + 6;
+    while k < n && bytes[k].is_ascii_whitespace() { k += 1; }
+    if k >= n || bytes[k] != b'(' { return Vec::new(); }
+    let mut out = Vec::new();
+    let mut depth = 1i32;
+    let mut item_end = k + 1; // running end-of-current-item byte position
+    let mut had_content = false;
+    let mut i = k + 1;
+    while i < n && depth > 0 {
+        match bytes[i] {
+            b'(' => { depth += 1; had_content = true; }
+            b')' => {
+                depth -= 1;
+                if depth == 0 {
+                    if had_content { out.push(start + item_end); }
+                    break;
+                }
+            }
+            b'\'' => {
+                i += 1;
+                while i < n && bytes[i] != b'\'' { i += 1; }
+                had_content = true;
+                if i < n {
+                    i += 1;
+                    item_end = i;
+                    continue;
+                }
+            }
+            b',' if depth == 1 => {
+                if had_content { out.push(start + item_end); }
+                had_content = false;
+                i += 1;
+                continue;
+            }
+            c if c.is_ascii_whitespace() => {}
+            _ => { had_content = true; item_end = i + 1; }
+        }
+        if !bytes[i].is_ascii_whitespace() { item_end = i + 1; }
+        i += 1;
+    }
+    out
 }
 
 fn find_star(source: &str, range: TextRange) -> Option<usize> {

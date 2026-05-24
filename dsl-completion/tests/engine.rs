@@ -36,6 +36,7 @@ fn catalog_with_users_and_orders() -> Catalog {
         schemas: vec![Schema { name: "public".into(), tables: vec![users, orders] }],
         functions: vec![],
         types: vec![],
+        roles: vec![],
     }
 }
 
@@ -837,15 +838,34 @@ fn completion_after_create_table_body_still_works() {
 }
 
 #[test]
-fn drop_table_still_offers_existing_tables() {
-    // DROP TABLE wants an EXISTING table -- completion should fire.
-    // (We expect at least one table candidate from the catalog.)
+fn drop_table_offers_existing_tables() {
     let cat = catalog_with_users_and_orders();
     let src = "DROP TABLE ";
     let items = complete_at(src, src.len(), &cat);
-    // Don't assert the exact menu, just that suppression doesn't kick in.
-    // We'd only require this to NOT be empty when DROP completion is wired.
-    let _ = items;
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(labels.contains(&"users"),
+        "DROP TABLE should surface existing tables; got: {:?}", labels);
+    assert!(labels.contains(&"orders"));
+}
+
+#[test]
+fn alter_table_offers_existing_tables() {
+    let cat = catalog_with_users_and_orders();
+    let src = "ALTER TABLE ";
+    let items = complete_at(src, src.len(), &cat);
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(labels.contains(&"users"),
+        "ALTER TABLE should surface existing tables; got: {:?}", labels);
+}
+
+#[test]
+fn truncate_offers_existing_tables() {
+    let cat = catalog_with_users_and_orders();
+    let src = "TRUNCATE ";
+    let items = complete_at(src, src.len(), &cat);
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(labels.contains(&"users"),
+        "TRUNCATE should surface existing tables; got: {:?}", labels);
 }
 
 #[test]

@@ -23,6 +23,7 @@ fn cat() -> Catalog {
         schemas: vec![Schema { name: "public".into(), tables: vec![users] }],
         functions: vec![],
         types: vec![],
+        roles: vec![],
     }
 }
 
