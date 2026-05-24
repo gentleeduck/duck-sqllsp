@@ -2,7 +2,7 @@
   "name": "duck-sqllsp-vscode",
   "displayName": "duck-sqllsp",
   "description": "SQL Language Server for Postgres (and MySQL / SQLite) -- completion, hover, diagnostics, formatting, inlay hints, refactors. Works offline; richer when a DB is connected.",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "publisher": "wildduck",
   "license": "MIT",
   "repository": {
@@ -158,8 +158,16 @@
     "languages": [
       {
         "id": "sql",
-        "extensions": [".sql", ".pgsql", ".psql"],
-        "aliases": ["SQL", "PostgreSQL", "pgsql"]
+        "extensions": [
+          ".sql",
+          ".pgsql",
+          ".psql"
+        ],
+        "aliases": [
+          "SQL",
+          "PostgreSQL",
+          "pgsql"
+        ]
       }
     ],
     "snippets": [
@@ -178,7 +186,9 @@
             "id": "install",
             "title": "Install the duck-sqllsp binary",
             "description": "The extension is a thin client -- install the Rust server binary first.\n[Show Logs](command:duckSqllsp.showLogs)",
-            "media": { "markdown": "media/install.md" },
+            "media": {
+              "markdown": "media/install.md"
+            },
             "completionEvents": [
               "onCommand:duckSqllsp.restartServer"
             ]
@@ -187,7 +197,9 @@
             "id": "connect",
             "title": "Connect to a database (optional)",
             "description": "Catalog-aware completion / hover get richer with a live DB connection. Open the Connections sidebar and click +.\n[Add Connection](command:duckSqllsp.addConnection)",
-            "media": { "markdown": "media/connect.md" },
+            "media": {
+              "markdown": "media/connect.md"
+            },
             "completionEvents": [
               "onCommand:duckSqllsp.addConnection"
             ]
@@ -196,7 +208,9 @@
             "id": "try",
             "title": "Try a SQL file",
             "description": "Open or create any .sql file and start typing -- completion, hover, diagnostics, inlay hints, and refactors all fire automatically.",
-            "media": { "markdown": "media/try.md" },
+            "media": {
+              "markdown": "media/try.md"
+            },
             "completionEvents": [
               "onLanguage:sql"
             ]
@@ -215,7 +229,11 @@
         },
         "duckSqllsp.trace.server": {
           "type": "string",
-          "enum": ["off", "messages", "verbose"],
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
           "default": "off",
           "description": "Trace LSP traffic between client and server (output -> 'duck-sqllsp' channel)."
         },
@@ -228,8 +246,9 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run bundle",
     "compile": "tsc -p .",
+    "bundle": "esbuild src/extension.ts --bundle --platform=node --target=node18 --external:vscode --outfile=out/extension.js --format=cjs --sourcemap",
     "watch": "tsc -watch -p .",
     "package": "vsce package"
   },
@@ -239,7 +258,8 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.75.0",
-    "typescript": "^5.4.0",
-    "@vscode/vsce": "^2.24.0"
+    "@vscode/vsce": "^2.24.0",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.4.0"
   }
 }

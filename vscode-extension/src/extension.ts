@@ -26,41 +26,73 @@ let outputChannel: vscode.OutputChannel | undefined;
 let traceChannel: vscode.OutputChannel | undefined;
 
 export function activate(context: ExtensionContext) {
+  // Output channels are the first thing we set up so every later
+  // step can log into them. Any throw past this point is logged +
+  // surfaced as a notification so the user can see what's failing.
   outputChannel = window.createOutputChannel("duck-sqllsp");
   traceChannel = window.createOutputChannel("duck-sqllsp trace");
-  outputChannel.appendLine("[ext] duck-sqllsp activating");
+  outputChannel.appendLine(`[ext] duck-sqllsp activating (extension version ${context.extension.packageJSON?.version ?? "?"})`);
 
-  connectionsProvider = new ConnectionsProvider();
-
-  statusItem = window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  statusItem.text = "$(database) duck-sqllsp";
-  statusItem.tooltip = "duck-sqllsp LSP status -- click to restart";
-  statusItem.command = "duckSqllsp.restartServer";
-  statusItem.show();
+  // CRITICAL: register every command FIRST, before anything that
+  // might throw. If activation throws halfway, the commands are
+  // already wired so the palette / sidebar buttons don't error out
+  // with "command not found". Each command body is wrapped in a
+  // try/catch so a broken command doesn't poison the others.
+  const safe =
+    <A extends any[], R>(name: string, fn: (...args: A) => Promise<R> | R) =>
+    async (...args: A): Promise<R | void> => {
+      try {
+        return await fn(...args);
+      } catch (e: any) {
+        outputChannel?.appendLine(`[cmd:${name}] error: ${e?.stack ?? e}`);
+        window.showErrorMessage(`duck-sqllsp ${name}: ${e?.message ?? e}`);
+      }
+    };
 
   context.subscriptions.push(
     outputChannel,
     traceChannel,
-    statusItem,
-    window.registerTreeDataProvider("duckSqllsp.connections", connectionsProvider),
-    commands.registerCommand("duckSqllsp.addConnection", addConnection),
-    commands.registerCommand("duckSqllsp.listConnections", listConnections),
-    commands.registerCommand("duckSqllsp.setActiveConnection", setActiveConnection),
-    commands.registerCommand("duckSqllsp.removeConnection", removeConnection),
-    commands.registerCommand("duckSqllsp.refreshCatalog", refreshCatalog),
-    commands.registerCommand("duckSqllsp.restartServer", restartServer),
+    commands.registerCommand("duckSqllsp.addConnection", safe("addConnection", addConnection)),
+    commands.registerCommand("duckSqllsp.listConnections", safe("listConnections", listConnections)),
+    commands.registerCommand("duckSqllsp.setActiveConnection", safe("setActiveConnection", setActiveConnection)),
+    commands.registerCommand("duckSqllsp.removeConnection", safe("removeConnection", removeConnection)),
+    commands.registerCommand("duckSqllsp.refreshCatalog", safe("refreshCatalog", refreshCatalog)),
+    commands.registerCommand("duckSqllsp.restartServer", safe("restartServer", restartServer)),
     commands.registerCommand("duckSqllsp.showLogs", () => outputChannel?.show(true)),
-    commands.registerCommand("duckSqllsp.testConnection", testConnection),
-    workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("duckSqllsp")) {
-        connectionsProvider?.refresh();
-      }
-    }),
+    commands.registerCommand("duckSqllsp.testConnection", safe("testConnection", testConnection)),
   );
+  outputChannel.appendLine("[ext] commands registered");
+
+  // Sidebar tree provider + status bar live after commands so a
+  // failure here can't break the command surface.
+  try {
+    connectionsProvider = new ConnectionsProvider();
+    context.subscriptions.push(
+      window.registerTreeDataProvider("duckSqllsp.connections", connectionsProvider),
+      workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration("duckSqllsp")) {
+          connectionsProvider?.refresh();
+        }
+      }),
+    );
+  } catch (e: any) {
+    outputChannel.appendLine(`[ext] connectionsProvider failed: ${e?.stack ?? e}`);
+  }
+
+  try {
+    statusItem = window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    statusItem.text = "$(database) duck-sqllsp";
+    statusItem.tooltip = "duck-sqllsp LSP status -- click to restart";
+    statusItem.command = "duckSqllsp.restartServer";
+    statusItem.show();
+    context.subscriptions.push(statusItem);
+  } catch (e: any) {
+    outputChannel.appendLine(`[ext] statusItem failed: ${e?.stack ?? e}`);
+  }
 
   startClient(context).catch((err) => {
-    outputChannel?.appendLine(`[ext] failed to start client: ${err}`);
-    window.showErrorMessage(`duck-sqllsp failed to start: ${err.message ?? err}`);
+    outputChannel?.appendLine(`[ext] failed to start client: ${err?.stack ?? err}`);
+    window.showErrorMessage(`duck-sqllsp failed to start: ${err?.message ?? err}`);
     setStatus("error", "failed to start");
   });
 }

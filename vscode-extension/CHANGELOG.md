@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.1.3
+
+**Critical bug fix.** 0.1.0..0.1.2 shipped without bundled runtime
+dependencies -- `.vscodeignore` excluded `node_modules/**` so
+`require("vscode-languageclient/node")` failed at extension load
+time, before `activate()` ever ran. Net effect: zero commands
+registered, every palette invocation returned "command not found".
+
+This release bundles the production node_modules (~1MB) so the
+extension actually loads. Future work: bundle via esbuild to keep
+the .vsix small.
+
+## 0.1.2
+
+- Activation hardening: commands are registered as the very first
+  thing in activate() now, before anything that could throw. Each
+  command body is wrapped in a try/catch that logs to the
+  duck-sqllsp output channel and shows the message as a toast --
+  so a broken command can no longer mask others as "command not
+  found".
+- ConnectionsProvider and the status bar item moved into separate
+  try/catch blocks for the same reason.
+- Output channel logs the extension version on every activation so
+  users can confirm which build is running.
+
 ## 0.1.1
 
 - Activation: re-added `onCommand:*` events for every contributed command so
