@@ -452,3 +452,33 @@ fn cte_dot_with_unknown_body_returns_empty() {
     let _items = complete_at(src, cur, &cat);
     // Just make sure we didn't panic.
 }
+
+// ===== CHECK expression completion: surfaces functions ====================
+
+#[test]
+fn check_expression_offers_built_in_functions() {
+    // Inside `CHECK (...)`, expect built-in functions like length /
+    // char_length / now to be surfaced -- not just the table's columns.
+    let cat = catalog_with_users_and_orders();
+    let src = "CREATE TABLE posts (body text, CHECK (len";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(labels.iter().any(|l| l.eq_ignore_ascii_case("length")),
+        "expected length() in CHECK completion, got: {labels:?}");
+    assert!(labels.iter().any(|l| l.eq_ignore_ascii_case("char_length")),
+        "expected char_length() in CHECK completion, got: {labels:?}");
+}
+
+#[test]
+fn check_expression_offers_table_columns() {
+    let cat = catalog_with_users_and_orders();
+    let src = "CREATE TABLE users (id uuid, email text, CHECK (";
+    let cur = src.len();
+    let items = complete_at(src, cur, &cat);
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    // Buffer-defined column extraction means we look at the CREATE
+    // TABLE body for column names.
+    assert!(labels.iter().any(|l| l.eq_ignore_ascii_case("id") || l.eq_ignore_ascii_case("email")),
+        "expected columns of users in CHECK, got: {labels:?}");
+}

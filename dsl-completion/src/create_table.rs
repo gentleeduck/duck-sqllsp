@@ -269,9 +269,7 @@ fn classify_entry(_source: &str, entry: &Entry<'_>, enclosing: Option<&str>) -> 
     }
     if upper.starts_with("CHECK") {
         if inside_paren(committed) {
-            if let Some(t) = enclosing.map(str::to_string) {
-                return Phase::CtlExpectFkColumn { table: t };
-            }
+            return Phase::CtlCheckExpr { table: enclosing.map(str::to_string) };
         }
         return Phase::Unknown;
     }

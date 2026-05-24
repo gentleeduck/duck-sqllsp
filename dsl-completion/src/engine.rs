@@ -268,6 +268,26 @@ fn route_phase(
         Phase::CtlExpectFkTable {} => {
             sources::tables(cat, &mut out);
         }
+        Phase::CtlCheckExpr { table } => {
+            if let Some(t) = table {
+                sources::columns_of_table(cat, None, &t, &mut out);
+                if out.is_empty() {
+                    for name in crate::source_tables::buffer_column_names(source, &t) {
+                        out.push(crate::item::Item {
+                            label: name.clone(),
+                            kind: crate::item::ItemKind::Column,
+                            detail: Some(format!("column of `{t}` (buffer)")),
+                            description: None,
+                            documentation_md: None,
+                            insert_text: name,
+                            sort_priority: 0,
+                        });
+                    }
+                }
+            }
+            push_all_functions(cat, &mut out);
+            sources::expression_keywords(&mut out);
+        }
         Phase::CtlExpectFkColumn { table } => {
             sources::columns_of_table(cat, None, &table, &mut out);
             // Fallback: the table being created may not have parsed

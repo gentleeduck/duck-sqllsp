@@ -110,6 +110,10 @@ pub enum Phase {
     CtlExpectFkTable { /* nothing for now */ },
     /// After `REFERENCES tbl (` -- expect a column of that table.
     CtlExpectFkColumn { table: String },
+    /// Inside a `CHECK ( ... )` expression. Expect this table's
+    /// columns plus the full PG function library and expression
+    /// keywords -- CHECK bodies are arbitrary boolean expressions.
+    CtlCheckExpr { table: Option<String> },
 
     /// Right after the PG `::` cast operator. Expect a type (DATE,
     /// NUMERIC, TEXT, JSONB, custom enum/domain, ...).
