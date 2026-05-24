@@ -156,6 +156,42 @@
         "path": "./snippets/sql.json"
       }
     ],
+    "walkthroughs": [
+      {
+        "id": "duckSqllspGetStarted",
+        "title": "Get started with duck-sqllsp",
+        "description": "SQL completion / hover / diagnostics / formatting for Postgres (MySQL + SQLite too). Install the server, connect a DB (or stay offline), and try it.",
+        "steps": [
+          {
+            "id": "install",
+            "title": "Install the duck-sqllsp binary",
+            "description": "The extension is a thin client -- install the Rust server binary first.\n[Show Logs](command:duckSqllsp.showLogs)",
+            "media": { "markdown": "media/install.md" },
+            "completionEvents": [
+              "onCommand:duckSqllsp.restartServer"
+            ]
+          },
+          {
+            "id": "connect",
+            "title": "Connect to a database (optional)",
+            "description": "Catalog-aware completion / hover get richer with a live DB connection. Open the Connections sidebar and click +.\n[Add Connection](command:duckSqllsp.addConnection)",
+            "media": { "markdown": "media/connect.md" },
+            "completionEvents": [
+              "onCommand:duckSqllsp.addConnection"
+            ]
+          },
+          {
+            "id": "try",
+            "title": "Try a SQL file",
+            "description": "Open or create any .sql file and start typing -- completion, hover, diagnostics, inlay hints, and refactors all fire automatically.",
+            "media": { "markdown": "media/try.md" },
+            "completionEvents": [
+              "onLanguage:sql"
+            ]
+          }
+        ]
+      }
+    ],
     "configuration": {
       "type": "object",
       "title": "duck-sqllsp",
