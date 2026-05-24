@@ -17,10 +17,10 @@ use tower_lsp::lsp_types::{
 
 pub fn run(state: &ServerState, params: CodeLensParams) -> Option<Vec<CodeLens>> {
     let doc = state.documents.get(&params.text_document.uri)?;
-    let parsed = dsl_parse::parse(&doc.text, dsl_parse::Dialect::Postgres);
+    let cache = doc.parsed();
 
     let mut out = Vec::new();
-    for stmt in &parsed.statements {
+    for stmt in &cache.file.statements {
         let runnable = matches!(
             &stmt.kind,
             StatementKind::Select(_)

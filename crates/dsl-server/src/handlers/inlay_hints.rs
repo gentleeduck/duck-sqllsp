@@ -20,7 +20,8 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
     let uri = params.text_document.uri;
     let doc = state.documents.get(&uri)?;
     let cat = state.catalog.read().clone();
-    let parsed = dsl_parse::parse(&doc.text, dsl_parse::Dialect::Postgres);
+    let cache = doc.parsed();
+    let parsed = &cache.file;
 
     // Also resolve against buffer-defined tables so a fresh `CREATE TABLE`
     // expands its columns immediately without needing a DB round-trip.
