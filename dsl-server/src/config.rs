@@ -160,6 +160,18 @@ impl DuckSqllspConfig {
         if other.style.function != default.function   { self.style.function = other.style.function; }
         if other.style.type_ != default.type_         { self.style.type_ = other.style.type_; }
         if other.style.identifier != default.identifier { self.style.identifier = other.style.identifier; }
+        // Formatter + CreateTable: overlay wholesale only when the
+        // incoming block differs from defaults. Field-level merging
+        // would require knowing whether each scalar was explicitly
+        // set (serde::default zeroes that signal); the wholesale
+        // overlay matches the "last source wins" intent of the
+        // didChangeConfiguration / project-file pipeline.
+        if other.style.create_table != default.create_table {
+            self.style.create_table = other.style.create_table;
+        }
+        if other.style.formatter != default.formatter {
+            self.style.formatter = other.style.formatter;
+        }
     }
 }
 
@@ -207,5 +219,55 @@ pub fn load_project_config(start: &Path) -> Option<DuckSqllspConfig> {
         if !dir.pop() {
             return None;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn merge_overlays_formatter_when_nondefault() {
+        let mut base = DuckSqllspConfig::default();
+        let mut other = DuckSqllspConfig::default();
+        other.style.formatter.tab_width = 8;
+        other.style.formatter.keyword_case = "lower".into();
+        base.merge_from(other);
+        assert_eq!(base.style.formatter.tab_width, 8);
+        assert_eq!(base.style.formatter.keyword_case, "lower");
+    }
+
+    #[test]
+    fn merge_leaves_formatter_alone_when_other_is_default() {
+        let mut base = DuckSqllspConfig::default();
+        base.style.formatter.tab_width = 2;
+        let other = DuckSqllspConfig::default();
+        base.merge_from(other);
+        assert_eq!(base.style.formatter.tab_width, 2, "default `other` must not clobber base");
+    }
+
+    #[test]
+    fn merge_overlays_create_table_block() {
+        let mut base = DuckSqllspConfig::default();
+        let mut other = DuckSqllspConfig::default();
+        other.style.create_table.column_gap = 1;
+        other.style.create_table.align_columns = false;
+        base.merge_from(other);
+        assert_eq!(base.style.create_table.column_gap, 1);
+        assert!(!base.style.create_table.align_columns);
+    }
+
+    #[test]
+    fn parse_accepts_nested_formatter_block() {
+        let json = serde_json::json!({
+            "style": {
+                "formatter": { "tabWidth": 8, "keywordCase": "lower" },
+                "createTable": { "columnGap": 1 }
+            }
+        });
+        let cfg = parse(json).duck_sqllsp;
+        assert_eq!(cfg.style.formatter.tab_width, 8);
+        assert_eq!(cfg.style.formatter.keyword_case, "lower");
+        assert_eq!(cfg.style.create_table.column_gap, 1);
     }
 }

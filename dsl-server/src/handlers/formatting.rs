@@ -13,7 +13,18 @@ pub fn run(state: &ServerState, params: DocumentFormattingParams) -> Option<Vec<
     let original = doc.text.clone();
     let cfg = state.config_snapshot();
 
-    let formatted = dsl_format::format(&original, &cfg.style.formatter, &cfg.style.create_table);
+    // Honor the LSP-standard FormattingOptions the editor sent. tab_size
+    // overrides the formatter's tabWidth (per-buffer wins over global
+    // config) so the editor's `:set tabstop=2` is respected for this one
+    // format request. insert_spaces is informational for now; sql-
+    // formatter always emits spaces. trim_trailing_whitespace and
+    // insert_final_newline are normalised already by the post-pass.
+    let mut formatter_style = cfg.style.formatter.clone();
+    if params.options.tab_size > 0 {
+        formatter_style.tab_width = params.options.tab_size as usize;
+    }
+
+    let formatted = dsl_format::format(&original, &formatter_style, &cfg.style.create_table);
     if formatted == original { return None; }
 
     let last_line_idx = original.lines().count() as u32;
