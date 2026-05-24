@@ -54,11 +54,17 @@ impl LintRule for Rule {
     let value_count = top_level_comma_count(tuple) + 1;
     let col_count = i.columns.len();
     if value_count != col_count {
+      // Narrow the diagnostic to the VALUES tuple `(...)` span rather
+      // than the full Insert statement.range, which the parser can
+      // extend past the prior `;` and land on the previous statement
+      // (a CREATE INDEX one line up, etc).
+      let abs_open = start + k;
+      let abs_close = start + tuple_end + 1; // include the closing `)`
       out.push(Diagnostic {
         code: "sql038",
         severity: Severity::Error,
         message: format!("INSERT has {col_count} target column(s) but {value_count} value(s) in VALUES"),
-        range: stmt.range,
+        range: text_size::TextRange::new((abs_open as u32).into(), (abs_close as u32).into()),
       });
     }
   }
