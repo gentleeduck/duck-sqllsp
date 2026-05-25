@@ -670,7 +670,8 @@ fn sql056_range_narrows_to_union_keyword() {
 
 #[test]
 fn sql058_range_narrows_to_case_keyword() {
-  let src = "SELECT CASE WHEN id IS NULL THEN 'nil' ELSE 'ok' END FROM users;";
+  // Single WHEN without ELSE -- the canonical noise case.
+  let src = "SELECT CASE WHEN id IS NULL THEN 'nil' END FROM users;";
   let d = diags(src);
   let hit = d.iter().find(|x| x.code == "sql058").expect("sql058");
   let s: u32 = hit.range.start().into();
@@ -994,8 +995,16 @@ fn sql061_quiet_when_cast() {
 
 #[test]
 fn sql058_flags_case_with_one_when() {
-  let d = diags("SELECT CASE WHEN id IS NULL THEN 'nil' ELSE 'ok' END FROM users;");
+  // Single WHEN without ELSE silently NULL-fills.
+  let d = diags("SELECT CASE WHEN id IS NULL THEN 'nil' END FROM users;");
   assert!(d.iter().any(|x| x.code == "sql058"));
+}
+
+#[test]
+fn sql058_quiet_with_else() {
+  // CASE WHEN x THEN a ELSE b END is the canonical if-else; never noise.
+  let d = diags("SELECT CASE WHEN id IS NULL THEN 'nil' ELSE 'ok' END FROM users;");
+  assert!(!d.iter().any(|x| x.code == "sql058"));
 }
 
 #[test]
@@ -3697,8 +3706,16 @@ fn sql294_quiet_single_begin() {
 
 #[test]
 fn sql327_flags_unqualified_create_table() {
-  let d = diags("CREATE TABLE widgets (id int);");
+  // Mixed style -- one qualified, one bare. Bare one gets flagged.
+  let d = diags("CREATE TABLE inventory.widgets (id int);\nCREATE TABLE gadgets (id int);");
   assert!(d.iter().any(|x| x.code == "sql327"));
+}
+
+#[test]
+fn sql327_quiet_when_buffer_all_bare() {
+  // Every table is bare -- consistent flat-schema project; no noise.
+  let d = diags("CREATE TABLE widgets (id int);\nCREATE TABLE gadgets (id int);");
+  assert!(!d.iter().any(|x| x.code == "sql327"));
 }
 
 #[test]
