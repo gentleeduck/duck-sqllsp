@@ -104,10 +104,13 @@ impl LanguageServer for Backend {
         let root = derive_workspace_root(&path);
         if let Some(root) = root {
           self.state.set_workspace_root(root);
-          let state = self.state.clone();
-          tokio::spawn(async move {
-            state.rescan_workspace_offline();
-          });
+          // Inline scan so the FIRST diagnostics + completion request
+          // sees the workspace-derived catalog. Filesystem walk is
+          // fast (~ms for typical projects) and bounded by MAX_FILES
+          // in state.rs. Without this, sql001/sql002 flag every
+          // table defined in a sibling .sql file as "unresolved" on
+          // first open, then silently clear on the next edit.
+          self.state.rescan_workspace_offline();
         }
       }
     }

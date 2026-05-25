@@ -248,8 +248,21 @@ fn route_phase(
       sources::tables(cat, &mut out);
     },
     Phase::InsertColumnList => {
-      push_scope_columns_or_all(file, scopes, source, cat, offset, &mut out);
-      push_aliases(file, scopes, source, offset, &mut out);
+      // Strict: only columns of the INSERT target table. Falling back
+      // to the global column dump showed every catalog table's columns
+      // (huge menu) which is never what the user wants in a paren list
+      // that PG strictly validates against the target.
+      if let Some(target) = insert_target_table(source, offset) {
+        sources::columns_of_table(cat, None, &target, &mut out);
+        // Filter out columns the user already typed in this paren list.
+        let used = used_columns_in_clause(source, offset);
+        if !used.is_empty() {
+          out.retain(|it| !is_column_listed(it, &used));
+        }
+      } else {
+        push_scope_columns_or_all(file, scopes, source, cat, offset, &mut out);
+        push_aliases(file, scopes, source, offset, &mut out);
+      }
     },
     Phase::InsertExpectValues | Phase::InsertValuesList => {
       push_aliases(file, scopes, source, offset, &mut out);
@@ -442,6 +455,34 @@ fn route_phase(
 /// True for completion items that should be filtered when the column
 /// is already in the current clause's comma list. Matches both bare
 /// columns (`id`) and qualified ones (`u.id`) by checking the tail.
+/// Walk back from `offset` to find `INSERT INTO <table> (` and return
+/// the bare table name. None when the cursor isn't inside an INSERT
+/// column list.
+fn insert_target_table(source: &str, offset: TextSize) -> Option<String> {
+  let pos: usize = u32::from(offset) as usize;
+  let pos = pos.min(source.len());
+  // Statement boundary.
+  let stmt_start = source[..pos].rfind(';').map(|p| p + 1).unwrap_or(0);
+  let stmt = &source[stmt_start..pos];
+  let upper = stmt.to_ascii_uppercase();
+  let at = upper.rfind("INSERT INTO")?;
+  let after = at + "INSERT INTO".len();
+  let rest = &stmt[after..];
+  let lead = rest.len() - rest.trim_start().len();
+  let raw = &rest[lead..];
+  let id_end = raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(raw.len());
+  let table = raw[..id_end].rsplit('.').next().unwrap_or(&raw[..id_end]).trim_matches('"').to_string();
+  if table.is_empty() { return None }
+  // Must be inside the paren list: the chars between `<table>` and
+  // cursor must contain `(` and not a closing `)`.
+  let after_table = after + lead + id_end;
+  let trail = &stmt[after_table..];
+  let paren_at = trail.find('(')?;
+  let paren_body = &trail[paren_at + 1..];
+  if paren_body.contains(')') { return None }
+  Some(table)
+}
+
 fn is_column_listed(it: &Item, used: &std::collections::HashSet<String>) -> bool {
   if !matches!(it.kind, crate::item::ItemKind::Column) {
     return false;

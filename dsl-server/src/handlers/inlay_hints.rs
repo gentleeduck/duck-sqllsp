@@ -65,11 +65,25 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
       continue;
     }
     // Map ins.columns -> Vec<(name, type)>; empty cols list means
-    // positional, use the catalog order.
+    // positional, use the catalog order. With an explicit column list
+    // we MUST preserve every position (including columns not in the
+    // catalog) so the chip alignment matches the VALUES literals.
+    // Previously `filter_map` dropped typos, breaking the 1:1
+    // mapping and emitting hints with the wrong column names.
     let ordered: Vec<(String, String)> = if ins.columns.is_empty() {
       cols.clone()
     } else {
-      ins.columns.iter().filter_map(|name| cols.iter().find(|(n, _)| n.eq_ignore_ascii_case(name)).cloned()).collect()
+      ins
+        .columns
+        .iter()
+        .map(|name| {
+          cols
+            .iter()
+            .find(|(n, _)| n.eq_ignore_ascii_case(name))
+            .cloned()
+            .unwrap_or_else(|| (name.clone(), String::new()))
+        })
+        .collect()
     };
     let positional = ins.columns.is_empty();
     if positional {

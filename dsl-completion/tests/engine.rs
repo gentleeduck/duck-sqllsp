@@ -1186,6 +1186,29 @@ fn policy_for_completes_command() {
 }
 
 #[test]
+fn insert_column_list_only_target_table_columns() {
+  let cat = catalog_with_users_and_orders();
+  let src = "INSERT INTO users (";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<String> = items.iter().map(|i| i.label.clone()).collect();
+  assert!(labels.contains(&"id".to_string()));
+  assert!(labels.contains(&"email".to_string()));
+  assert!(labels.contains(&"name".to_string()));
+  // Must NOT include orders columns.
+  assert!(!labels.contains(&"user_id".to_string()), "leaked orders.user_id into INSERT col list");
+}
+
+#[test]
+fn insert_column_list_filters_already_typed() {
+  let cat = catalog_with_users_and_orders();
+  let src = "INSERT INTO users (id, ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<String> = items.iter().map(|i| i.label.clone()).collect();
+  assert!(!labels.contains(&"id".to_string()), "id already typed, should be filtered");
+  assert!(labels.contains(&"email".to_string()));
+}
+
+#[test]
 fn alter_column_type_completes() {
   let cat = catalog_with_users_and_orders();
   let src = "ALTER TABLE users ALTER COLUMN name TYPE ";

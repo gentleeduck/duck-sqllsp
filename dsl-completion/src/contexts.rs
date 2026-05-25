@@ -27,6 +27,7 @@ pub fn detect(source: &str, offset: TextSize, cat: &Catalog) -> Option<Vec<Item>
   let stmt_start = source[..pos].rfind(';').map(|p| p + 1).unwrap_or(0);
   let stmt = &source[stmt_start..pos];
   let upper = stmt.to_ascii_uppercase();
+  let _ = source;
 
   // ---- CREATE INDEX USING <method> ----
   if upper.contains("CREATE INDEX") || upper.contains("CREATE UNIQUE INDEX") {
@@ -46,7 +47,7 @@ pub fn detect(source: &str, offset: TextSize, cat: &Catalog) -> Option<Vec<Item>
     if let Some(items) = trigger_on_table(&upper, cat) {
       return Some(items);
     }
-    if let Some(items) = trigger_execute_function(&upper, stmt, cat) {
+    if let Some(items) = trigger_execute_function(&upper, source, cat) {
       return Some(items);
     }
   }

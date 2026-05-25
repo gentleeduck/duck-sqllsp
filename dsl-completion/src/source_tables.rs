@@ -930,6 +930,27 @@ fn name_followed_by_as_enum(src: &str, upper: &str, prefix: &str, name: &str) ->
   tail.to_ascii_uppercase().starts_with("AS ENUM")
 }
 
+/// Pull the type out of `RETURNS <type>` in a CREATE FUNCTION DDL.
+/// Stops at `AS`, `LANGUAGE`, `$$`, or newline. Returns "?" when
+/// the clause isn't found.
+fn extract_returns(ddl: &str) -> String {
+  let upper = ddl.to_ascii_uppercase();
+  let Some(at) = upper.find(" RETURNS ") else { return "?".into() };
+  let after = at + 9;
+  let rest = &ddl[after..];
+  let stop = rest
+    .find(|c: char| c == '\n')
+    .or_else(|| {
+      let u = rest.to_ascii_uppercase();
+      u.find(" AS ").or_else(|| u.find(" LANGUAGE "))
+    })
+    .unwrap_or(rest.len());
+  let raw = rest[..stop].trim();
+  // Drop trailing punctuation / TABLE() schema noise.
+  let bare = raw.split_whitespace().next().unwrap_or(raw).trim_end_matches(',');
+  if bare.is_empty() { "?".into() } else { bare.to_string() }
+}
+
 fn scan_functions(src: &str) -> Vec<Function> {
   let upper = src.to_ascii_uppercase();
   let bytes = src.as_bytes();
@@ -955,11 +976,13 @@ fn scan_functions(src: &str) -> Vec<Function> {
       // quoted body (or just up to the end of file if unterminated).
       let stmt_end = find_function_end(src, k);
       let full_ddl = src[stmt_start..stmt_end].trim().to_string();
+      // Extract RETURNS <type> from the DDL header (before AS $$).
+      let return_type = extract_returns(&full_ddl);
       out.push(Function {
         schema: "public".into(),
         name: bare,
         arguments: Vec::<FunctionArg>::new(),
-        return_type: "?".into(),
+        return_type,
         // Render layer reads `comment` for the source block when it
         // starts with CREATE; ship the full DDL so the hover shows
         // the body inline.
