@@ -193,6 +193,7 @@ pub mod unique_on_nullable;
 pub mod unknown_column;
 pub mod unreachable_after_return;
 pub mod unresolved_table;
+pub mod update_delete_limit;
 pub mod update_from_no_pk_filter;
 pub mod update_set_no_change;
 pub mod update_set_alias_mismatch;
@@ -524,5 +525,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(self_fk_no_deferrable::Rule),
     Box::new(information_schema_perf::Rule),
     Box::new(in_list_duplicates::Rule),
+    Box::new(update_delete_limit::Rule),
   ]
 }
