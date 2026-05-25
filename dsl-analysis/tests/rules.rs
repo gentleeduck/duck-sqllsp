@@ -3717,3 +3717,45 @@ fn sql328_quiet_when_grant_present() {
   let d = diags("GRANT SELECT ON users TO analyst;\nREVOKE SELECT ON users FROM analyst;");
   assert!(!d.iter().any(|x| x.code == "sql328"));
 }
+
+// ===== sql329 substring(.. FROM n) without FOR =====
+
+#[test]
+fn sql329_flags_substring_no_for() {
+  let d = diags("SELECT substring(name FROM 1) FROM users;");
+  assert!(d.iter().any(|x| x.code == "sql329"));
+}
+
+#[test]
+fn sql329_quiet_with_for() {
+  let d = diags("SELECT substring(name FROM 1 FOR 3) FROM users;");
+  assert!(!d.iter().any(|x| x.code == "sql329"));
+}
+
+// ===== sql331 DROP INDEX CONCURRENTLY in tx =====
+
+#[test]
+fn sql331_flags_drop_concurrently_in_tx() {
+  let d = diags("BEGIN;\nDROP INDEX CONCURRENTLY idx_x;");
+  assert!(d.iter().any(|x| x.code == "sql331"));
+}
+
+#[test]
+fn sql331_quiet_outside_tx() {
+  let d = diags("DROP INDEX CONCURRENTLY idx_x;");
+  assert!(!d.iter().any(|x| x.code == "sql331"));
+}
+
+// ===== sql332 pg_terminate_backend / pg_cancel_backend =====
+
+#[test]
+fn sql332_flags_terminate_backend() {
+  let d = diags("SELECT pg_terminate_backend(1234);");
+  assert!(d.iter().any(|x| x.code == "sql332"));
+}
+
+#[test]
+fn sql332_quiet_when_absent() {
+  let d = diags("SELECT 1;");
+  assert!(!d.iter().any(|x| x.code == "sql332"));
+}

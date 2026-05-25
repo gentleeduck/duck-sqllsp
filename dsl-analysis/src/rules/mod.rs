@@ -37,6 +37,7 @@ pub mod copy_no_format;
 pub mod copy_program_exec;
 pub mod count_one_vs_star;
 pub mod create_table_no_schema;
+pub mod drop_index_concurrently_in_tx;
 pub mod count_star_returns_one;
 pub mod cte_dml_no_returning;
 pub mod cte_missing_recursive;
@@ -146,6 +147,7 @@ pub mod plpgsql_assign_type;
 pub mod perform_for_pure_select;
 pub mod pg_catalog_no_schema;
 pub mod pg_sleep_in_tx;
+pub mod pg_terminate_backend;
 pub mod pk_duplicate_col;
 pub mod prefer_alias;
 pub mod psql_backslash;
@@ -191,6 +193,7 @@ pub mod shell_command_in_sql;
 pub mod single_stmt_transaction;
 pub mod star_with_order_by_position;
 pub mod string_agg_no_order;
+pub mod substring_from_no_for;
 pub mod sql_lang_uses_new_old;
 pub mod system_catalog_dml;
 pub mod table_inherits;
@@ -568,5 +571,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(oracle_outer_join::Rule),
     Box::new(create_table_no_schema::Rule),
     Box::new(revoke_without_grant::Rule),
+    Box::new(substring_from_no_for::Rule),
+    Box::new(drop_index_concurrently_in_tx::Rule),
+    Box::new(pg_terminate_backend::Rule),
   ]
 }
