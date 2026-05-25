@@ -116,6 +116,7 @@ pub mod returning_no_assign;
 pub mod returning_with_truncate;
 pub mod row_constructor_single;
 pub mod row_count_after_dml;
+pub mod savepoint_name_reuse;
 pub mod savepoint_no_release;
 pub mod select_for_update_in_recursive_cte;
 pub mod select_for_update_no_where;
@@ -127,6 +128,7 @@ pub mod select_no_from_no_agg;
 pub mod select_star_insert;
 pub mod set_constraints_outside_tx;
 pub mod set_role_no_reset;
+pub mod shell_command_in_sql;
 pub mod single_stmt_transaction;
 pub mod sql_lang_uses_new_old;
 pub mod text_int_arithmetic;
@@ -161,6 +163,8 @@ pub mod truncate_in_trigger;
 pub mod varchar_length;
 pub mod date_literal_format;
 pub mod alter_column_type;
+pub mod alter_drop_just_created;
+pub mod array_eq_with_null;
 pub mod array_fn_on_scalar;
 pub mod array_mixed_types;
 pub mod cast_literal_invalid;
@@ -384,5 +388,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(empty_in_list::Rule),
     Box::new(pg_sleep_in_tx::Rule),
     Box::new(after_trigger_return_row::Rule),
+    Box::new(shell_command_in_sql::Rule),
+    Box::new(array_eq_with_null::Rule),
+    Box::new(alter_drop_just_created::Rule),
+    Box::new(savepoint_name_reuse::Rule),
   ]
 }
