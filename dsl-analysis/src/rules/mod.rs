@@ -88,6 +88,7 @@ pub mod mv_no_data_query;
 pub mod mutating_without_where;
 pub mod negative_limit_offset;
 pub mod notify_unlistened;
+pub mod not_in_nullable;
 pub mod not_in_subquery;
 pub mod null_comparison;
 pub mod null_default_not_null;
@@ -95,6 +96,7 @@ pub mod null_in_values;
 pub mod nulls_first_last_no_order;
 pub mod nullif_same_args;
 pub mod numeric_no_precision;
+pub mod order_by_in_subquery;
 pub mod order_by_position;
 pub mod order_by_random;
 pub mod owner_to_unknown_role;
@@ -168,6 +170,7 @@ pub mod truncate_in_trigger;
 pub mod varchar_length;
 pub mod date_literal_format;
 pub mod alter_column_type;
+pub mod alter_set_tablespace;
 pub mod alter_drop_just_created;
 pub mod array_eq_with_null;
 pub mod array_fn_on_scalar;
@@ -414,5 +417,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(default_values_no_default_col::Rule),
     Box::new(for_update_aggregate::Rule),
     Box::new(star_with_order_by_position::Rule),
+    Box::new(order_by_in_subquery::Rule),
+    Box::new(not_in_nullable::Rule),
+    Box::new(alter_set_tablespace::Rule),
   ]
 }
