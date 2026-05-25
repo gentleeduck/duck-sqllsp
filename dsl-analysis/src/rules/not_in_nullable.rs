@@ -34,13 +34,16 @@ impl LintRule for Rule {
       // Single-column projection text-scan.
       let proj_end = inner_upper.find(" FROM ").unwrap_or(inner.len());
       let proj = inner[6..proj_end].trim();
-      // Determine target column + table.
       let col = proj.trim_matches('"');
-      let from_end = inner_upper[proj_end..].find(|c: char| c.is_whitespace() || c == ',' || c == ';').map(|p| proj_end + p).unwrap_or(inner.len());
-      let table = if proj_end + " FROM ".len() < inner.len() {
-        inner[proj_end + " FROM ".len()..from_end].trim()
-      } else { "" };
       let bare = col.rsplit('.').next().unwrap_or(col);
+      // Locate the FROM tail and extract the first identifier (table name).
+      let tbl_start = proj_end + " FROM ".len();
+      if tbl_start >= inner.len() { from = close + 1; continue }
+      let tail = &inner[tbl_start..];
+      let tbl_end = tail
+        .find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"')
+        .unwrap_or(tail.len());
+      let table = &tail[..tbl_end];
       let table_bare = table.rsplit('.').next().unwrap_or(table).trim_matches('"');
       let Some(t) = catalog.find_table(None, table_bare) else { from = close + 1; continue };
       let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(bare)) else { from = close + 1; continue };

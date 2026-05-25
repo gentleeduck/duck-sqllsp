@@ -57,6 +57,7 @@ pub mod extract_on_indexable;
 pub mod extract_unknown_field;
 pub mod generate_series_no_alias;
 pub mod gin_on_scalar;
+pub mod gist_on_scalar;
 pub mod grant_to_public;
 pub mod grant_with_grant_option;
 pub mod group_by_all;
@@ -454,5 +455,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(extract_on_indexable::Rule),
     Box::new(format_no_placeholders::Rule),
     Box::new(cursor_with_hold_no_tx::Rule),
+    Box::new(gist_on_scalar::Rule),
   ]
 }
