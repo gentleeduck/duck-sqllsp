@@ -22,11 +22,11 @@ impl LintRule for Rule {
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let raw = &source[start..end];
+    let body = strip_comments(raw);
     let upper = body.to_ascii_uppercase();
     let Some(rel) = upper.find("SAVEPOINT") else { return };
     let kw_at = start + rel;
-    // Word-boundary check on the SAVEPOINT keyword.
     if let Some(prev) = source.as_bytes().get(kw_at.saturating_sub(1)).copied() {
       if (prev as char).is_ascii_alphanumeric() || prev == b'_' { return; }
     }
@@ -35,10 +35,12 @@ impl LintRule for Rule {
       if (next as char).is_ascii_alphanumeric() || next == b'_' { return; }
     }
     // Count BEGIN/START TRANSACTION vs COMMIT/ROLLBACK in source up
-    // to (but excluding) the SAVEPOINT statement.
-    let prior = &source[..kw_at].to_ascii_uppercase();
-    let begins = count_word(prior, "BEGIN") + count_word(prior, "START TRANSACTION");
-    let commits = count_word(prior, "COMMIT") + count_word(prior, "ROLLBACK");
+    // to the SAVEPOINT keyword, with comments stripped to keep counts
+    // honest.
+    let prior_owned = strip_comments(&source[..kw_at]);
+    let prior = prior_owned.to_ascii_uppercase();
+    let begins = count_word(&prior, "BEGIN") + count_word(&prior, "START TRANSACTION");
+    let commits = count_word(&prior, "COMMIT") + count_word(&prior, "ROLLBACK");
     if begins > commits {
       return;
     }
@@ -68,4 +70,28 @@ fn count_word(haystack: &str, needle: &str) -> usize {
     i += 1;
   }
   count
+}
+
+fn strip_comments(s: &str) -> String {
+  let mut out = String::with_capacity(s.len());
+  let bytes = s.as_bytes();
+  let n = bytes.len();
+  let mut i = 0usize;
+  while i < n {
+    if i + 1 < n && bytes[i] == b'-' && bytes[i + 1] == b'-' {
+      while i < n && bytes[i] != b'\n' { out.push(' '); i += 1 }
+    } else if bytes[i] == b'\'' {
+      out.push(' ');
+      i += 1;
+      while i < n && bytes[i] != b'\'' { out.push(' '); i += 1 }
+      if i < n { out.push(' '); i += 1 }
+    } else if bytes[i].is_ascii() {
+      out.push(bytes[i] as char);
+      i += 1;
+    } else {
+      out.push(' ');
+      i += 1;
+    }
+  }
+  out
 }
