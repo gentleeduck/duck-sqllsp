@@ -1242,6 +1242,15 @@ pub fn build() -> HashMap<&'static str, Entry> {
   f!("pg_xact_status",     "pg_xact_status(xid8) -> text",  "Status of a transaction: committed / in progress / aborted.", "SELECT pg_xact_status(pg_current_xact_id());", pg("functions-info.html"));
 
   // ---- Comparison / NULL counting ----
+  // Geometric type constructors.
+  f!("point",   "point(x float8, y float8) -> point",  "Construct a geometric point.", "SELECT point(40.7, -74.0);", pg("functions-geometry.html"));
+  f!("box",     "box(point, point) -> box",            "Construct a rectangular box from two points.", "SELECT box(point(0,0), point(1,1));", pg("functions-geometry.html"));
+  f!("circle",  "circle(point, float8) -> circle",     "Construct a circle from center + radius.", "SELECT circle(point(0,0), 5);", pg("functions-geometry.html"));
+  f!("line",    "line(point, point) -> line",          "Construct a line from two points.", "SELECT line(point(0,0), point(1,1));", pg("functions-geometry.html"));
+  f!("lseg",    "lseg(point, point) -> lseg",          "Construct a line segment.", "SELECT lseg(point(0,0), point(1,1));", pg("functions-geometry.html"));
+  f!("path",    "path(polygon) -> path",               "Construct a path from a polygon.", "SELECT path('((0,0),(1,1),(2,2))'::polygon);", pg("functions-geometry.html"));
+  f!("polygon", "polygon(box) -> polygon",             "Construct a polygon from a box.", "SELECT polygon(box(point(0,0), point(1,1)));", pg("functions-geometry.html"));
+
   // uuid-ossp extension fns (heavily used in real schemas).
   f!("uuid_generate_v4", "uuid_generate_v4() -> uuid",      "Random UUID (v4). Requires the uuid-ossp extension.", "SELECT uuid_generate_v4();", pg("uuid-ossp.html"));
   f!("uuid_generate_v1", "uuid_generate_v1() -> uuid",      "MAC-address + timestamp UUID (v1).",                  "SELECT uuid_generate_v1();", pg("uuid-ossp.html"));
