@@ -110,6 +110,7 @@ pub mod mysql_auto_increment;
 pub mod mysql_engine;
 pub mod mysql_interval_syntax;
 pub mod mysql_table_comment;
+pub mod mysql_types;
 pub mod mutating_without_where;
 pub mod negative_limit_offset;
 pub mod nested_begin;
@@ -542,5 +543,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(mysql_table_comment::Rule),
     Box::new(mysql_auto_increment::Rule),
     Box::new(mysql_engine::Rule),
+    Box::new(mysql_types::Rule),
   ]
 }
