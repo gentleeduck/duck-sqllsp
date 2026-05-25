@@ -242,6 +242,10 @@ pub fn column(t: &Table, c: &Column) -> String {
   let mut s = format!("# Column `{}.{}.{}`\n\n", t.schema, t.name, c.name);
   s.push_str(&format!("- **type:** `{}`\n", c.data_type));
   s.push_str(&format!("- **nullable:** `{}`\n", c.nullable));
+  if let Some(g) = &c.generated {
+    let wrapped = dsl_knowledge::wrap_paragraphs(g, 64);
+    s.push_str(&format!("- **generated:** `GENERATED ALWAYS AS ({wrapped}) STORED`\n"));
+  }
   if let Some(d) = &c.default {
     let wrapped = dsl_knowledge::wrap_paragraphs(d, 64);
     s.push_str(&format!("- **default:** `{wrapped}`\n"));

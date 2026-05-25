@@ -9,9 +9,9 @@ fn cat() -> Catalog {
     name: "users".into(),
     kind: TableKind::Table,
     columns: vec![
-      Column { name: "id".into(), data_type: "uuid".into(), nullable: false, default: None, comment: None },
-      Column { name: "email".into(), data_type: "text".into(), nullable: false, default: None, comment: None },
-      Column { name: "name".into(), data_type: "text".into(), nullable: true, default: None, comment: None },
+      Column { name: "id".into(), data_type: "uuid".into(), nullable: false, default: None, comment: None, generated: None },
+      Column { name: "email".into(), data_type: "text".into(), nullable: false, default: None, comment: None, generated: None },
+      Column { name: "name".into(), data_type: "text".into(), nullable: true, default: None, comment: None, generated: None },
     ],
     constraints: vec![Constraint {
       name: "pk_users_id".into(),
@@ -30,8 +30,8 @@ fn cat() -> Catalog {
     name: "orders".into(),
     kind: TableKind::Table,
     columns: vec![
-      Column { name: "id".into(), data_type: "uuid".into(), nullable: false, default: None, comment: None },
-      Column { name: "user_id".into(), data_type: "uuid".into(), nullable: false, default: None, comment: None },
+      Column { name: "id".into(), data_type: "uuid".into(), nullable: false, default: None, comment: None, generated: None },
+      Column { name: "user_id".into(), data_type: "uuid".into(), nullable: false, default: None, comment: None, generated: None },
     ],
     constraints: vec![],
     indexes: vec![],
@@ -44,8 +44,8 @@ fn cat() -> Catalog {
     name: "flags".into(),
     kind: TableKind::Table,
     columns: vec![
-      Column { name: "id".into(), data_type: "uuid".into(), nullable: false, default: None, comment: None },
-      Column { name: "active".into(), data_type: "boolean".into(), nullable: false, default: None, comment: None },
+      Column { name: "id".into(), data_type: "uuid".into(), nullable: false, default: None, comment: None, generated: None },
+      Column { name: "active".into(), data_type: "boolean".into(), nullable: false, default: None, comment: None, generated: None },
     ],
     constraints: vec![],
     indexes: vec![],

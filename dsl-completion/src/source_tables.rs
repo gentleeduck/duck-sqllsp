@@ -50,6 +50,7 @@ pub fn from_file(file: &ParsedFile) -> Catalog {
           nullable: c.nullable,
           default: c.default.clone(),
           comment: None,
+          generated: None,
         })
         .collect(),
       constraints: Vec::new(),
@@ -128,10 +129,14 @@ pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
       if let Some(pols) = policies_by_table.get(&key) {
         table.policies = pols.clone();
       }
+      let generated_by_col = scan_generated_for(source, &table.name);
       for col in table.columns.iter_mut() {
         let ckey = format!("{}.{}", table.name.to_ascii_lowercase(), col.name.to_ascii_lowercase());
         if let Some(c) = comments_by_col.get(&ckey) {
           col.comment = Some(c.clone());
+        }
+        if let Some(g) = generated_by_col.get(&col.name.to_ascii_lowercase()) {
+          col.generated = Some(g.clone());
         }
       }
     }
@@ -458,6 +463,98 @@ fn scan_column_comments(src: &str) -> std::collections::HashMap<String, String> 
 /// Locate the CREATE TABLE body for `name` and pull out every
 /// PK/UNIQUE/FK constraint we can spot. Both inline-on-column and
 /// table-level forms. Forgiving -- text-scan, not a real parser.
+/// Walks the body of `CREATE TABLE <name> (...)` and pulls the
+/// `GENERATED ALWAYS AS (expr) STORED` clause for each column that
+/// has one. Returns a map of lowercase column name -> the expr
+/// text (without the keywords).
+fn scan_generated_for(src: &str, name: &str) -> std::collections::HashMap<String, String> {
+  let upper = src.to_ascii_uppercase();
+  let mut out: std::collections::HashMap<String, String> = Default::default();
+  for needle in ["CREATE TABLE IF NOT EXISTS ", "CREATE TEMP TABLE ", "CREATE TEMPORARY TABLE ", "CREATE TABLE "] {
+    let mut from = 0usize;
+    while let Some(rel) = upper[from..].find(needle) {
+      let after = from + rel + needle.len();
+      let bytes = src.as_bytes();
+      let mut k = after;
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+      let id_start = k;
+      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') { k += 1 }
+      let raw = &src[id_start..k];
+      let bare = raw.rsplit('.').next().unwrap_or(raw).trim_matches('"');
+      if !bare.eq_ignore_ascii_case(name) { from = after; continue }
+      while k < bytes.len() && bytes[k] != b'(' { k += 1 }
+      if k >= bytes.len() { return out }
+      let body_start = k + 1;
+      let body_end = match_paren(bytes, k);
+      let body = &src[body_start..body_end];
+      for line in split_top_level(body) {
+        let upper_line = line.to_ascii_uppercase();
+        let Some(g_at) = upper_line.find("GENERATED") else { continue };
+        let post = &line[g_at..];
+        let post_upper = post.to_ascii_uppercase();
+        if !post_upper.starts_with("GENERATED ALWAYS AS") { continue }
+        let after_kw = g_at + "GENERATED ALWAYS AS".len();
+        let rest = line[after_kw..].trim_start();
+        if !rest.starts_with('(') { continue }
+        let abs_open = after_kw + (line[after_kw..].len() - rest.len());
+        let Some(close_rel) = match_paren_offset(&line, abs_open) else { continue };
+        let expr = &line[abs_open + 1..close_rel];
+        let col_name = line.split_whitespace().next().unwrap_or("").trim_matches('"').to_ascii_lowercase();
+        if !col_name.is_empty() {
+          out.insert(col_name, expr.to_string());
+        }
+      }
+      return out;
+    }
+  }
+  out
+}
+
+fn split_top_level(text: &str) -> Vec<String> {
+  let mut out = Vec::new();
+  let bytes = text.as_bytes();
+  let mut depth = 0i32;
+  let mut start = 0usize;
+  let mut i = 0usize;
+  while i < bytes.len() {
+    match bytes[i] {
+      b'(' => depth += 1,
+      b')' => depth -= 1,
+      b',' if depth == 0 => {
+        out.push(text[start..i].trim().to_string());
+        start = i + 1;
+      }
+      b'\'' => {
+        i += 1;
+        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
+      }
+      _ => {}
+    }
+    i += 1;
+  }
+  out.push(text[start..].trim().to_string());
+  out
+}
+
+fn match_paren_offset(s: &str, open: usize) -> Option<usize> {
+  let bytes = s.as_bytes();
+  let mut depth = 0i32;
+  let mut i = open;
+  while i < bytes.len() {
+    match bytes[i] {
+      b'(' => depth += 1,
+      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b'\'' => {
+        i += 1;
+        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
+      }
+      _ => {}
+    }
+    i += 1;
+  }
+  None
+}
+
 fn scan_constraints_for(src: &str, name: &str) -> Vec<Constraint> {
   let upper = src.to_ascii_uppercase();
   let mut out: Vec<Constraint> = Vec::new();

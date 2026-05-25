@@ -130,6 +130,11 @@ pub struct Column {
   pub default: Option<String>,
   #[serde(default)]
   pub comment: Option<String>,
+  /// GENERATED ALWAYS AS (...) STORED expression. Stored as the
+  /// parenthesised expression text without the enclosing keywords --
+  /// hover renders the full form. None for non-generated columns.
+  #[serde(default)]
+  pub generated: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

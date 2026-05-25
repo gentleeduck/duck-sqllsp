@@ -225,6 +225,7 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
             nullable: is_nullable == "YES",
             default,
             comment: None,
+            generated: None,
           });
         }
       }
