@@ -25,6 +25,20 @@ pub fn run(state: &ServerState, params: DocumentFormattingParams) -> Option<Vec<
     formatter_style.tab_width = params.options.tab_size as usize;
   }
 
+  // Dialect-aware formatter language. When the user hasn't pinned
+  // `formatter.language` away from the default (postgresql), let the
+  // open buffer's dialect drive sql-formatter's `-l` flag so it
+  // tokenises `\`backticks\`` (mysql) or `[brackets]` (mssql) instead
+  // of treating them as garbage.
+  if formatter_style.language == "postgresql" {
+    formatter_style.language = match doc.dialect {
+      dsl_parse::Dialect::Postgres => "postgresql".into(),
+      dsl_parse::Dialect::MySql => "mysql".into(),
+      dsl_parse::Dialect::SQLite => "sqlite".into(),
+      dsl_parse::Dialect::Generic => "sql".into(),
+    };
+  }
+
   let formatted = dsl_format::format(&original, &formatter_style, &cfg.style.create_table);
   if formatted == original {
     return None;
