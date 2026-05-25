@@ -71,6 +71,7 @@ pub mod group_by_required;
 pub mod identifier_too_long;
 pub mod immutable_calls_volatile;
 pub mod implicit_cross_join;
+pub mod in_list_duplicates;
 pub mod index_concurrently_in_tx;
 pub mod information_schema_perf;
 pub mod index_expr_volatile;
@@ -522,5 +523,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(empty_array_no_cast::Rule),
     Box::new(self_fk_no_deferrable::Rule),
     Box::new(information_schema_perf::Rule),
+    Box::new(in_list_duplicates::Rule),
   ]
 }
