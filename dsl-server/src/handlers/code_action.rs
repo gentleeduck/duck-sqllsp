@@ -55,6 +55,8 @@ pub fn run(state: &ServerState, params: CodeActionParams) -> Option<CodeActionRe
   explain_analyze_wrap_action(&uri, &params.range, &doc.text, &mut actions);
   // `<expr> IS [NOT] DISTINCT FROM NULL` -> `<expr> IS [NOT] NULL`.
   is_distinct_from_null_action(&uri, &params.range, &doc.text, &mut actions);
+  // Append RETURNING * to UPDATE / DELETE / INSERT lacking one.
+  add_returning_star_action(&uri, &params.range, &doc.text, &mut actions);
 
   if actions.is_empty() {
     return None;
@@ -482,6 +484,52 @@ fn expand_select_star_action(
 /// Wrap the enclosing statement in
 /// `BEGIN; EXPLAIN ANALYZE <stmt>; ROLLBACK;` so the planner runs the
 /// query (with real timings) but the rollback discards any mutation.
+/// Append `RETURNING *` to an UPDATE / DELETE / INSERT that doesn't
+/// already have a RETURNING clause. Lets the user see what their
+/// mutation actually touched without writing the clause by hand.
+fn add_returning_star_action(uri: &Url, range: &Range, text: &str, out: &mut Vec<CodeActionOrCommand>) {
+  let Some(sel) = line_col_to_byte(text, range.start) else { return };
+  let bytes = text.as_bytes();
+  let n = bytes.len();
+  // Locate the enclosing statement bounds (prior `;` to next `;`).
+  let stmt_start = text[..sel].rfind(';').map(|i| i + 1).unwrap_or(0);
+  let mut k = sel;
+  while k < n && bytes[k] != b';' { k += 1; }
+  let stmt_end = k;
+  if stmt_end <= stmt_start { return; }
+  let stmt = &text[stmt_start..stmt_end];
+  let upper = stmt.to_ascii_uppercase();
+  let trimmed_upper = upper.trim_start();
+  let kind = if trimmed_upper.starts_with("UPDATE") {
+    "UPDATE"
+  } else if trimmed_upper.starts_with("DELETE") {
+    "DELETE"
+  } else if trimmed_upper.starts_with("INSERT") {
+    "INSERT"
+  } else {
+    return;
+  };
+  if upper.contains("RETURNING") { return; }
+  // Insert before the trailing `;` (or at end if statement has none).
+  let insert_at = stmt_end;
+  let edit = TextEdit {
+    range: byte_range_to_lsp(text, insert_at, insert_at),
+    new_text: "\nRETURNING *".into(),
+  };
+  let mut changes = HashMap::new();
+  changes.insert(uri.clone(), vec![edit]);
+  out.push(CodeActionOrCommand::CodeAction(CodeAction {
+    title: format!("Add `RETURNING *` to {kind}"),
+    kind: Some(CodeActionKind::REFACTOR_REWRITE),
+    diagnostics: None,
+    edit: Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None }),
+    command: None,
+    is_preferred: None,
+    disabled: None,
+    data: None,
+  }));
+}
+
 /// Quick-fix for sql095: rewrites `<expr> IS [NOT] DISTINCT FROM NULL`
 /// into the equivalent `<expr> IS [NOT] NULL`. PG treats them the
 /// same; the shorter form is the idiomatic spelling and survives

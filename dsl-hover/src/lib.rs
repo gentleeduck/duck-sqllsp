@@ -99,6 +99,12 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
     return Some(md);
   }
 
+  // Cursor on the JSON path operators (-> / ->> / #> / #>>). Surface
+  // a short card naming the operator's return type.
+  if let Some(md) = jsonb_operator_hover(source, pos) {
+    return Some(md);
+  }
+
   // Cursor on a `*` token (SELECT projection / `u.*` / `count(*)`).
   // The lexer-based token_at skips non-word chars so the star never
   // makes it to the normal lookup path. Handle it explicitly.
@@ -458,6 +464,66 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
 /// name with a role shouldn't be hijacked. Surfaces:
 ///   * Catalog membership status (known / unknown / built-in).
 ///   * Source: live catalog vs convention whitelist.
+/// Hover card for the four JSONB path operators -- ->, ->>, #>, #>>.
+/// Each returns a different type so users get caught out by mixing
+/// them (especially -> vs ->>). Fires when the cursor sits on any
+/// byte of the operator.
+fn jsonb_operator_hover(source: &str, pos: usize) -> Option<String> {
+  let bytes = source.as_bytes();
+  if pos >= bytes.len() { return None; }
+  let b = bytes[pos];
+  if b != b'-' && b != b'>' && b != b'#' { return None; }
+  // Find the operator span this byte belongs to.
+  let mut s = pos;
+  while s > 0 && matches!(bytes[s - 1], b'-' | b'>' | b'#') {
+    s -= 1;
+  }
+  let mut e = pos;
+  while e < bytes.len() && matches!(bytes[e], b'-' | b'>' | b'#') {
+    e += 1;
+  }
+  let op = &source[s..e];
+  match op {
+    "->" => Some(
+      "# `->`\n\n_JSON / JSONB path operator_\n\n\
+       Returns the **JSON value** at the given key (or array index).\
+       Result type matches the operand type -- `json -> 'k'` returns json, \
+       `jsonb -> 'k'` returns jsonb.\n\n\
+       ```sql\n\
+       data -> 'profile'        -- jsonb\n\
+       items -> 0               -- first array element as jsonb\n\
+       data -> 'a' -> 'b'       -- chain\n\
+       ```\n".into(),
+    ),
+    "->>" => Some(
+      "# `->>`\n\n_JSON path operator returning TEXT_\n\n\
+       Same as `->` but always returns **text**, not json. Use this when \
+       you need the unquoted string value.\n\n\
+       ```sql\n\
+       data ->> 'email'         -- text (not jsonb)\n\
+       items ->> 0              -- first element coerced to text\n\
+       ```\n\n\
+       Compares with `=` against a string literal directly: `data ->> 'k' = 'x'`. \
+       Compare with `->` against a json literal: `data -> 'k' = '\"x\"'::jsonb`.\n".into(),
+    ),
+    "#>" => Some(
+      "# `#>`\n\n_JSON path lookup (array form)_\n\n\
+       Returns the **JSON value** at the path specified by an array of keys.\n\n\
+       ```sql\n\
+       data #> '{a,b,0}'        -- equivalent to data -> 'a' -> 'b' -> 0\n\
+       ```\n".into(),
+    ),
+    "#>>" => Some(
+      "# `#>>`\n\n_JSON path lookup returning TEXT_\n\n\
+       Same as `#>` but coerces the final value to text.\n\n\
+       ```sql\n\
+       data #>> '{profile,email}'   -- text\n\
+       ```\n".into(),
+    ),
+    _ => None,
+  }
+}
+
 /// Numeric literal hover. Cursor on `123` / `12.5` / `-7` returns a
 /// tiny card naming kind (integer / float) + the assigned column
 /// type when in INSERT VALUES / UPDATE SET / WHERE.
