@@ -22,6 +22,11 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
+    // Skip PL/pgSQL function/procedure bodies + DO blocks -- multiple
+    // top-level WHEREs there belong to different sub-statements.
+    if upper.contains("$$") || upper.contains("LANGUAGE PLPGSQL") || upper.contains("LANGUAGE SQL") {
+      return;
+    }
     let bytes = body.as_bytes();
     let ubytes = upper.as_bytes();
     let n = bytes.len();
