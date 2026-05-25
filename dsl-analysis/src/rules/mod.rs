@@ -195,6 +195,7 @@ pub mod default_references_column;
 pub mod default_values_no_default_col;
 pub mod fk_target_not_unique;
 pub mod for_update_aggregate;
+pub mod format_no_placeholders;
 pub mod for_update_left_join;
 pub mod for_update_of_unknown;
 pub mod inline_check_other_col;
@@ -450,5 +451,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(chained_comparison::Rule),
     Box::new(union_inner_order_by::Rule),
     Box::new(extract_on_indexable::Rule),
+    Box::new(format_no_placeholders::Rule),
   ]
 }
