@@ -66,6 +66,7 @@ pub mod grant_with_grant_option;
 pub mod group_by_all;
 pub mod group_by_position;
 pub mod group_by_required;
+pub mod identifier_too_long;
 pub mod immutable_calls_volatile;
 pub mod implicit_cross_join;
 pub mod index_concurrently_in_tx;
@@ -506,5 +507,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(copy_header_no_csv::Rule),
     Box::new(reindex_in_tx::Rule),
     Box::new(notify_payload_too_large::Rule),
+    Box::new(identifier_too_long::Rule),
   ]
 }
