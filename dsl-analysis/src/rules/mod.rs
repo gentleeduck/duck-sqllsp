@@ -2,6 +2,7 @@
 //!
 //! New rules: add the module, then push an instance into [`all`].
 
+pub mod add_column_notnull_no_default;
 pub mod advisory_lock_literal_key;
 pub mod advisory_lock_no_unlock;
 pub mod after_trigger_return_row;
@@ -133,6 +134,7 @@ pub mod set_constraints_outside_tx;
 pub mod set_role_no_reset;
 pub mod shell_command_in_sql;
 pub mod single_stmt_transaction;
+pub mod star_with_order_by_position;
 pub mod sql_lang_uses_new_old;
 pub mod text_int_arithmetic;
 pub mod time_with_timezone;
@@ -174,7 +176,9 @@ pub mod cast_literal_invalid;
 pub mod comment_clears_existing;
 pub mod comment_on_unknown;
 pub mod default_references_column;
+pub mod default_values_no_default_col;
 pub mod fk_target_not_unique;
+pub mod for_update_aggregate;
 pub mod for_update_left_join;
 pub mod for_update_of_unknown;
 pub mod inline_check_other_col;
@@ -406,5 +410,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(pg_catalog_no_schema::Rule),
     Box::new(on_conflict_do_nothing::Rule),
     Box::new(advisory_lock_literal_key::Rule),
+    Box::new(add_column_notnull_no_default::Rule),
+    Box::new(default_values_no_default_col::Rule),
+    Box::new(for_update_aggregate::Rule),
+    Box::new(star_with_order_by_position::Rule),
   ]
 }
