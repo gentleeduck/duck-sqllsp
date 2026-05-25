@@ -3,6 +3,7 @@
 //! New rules: add the module, then push an instance into [`all`].
 
 pub mod advisory_lock_no_unlock;
+pub mod after_trigger_return_row;
 pub mod alter_table_no_owner;
 pub mod alter_type_add_value_in_tx;
 pub mod ambiguous_column;
@@ -39,6 +40,7 @@ pub mod distinct_after_group_by;
 pub mod distinct_on_no_order;
 pub mod distinct_with_aggregate;
 pub mod empty_comment;
+pub mod empty_in_list;
 pub mod exit_outside_loop;
 pub mod exists_select_star;
 pub mod explain_analyze_in_dml;
@@ -95,6 +97,7 @@ pub mod order_by_random;
 pub mod owner_to_unknown_role;
 pub mod plpgsql_assign_type;
 pub mod perform_for_pure_select;
+pub mod pg_sleep_in_tx;
 pub mod prefer_alias;
 pub mod raise_arg_count;
 pub mod raise_no_level;
@@ -378,5 +381,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(nulls_first_last_no_order::Rule),
     Box::new(jsonb_contains_no_cast::Rule),
     Box::new(mv_no_data_query::Rule),
+    Box::new(empty_in_list::Rule),
+    Box::new(pg_sleep_in_tx::Rule),
+    Box::new(after_trigger_return_row::Rule),
   ]
 }
