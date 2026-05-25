@@ -43,7 +43,7 @@ impl LintRule for Rule {
     "sql348"
   }
   fn default_severity(&self) -> Severity {
-    Severity::Warning
+    Severity::Error
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
@@ -128,7 +128,7 @@ impl LintRule for Rule {
       let abs_e = start + full_end;
       out.push(Diagnostic {
         code: "sql348",
-        severity: Severity::Warning,
+        severity: Severity::Error,
         message: format!("unknown function `{bare}` -- not in catalog, dsl-knowledge, or this buffer"),
         range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
       });

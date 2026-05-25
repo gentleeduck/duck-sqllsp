@@ -106,6 +106,33 @@ fn select(s: &pg_query::protobuf::SelectStmt, _text: &str) -> SelectStmt {
     match f.node.as_ref() {
       Some(PgNode::RangeVar(r)) => from.push(rangevar_to_tableref(r)),
       Some(PgNode::JoinExpr(j)) => walk_join(j, &mut from, &mut joins),
+      // `FROM generate_series(1, 10) AS number` -- function-call FROM.
+      // The function alias becomes the binding name so the resolver
+      // can see references like `number.column` (rare) or bare
+      // `number` (common: `SELECT number FROM generate_series(...) AS number`).
+      Some(PgNode::RangeFunction(rf)) => {
+        let alias = rf.alias.as_ref().map(|a| a.aliasname.clone()).filter(|n| !n.is_empty());
+        if let Some(alias_str) = alias {
+          from.push(TableRef {
+            schema: None,
+            name: alias_str.clone(),
+            alias: Some(alias_str),
+            range: TextRange::default(),
+          });
+        }
+      },
+      // `FROM (SELECT ...) AS sub` -- subquery alias.
+      Some(PgNode::RangeSubselect(rs)) => {
+        let alias = rs.alias.as_ref().map(|a| a.aliasname.clone()).filter(|n| !n.is_empty());
+        if let Some(alias_str) = alias {
+          from.push(TableRef {
+            schema: None,
+            name: alias_str.clone(),
+            alias: Some(alias_str),
+            range: TextRange::default(),
+          });
+        }
+      },
       _ => {},
     }
   }

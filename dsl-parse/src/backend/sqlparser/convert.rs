@@ -112,16 +112,53 @@ fn join_on(op: &sp::JoinOperator) -> Option<sp::Expr> {
 }
 
 fn table_factor(tf: &sp::TableFactor) -> TableRef {
-  if let sp::TableFactor::Table { name, alias, .. } = tf {
-    let (schema, table_name) = split_object_name(name);
-    return TableRef {
-      schema,
-      name: table_name,
-      alias: alias.as_ref().map(|a| a.name.value.clone()),
-      range: TextRange::default(),
-    };
+  match tf {
+    sp::TableFactor::Table { name, alias, .. } => {
+      let (schema, table_name) = split_object_name(name);
+      TableRef {
+        schema,
+        name: table_name,
+        alias: alias.as_ref().map(|a| a.name.value.clone()),
+        range: TextRange::default(),
+      }
+    },
+    // `SELECT * FROM generate_series(1, 10) AS number` and friends.
+    // The function call IS the table source; we use its return alias
+    // (e.g. `number`) as the binding name so the resolver puts it in
+    // scope. Without this the alias is invisible and any reference
+    // to `number` looks like an unresolved identifier.
+    sp::TableFactor::Function { name, alias, .. } => {
+      let (schema, fn_name) = split_object_name(name);
+      let alias_str = alias.as_ref().map(|a| a.name.value.clone());
+      TableRef {
+        schema,
+        // Use the alias when present so the binding key matches the
+        // user's column reference; fall back to the function name.
+        name: alias_str.clone().unwrap_or(fn_name),
+        alias: alias_str,
+        range: TextRange::default(),
+      }
+    },
+    sp::TableFactor::TableFunction { alias, .. } | sp::TableFactor::UNNEST { alias, .. } => {
+      let alias_str = alias.as_ref().map(|a| a.name.value.clone());
+      TableRef {
+        schema: None,
+        name: alias_str.clone().unwrap_or_default(),
+        alias: alias_str,
+        range: TextRange::default(),
+      }
+    },
+    sp::TableFactor::Derived { alias, .. } => {
+      let alias_str = alias.as_ref().map(|a| a.name.value.clone());
+      TableRef {
+        schema: None,
+        name: alias_str.clone().unwrap_or_default(),
+        alias: alias_str,
+        range: TextRange::default(),
+      }
+    },
+    _ => TableRef::default(),
   }
-  TableRef::default()
 }
 
 fn object_name(name: &sp::ObjectName) -> TableRef {
