@@ -32,7 +32,8 @@ pub async fn publish_for(client: &Client, state: &ServerState, uri: &Url) {
     &dsl_completion::source_tables::merge(&live, &derived),
     &ws_offline,
   );
-  let raw = dsl_analysis::run(&text, &cache.file, &cache.scopes, &cat);
+  let doc_dialect = state.documents.get(uri).map(|d| d.dialect).unwrap_or(dsl_parse::Dialect::Postgres);
+  let raw = dsl_analysis::run_with_dialect(&text, &cache.file, &cache.scopes, &cat, doc_dialect);
 
   // Cancellation check #1: skip mapping work if a newer didChange
   // already arrived. The next publish_for call will produce diagnostics

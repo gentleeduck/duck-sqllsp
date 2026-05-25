@@ -151,7 +151,7 @@ fn main() -> anyhow::Result<()> {
         let parsed = dsl_parse::parse(&source, dialect);
         let scopes = dsl_resolve::resolve_with_source(&parsed.statements, &source);
         let catalog = dsl_completion::source_tables::from_source(&parsed, &source);
-        let diags = dsl_analysis::run(&source, &parsed, &scopes, &catalog);
+        let diags = dsl_analysis::run_with_dialect(&source, &parsed, &scopes, &catalog, dialect);
         for d in &diags {
           let sev_str = match d.severity {
             dsl_analysis::Severity::Error => { error_count += 1; "error" }

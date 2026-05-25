@@ -12,8 +12,43 @@ pub mod rules;
 pub use diagnostic::{Diagnostic, Severity};
 
 use dsl_catalog::Catalog;
-use dsl_parse::{ParseError, ParsedFile, Statement};
+use dsl_parse::{Dialect, ParseError, ParsedFile, Statement};
 use dsl_resolve::Scope;
+
+/// Diagnostic codes that detect MySQL syntax inside a PG buffer. When
+/// the buffer's `Dialect` is MySql these are irrelevant -- the syntax
+/// they flag is correct for the actual target -- so we skip them.
+const MYSQL_PORT_CODES: &[&str] = &[
+  "sql276", // INTERVAL literal needs quotes
+  "sql313", // inline COMMENT in CREATE TABLE
+  "sql314", // AUTO_INCREMENT
+  "sql315", // ENGINE=
+  "sql316", // TINYINT / MEDIUMINT / LONGTEXT / DATETIME / BLOB
+];
+
+/// MSSQL/T-SQL port-detection codes. Skipped on MSSQL buffers (we
+/// route those through Generic since we have no MSSQL dialect yet).
+const MSSQL_PORT_CODES: &[&str] = &["sql317", "sql318", "sql321", "sql322"];
+
+/// Oracle port-detection codes.
+const ORACLE_PORT_CODES: &[&str] = &["sql323", "sql324", "sql325", "sql326"];
+
+/// Cross-dialect codes (ISNULL/NVL/IFNULL, GETDATE/SYSDATE) -- skip on
+/// any non-PG buffer since the rewrite suggestion is dialect-specific.
+const CROSS_DIALECT_CODES: &[&str] = &["sql319", "sql320"];
+
+fn skip_for_dialect(dialect: Dialect, code: &str) -> bool {
+  match dialect {
+    Dialect::Postgres => false,
+    Dialect::MySql => MYSQL_PORT_CODES.contains(&code) || CROSS_DIALECT_CODES.contains(&code),
+    Dialect::SQLite | Dialect::Generic => {
+      MYSQL_PORT_CODES.contains(&code)
+        || MSSQL_PORT_CODES.contains(&code)
+        || ORACLE_PORT_CODES.contains(&code)
+        || CROSS_DIALECT_CODES.contains(&code)
+    }
+  }
+}
 
 /// Per-statement parser errors -> sql000 diagnostics. Always run.
 fn parser_diags(errors: &[ParseError]) -> Vec<Diagnostic> {
@@ -35,24 +70,32 @@ pub trait LintRule: Send + Sync {
 }
 
 pub fn run(source: &str, file: &ParsedFile, scopes: &[Scope], catalog: &Catalog) -> Vec<Diagnostic> {
+  run_with_dialect(source, file, scopes, catalog, Dialect::Postgres)
+}
+
+/// Like [`run`] but skips port-detection rules that don't apply when
+/// the buffer's dialect already matches the would-be foreign syntax.
+/// e.g. on a MySQL buffer, the AUTO_INCREMENT-is-MySQL hint is wrong.
+pub fn run_with_dialect(
+  source: &str,
+  file: &ParsedFile,
+  scopes: &[Scope],
+  catalog: &Catalog,
+  dialect: Dialect,
+) -> Vec<Diagnostic> {
   let mut out = parser_diags(&file.errors);
   let registered = rules::all();
   for (stmt, scope) in file.statements.iter().zip(scopes.iter()) {
-    // pg_query / sqlparser sometimes include leading whitespace
-    // (the gap after the prior `;`) in stmt.range. That extra
-    // span shifts every offset rules derive from stmt.range -- so
-    // diagnostics land on the prior statement's last line. Trim
-    // the start to the first non-whitespace byte before passing
-    // the statement down.
     let trimmed = trim_stmt_range(stmt, source);
     for rule in &registered {
+      if skip_for_dialect(dialect, rule.code()) { continue }
       rule.check(source, &trimmed, scope, catalog, &mut out);
     }
   }
-  // Apply suppression comments. `-- duck-sqllsp: ignore` on the same
-  // line silences every diagnostic on that line; appending a rule
-  // code (`ignore sql001`) narrows to that one. `-- duck-sqllsp:
-  // ignore-next-line [code]` silences the line after the comment.
+  // Belt-and-suspenders: some rules emit a different diagnostic code
+  // than their `rule.code()` value (e.g. composite rules). Drop any
+  // produced diagnostic whose emitted code is dialect-skipped.
+  out.retain(|d| !skip_for_dialect(dialect, d.code));
   apply_suppressions(source, &mut out);
   out
 }
