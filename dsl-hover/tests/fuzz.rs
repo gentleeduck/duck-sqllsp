@@ -24,6 +24,7 @@ fn cat() -> Catalog {
         triggers: vec![],
         policies: vec![],
         comment: None,
+    row_estimate: None,
       }],
     }],
     functions: vec![],

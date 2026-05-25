@@ -8,6 +8,7 @@
 //! milliseconds.
 
 pub mod context;
+pub mod contexts;
 pub mod create_index;
 pub mod create_table;
 pub mod engine;

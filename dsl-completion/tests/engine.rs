@@ -19,6 +19,7 @@ fn catalog_with_users_and_orders() -> Catalog {
     triggers: vec![],
     policies: vec![],
     comment: None,
+    row_estimate: None,
   };
   let orders = Table {
     schema: "public".into(),
@@ -33,6 +34,7 @@ fn catalog_with_users_and_orders() -> Catalog {
     triggers: vec![],
     policies: vec![],
     comment: None,
+    row_estimate: None,
   };
   Catalog {
     version: CATALOG_VERSION,
@@ -1139,6 +1141,59 @@ fn json_path_completion_returns_normal_in_plain_string() {
   let labels: Vec<String> = items.iter().map(|i| i.label.to_lowercase()).collect();
   // Should NOT contain "role" / "team" from JSON harvesting.
   assert!(!labels.contains(&"role".to_string()));
+}
+
+#[test]
+fn index_using_method_completes() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE INDEX idx ON users USING ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<String> = items.iter().map(|i| i.label.clone()).collect();
+  for m in &["btree", "gin", "gist", "brin", "hash", "spgist"] {
+    assert!(labels.iter().any(|l| l == m), "method `{m}` missing");
+  }
+}
+
+#[test]
+fn trigger_event_completes_after_before() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE TRIGGER t BEFORE ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<String> = items.iter().map(|i| i.label.clone()).collect();
+  for ev in &["INSERT", "UPDATE", "DELETE", "TRUNCATE"] {
+    assert!(labels.iter().any(|l| l == ev), "event `{ev}` missing");
+  }
+}
+
+#[test]
+fn trigger_on_completes_table() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE TRIGGER t BEFORE INSERT ON ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<String> = items.iter().map(|i| i.label.clone()).collect();
+  assert!(labels.iter().any(|l| l == "users"), "users table missing");
+}
+
+#[test]
+fn policy_for_completes_command() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE POLICY p ON users FOR ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<String> = items.iter().map(|i| i.label.clone()).collect();
+  for c in &["ALL", "SELECT", "INSERT", "UPDATE", "DELETE"] {
+    assert!(labels.iter().any(|l| l == c), "policy command `{c}` missing");
+  }
+}
+
+#[test]
+fn alter_column_type_completes() {
+  let cat = catalog_with_users_and_orders();
+  let src = "ALTER TABLE users ALTER COLUMN name TYPE ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<String> = items.iter().map(|i| i.label.clone()).collect();
+  for ty in &["text", "varchar", "integer", "jsonb"] {
+    assert!(labels.iter().any(|l| l == ty), "type `{ty}` missing");
+  }
 }
 
 #[test]

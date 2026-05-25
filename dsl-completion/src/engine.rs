@@ -144,6 +144,15 @@ pub fn complete(source: &str, file: &ParsedFile, scopes: &[Scope], catalog: &Cat
     return out;
   }
 
+  // Special context completions (INDEX USING method, TRIGGER EXECUTE
+  // FUNCTION, CALL procedure, CREATE POLICY FOR/TO, ALTER COLUMN TYPE,
+  // index opclass slot, trigger event slot, trigger ON table). All
+  // run *before* the index/table phases because they're more specific
+  // than the column dump those phases would emit.
+  if let Some(items) = crate::contexts::detect(source, offset, &cat) {
+    return items;
+  }
+
   // CREATE INDEX scoped context wins before CREATE TABLE / generic
   // phases. `CREATE INDEX <name> ON users (` should only ever surface
   // columns of `users`, never a global table or column dump.
