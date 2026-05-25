@@ -1242,6 +1242,15 @@ pub fn build() -> HashMap<&'static str, Entry> {
   f!("pg_xact_status",     "pg_xact_status(xid8) -> text",  "Status of a transaction: committed / in progress / aborted.", "SELECT pg_xact_status(pg_current_xact_id());", pg("functions-info.html"));
 
   // ---- Comparison / NULL counting ----
+  // Full-text search helpers.
+  f!("setweight",       "setweight(tsvector, weight char) -> tsvector",      "Tag every lexeme with a weight letter (A/B/C/D).", "SELECT setweight(to_tsvector('title'), 'A');",   pg("textsearch-features.html#TEXTSEARCH-MANIPULATE-TSVECTOR"));
+  f!("ts_headline",     "ts_headline([config], doc, query [, options]) -> text", "Highlight query matches in a document.",        "SELECT ts_headline('eng', body, query) FROM docs;", pg("textsearch-controls.html#TEXTSEARCH-HEADLINE"));
+  f!("plainto_tsquery", "plainto_tsquery([config], text) -> tsquery",        "Convert text to a tsquery with AND semantics.",    "SELECT plainto_tsquery('eng', 'hello world');",  pg("textsearch-controls.html"));
+  f!("similarity",      "similarity(text, text) -> real",                    "pg_trgm similarity score (0..1).",                  "SELECT similarity('foo', 'foobar');",            pg("pgtrgm.html"));
+  f!("word_similarity", "word_similarity(text, text) -> real",               "pg_trgm word-level similarity.",                    "SELECT word_similarity('rust', 'postgres rust');", pg("pgtrgm.html"));
+  f!("strict_word_similarity", "strict_word_similarity(text, text) -> real", "Strict word similarity (pg_trgm).",                 "SELECT strict_word_similarity('foo', 'foobar');", pg("pgtrgm.html"));
+  f!("show_trgm",       "show_trgm(text) -> text[]",                         "Return trigrams of a string.",                      "SELECT show_trgm('foobar');",                   pg("pgtrgm.html"));
+
   // Additional jsonb fns.
   f!("jsonb_build_array",          "jsonb_build_array(VARIADIC \"any\") -> jsonb", "Build a jsonb array from variadic args.",       "SELECT jsonb_build_array('a', 1, true);",                 pg("functions-json.html"));
   f!("jsonb_object_agg",           "jsonb_object_agg(key, value) -> jsonb",        "Aggregate key/value pairs into a jsonb object.", "SELECT jsonb_object_agg(k, v) FROM kv;",                    pg("functions-aggregate.html"));
