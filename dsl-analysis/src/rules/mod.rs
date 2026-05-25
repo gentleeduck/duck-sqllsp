@@ -127,6 +127,7 @@ pub mod notify_payload_too_large;
 pub mod notify_unlistened;
 pub mod not_in_nullable;
 pub mod not_in_subquery;
+pub mod new_assign_pk_in_before_insert;
 pub mod null_comparison;
 pub mod null_default_not_null;
 pub mod null_in_values;
@@ -588,5 +589,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(group_by_alias::Rule),
     Box::new(like_include_indexes_partition::Rule),
     Box::new(truncate_in_plpgsql_exception::Rule),
+    Box::new(new_assign_pk_in_before_insert::Rule),
   ]
 }

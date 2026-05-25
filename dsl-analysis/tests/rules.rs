@@ -3839,3 +3839,11 @@ fn sql339_flags_truncate_with_exception() {
   let d = diags("DO $$\nBEGIN\n  TRUNCATE staging;\nEXCEPTION WHEN OTHERS THEN NULL;\nEND $$;");
   assert!(d.iter().any(|x| x.code == "sql339"));
 }
+
+// ===== sql340 NEW.id := in BEFORE INSERT =====
+
+#[test]
+fn sql340_flags_new_id_assign_in_before_insert() {
+  let d = diags("CREATE TRIGGER t BEFORE INSERT ON x FOR EACH ROW EXECUTE FUNCTION f();\nCREATE FUNCTION f() RETURNS trigger AS $$\nBEGIN\n  NEW.id := 1;\n  RETURN NEW;\nEND $$ LANGUAGE plpgsql;");
+  assert!(d.iter().any(|x| x.code == "sql340"));
+}
