@@ -1242,6 +1242,34 @@ pub fn build() -> HashMap<&'static str, Entry> {
     "SELECT hashbpchar('abc'::char(3));",
     pg("functions-string.html")
   );
+  f!(
+    "make_interval",
+    "make_interval(years int, months int, weeks int, days int, hours int, mins int, secs double) -> interval",
+    "Build an interval from explicit fields. All args have defaults; use named-arg syntax.",
+    "SELECT make_interval(days := 7, hours := 12);",
+    pg("functions-datetime.html#FUNCTIONS-DATETIME-CONSTRUCT")
+  );
+  f!(
+    "make_time",
+    "make_time(hour int, min int, sec double) -> time",
+    "Build a TIME value from explicit hour/minute/second.",
+    "SELECT make_time(7, 30, 15);",
+    pg("functions-datetime.html#FUNCTIONS-DATETIME-CONSTRUCT")
+  );
+  f!(
+    "make_timestamp",
+    "make_timestamp(y int, m int, d int, h int, mi int, sec double) -> timestamp",
+    "Build a TIMESTAMP from y/m/d/h/m/s.",
+    "SELECT make_timestamp(2026, 5, 26, 9, 0, 0);",
+    pg("functions-datetime.html#FUNCTIONS-DATETIME-CONSTRUCT")
+  );
+  f!(
+    "make_timestamptz",
+    "make_timestamptz(y int, m int, d int, h int, mi int, sec double, tz text) -> timestamptz",
+    "Build a TIMESTAMP WITH TIME ZONE.",
+    "SELECT make_timestamptz(2026, 5, 26, 9, 0, 0, 'UTC');",
+    pg("functions-datetime.html#FUNCTIONS-DATETIME-CONSTRUCT")
+  );
 
   // ---- Trigonometric ----
   f!("sin",   "sin(double precision) -> double precision", "Sine, radians.",   "SELECT sin(0);", pg("functions-math.html"));

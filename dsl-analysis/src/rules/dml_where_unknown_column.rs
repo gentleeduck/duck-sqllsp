@@ -60,8 +60,18 @@ impl LintRule for Rule {
       let s = i;
       while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') { i += 1 }
       let token = &predicate[s..i];
-      // Skip qualified ref (a.b), function call (foo(...)), keywords.
-      if i < bytes.len() && (bytes[i] == b'.' || bytes[i] == b'(') { continue }
+      // Qualified ref like `b.a_id` -- skip over the whole `b.a_id`.
+      // Without this, the inner walk left `i` at the `.`, then resumed
+      // at `a_id` and treated it as an unqualified column on the
+      // UPDATE/DELETE target, false-firing whenever the WHERE
+      // references a column of the USING/FROM table.
+      if i < bytes.len() && bytes[i] == b'.' {
+        i += 1;
+        while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') { i += 1 }
+        continue;
+      }
+      // Function call shape `foo(...)` -- skip.
+      if i < bytes.len() && bytes[i] == b'(' { continue }
       let upper_tok = token.to_ascii_uppercase();
       if is_keyword(&upper_tok) { continue }
       if t.columns.iter().any(|c| c.name.eq_ignore_ascii_case(token)) { continue }
