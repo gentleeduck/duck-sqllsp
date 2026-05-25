@@ -127,6 +127,7 @@ pub mod plpgsql_assign_type;
 pub mod perform_for_pure_select;
 pub mod pg_catalog_no_schema;
 pub mod pg_sleep_in_tx;
+pub mod pk_duplicate_col;
 pub mod prefer_alias;
 pub mod raise_arg_count;
 pub mod raise_no_level;
@@ -508,5 +509,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(reindex_in_tx::Rule),
     Box::new(notify_payload_too_large::Rule),
     Box::new(identifier_too_long::Rule),
+    Box::new(pk_duplicate_col::Rule),
   ]
 }
