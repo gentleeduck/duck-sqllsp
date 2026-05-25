@@ -51,6 +51,14 @@ const KEYWORDS: &[&str] = &[
   "DO", "LANGUAGE", "PLPGSQL", "SQL", "STABLE", "IMMUTABLE", "VOLATILE",
   "SECURITY", "DEFINER", "INVOKER", "STRICT", "PARALLEL", "SAFE", "UNSAFE",
   "RESTRICTED", "LEAKPROOF", "COST", "CALL",
+  // Foreign-data-wrapper DDL: `... OPTIONS (...)`, `WRAPPER (...)`.
+  "OPTIONS", "WRAPPER", "SERVER", "VALIDATOR", "HANDLER",
+  // Publication / Subscription / Replication.
+  "PUBLICATION", "SUBSCRIPTION", "REPLICATION", "SLOT",
+  // Aggregate / Operator / Collation / Statistics names + FDW IMPORT.
+  "AGGREGATE", "COLLATION", "STATISTICS", "MAPPING", "IMPORT",
+  // SAVEPOINT names, ROLE/USER MAPPING targets, etc.
+  "MAPPING", "VARIADIC",
 ];
 
 impl LintRule for Rule {
@@ -259,6 +267,14 @@ const PRECEDING_BLOCKLIST: &[&str] = &[
   // PREPARE'd stmt). `EXECUTE FUNCTION fn()` is handled separately via
   // the FUNCTION blocklist + two-word lookback.
   "PREPARE", "EXECUTE", "DEALLOCATE",
+  // CREATE AGGREGATE my_sum(bigint) (...): name slot.
+  "AGGREGATE", "COLLATION", "STATISTICS",
+  // CREATE OPERATOR @@ (LEFTARG=..., RIGHTARG=...): name slot.
+  "OPERATOR",
+  // CREATE PUBLICATION p FOR TABLE t / SUBSCRIPTION s CONNECTION ...
+  "PUBLICATION", "SUBSCRIPTION",
+  // CREATE SERVER srv FOREIGN DATA WRAPPER fdw OPTIONS (...).
+  "SERVER", "WRAPPER",
 ];
 
 

@@ -40,7 +40,11 @@ impl LintRule for Rule {
     let prior_owned = strip_comments(&source[..kw_at]);
     let prior = prior_owned.to_ascii_uppercase();
     let begins = count_word(&prior, "BEGIN") + count_word(&prior, "START TRANSACTION");
-    let commits = count_word(&prior, "COMMIT") + count_word(&prior, "ROLLBACK");
+    // `ROLLBACK TO SAVEPOINT` and `ROLLBACK TO` are partial rollbacks that
+    // do NOT end the transaction -- exclude them. Same for `COMMIT
+    // PREPARED` which acts on a 2PC stmt, not the active tx.
+    let commits = count_word_excluding_followups(&prior, "COMMIT", &["PREPARED"])
+      + count_word_excluding_followups(&prior, "ROLLBACK", &["TO", "PREPARED"]);
     if begins > commits {
       return;
     }
@@ -51,6 +55,33 @@ impl LintRule for Rule {
       range: text_size::TextRange::new((kw_at as u32).into(), (after as u32).into()),
     });
   }
+}
+
+fn count_word_excluding_followups(haystack: &str, needle: &str, excluded: &[&str]) -> usize {
+  let bytes = haystack.as_bytes();
+  let n = bytes.len();
+  let nlen = needle.len();
+  let mut count = 0;
+  let mut i = 0;
+  while i + nlen <= n {
+    if &haystack[i..i + nlen] == needle {
+      let prev_ok = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
+      let next_ok = i + nlen == n || !(bytes[i + nlen].is_ascii_alphanumeric() || bytes[i + nlen] == b'_');
+      if prev_ok && next_ok {
+        let mut k = i + nlen;
+        while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+        let after = &haystack[k..];
+        let is_excluded = excluded.iter().any(|ex| {
+          let elen = ex.len();
+          after.len() >= elen && after[..elen].eq_ignore_ascii_case(ex)
+            && (after.len() == elen || !(after.as_bytes()[elen].is_ascii_alphanumeric() || after.as_bytes()[elen] == b'_'))
+        });
+        if !is_excluded { count += 1 }
+      }
+    }
+    i += 1;
+  }
+  count
 }
 
 fn count_word(haystack: &str, needle: &str) -> usize {

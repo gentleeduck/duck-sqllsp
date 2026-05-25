@@ -24,9 +24,12 @@ impl LintRule for Rule {
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
     if !upper.trim_start().starts_with("SET CONSTRAINTS") { return }
-    let prelude = source[..start].to_ascii_uppercase();
+    let prelude_clean = strip_noise(&source[..start]);
+    let prelude = prelude_clean.to_ascii_uppercase();
     let begins = count_kw(&prelude, "BEGIN") + count_phrase(&prelude, "START TRANSACTION");
-    let closes = count_kw(&prelude, "COMMIT") + count_kw(&prelude, "ROLLBACK");
+    // `ROLLBACK TO [SAVEPOINT]` / `COMMIT PREPARED` don't end the tx.
+    let closes = count_excluding_followups(&prelude, "COMMIT", &["PREPARED"])
+      + count_excluding_followups(&prelude, "ROLLBACK", &["TO", "PREPARED"]);
     if begins > closes { return }
     let abs_s = start;
     let abs_e = start + body.find(';').unwrap_or(body.len());
@@ -56,4 +59,60 @@ fn count_kw(s: &str, needle: &str) -> usize {
 
 fn count_phrase(s: &str, needle: &str) -> usize {
   s.matches(needle).count()
+}
+
+fn count_excluding_followups(haystack: &str, needle: &str, excluded: &[&str]) -> usize {
+  let bytes = haystack.as_bytes();
+  let n = bytes.len();
+  let nlen = needle.len();
+  let mut count = 0;
+  let mut i = 0;
+  while i + nlen <= n {
+    if &haystack[i..i + nlen] == needle {
+      let prev_ok = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
+      let next_ok = i + nlen == n || !(bytes[i + nlen].is_ascii_alphanumeric() || bytes[i + nlen] == b'_');
+      if prev_ok && next_ok {
+        let mut k = i + nlen;
+        while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+        let after = &haystack[k..];
+        let is_excluded = excluded.iter().any(|ex| {
+          let elen = ex.len();
+          after.len() >= elen && after[..elen].eq_ignore_ascii_case(ex)
+            && (after.len() == elen || !(after.as_bytes()[elen].is_ascii_alphanumeric() || after.as_bytes()[elen] == b'_'))
+        });
+        if !is_excluded { count += 1 }
+      }
+    }
+    i += 1;
+  }
+  count
+}
+
+fn strip_noise(s: &str) -> String {
+  let mut out = String::with_capacity(s.len());
+  let bytes = s.as_bytes();
+  let n = bytes.len();
+  let mut i = 0usize;
+  while i < n {
+    if i + 1 < n && bytes[i] == b'-' && bytes[i + 1] == b'-' {
+      while i < n && bytes[i] != b'\n' { out.push(' '); i += 1 }
+    } else if i + 1 < n && bytes[i] == b'/' && bytes[i + 1] == b'*' {
+      let mut depth = 1u32;
+      out.push(' '); out.push(' '); i += 2;
+      while i + 1 < n && depth > 0 {
+        if bytes[i] == b'/' && bytes[i + 1] == b'*' { depth += 1; out.push(' '); out.push(' '); i += 2; }
+        else if bytes[i] == b'*' && bytes[i + 1] == b'/' { depth -= 1; out.push(' '); out.push(' '); i += 2; }
+        else { out.push(' '); i += 1; }
+      }
+    } else if bytes[i] == b'\'' {
+      out.push(' '); i += 1;
+      while i < n && bytes[i] != b'\'' { out.push(' '); i += 1 }
+      if i < n { out.push(' '); i += 1 }
+    } else if bytes[i].is_ascii() {
+      out.push(bytes[i] as char); i += 1;
+    } else {
+      out.push(' '); i += 1;
+    }
+  }
+  out
 }
