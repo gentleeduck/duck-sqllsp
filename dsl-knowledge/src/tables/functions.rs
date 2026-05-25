@@ -1242,6 +1242,19 @@ pub fn build() -> HashMap<&'static str, Entry> {
   f!("pg_xact_status",     "pg_xact_status(xid8) -> text",  "Status of a transaction: committed / in progress / aborted.", "SELECT pg_xact_status(pg_current_xact_id());", pg("functions-info.html"));
 
   // ---- Comparison / NULL counting ----
+  // Additional jsonb fns.
+  f!("jsonb_build_array",          "jsonb_build_array(VARIADIC \"any\") -> jsonb", "Build a jsonb array from variadic args.",       "SELECT jsonb_build_array('a', 1, true);",                 pg("functions-json.html"));
+  f!("jsonb_object_agg",           "jsonb_object_agg(key, value) -> jsonb",        "Aggregate key/value pairs into a jsonb object.", "SELECT jsonb_object_agg(k, v) FROM kv;",                    pg("functions-aggregate.html"));
+  f!("jsonb_array_elements_text",  "jsonb_array_elements_text(jsonb) -> setof text", "Expand jsonb array into rows of text.",        "SELECT * FROM jsonb_array_elements_text('[\"a\",\"b\"]');", pg("functions-json.html"));
+  f!("jsonb_each_text",            "jsonb_each_text(jsonb) -> setof (text, text)", "Expand jsonb object into key/value text rows.",  "SELECT * FROM jsonb_each_text('{\"a\":1}');",               pg("functions-json.html"));
+  f!("json_build_array",           "json_build_array(VARIADIC \"any\") -> json",   "Build a json array.",                            "SELECT json_build_array(1, 2, 3);",                          pg("functions-json.html"));
+  f!("json_object_agg",            "json_object_agg(key, value) -> json",          "Aggregate key/value pairs into a json object.",  "SELECT json_object_agg(k, v) FROM kv;",                      pg("functions-aggregate.html"));
+  f!("json_array_elements_text",   "json_array_elements_text(json) -> setof text", "Expand json array as text rows.",                "SELECT * FROM json_array_elements_text('[\"a\"]');",         pg("functions-json.html"));
+  f!("json_each_text",             "json_each_text(json) -> setof (text, text)",   "Expand json object as text key/value rows.",     "SELECT * FROM json_each_text('{\"a\":\"b\"}');",             pg("functions-json.html"));
+  f!("jsonb_insert",               "jsonb_insert(target, path, new_value [, insert_after]) -> jsonb", "Insert into a jsonb structure.",            "SELECT jsonb_insert(data, '{0}', '\"x\"');",       pg("functions-json.html"));
+  f!("jsonb_object",               "jsonb_object(text[] [, text[]]) -> jsonb",     "Build a jsonb object from a key array (+ optional value array).", "SELECT jsonb_object('{a,b}', '{1,2}');", pg("functions-json.html"));
+  f!("json_object",                "json_object(text[] [, text[]]) -> json",       "Build a json object from key/value arrays.",     "SELECT json_object('{a,b}', '{1,2}');",                      pg("functions-json.html"));
+
   // Geometric type constructors.
   f!("point",   "point(x float8, y float8) -> point",  "Construct a geometric point.", "SELECT point(40.7, -74.0);", pg("functions-geometry.html"));
   f!("box",     "box(point, point) -> box",            "Construct a rectangular box from two points.", "SELECT box(point(0,0), point(1,1));", pg("functions-geometry.html"));
