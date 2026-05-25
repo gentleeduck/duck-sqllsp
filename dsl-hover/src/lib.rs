@@ -398,10 +398,23 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
     ));
   }
   if let Some((t, tr)) = catalog.find_trigger(token) {
-    return Some(format!(
+    let mut s = format!(
       "# `{}`\n_trigger on `{}.{}`_\n\n- **timing**: `{}`\n- **event**: `{}`\n- **granularity**: `{}`\n- **executes**: `{}`\n",
       tr.name, t.schema, t.name, tr.timing, tr.event, tr.granularity, tr.function,
-    ));
+    );
+    // Append the handler function's source if it's in the catalog.
+    let fn_name = tr.function.rsplit('.').next().unwrap_or(&tr.function);
+    if let Some(f) = catalog.functions.iter().find(|f| f.name.eq_ignore_ascii_case(fn_name)) {
+      if let Some(body) = f.comment.as_ref() {
+        let trimmed = body.trim();
+        if trimmed.to_ascii_uppercase().starts_with("CREATE") {
+          s.push_str("\n**Handler function**\n\n```sql\n");
+          s.push_str(trimmed);
+          s.push_str("\n```\n");
+        }
+      }
+    }
+    return Some(s);
   }
   if let Some((t, i)) = catalog.find_index(token) {
     let def = i.definition.as_deref().unwrap_or("");

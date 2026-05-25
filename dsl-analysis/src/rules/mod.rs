@@ -127,6 +127,8 @@ pub mod is_null_on_not_null;
 pub mod insert_into_generated;
 pub mod savepoint_outside_tx;
 pub mod truncate_in_trigger;
+pub mod varchar_length;
+pub mod date_literal_format;
 pub mod null_into_not_null;
 pub mod schema_drift;
 pub mod vacuum_in_transaction;
@@ -272,5 +274,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(insert_into_generated::Rule),
     Box::new(savepoint_outside_tx::Rule),
     Box::new(truncate_in_trigger::Rule),
+    Box::new(varchar_length::Rule),
+    Box::new(date_literal_format::Rule),
   ]
 }
