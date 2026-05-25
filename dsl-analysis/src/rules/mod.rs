@@ -149,6 +149,7 @@ pub mod set_constraints_outside_tx;
 pub mod set_local_outside_tx;
 pub mod set_role_in_function;
 pub mod set_role_no_reset;
+pub mod set_transaction_in_function;
 pub mod shell_command_in_sql;
 pub mod single_stmt_transaction;
 pub mod star_with_order_by_position;
@@ -460,5 +461,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(gist_on_scalar::Rule),
     Box::new(check_always_false::Rule),
     Box::new(select_into_temp_shadows::Rule),
+    Box::new(set_transaction_in_function::Rule),
   ]
 }
