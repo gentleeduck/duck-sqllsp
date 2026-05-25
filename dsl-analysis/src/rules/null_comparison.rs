@@ -26,7 +26,24 @@ impl LintRule for Rule {
     let end: u32 = range.end().into();
     let slice = &source[start as usize..end.min(source.len() as u32) as usize];
 
+    // Skip when the only `= NULL` occurrence is part of an assignment
+    // (UPDATE ... SET col = NULL / INSERT ... col = NULL): that's
+    // setting a value, not comparing.
+    let upper_slice = slice.to_ascii_uppercase();
+    let in_set_assignment = upper_slice.contains("UPDATE ") && upper_slice.contains(" SET ");
     for pat in ["= NULL", "=NULL", "<> NULL", "<>NULL", "!= NULL", "!=NULL"] {
+      if in_set_assignment && pat.starts_with("=") {
+        // Only fire if there's a `= NULL` occurrence outside the SET
+        // clause -- i.e. somewhere in WHERE / ON / HAVING.
+        let Some(set_at) = upper_slice.find(" SET ") else { continue };
+        let where_at = upper_slice[set_at..].find(" WHERE ").map(|p| set_at + p);
+        let in_predicate = if let Some(wh) = where_at {
+          find_outside_strings(&slice[wh..], pat).is_some()
+        } else {
+          false
+        };
+        if !in_predicate { continue }
+      }
       if find_outside_strings(slice, pat).is_some() {
         out.push(Diagnostic {
           code: "sql015",

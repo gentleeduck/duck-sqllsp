@@ -266,6 +266,13 @@ fn scan_projection(proj: &str) -> (usize, Vec<String>) {
       i += 1;
       continue;
     }
+    if c == b'(' {
+      // Scalar subquery: (SELECT ...). Don't dive in -- columns
+      // there belong to the subquery's scope, not the outer SELECT's
+      // GROUP BY. skip_parens jumps past the matching close.
+      i = skip_parens(bytes, i);
+      continue;
+    }
     i += 1;
   }
   (aggregates, bare)

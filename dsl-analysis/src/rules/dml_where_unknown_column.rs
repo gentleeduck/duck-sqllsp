@@ -17,7 +17,7 @@ impl LintRule for Rule {
     Severity::Error
   }
 
-  fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
+  fn check(&self, source: &str, stmt: &Statement, scope: &Scope, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let table_ref: &TableRef = match &stmt.kind {
       StatementKind::Update(u) => &u.table,
       StatementKind::Delete(d) => &d.table,
@@ -31,6 +31,12 @@ impl LintRule for Rule {
     // predicate walk (was matching `col` inside the comment text).
     let cleaned = strip_line_comments(body);
     let upper = cleaned.to_ascii_uppercase();
+    // CTE / subquery in the body -- columns from `WITH t AS (...)`
+    // aren't in this statement's resolver scope; bail rather than
+    // false-flag every CTE name as an unknown column.
+    if upper.contains("WITH ") || upper.contains(" SELECT ") {
+      return;
+    }
     let body = cleaned.as_str();
     let Some(where_at) = upper.find(" WHERE ") else { return };
     let after = where_at + 7;
@@ -59,6 +65,10 @@ impl LintRule for Rule {
       let upper_tok = token.to_ascii_uppercase();
       if is_keyword(&upper_tok) { continue }
       if t.columns.iter().any(|c| c.name.eq_ignore_ascii_case(token)) { continue }
+      // Token may be a table name (subquery references) -- skip.
+      if catalog.tables().any(|tb| tb.name.eq_ignore_ascii_case(token)) { continue }
+      // Token may be a CTE name or alias the scope knows about.
+      if scope.get(token).is_some() { continue }
       let abs_s = start + after + s;
       let abs_e = abs_s + token.len();
       out.push(Diagnostic {
@@ -102,6 +112,10 @@ fn is_keyword(t: &str) -> bool {
     "LEFT" | "RIGHT" | "INNER" | "OUTER" | "CROSS" | "FULL" | "ON" | "USING" | "AS" |
     "ASC" | "DESC" | "NULLS" | "FIRST" | "LAST" | "LIMIT" | "OFFSET" | "CASE" | "WHEN" |
     "THEN" | "ELSE" | "END" | "RETURNING" | "CAST" | "ARRAY" | "ROW" | "CURRENT" | "DATE" |
-    "TIME" | "TIMESTAMP" | "INTERVAL"
+    "TIME" | "TIMESTAMP" | "INTERVAL" |
+    "SELECT" | "UPDATE" | "INSERT" | "DELETE" | "WITH" | "VALUES" |
+    "INTO" | "SET" | "WHERE" | "GROUP" | "BY" | "HAVING" | "ORDER" |
+    "UNION" | "INTERSECT" | "EXCEPT" | "OFFSET" | "FETCH" | "FOR" |
+    "OVER" | "PARTITION" | "WINDOW" | "FILTER" | "LATERAL" | "NATURAL"
   )
 }
