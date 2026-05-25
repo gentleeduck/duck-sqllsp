@@ -70,10 +70,15 @@ fn main() -> anyhow::Result<()> {
         }))
         .collect();
       rules.sort_by(|a, b| a.0.cmp(&b.0));
+      let mut by_sev: std::collections::BTreeMap<&str, usize> = Default::default();
       println!("{:6}  {:8}", "code", "severity");
-      for (code, sev) in rules {
+      for (code, sev) in &rules {
         println!("{:6}  {:8}", code, sev);
+        *by_sev.entry(sev).or_insert(0) += 1;
       }
+      println!();
+      println!("total: {} rules", rules.len());
+      for (sev, n) in by_sev { println!("  {sev}: {n}"); }
       Ok(())
     },
   }
