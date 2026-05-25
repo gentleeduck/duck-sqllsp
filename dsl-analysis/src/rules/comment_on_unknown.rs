@@ -60,7 +60,8 @@ impl LintRule for Rule {
               .unwrap_or(false)
           }
         }
-        "function" => catalog.functions.iter().any(|f| f.name.eq_ignore_ascii_case(target_name)),
+        "function" => catalog.functions.iter().any(|f| f.name.eq_ignore_ascii_case(target_name))
+          || dsl_knowledge::tables::functions().contains_key(target_name.to_ascii_lowercase().as_str()),
         "type" | "domain" => catalog.types().any(|t| t.name.eq_ignore_ascii_case(target_name)),
         "sequence" => catalog.sequences().any(|s| s.name.eq_ignore_ascii_case(target_name)),
         _ => true, // index / trigger less commonly cataloged; skip.

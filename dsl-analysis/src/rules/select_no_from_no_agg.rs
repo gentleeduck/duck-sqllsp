@@ -116,6 +116,19 @@ impl LintRule for Rule {
     if proj.contains('(') {
       return;
     }
+    // Skip when projection is a boolean / NULL test expression like
+    // `SELECT NULL IS NULL` -- has IS / IS NOT / AND / OR keywords.
+    let upper_proj = proj.to_ascii_uppercase();
+    if upper_proj.contains(" IS ")
+      || upper_proj.contains(" AND ")
+      || upper_proj.contains(" OR ")
+      || upper_proj.contains(" NOT ")
+      || upper_proj.contains(" BETWEEN ")
+      || upper_proj.contains(" LIKE ")
+      || upper_proj.contains(" ILIKE ")
+    {
+      return;
+    }
     // Skip casts: `SELECT '42'::int;` -- expression form.
     if proj.contains("::") {
       return;
