@@ -160,6 +160,7 @@ pub mod trigger_when_uses_new_in_delete;
 pub mod trigger_when_uses_old_in_insert;
 pub mod truncate_no_cascade;
 pub mod union_column_count;
+pub mod union_inner_order_by;
 pub mod union_vs_all;
 pub mod unique_on_nullable;
 pub mod unknown_column;
@@ -446,5 +447,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(now_default_on_timestamp::Rule),
     Box::new(jsonb_build_odd_args::Rule),
     Box::new(chained_comparison::Rule),
+    Box::new(union_inner_order_by::Rule),
   ]
 }
