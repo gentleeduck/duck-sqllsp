@@ -135,6 +135,7 @@ pub mod now_default_on_timestamp;
 pub mod nullif_same_args;
 pub mod nullif_type_mismatch;
 pub mod group_by_alias;
+pub mod like_include_indexes_partition;
 pub mod numeric_no_precision;
 pub mod on_update_cascade_pk;
 pub mod order_by_in_subquery;
@@ -209,6 +210,7 @@ pub mod timestamp_int_arithmetic;
 pub mod timestamp_precision_over;
 pub mod timestamp_without_tz;
 pub mod trailing_comma_values;
+pub mod truncate_in_plpgsql_exception;
 pub mod transaction_isolation_no_set;
 pub mod trigger_stmt_uses_new;
 pub mod trigger_when_uses_new_in_delete;
@@ -584,5 +586,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(tablespace_specified::Rule),
     Box::new(bytea_literal_no_escape::Rule),
     Box::new(group_by_alias::Rule),
+    Box::new(like_include_indexes_partition::Rule),
+    Box::new(truncate_in_plpgsql_exception::Rule),
   ]
 }

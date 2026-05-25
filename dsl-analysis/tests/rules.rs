@@ -3823,3 +3823,19 @@ fn sql337_quiet_group_by_expr() {
   let d = diags("SELECT extract(year FROM created_at) AS yr FROM users GROUP BY extract(year FROM created_at);");
   assert!(!d.iter().any(|x| x.code == "sql337"));
 }
+
+// ===== sql338 INCLUDING INDEXES inside PARTITION OF =====
+
+#[test]
+fn sql338_flags_include_indexes_in_partition() {
+  let d = diags("CREATE TABLE p_2026 PARTITION OF parent (LIKE base INCLUDING INDEXES);");
+  assert!(d.iter().any(|x| x.code == "sql338"));
+}
+
+// ===== sql339 TRUNCATE in plpgsql + EXCEPTION =====
+
+#[test]
+fn sql339_flags_truncate_with_exception() {
+  let d = diags("DO $$\nBEGIN\n  TRUNCATE staging;\nEXCEPTION WHEN OTHERS THEN NULL;\nEND $$;");
+  assert!(d.iter().any(|x| x.code == "sql339"));
+}
