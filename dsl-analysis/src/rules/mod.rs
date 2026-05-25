@@ -112,6 +112,7 @@ pub mod null_in_values;
 pub mod nulls_first_last_no_order;
 pub mod now_default_on_timestamp;
 pub mod nullif_same_args;
+pub mod nullif_type_mismatch;
 pub mod numeric_no_precision;
 pub mod order_by_in_subquery;
 pub mod order_by_position;
@@ -496,5 +497,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(percentile_no_within::Rule),
     Box::new(grant_all_too_broad::Rule),
     Box::new(limit_zero::Rule),
+    Box::new(nullif_type_mismatch::Rule),
   ]
 }
