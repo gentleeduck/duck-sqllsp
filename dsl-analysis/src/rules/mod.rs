@@ -99,6 +99,7 @@ pub mod null_comparison;
 pub mod null_default_not_null;
 pub mod null_in_values;
 pub mod nulls_first_last_no_order;
+pub mod now_default_on_timestamp;
 pub mod nullif_same_args;
 pub mod numeric_no_precision;
 pub mod order_by_in_subquery;
@@ -145,6 +146,7 @@ pub mod shell_command_in_sql;
 pub mod single_stmt_transaction;
 pub mod star_with_order_by_position;
 pub mod sql_lang_uses_new_old;
+pub mod system_catalog_dml;
 pub mod text_int_arithmetic;
 pub mod time_with_timezone;
 pub mod timestamp_int_arithmetic;
@@ -438,5 +440,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(merge_missing_when::Rule),
     Box::new(extension_no_if_not_exists::Rule),
     Box::new(distinct_on_subq_no_order::Rule),
+    Box::new(system_catalog_dml::Rule),
+    Box::new(now_default_on_timestamp::Rule),
   ]
 }
