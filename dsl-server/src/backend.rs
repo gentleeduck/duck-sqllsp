@@ -82,6 +82,12 @@ impl LanguageServer for Backend {
         let mut cfg = self.state.config_snapshot();
         cfg.merge_from(proj);
         self.state.set_config(cfg);
+        let dialect = match self.state.config_snapshot().effective_dialect() {
+          config::Dialect::Postgresql => dsl_parse::Dialect::Postgres,
+          config::Dialect::Mysql => dsl_parse::Dialect::MySql,
+          config::Dialect::Sqlite => dsl_parse::Dialect::SQLite,
+        };
+        self.state.documents.set_dialect_all(dialect);
         let state = self.state.clone();
         let client = self.client.clone();
         tokio::spawn(async move {
@@ -105,7 +111,12 @@ impl LanguageServer for Backend {
       }
     }
     let uri = td.uri.clone();
-    self.state.documents.open(td.uri, td.text, td.version);
+    let dialect = match self.state.config_snapshot().effective_dialect() {
+      config::Dialect::Postgresql => dsl_parse::Dialect::Postgres,
+      config::Dialect::Mysql => dsl_parse::Dialect::MySql,
+      config::Dialect::Sqlite => dsl_parse::Dialect::SQLite,
+    };
+    self.state.documents.open_with_dialect(td.uri, td.text, td.version, dialect);
     crate::diagnostics::publish_for(&self.client, &self.state, &uri).await;
   }
 
@@ -258,6 +269,12 @@ impl LanguageServer for Backend {
   async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
     let cfg = config::parse(params.settings);
     self.state.set_config(cfg.duck_sqllsp);
+    let dialect = match self.state.config_snapshot().effective_dialect() {
+      config::Dialect::Postgresql => dsl_parse::Dialect::Postgres,
+      config::Dialect::Mysql => dsl_parse::Dialect::MySql,
+      config::Dialect::Sqlite => dsl_parse::Dialect::SQLite,
+    };
+    self.state.documents.set_dialect_all(dialect);
     let state = self.state.clone();
     let client = self.client.clone();
     tokio::spawn(async move {

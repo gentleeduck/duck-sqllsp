@@ -27,6 +27,10 @@ pub struct Document {
   pub text: String,
   pub version: i32,
   pub rope: Rope,
+  /// Dialect to parse this buffer against. Server pushes this from
+  /// the resolved [`DuckSqllspConfig::effective_dialect`] at didOpen /
+  /// configuration-change time; defaults to Postgres when unknown.
+  pub dialect: Dialect,
   /// Lazily-populated parse + scope cache. Cleared on every update --
   /// the first heavy handler after didChange pays the parse cost, the
   /// rest reuse it. Wrapped in `Arc` so clones from `DashMap::get`
@@ -46,8 +50,12 @@ pub struct ParseCache {
 
 impl Document {
   pub fn new(uri: Url, text: String, version: i32) -> Self {
+    Self::with_dialect(uri, text, version, Dialect::Postgres)
+  }
+
+  pub fn with_dialect(uri: Url, text: String, version: i32, dialect: Dialect) -> Self {
     let rope = Rope::from_str(&text);
-    Self { uri, text, version, rope, parse_cache: Arc::new(OnceLock::new()) }
+    Self { uri, text, version, rope, dialect, parse_cache: Arc::new(OnceLock::new()) }
   }
 
   /// True when the document exceeds [`MAX_DOC_BYTES`] -- heavy handlers
@@ -61,10 +69,11 @@ impl Document {
   /// value. Cleared on every `DocumentStore::update`.
   pub fn parsed(&self) -> Arc<ParseCache> {
     let version = self.version;
+    let dialect = self.dialect;
     self
       .parse_cache
       .get_or_init(|| {
-        let file = dsl_parse::parse(&self.text, Dialect::Postgres);
+        let file = dsl_parse::parse(&self.text, dialect);
         let scopes = dsl_resolve::resolve_with_source(&file.statements, &self.text);
         Arc::new(ParseCache { file, scopes, version })
       })
@@ -86,6 +95,22 @@ impl DocumentStore {
 impl DocumentStore {
   pub fn open(&self, uri: Url, text: String, version: i32) {
     self.docs.insert(uri.clone(), Document::new(uri, text, version));
+  }
+
+  pub fn open_with_dialect(&self, uri: Url, text: String, version: i32, dialect: Dialect) {
+    self.docs.insert(uri.clone(), Document::with_dialect(uri, text, version, dialect));
+  }
+
+  /// Update the dialect for every open document. Called when the
+  /// effective config dialect changes. Invalidates parse cache so
+  /// the next handler re-parses with the new dialect.
+  pub fn set_dialect_all(&self, dialect: Dialect) {
+    for mut entry in self.docs.iter_mut() {
+      if entry.dialect != dialect {
+        entry.dialect = dialect;
+        entry.parse_cache = Arc::new(OnceLock::new());
+      }
+    }
   }
 
   pub fn update(&self, uri: &Url, text: String, version: i32) {
