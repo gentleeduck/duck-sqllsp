@@ -223,8 +223,17 @@ fn scan_projection(proj: &str) -> (usize, Vec<String>) {
       let lower = word.to_ascii_lowercase();
       if is_call {
         if AGG_FNS.iter().any(|f| *f == lower) {
-          aggregates += 1;
-          i = skip_parens(bytes, k);
+          let after_close = skip_parens(bytes, k);
+          // Peek for OVER -- window-function form (COUNT(*) OVER ...)
+          // partitions per-row and does NOT require GROUP BY.
+          let mut p = after_close;
+          while p < n && (bytes[p] as char).is_whitespace() { p += 1 }
+          let is_window = p + 4 <= n && bytes[p..p + 4].eq_ignore_ascii_case(b"OVER")
+            && (p + 4 == n || !is_word(bytes[p + 4] as char));
+          if !is_window {
+            aggregates += 1;
+          }
+          i = after_close;
         } else {
           i = skip_parens(bytes, k);
         }

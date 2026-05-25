@@ -1242,6 +1242,11 @@ pub fn build() -> HashMap<&'static str, Entry> {
   f!("pg_xact_status",     "pg_xact_status(xid8) -> text",  "Status of a transaction: committed / in progress / aborted.", "SELECT pg_xact_status(pg_current_xact_id());", pg("functions-info.html"));
 
   // ---- Comparison / NULL counting ----
+  // Window-only rank functions (siblings of row_number / rank already
+  // listed above).
+  f!("percent_rank", "percent_rank() -> double precision", "Relative rank of the current row (0..1), excluding the current row's peers.", "SELECT percent_rank() OVER (ORDER BY salary) FROM employees;", pg("functions-window.html"));
+  f!("cume_dist",    "cume_dist() -> double precision",    "Cumulative distribution of the current row -- fraction of partition rows with values <= current.", "SELECT cume_dist() OVER (ORDER BY salary) FROM employees;", pg("functions-window.html"));
+
   f!("num_nonnulls", "num_nonnulls(VARIADIC \"any\") -> int", "Count of non-NULL arguments. Useful in CHECK constraints to require exactly one of N columns.", "CHECK (num_nonnulls(promo_id, voucher_id) = 1)", pg("functions-comparison.html#FUNCTIONS-COMPARISON-FUNC-TABLE"));
   f!("num_nulls",    "num_nulls(VARIADIC \"any\") -> int",    "Count of NULL arguments. Inverse of num_nonnulls.",                                                                  "SELECT num_nulls(a, b, c);",                    pg("functions-comparison.html#FUNCTIONS-COMPARISON-FUNC-TABLE"));
 
