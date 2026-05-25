@@ -116,6 +116,7 @@ pub mod mysql_types;
 pub mod mutating_without_where;
 pub mod negative_limit_offset;
 pub mod nested_begin;
+pub mod non_pg_date_fns;
 pub mod non_pg_null_fns;
 pub mod notify_payload_too_large;
 pub mod notify_unlistened;
@@ -550,5 +551,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(mssql_bracket_quote::Rule),
     Box::new(mssql_top::Rule),
     Box::new(non_pg_null_fns::Rule),
+    Box::new(non_pg_date_fns::Rule),
   ]
 }
