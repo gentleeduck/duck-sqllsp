@@ -136,6 +136,7 @@ pub mod order_by_in_subquery;
 pub mod order_by_position;
 pub mod order_by_random;
 pub mod oracle_dual;
+pub mod oracle_rownum;
 pub mod owner_to_unknown_role;
 pub mod percentile_no_within;
 pub mod plpgsql_assign_type;
@@ -558,5 +559,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(mssql_go::Rule),
     Box::new(mssql_begin_tran::Rule),
     Box::new(oracle_dual::Rule),
+    Box::new(oracle_rownum::Rule),
   ]
 }
