@@ -59,6 +59,7 @@ pub mod is_distinct_null;
 pub mod join_no_on;
 pub mod jsonb_no_cast;
 pub mod jsonb_set_no_create;
+pub mod jsonb_set_path_format;
 pub mod like_leading_wildcard;
 pub mod like_with_no_collation;
 pub mod limit_for_update_subq;
@@ -114,6 +115,7 @@ pub mod select_into_shape;
 pub mod select_into_strict_no_exception;
 pub mod select_no_from_no_agg;
 pub mod select_star_insert;
+pub mod set_constraints_outside_tx;
 pub mod set_role_no_reset;
 pub mod single_stmt_transaction;
 pub mod sql_lang_uses_new_old;
@@ -152,6 +154,7 @@ pub mod alter_column_type;
 pub mod array_fn_on_scalar;
 pub mod array_mixed_types;
 pub mod cast_literal_invalid;
+pub mod comment_clears_existing;
 pub mod comment_on_unknown;
 pub mod default_references_column;
 pub mod fk_target_not_unique;
@@ -163,6 +166,7 @@ pub mod generated_uses_volatile;
 pub mod on_conflict_no_unique;
 pub mod truncate_with_fk;
 pub mod window_frame_reversed;
+pub mod drop_cascade_chain;
 pub mod drop_column_fk;
 pub mod fk_unknown_column;
 pub mod int_range;
@@ -356,5 +360,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(recursive_cte_no_union::Rule),
     Box::new(array_mixed_types::Rule),
     Box::new(limit_for_update_subq::Rule),
+    Box::new(jsonb_set_path_format::Rule),
+    Box::new(set_constraints_outside_tx::Rule),
+    Box::new(comment_clears_existing::Rule),
+    Box::new(drop_cascade_chain::Rule),
   ]
 }
