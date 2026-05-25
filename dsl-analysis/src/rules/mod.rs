@@ -10,6 +10,7 @@ pub mod alter_table_no_owner;
 pub mod alter_type_add_value_in_tx;
 pub mod ambiguous_column;
 pub mod any_all_multicol;
+pub mod array_elem_vs_col;
 pub mod array_subscript_zero;
 pub mod backslash_in_string;
 pub mod bare_return_typed;
@@ -17,6 +18,7 @@ pub mod begin_no_lock_mode;
 pub mod between_reversed;
 pub mod bool_compare_equals;
 pub mod boolean_in_text_column;
+pub mod bool_agg_nullable;
 pub mod case_branch_types;
 pub mod case_no_else;
 pub mod case_single_when;
@@ -141,6 +143,7 @@ pub mod numeric_no_precision;
 pub mod on_update_cascade_pk;
 pub mod order_by_in_subquery;
 pub mod order_by_position;
+pub mod order_by_using_noncomparable;
 pub mod order_by_random;
 pub mod oracle_connect_by;
 pub mod oracle_dual;
@@ -148,6 +151,7 @@ pub mod oracle_outer_join;
 pub mod oracle_rownum;
 pub mod owner_to_unknown_role;
 pub mod percentile_no_within;
+pub mod percentile_non_numeric_order;
 pub mod plpgsql_assign_type;
 pub mod perform_for_pure_select;
 pub mod pg_catalog_no_schema;
@@ -590,5 +594,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(like_include_indexes_partition::Rule),
     Box::new(truncate_in_plpgsql_exception::Rule),
     Box::new(new_assign_pk_in_before_insert::Rule),
+    Box::new(array_elem_vs_col::Rule),
+    Box::new(bool_agg_nullable::Rule),
+    Box::new(percentile_non_numeric_order::Rule),
+    Box::new(order_by_using_noncomparable::Rule),
   ]
 }
