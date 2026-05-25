@@ -194,6 +194,7 @@ pub mod alter_column_type;
 pub mod alter_set_not_null_scan;
 pub mod alter_set_tablespace;
 pub mod alter_drop_just_created;
+pub mod analyze_in_tx;
 pub mod array_eq_with_null;
 pub mod array_fn_on_scalar;
 pub mod array_mixed_types;
@@ -476,5 +477,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(alter_add_check_no_not_valid::Rule),
     Box::new(alter_set_not_null_scan::Rule),
     Box::new(where_true_placeholder::Rule),
+    Box::new(analyze_in_tx::Rule),
   ]
 }
