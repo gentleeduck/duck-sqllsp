@@ -129,7 +129,10 @@ pub mod savepoint_outside_tx;
 pub mod truncate_in_trigger;
 pub mod varchar_length;
 pub mod date_literal_format;
+pub mod drop_column_fk;
+pub mod fk_unknown_column;
 pub mod int_range;
+pub mod using_clause_columns;
 pub mod uuid_literal_format;
 pub mod null_into_not_null;
 pub mod schema_drift;
@@ -279,6 +282,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(varchar_length::Rule),
     Box::new(date_literal_format::Rule),
     Box::new(uuid_literal_format::Rule),
+    Box::new(using_clause_columns::Rule),
     Box::new(int_range::Rule),
+    Box::new(fk_unknown_column::Rule),
+    Box::new(drop_column_fk::Rule),
   ]
 }
