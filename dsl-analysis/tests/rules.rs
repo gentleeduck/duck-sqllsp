@@ -4003,6 +4003,26 @@ fn sql348_quiet_on_keyword_call() {
   assert!(!d.iter().any(|x| x.code == "sql348"));
 }
 
+#[test]
+fn sql348_flags_unknown_in_execute_function() {
+  let d = diags("CREATE TRIGGER t BEFORE UPDATE ON users EXECUTE FUNCTION nonexistent_fn();");
+  assert!(d.iter().any(|x| x.code == "sql348"));
+}
+
+#[test]
+fn sql348_quiet_on_execute_function_known() {
+  // length is a built-in fn known by dsl-knowledge.
+  let d = diags("CREATE TRIGGER t BEFORE UPDATE ON users EXECUTE FUNCTION length();");
+  assert!(!d.iter().any(|x| x.code == "sql348"));
+}
+
+#[test]
+fn sql348_quiet_on_create_function_decl() {
+  // CREATE FUNCTION foo() is a definition slot; foo is fresh, not a call.
+  let d = diags("CREATE FUNCTION my_helper2() RETURNS int AS $$ SELECT 1 $$ LANGUAGE sql;");
+  assert!(!d.iter().any(|x| x.code == "sql348"));
+}
+
 // ===== sql349 INSERT unknown column =====
 
 #[test]

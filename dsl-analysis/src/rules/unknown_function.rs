@@ -106,7 +106,20 @@ impl LintRule for Rule {
       // shape `<ident>(` but aren't calls.
       let prev_word = preceding_word(body, id_start);
       let prev_upper = prev_word.to_ascii_uppercase();
-      if PRECEDING_BLOCKLIST.contains(&prev_upper.as_str()) { continue }
+      // FUNCTION / PROCEDURE are blocklisted because CREATE / DROP /
+      // ALTER FUNCTION put the next ident in a name slot. But
+      // `EXECUTE FUNCTION fn()` and `CALL fn()` are real calls --
+      // detect via the word BEFORE the blocklisted keyword.
+      if matches!(prev_upper.as_str(), "FUNCTION" | "PROCEDURE") {
+        let prev_prev = preceding_word_before(body, id_start, prev_word.len());
+        let pp_upper = prev_prev.to_ascii_uppercase();
+        if !matches!(pp_upper.as_str(), "EXECUTE" | "CALL" | "PERFORM") {
+          continue;
+        }
+        // Fall through: this is a real call, validate it.
+      } else if PRECEDING_BLOCKLIST.contains(&prev_upper.as_str()) {
+        continue;
+      }
       // Type-cast-style: `INT(x)` etc. -- already caught by KEYWORDS.
       // Method-style: name followed by `(*)` is COUNT-only; allow it.
       // Lookup.
@@ -170,6 +183,7 @@ const PRECEDING_BLOCKLIST: &[&str] = &[
   "BEFORE", "AFTER",
 ];
 
+
 /// Pull the word ending at byte `end` (exclusive). Skips whitespace,
 /// punctuation, dots. Returns "" when there's no word boundary.
 fn preceding_word(body: &str, end: usize) -> &str {
@@ -180,6 +194,18 @@ fn preceding_word(body: &str, end: usize) -> &str {
   while i > 0 && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_') { i -= 1 }
   if i == word_end { return "" }
   &body[i..word_end]
+}
+
+/// Pull the word that immediately precedes the word ending at `end - prev_len`
+/// (so we can look two tokens back without re-walking the whitespace).
+fn preceding_word_before<'a>(body: &'a str, end: usize, prev_len: usize) -> &'a str {
+  let bytes = body.as_bytes();
+  // Reach the start of the previous word: skip ws ending at `end`, then
+  // step back over prev_len chars, then ask preceding_word from there.
+  let mut i = end;
+  while i > 0 && bytes[i - 1].is_ascii_whitespace() { i -= 1 }
+  if i < prev_len { return "" }
+  preceding_word(body, i - prev_len)
 }
 
 fn find_dollar_close(body: &str, dollar_at: usize) -> Option<usize> {
