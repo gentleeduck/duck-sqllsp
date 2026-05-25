@@ -115,6 +115,7 @@ pub mod order_by_in_subquery;
 pub mod order_by_position;
 pub mod order_by_random;
 pub mod owner_to_unknown_role;
+pub mod percentile_no_within;
 pub mod plpgsql_assign_type;
 pub mod perform_for_pure_select;
 pub mod pg_catalog_no_schema;
@@ -159,6 +160,7 @@ pub mod single_stmt_transaction;
 pub mod star_with_order_by_position;
 pub mod sql_lang_uses_new_old;
 pub mod system_catalog_dml;
+pub mod table_inherits;
 pub mod text_int_arithmetic;
 pub mod tg_var_in_non_trigger;
 pub mod time_with_timezone;
@@ -488,5 +490,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(alter_type_label_unknown::Rule),
     Box::new(revoke_cascade::Rule),
     Box::new(index_no_name::Rule),
+    Box::new(table_inherits::Rule),
+    Box::new(percentile_no_within::Rule),
   ]
 }
