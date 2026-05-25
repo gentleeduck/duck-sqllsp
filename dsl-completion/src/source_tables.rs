@@ -131,6 +131,7 @@ pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
         table.policies = pols.clone();
       }
       let generated_by_col = scan_generated_for(source, &table.name);
+      let json_keys_by_col = scan_json_keys_for(source, &table.name);
       for col in table.columns.iter_mut() {
         let ckey = format!("{}.{}", table.name.to_ascii_lowercase(), col.name.to_ascii_lowercase());
         if let Some(c) = comments_by_col.get(&ckey) {
@@ -138,6 +139,9 @@ pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
         }
         if let Some(g) = generated_by_col.get(&col.name.to_ascii_lowercase()) {
           col.generated = Some(g.clone());
+        }
+        if let Some(keys) = json_keys_by_col.get(&col.name.to_ascii_lowercase()) {
+          col.json_keys = Some(keys.clone());
         }
       }
     }
@@ -504,6 +508,64 @@ fn scan_generated_for(src: &str, name: &str) -> std::collections::HashMap<String
         if !col_name.is_empty() {
           out.insert(col_name, expr.to_string());
         }
+      }
+      return out;
+    }
+  }
+  out
+}
+
+/// `-- @json-keys: a, b, c` annotation comment placed on its own line
+/// above a jsonb column. Walks the CREATE TABLE body line-by-line,
+/// remembers the most recent annotation, and attaches its keys to the
+/// next non-comment, non-constraint column line. Returns
+/// lowercase-column-name -> Vec<String>.
+fn scan_json_keys_for(src: &str, name: &str) -> std::collections::HashMap<String, Vec<String>> {
+  let upper = src.to_ascii_uppercase();
+  let mut out: std::collections::HashMap<String, Vec<String>> = Default::default();
+  for needle in ["CREATE TABLE IF NOT EXISTS ", "CREATE TEMP TABLE ", "CREATE TEMPORARY TABLE ", "CREATE TABLE "] {
+    let mut from = 0usize;
+    while let Some(rel) = upper[from..].find(needle) {
+      let after = from + rel + needle.len();
+      let bytes = src.as_bytes();
+      let mut k = after;
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+      let id_start = k;
+      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') { k += 1 }
+      let raw = &src[id_start..k];
+      let bare = raw.rsplit('.').next().unwrap_or(raw).trim_matches('"');
+      if !bare.eq_ignore_ascii_case(name) { from = after; continue }
+      while k < bytes.len() && bytes[k] != b'(' { k += 1 }
+      if k >= bytes.len() { return out }
+      let body_start = k + 1;
+      let body_end = match_paren(bytes, k);
+      let body = &src[body_start..body_end];
+      let mut pending: Option<Vec<String>> = None;
+      let mut paren_depth = 0i32;
+      for line in body.lines() {
+        let trimmed = line.trim();
+        if let Some(at) = trimmed.find("@json-keys:") {
+          let payload = &trimmed[at + "@json-keys:".len()..];
+          let keys: Vec<String> = payload
+            .split(',')
+            .map(|s| s.trim().trim_matches('"').to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+          if !keys.is_empty() { pending = Some(keys); }
+          continue;
+        }
+        if trimmed.is_empty() || trimmed.starts_with("--") { continue }
+        let entered_at = paren_depth;
+        for b in trimmed.as_bytes() {
+          match b { b'(' => paren_depth += 1, b')' => paren_depth -= 1, _ => {} }
+        }
+        if entered_at != 0 { continue }
+        let Some(keys) = pending.take() else { continue };
+        let head = trimmed.split_whitespace().next().unwrap_or("");
+        let head_upper = head.to_ascii_uppercase();
+        if matches!(head_upper.as_str(), "CONSTRAINT" | "PRIMARY" | "UNIQUE" | "FOREIGN" | "CHECK" | "EXCLUDE" | "LIKE") { continue }
+        let col_name = head.trim_matches('"').trim_end_matches(',').to_ascii_lowercase();
+        if !col_name.is_empty() { out.insert(col_name, keys); }
       }
       return out;
     }
@@ -1191,4 +1253,37 @@ pub fn merge(live: &Catalog, derived: &Catalog) -> Catalog {
     }
   }
   out
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use dsl_parse::Dialect;
+
+  #[test]
+  fn json_keys_annotation_populates_column() {
+    let src = "CREATE TABLE event (\n  id int,\n  -- @json-keys: name, age, tier\n  payload jsonb\n);\n";
+    let parsed = dsl_parse::parse(src, Dialect::Postgres);
+    let cat = from_source(&parsed, src);
+    let tbl = cat
+      .schemas
+      .iter()
+      .flat_map(|s| s.tables.iter())
+      .find(|t| t.name == "event")
+      .expect("event table");
+    let payload = tbl.columns.iter().find(|c| c.name == "payload").expect("payload col");
+    assert_eq!(payload.json_keys.as_deref(), Some(&["name".to_string(), "age".to_string(), "tier".to_string()][..]));
+    let id = tbl.columns.iter().find(|c| c.name == "id").expect("id col");
+    assert!(id.json_keys.is_none());
+  }
+
+  #[test]
+  fn json_keys_annotation_quoted_keys() {
+    let src = "CREATE TABLE t (\n  -- @json-keys: \"a-b\", c\n  data jsonb\n);\n";
+    let parsed = dsl_parse::parse(src, Dialect::Postgres);
+    let cat = from_source(&parsed, src);
+    let tbl = cat.schemas.iter().flat_map(|s| s.tables.iter()).find(|t| t.name == "t").unwrap();
+    let col = tbl.columns.iter().find(|c| c.name == "data").unwrap();
+    assert_eq!(col.json_keys.as_deref(), Some(&["a-b".to_string(), "c".to_string()][..]));
+  }
 }
