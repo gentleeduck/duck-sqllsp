@@ -33,7 +33,66 @@ pub fn run(state: &ServerState, params: HoverParams) -> Option<Hover> {
     Case::Preserve => KeywordCase::Preserve,
   };
   let md = hover_with(&doc.text, offset, &cat, case)?;
-  Some(Hover { contents: split_markdown_fences(&md), range: None })
+  let range = hover_range_for(&doc.text, &doc.rope, offset);
+  Some(Hover { contents: split_markdown_fences(&md), range })
+}
+
+/// Compute the hover-target range so the editor highlights the
+/// whole token / literal under the cursor. Without this the client
+/// underlines only the cursor's position.
+fn hover_range_for(source: &str, rope: &ropey::Rope, offset: text_size::TextSize) -> Option<tower_lsp::lsp_types::Range> {
+  let pos: usize = u32::from(offset) as usize;
+  let bytes = source.as_bytes();
+  if pos > bytes.len() { return None; }
+  // String literal: walk back to opening `'`, forward to closing `'`.
+  if let Some(span) = enclosing_string(bytes, pos) {
+    return Some(tower_lsp::lsp_types::Range {
+      start: position::byte_to_lsp(rope, span.0),
+      end: position::byte_to_lsp(rope, span.1),
+    });
+  }
+  // Identifier / number: word-bounded.
+  let mut s = pos.min(bytes.len());
+  while s > 0 && is_word(bytes[s - 1]) {
+    s -= 1;
+  }
+  let mut e = pos.min(bytes.len());
+  while e < bytes.len() && is_word(bytes[e]) {
+    e += 1;
+  }
+  if s == e { return None; }
+  Some(tower_lsp::lsp_types::Range {
+    start: position::byte_to_lsp(rope, s),
+    end: position::byte_to_lsp(rope, e),
+  })
+}
+
+fn is_word(b: u8) -> bool { b.is_ascii_alphanumeric() || b == b'_' }
+
+/// Span of the single-quoted string literal containing `pos` (inclusive
+/// of both quotes). None when pos isn't inside one.
+fn enclosing_string(bytes: &[u8], pos: usize) -> Option<(usize, usize)> {
+  let n = bytes.len();
+  let mut i = 0usize;
+  while i < n {
+    if bytes[i] == b'\'' {
+      let start = i;
+      i += 1;
+      while i < n {
+        if bytes[i] == b'\'' {
+          if i + 1 < n && bytes[i + 1] == b'\'' { i += 2; continue; }
+          let end = i + 1;
+          if pos >= start && pos <= end { return Some((start, end)); }
+          i = end;
+          break;
+        }
+        i += 1;
+      }
+      continue;
+    }
+    i += 1;
+  }
+  None
 }
 
 /// Split the hover markdown at every ```sql ... ``` fence and return a

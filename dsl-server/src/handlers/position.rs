@@ -5,6 +5,24 @@ use ropey::Rope;
 use text_size::TextSize;
 use tower_lsp::lsp_types::Position;
 
+/// Inverse of [`to_offset`]: utf-8 byte offset -> LSP `Position`
+/// with utf-16 column.
+pub fn byte_to_lsp(rope: &Rope, byte: usize) -> Position {
+  let byte = byte.min(rope.len_bytes());
+  let line = rope.byte_to_line(byte);
+  let line_start_byte = rope.line_to_byte(line);
+  let line_slice = rope.line(line);
+  let mut utf16 = 0u32;
+  let mut bytes_seen = 0usize;
+  let bytes_in_line = byte.saturating_sub(line_start_byte);
+  for c in line_slice.chars() {
+    if bytes_seen >= bytes_in_line { break; }
+    utf16 += c.len_utf16() as u32;
+    bytes_seen += c.len_utf8();
+  }
+  Position { line: line as u32, character: utf16 }
+}
+
 pub fn to_offset(rope: &Rope, pos: Position) -> TextSize {
   let line = pos.line as usize;
   let col = pos.character as usize;
