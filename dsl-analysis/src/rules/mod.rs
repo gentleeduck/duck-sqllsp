@@ -159,6 +159,7 @@ pub mod select_into_shape;
 pub mod select_into_strict_no_exception;
 pub mod select_no_from_no_agg;
 pub mod select_star_insert;
+pub mod select_trailing_comma;
 pub mod set_constraints_outside_tx;
 pub mod set_local_outside_tx;
 pub mod set_role_in_function;
@@ -510,5 +511,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(notify_payload_too_large::Rule),
     Box::new(identifier_too_long::Rule),
     Box::new(pk_duplicate_col::Rule),
+    Box::new(select_trailing_comma::Rule),
   ]
 }
