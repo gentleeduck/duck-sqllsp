@@ -86,6 +86,23 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
     return Some(md);
   }
 
+  // Cursor on the `::` cast operator itself (between expr and type).
+  if cursor_on_double_colon(source, offset) {
+    return Some(
+      "# `::` cast operator\n\n_PG-specific shorthand for `CAST(expr AS type)`_\n\n\
+       ```sql\n\
+       '123'::int            -- string -> integer\n\
+       column_name::text     -- column to text\n\
+       now()::date           -- timestamp -> date\n\
+       arr::int[]            -- array element type cast\n\
+       data::jsonb           -- text -> jsonb\n\
+       ```\n\n\
+       Equivalent to `CAST(expr AS type)`. Errors at runtime if the value can't be converted; \
+       check with `IS NOT NULL` first when in doubt. Inside DDL prefer the standard CAST form."
+        .to_string(),
+    );
+  }
+
   if let Some(tok) = token::token_at(source, offset) {
     // Dotted token `a.b` -- narrow to the side under the cursor.
     // Cursor on the alias side ⇒ table card. Cursor on the column
@@ -297,6 +314,18 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
 /// name with a role shouldn't be hijacked. Surfaces:
 ///   * Catalog membership status (known / unknown / built-in).
 ///   * Source: live catalog vs convention whitelist.
+/// True when the cursor sits exactly on a `:` byte that's part of
+/// the `::` cast operator (either the first or second colon).
+fn cursor_on_double_colon(source: &str, offset: TextSize) -> bool {
+  let pos: usize = u32::from(offset) as usize;
+  let bytes = source.as_bytes();
+  if pos >= bytes.len() { return false; }
+  if bytes[pos] != b':' { return false; }
+  let prev = if pos > 0 { bytes[pos - 1] } else { 0 };
+  let next = if pos + 1 < bytes.len() { bytes[pos + 1] } else { 0 };
+  prev == b':' || next == b':'
+}
+
 /// Hover handler for the `*` token. Three flavours:
 ///   * `SELECT *` (no qualifier) -> list every column of every FROM
 ///     table in the current statement.
