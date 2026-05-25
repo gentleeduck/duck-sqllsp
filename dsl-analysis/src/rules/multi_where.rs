@@ -72,7 +72,19 @@ impl LintRule for Rule {
             None => {
               first = Some(i);
             },
-            Some(_) => {
+            Some(prev_where) => {
+              // A `UNION` / `INTERSECT` / `EXCEPT` between the previous
+              // WHERE and this one means we're in separate set-op
+              // branches -- each branch gets its own WHERE.
+              let between = &upper[prev_where..i];
+              if has_word_kw(between, "UNION")
+                || has_word_kw(between, "INTERSECT")
+                || has_word_kw(between, "EXCEPT")
+              {
+                first = Some(i);
+                i += 5;
+                continue;
+              }
               let abs_start = start + i;
               let abs_end = start + i + 5;
               out.push(Diagnostic {
@@ -95,4 +107,20 @@ impl LintRule for Rule {
 
 fn is_word(c: char) -> bool {
   c.is_alphanumeric() || c == '_'
+}
+
+fn has_word_kw(haystack: &str, needle: &str) -> bool {
+  let h = haystack.as_bytes();
+  let n = needle.as_bytes();
+  if n.is_empty() { return false; }
+  let mut i = 0;
+  while i + n.len() <= h.len() {
+    if h[i..i + n.len()] == *n {
+      let prev_ok = i == 0 || !is_word(h[i - 1] as char);
+      let next_ok = i + n.len() == h.len() || !is_word(h[i + n.len()] as char);
+      if prev_ok && next_ok { return true; }
+    }
+    i += 1;
+  }
+  false
 }

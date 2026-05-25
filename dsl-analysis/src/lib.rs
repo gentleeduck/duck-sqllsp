@@ -53,9 +53,10 @@ fn skip_for_dialect(dialect: Dialect, code: &str) -> bool {
 }
 
 /// Per-statement parser errors -> sql000 diagnostics. Always run.
-fn parser_diags(errors: &[ParseError]) -> Vec<Diagnostic> {
+fn parser_diags(source: &str, errors: &[ParseError]) -> Vec<Diagnostic> {
   errors
     .iter()
+    .filter(|e| !error_is_psql_meta(source, e))
     .map(|e| Diagnostic {
       code: "sql000",
       severity: Severity::Error,
@@ -63,6 +64,20 @@ fn parser_diags(errors: &[ParseError]) -> Vec<Diagnostic> {
       range: e.range,
     })
     .collect()
+}
+
+/// True when ANY line in the chunk spanned by the error starts with
+/// `\<letter>` -- a psql meta-command. sql310 already reports those;
+/// suppress the redundant sql000 from pg_query.
+fn error_is_psql_meta(source: &str, e: &ParseError) -> bool {
+  let s: usize = u32::from(e.range.start()) as usize;
+  let e_end: usize = (u32::from(e.range.end()) as usize).min(source.len());
+  let chunk = source.get(s..e_end).unwrap_or("");
+  chunk.lines().any(|line| {
+    let t = line.trim_start();
+    let b = t.as_bytes();
+    b.len() >= 2 && b[0] == b'\\' && b[1].is_ascii_alphabetic()
+  })
 }
 
 pub trait LintRule: Send + Sync {
@@ -89,7 +104,7 @@ pub fn run_with_dialect(
   // unwinds the stack normally, but the default hook prints to stderr.
   let prev_hook = std::panic::take_hook();
   std::panic::set_hook(Box::new(|_| {}));
-  let mut out = parser_diags(&file.errors);
+  let mut out = parser_diags(source, &file.errors);
   let registered = rules::all();
   for (stmt, scope) in file.statements.iter().zip(scopes.iter()) {
     let trimmed = trim_stmt_range(stmt, source);
