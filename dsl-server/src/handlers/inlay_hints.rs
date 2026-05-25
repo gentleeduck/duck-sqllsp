@@ -167,6 +167,67 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
     });
   }
 
+  // Implicit literal cast in WHERE: `WHERE int_col = '123'` --
+  // PG auto-casts text -> int; surface ` :: int` after the literal
+  // so the cast is visible. Conservative -- only fires when:
+  //   * a single FROM table is in scope
+  //   * the comparison is `col OP literal` with literal text
+  //   * the column resolves and its catalog type differs from text
+  for stmt in &parsed.statements {
+    let StatementKind::Select(sel) = &stmt.kind else { continue };
+    if sel.from.len() != 1 { continue }
+    let target = &sel.from[0];
+    let cols: Vec<(String, String)> = if let Some(t) = cat.find_table(target.schema.as_deref(), &target.name) {
+      t.columns.iter().map(|c| (c.name.clone(), c.data_type.clone())).collect()
+    } else { continue };
+    let s: u32 = stmt.range.start().into();
+    let e: u32 = stmt.range.end().into();
+    let body = &doc.text[(s as usize).min(doc.text.len())..(e as usize).min(doc.text.len())];
+    let upper = body.to_ascii_uppercase();
+    let Some(where_at) = upper.find("WHERE") else { continue };
+    let bytes = body.as_bytes();
+    let mut i = where_at + "WHERE".len();
+    while i < bytes.len() {
+      // Find an identifier.
+      while i < bytes.len() && !(bytes[i].is_ascii_alphabetic() || bytes[i] == b'_') { i += 1 }
+      let id_start = i;
+      while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') { i += 1 }
+      let ident = &body[id_start..i];
+      if ident.is_empty() { break }
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
+      let op_start = i;
+      while i < bytes.len() && matches!(bytes[i], b'=' | b'<' | b'>' | b'!') { i += 1 }
+      if i == op_start { continue }
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
+      if i >= bytes.len() || bytes[i] != b'\'' { continue }
+      // Found col OP 'lit'. Resolve col, check type.
+      let Some((_, ty)) = cols.iter().find(|(n, _)| n.eq_ignore_ascii_case(ident)) else { continue };
+      let ty_lc = ty.to_ascii_lowercase();
+      let target_type = if ty_lc.starts_with("int") || ty_lc == "bigint" || ty_lc == "smallint" { Some("int") }
+        else if ty_lc.starts_with("numeric") || ty_lc.starts_with("decimal") { Some("numeric") }
+        else if ty_lc.starts_with("uuid") { Some("uuid") }
+        else if ty_lc.starts_with("bool") { Some("bool") }
+        else { None };
+      let Some(target_type) = target_type else { continue };
+      // Skip closing '.
+      i += 1;
+      while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
+      if i < bytes.len() { i += 1 }
+      let abs_after_lit = s as usize + i;
+      let pos = byte_to_position(&doc.rope, abs_after_lit);
+      hints.push(InlayHint {
+        position: pos,
+        label: InlayHintLabel::String(format!("::{target_type}")),
+        kind: Some(InlayHintKind::TYPE),
+        text_edits: None,
+        tooltip: None,
+        padding_left: Some(false),
+        padding_right: Some(false),
+        data: None,
+      });
+    }
+  }
+
   // INSERT VALUES row-count -- after the closing `)` of the last
   // tuple, append ` -- 3 rows` (skipped when only one tuple).
   for stmt in &parsed.statements {
