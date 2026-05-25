@@ -106,6 +106,7 @@ pub mod multi_raise_exception;
 pub mod multi_where;
 pub mod multiple_truncate_in_tx;
 pub mod mv_no_data_query;
+pub mod mysql_auto_increment;
 pub mod mysql_interval_syntax;
 pub mod mysql_table_comment;
 pub mod mutating_without_where;
@@ -538,5 +539,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(string_agg_no_order::Rule),
     Box::new(serial_vs_identity::Rule),
     Box::new(mysql_table_comment::Rule),
+    Box::new(mysql_auto_increment::Rule),
   ]
 }
