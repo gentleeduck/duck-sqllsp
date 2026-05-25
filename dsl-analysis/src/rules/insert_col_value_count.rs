@@ -73,6 +73,7 @@ impl LintRule for Rule {
 fn match_paren(bytes: &[u8], open: usize) -> Option<usize> {
   let n = bytes.len();
   let mut depth = 0i32;
+  let mut bracket_depth = 0i32;
   let mut i = open;
   while i < n {
     match bytes[i] {
@@ -83,6 +84,8 @@ fn match_paren(bytes: &[u8], open: usize) -> Option<usize> {
           return Some(i);
         }
       },
+      b'[' => bracket_depth += 1,
+      b']' => bracket_depth -= 1,
       b'\'' => {
         i += 1;
         while i < n && bytes[i] != b'\'' {
@@ -91,6 +94,7 @@ fn match_paren(bytes: &[u8], open: usize) -> Option<usize> {
       },
       _ => {},
     }
+    let _ = bracket_depth;
     i += 1;
   }
   None
@@ -104,8 +108,10 @@ fn top_level_comma_count(s: &str) -> usize {
   let mut i = 0;
   while i < n {
     match bytes[i] {
-      b'(' => depth += 1,
-      b')' => depth -= 1,
+      // Track `[` / `]` too so commas inside `ARRAY['a','b']` or
+      // `col[1]` don't count as top-level value separators.
+      b'(' | b'[' => depth += 1,
+      b')' | b']' => depth -= 1,
       b'\'' => {
         i += 1;
         while i < n && bytes[i] != b'\'' {
