@@ -167,7 +167,68 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
     });
   }
 
+  // INSERT VALUES row-count -- after the closing `)` of the last
+  // tuple, append ` -- 3 rows` (skipped when only one tuple).
+  for stmt in &parsed.statements {
+    let StatementKind::Insert(_) = &stmt.kind else { continue };
+    let s: u32 = stmt.range.start().into();
+    let e: u32 = stmt.range.end().into();
+    let body = &doc.text[(s as usize).min(doc.text.len())..(e as usize).min(doc.text.len())];
+    let upper = body.to_ascii_uppercase();
+    let Some(v_at) = upper.find("VALUES") else { continue };
+    let after = v_at + "VALUES".len();
+    let bytes = body.as_bytes();
+    let mut i = after;
+    let mut tuples = 0usize;
+    let mut last_close = after;
+    while i < bytes.len() {
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
+      if i >= bytes.len() || bytes[i] != b'(' { break }
+      let open = i;
+      let close = match_paren_count(body, open);
+      let Some(close) = close else { break };
+      tuples += 1;
+      last_close = close;
+      i = close + 1;
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
+      if i < bytes.len() && bytes[i] == b',' { i += 1 } else { break }
+    }
+    if tuples >= 2 {
+      let abs = s as usize + last_close + 1;
+      let pos = byte_to_position(&doc.rope, abs);
+      hints.push(InlayHint {
+        position: pos,
+        label: InlayHintLabel::String(format!("  -- {tuples} rows")),
+        kind: Some(InlayHintKind::TYPE),
+        text_edits: None,
+        tooltip: None,
+        padding_left: Some(false),
+        padding_right: Some(false),
+        data: None,
+      });
+    }
+  }
+
   if hints.is_empty() { None } else { Some(hints) }
+}
+
+fn match_paren_count(s: &str, open: usize) -> Option<usize> {
+  let bytes = s.as_bytes();
+  let mut depth = 0i32;
+  let mut i = open;
+  while i < bytes.len() {
+    match bytes[i] {
+      b'(' => depth += 1,
+      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b'\'' => {
+        i += 1;
+        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
+      }
+      _ => {}
+    }
+    i += 1;
+  }
+  None
 }
 
 /// A JOIN clause located in the buffer text that lacks an ON / USING
