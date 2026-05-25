@@ -3689,3 +3689,31 @@ fn sql294_quiet_single_begin() {
   let d = diags("BEGIN;");
   assert!(!d.iter().any(|x| x.code == "sql294"));
 }
+
+// ===== sql327 CREATE TABLE without schema =====
+
+#[test]
+fn sql327_flags_unqualified_create_table() {
+  let d = diags("CREATE TABLE widgets (id int);");
+  assert!(d.iter().any(|x| x.code == "sql327"));
+}
+
+#[test]
+fn sql327_quiet_schema_qualified() {
+  let d = diags("CREATE TABLE inventory.widgets (id int);");
+  assert!(!d.iter().any(|x| x.code == "sql327"));
+}
+
+// ===== sql328 REVOKE without GRANT =====
+
+#[test]
+fn sql328_flags_lone_revoke() {
+  let d = diags("REVOKE SELECT ON users FROM analyst;");
+  assert!(d.iter().any(|x| x.code == "sql328"));
+}
+
+#[test]
+fn sql328_quiet_when_grant_present() {
+  let d = diags("GRANT SELECT ON users TO analyst;\nREVOKE SELECT ON users FROM analyst;");
+  assert!(!d.iter().any(|x| x.code == "sql328"));
+}

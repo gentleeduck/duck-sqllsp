@@ -36,6 +36,7 @@ pub mod copy_header_no_csv;
 pub mod copy_no_format;
 pub mod copy_program_exec;
 pub mod count_one_vs_star;
+pub mod create_table_no_schema;
 pub mod count_star_returns_one;
 pub mod cte_dml_no_returning;
 pub mod cte_missing_recursive;
@@ -166,6 +167,7 @@ pub mod returning_no_assign;
 pub mod returning_with_truncate;
 pub mod revoke_cascade;
 pub mod revoke_missing_from;
+pub mod revoke_without_grant;
 pub mod row_constructor_single;
 pub mod row_count_after_dml;
 pub mod savepoint_name_reuse;
@@ -564,5 +566,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(oracle_rownum::Rule),
     Box::new(oracle_connect_by::Rule),
     Box::new(oracle_outer_join::Rule),
+    Box::new(create_table_no_schema::Rule),
+    Box::new(revoke_without_grant::Rule),
   ]
 }
