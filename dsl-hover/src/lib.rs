@@ -906,7 +906,91 @@ fn plpgsql_local_hover(source: &str, offset: TextSize, token: &str) -> Option<St
 }
 
 fn db_function(token: &str, catalog: &Catalog) -> Option<String> {
-  catalog.functions.iter().find(|f| f.name.eq_ignore_ascii_case(token)).map(render::function_full)
+  let f = catalog.functions.iter().find(|f| f.name.eq_ignore_ascii_case(token))?;
+  let mut s = render::function_full(f);
+  // Append fan-in/fan-out from the workspace catalog. The function
+  // body lives in f.comment (CREATE OR REPLACE FUNCTION ... $$ ...
+  // $$); we scan it for other function calls and walk every other
+  // catalog function's body for calls to this one.
+  let (outgoing, incoming) = call_graph(&f.name, catalog);
+  if !outgoing.is_empty() {
+    s.push_str("\n**Calls**\n\n");
+    for callee in outgoing.iter().take(20) {
+      s.push_str(&format!("- `{callee}`\n"));
+    }
+    if outgoing.len() > 20 {
+      s.push_str(&format!("- _… and {} more_\n", outgoing.len() - 20));
+    }
+  }
+  if !incoming.is_empty() {
+    s.push_str("\n**Called by**\n\n");
+    for caller in incoming.iter().take(20) {
+      s.push_str(&format!("- `{caller}`\n"));
+    }
+    if incoming.len() > 20 {
+      s.push_str(&format!("- _… and {} more_\n", incoming.len() - 20));
+    }
+  }
+  Some(s)
+}
+
+fn call_graph(name: &str, catalog: &Catalog) -> (Vec<String>, Vec<String>) {
+  let mut outgoing = std::collections::BTreeSet::new();
+  let mut incoming = std::collections::BTreeSet::new();
+  for f in &catalog.functions {
+    let Some(body) = f.comment.as_ref() else { continue };
+    let upper_body = body.to_ascii_uppercase();
+    if f.name.eq_ignore_ascii_case(name) {
+      // Outgoing: identifiers in this function's body followed by `(`.
+      for callee in extract_call_targets(body) {
+        if !callee.eq_ignore_ascii_case(name) && !is_keyword(&callee) {
+          outgoing.insert(callee);
+        }
+      }
+    } else if upper_body.contains(&name.to_ascii_uppercase()) {
+      // Incoming: if some other function's body mentions `name(`.
+      let needle = format!("{}(", name.to_ascii_lowercase());
+      if body.to_ascii_lowercase().contains(&needle) {
+        incoming.insert(f.name.clone());
+      }
+    }
+  }
+  (outgoing.into_iter().collect(), incoming.into_iter().collect())
+}
+
+fn extract_call_targets(body: &str) -> std::collections::BTreeSet<String> {
+  let bytes = body.as_bytes();
+  let n = bytes.len();
+  let mut out = std::collections::BTreeSet::new();
+  let mut i = 0;
+  while i < n {
+    if !(bytes[i].is_ascii_alphabetic() || bytes[i] == b'_') {
+      i += 1;
+      continue;
+    }
+    let s = i;
+    while i < n && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+      i += 1;
+    }
+    let mut k = i;
+    while k < n && bytes[k].is_ascii_whitespace() {
+      k += 1;
+    }
+    if k < n && bytes[k] == b'(' {
+      out.insert(body[s..i].to_string());
+    }
+  }
+  out
+}
+
+fn is_keyword(s: &str) -> bool {
+  matches!(
+    s.to_ascii_uppercase().as_str(),
+    "IF" | "WHILE" | "FOR" | "CASE" | "WHEN" | "RETURN" | "RAISE" | "SELECT" | "VALUES"
+      | "INSERT" | "UPDATE" | "DELETE" | "PERFORM" | "EXECUTE" | "DECLARE" | "BEGIN"
+      | "EXCEPTION" | "LOOP" | "EXIT" | "CONTINUE" | "ALL" | "ANY" | "OR" | "AND" | "NOT"
+      | "IN" | "NULLIF" | "COALESCE" | "GREATEST" | "LEAST" | "CAST"
+  )
 }
 
 /// Locate a CREATE FUNCTION / CREATE TRIGGER / CREATE INDEX defining
