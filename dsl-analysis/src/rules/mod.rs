@@ -129,7 +129,13 @@ pub mod savepoint_outside_tx;
 pub mod truncate_in_trigger;
 pub mod varchar_length;
 pub mod date_literal_format;
+pub mod alter_column_type;
 pub mod comment_on_unknown;
+pub mod for_update_of_unknown;
+pub mod generated_uses_volatile;
+pub mod on_conflict_no_unique;
+pub mod truncate_with_fk;
+pub mod window_frame_reversed;
 pub mod drop_column_fk;
 pub mod fk_unknown_column;
 pub mod int_range;
@@ -288,5 +294,11 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(fk_unknown_column::Rule),
     Box::new(drop_column_fk::Rule),
     Box::new(comment_on_unknown::Rule),
+    Box::new(alter_column_type::Rule),
+    Box::new(on_conflict_no_unique::Rule),
+    Box::new(window_frame_reversed::Rule),
+    Box::new(for_update_of_unknown::Rule),
+    Box::new(generated_uses_volatile::Rule),
+    Box::new(truncate_with_fk::Rule),
   ]
 }
