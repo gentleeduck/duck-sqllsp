@@ -87,6 +87,7 @@ pub mod like_with_no_collation;
 pub mod limit_for_update_subq;
 pub mod like_without_wildcard;
 pub mod limit_without_order;
+pub mod limit_zero;
 pub mod listen_unbounded;
 pub mod literal_div_zero;
 pub mod lock_table_no_tx;
@@ -494,5 +495,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(table_inherits::Rule),
     Box::new(percentile_no_within::Rule),
     Box::new(grant_all_too_broad::Rule),
+    Box::new(limit_zero::Rule),
   ]
 }
