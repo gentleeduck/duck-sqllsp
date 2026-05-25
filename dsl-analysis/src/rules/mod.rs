@@ -80,6 +80,7 @@ pub mod limit_without_order;
 pub mod listen_unbounded;
 pub mod lock_table_no_tx;
 pub mod long_in_list;
+pub mod merge_missing_when;
 pub mod missing_lateral;
 pub mod missing_primary_key;
 pub mod missing_trigger_return;
@@ -198,6 +199,7 @@ pub mod window_frame_reversed;
 pub mod window_no_order;
 pub mod drop_cascade_chain;
 pub mod drop_column_fk;
+pub mod drop_function_no_args;
 pub mod drop_schema_no_cascade;
 pub mod fk_unknown_column;
 pub mod int_range;
@@ -430,5 +432,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(do_block_bare_select::Rule),
     Box::new(set_local_outside_tx::Rule),
     Box::new(set_role_in_function::Rule),
+    Box::new(drop_function_no_args::Rule),
+    Box::new(merge_missing_when::Rule),
   ]
 }
