@@ -46,6 +46,8 @@ pub mod group_by_position;
 pub mod group_by_required;
 pub mod immutable_calls_volatile;
 pub mod implicit_cross_join;
+pub mod index_concurrently_in_tx;
+pub mod index_expr_volatile;
 pub mod insert_col_value_count;
 pub mod insert_no_columns;
 pub mod insert_no_on_conflict;
@@ -93,6 +95,8 @@ pub mod redundant_unique_index;
 pub mod reindex_system;
 pub mod reserved_word_identifier;
 pub mod return_type_literal;
+pub mod rollback_outside_tx;
+pub mod rollup_cube_single;
 pub mod returning_no_assign;
 pub mod returning_with_truncate;
 pub mod row_constructor_single;
@@ -100,6 +104,7 @@ pub mod row_count_after_dml;
 pub mod savepoint_no_release;
 pub mod select_for_update_in_recursive_cte;
 pub mod select_for_update_no_where;
+pub mod select_into_existing;
 pub mod select_into_outside_plpgsql;
 pub mod select_into_shape;
 pub mod select_into_strict_no_exception;
@@ -332,5 +337,10 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(extract_unknown_field::Rule),
     Box::new(copy_file_path::Rule),
     Box::new(reindex_system::Rule),
+    Box::new(rollback_outside_tx::Rule),
+    Box::new(select_into_existing::Rule),
+    Box::new(index_expr_volatile::Rule),
+    Box::new(index_concurrently_in_tx::Rule),
+    Box::new(rollup_cube_single::Rule),
   ]
 }
