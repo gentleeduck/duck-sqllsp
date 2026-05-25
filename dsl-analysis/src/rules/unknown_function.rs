@@ -254,6 +254,11 @@ const PRECEDING_BLOCKLIST: &[&str] = &[
   "CASCADE", "RESTRICT", "USING", "WITH", "OF", "TO", "AS",
   "UNIQUE", "PRIMARY", "FOREIGN", "KEY", "CHECK",
   "BEFORE", "AFTER",
+  // PREPARE / EXECUTE-prepared / DEALLOCATE take a prepared-statement
+  // name, not a function name (`EXECUTE upd_pat(...)` invokes a
+  // PREPARE'd stmt). `EXECUTE FUNCTION fn()` is handled separately via
+  // the FUNCTION blocklist + two-word lookback.
+  "PREPARE", "EXECUTE", "DEALLOCATE",
 ];
 
 
