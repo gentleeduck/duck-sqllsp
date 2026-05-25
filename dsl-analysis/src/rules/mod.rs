@@ -68,6 +68,7 @@ pub mod immutable_calls_volatile;
 pub mod implicit_cross_join;
 pub mod index_concurrently_in_tx;
 pub mod index_expr_volatile;
+pub mod index_no_name;
 pub mod insert_col_value_count;
 pub mod insert_no_columns;
 pub mod insert_no_on_conflict;
@@ -134,6 +135,7 @@ pub mod rollback_outside_tx;
 pub mod rollup_cube_single;
 pub mod returning_no_assign;
 pub mod returning_with_truncate;
+pub mod revoke_cascade;
 pub mod row_constructor_single;
 pub mod row_count_after_dml;
 pub mod savepoint_name_reuse;
@@ -484,5 +486,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(tg_var_in_non_trigger::Rule),
     Box::new(drop_role_no_reassign::Rule),
     Box::new(alter_type_label_unknown::Rule),
+    Box::new(revoke_cascade::Rule),
+    Box::new(index_no_name::Rule),
   ]
 }
