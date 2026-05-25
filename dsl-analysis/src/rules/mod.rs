@@ -35,6 +35,7 @@ pub mod count_one_vs_star;
 pub mod count_star_returns_one;
 pub mod cte_dml_no_returning;
 pub mod cte_missing_recursive;
+pub mod current_setting_no_missing_ok;
 pub mod ddl_in_immutable;
 pub mod deep_case_nesting;
 pub mod delete_no_where_in_fn;
@@ -42,6 +43,7 @@ pub mod deprecated_function;
 pub mod distinct_after_group_by;
 pub mod distinct_on_no_order;
 pub mod distinct_with_aggregate;
+pub mod do_block_bare_select;
 pub mod empty_comment;
 pub mod empty_in_list;
 pub mod exit_outside_loop;
@@ -191,6 +193,7 @@ pub mod on_conflict_do_nothing;
 pub mod on_conflict_no_unique;
 pub mod truncate_with_fk;
 pub mod window_frame_reversed;
+pub mod window_no_order;
 pub mod drop_cascade_chain;
 pub mod drop_column_fk;
 pub mod drop_schema_no_cascade;
@@ -420,5 +423,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(order_by_in_subquery::Rule),
     Box::new(not_in_nullable::Rule),
     Box::new(alter_set_tablespace::Rule),
+    Box::new(window_no_order::Rule),
+    Box::new(current_setting_no_missing_ok::Rule),
+    Box::new(do_block_bare_select::Rule),
   ]
 }
