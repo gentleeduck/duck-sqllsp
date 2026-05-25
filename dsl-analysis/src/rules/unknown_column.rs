@@ -136,6 +136,12 @@ fn column_exists(scope: &Scope, catalog: &Catalog, qualifier: Option<&str>, name
     return false;
   }
   // Unqualified column: check catalog tables in scope and CTE columns.
+  // Also accept when `name` matches a binding's alias / name -- function
+  // call FROM sources (`generate_series(...) AS number`) and subquery
+  // aliases bind under that name and their "column" IS the alias.
+  if scope.get(name).is_some() {
+    return true;
+  }
   for b in scope.tables() {
     if let Some(t) = catalog.find_table(b.table.schema.as_deref(), &b.table.name) {
       if t.columns.iter().any(|c| c.name == name) {
