@@ -1242,6 +1242,16 @@ pub fn build() -> HashMap<&'static str, Entry> {
   f!("pg_xact_status",     "pg_xact_status(xid8) -> text",  "Status of a transaction: committed / in progress / aborted.", "SELECT pg_xact_status(pg_current_xact_id());", pg("functions-info.html"));
 
   // ---- Comparison / NULL counting ----
+  // uuid-ossp extension fns (heavily used in real schemas).
+  f!("uuid_generate_v4", "uuid_generate_v4() -> uuid",      "Random UUID (v4). Requires the uuid-ossp extension.", "SELECT uuid_generate_v4();", pg("uuid-ossp.html"));
+  f!("uuid_generate_v1", "uuid_generate_v1() -> uuid",      "MAC-address + timestamp UUID (v1).",                  "SELECT uuid_generate_v1();", pg("uuid-ossp.html"));
+  f!("uuid_generate_v3", "uuid_generate_v3(namespace uuid, name text) -> uuid", "Name-based UUID (v3) using MD5.", "SELECT uuid_generate_v3(uuid_ns_dns(), 'example.com');", pg("uuid-ossp.html"));
+  f!("uuid_generate_v5", "uuid_generate_v5(namespace uuid, name text) -> uuid", "Name-based UUID (v5) using SHA-1.", "SELECT uuid_generate_v5(uuid_ns_dns(), 'example.com');", pg("uuid-ossp.html"));
+  f!("uuid_nil",         "uuid_nil() -> uuid",              "All-zero UUID.",                                       "SELECT uuid_nil();", pg("uuid-ossp.html"));
+  f!("uuid_ns_dns",      "uuid_ns_dns() -> uuid",           "DNS namespace UUID.",                                  "SELECT uuid_ns_dns();", pg("uuid-ossp.html"));
+  f!("uuid_ns_url",      "uuid_ns_url() -> uuid",           "URL namespace UUID.",                                  "SELECT uuid_ns_url();", pg("uuid-ossp.html"));
+  f!("gen_random_uuid",  "gen_random_uuid() -> uuid",       "Random UUID (built-in on PG13+, no extension).",       "SELECT gen_random_uuid();", pg("functions-uuid.html"));
+
   // Common math + date helpers that were missing.
   f!("ceil",  "ceil(numeric) -> numeric",   "Round up to integer.",   "SELECT ceil(3.2);", pg("functions-math.html"));
   f!("div",   "div(y numeric, x numeric) -> numeric", "Integer quotient of y/x.", "SELECT div(10, 3);", pg("functions-math.html"));

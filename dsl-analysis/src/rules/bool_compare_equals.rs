@@ -26,6 +26,12 @@ impl LintRule for Rule {
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
+    // Skip SET statements: `SET param = true/false` is an assignment
+    // to a GUC parameter, not a boolean comparison.
+    let trimmed = body.trim_start().to_ascii_uppercase();
+    if trimmed.starts_with("SET ") || trimmed.starts_with("RESET ") || trimmed.starts_with("ALTER SYSTEM ") {
+      return;
+    }
     let bytes = body.as_bytes();
     let n = bytes.len();
     let needles: &[(&[u8], &str)] = &[
