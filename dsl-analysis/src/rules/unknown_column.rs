@@ -142,6 +142,15 @@ fn column_exists(scope: &Scope, catalog: &Catalog, qualifier: Option<&str>, name
   if scope.get(name).is_some() {
     return true;
   }
+  // Lenient when any in-scope binding is synthetic (function-call FROM
+  // `<func>`, subquery alias `<subq>`): we cannot enumerate the source's
+  // columns reliably, so an unqualified reference may legitimately
+  // resolve against it. Better silent than crying wolf.
+  for b in scope.tables() {
+    if b.table.schema.as_deref().map_or(false, |s| s.starts_with('<')) {
+      return true;
+    }
+  }
   for b in scope.tables() {
     if let Some(t) = catalog.find_table(b.table.schema.as_deref(), &b.table.name) {
       if t.columns.iter().any(|c| c.name == name) {

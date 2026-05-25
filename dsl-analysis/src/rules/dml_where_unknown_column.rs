@@ -27,7 +27,11 @@ impl LintRule for Rule {
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    // Strip line comments so `-- WHERE col` doesn't pollute the
+    // predicate walk (was matching `col` inside the comment text).
+    let cleaned = strip_line_comments(body);
+    let upper = cleaned.to_ascii_uppercase();
+    let body = cleaned.as_str();
     let Some(where_at) = upper.find(" WHERE ") else { return };
     let after = where_at + 7;
     let rest = &body[after..];
@@ -66,6 +70,29 @@ impl LintRule for Rule {
       return;
     }
   }
+}
+
+/// Replace `-- comment` runs with spaces so byte offsets stay 1:1.
+fn strip_line_comments(s: &str) -> String {
+  let mut out = String::with_capacity(s.len());
+  let bytes = s.as_bytes();
+  let n = bytes.len();
+  let mut i = 0usize;
+  while i < n {
+    if i + 1 < n && bytes[i] == b'-' && bytes[i + 1] == b'-' {
+      while i < n && bytes[i] != b'\n' {
+        out.push(' ');
+        i += 1;
+      }
+    } else if bytes[i].is_ascii() {
+      out.push(bytes[i] as char);
+      i += 1;
+    } else {
+      out.push(' ');
+      i += 1;
+    }
+  }
+  out
 }
 
 fn is_keyword(t: &str) -> bool {

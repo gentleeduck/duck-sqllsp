@@ -50,6 +50,13 @@ impl LintRule for Rule {
           }
           continue;
         },
+        b'-' if i + 1 < n && bytes[i + 1] == b'-' => {
+          // Line comment -- skip to end of line. Was matching WHERE
+          // inside `-- WHERE foo` and flagging the next real WHERE
+          // as a duplicate.
+          while i < n && bytes[i] != b'\n' { i += 1 }
+          continue;
+        },
         _ => {},
       }
       if depth == 0 && i + 5 <= n && &upper[i..i + 5] == "WHERE" {

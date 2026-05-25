@@ -44,6 +44,11 @@ fn find_word(haystack: &str, needle: &str) -> Option<usize> {
   if n.is_empty() { return None }
   let mut i = 0usize;
   while i + n.len() <= h.len() {
+    // Skip `-- comment` runs so we don't match the col name inside one.
+    if i + 1 < h.len() && h[i] == b'-' && h[i + 1] == b'-' {
+      while i < h.len() && h[i] != b'\n' { i += 1 }
+      continue;
+    }
     if h[i..i + n.len()].eq_ignore_ascii_case(n) {
       let prev_ok = i == 0 || !is_word(h[i - 1] as char);
       let next_ok = i + n.len() == h.len() || !is_word(h[i + n.len()] as char);

@@ -223,16 +223,26 @@ fn collect_tables(kind: &StatementKind) -> Vec<TableRef> {
   match kind {
     StatementKind::Select(s) => {
       for t in &s.from {
+        if is_synthetic(t) { continue }
         out.push(t.clone());
       }
       for j in &s.joins {
+        if is_synthetic(&j.table) { continue }
         out.push(j.table.clone());
       }
     },
-    StatementKind::Update(u) => out.push(u.table.clone()),
-    StatementKind::Delete(d) => out.push(d.table.clone()),
-    StatementKind::Insert(i) => out.push(i.table.clone()),
+    StatementKind::Update(u) => { if !is_synthetic(&u.table) { out.push(u.table.clone()); } },
+    StatementKind::Delete(d) => { if !is_synthetic(&d.table) { out.push(d.table.clone()); } },
+    StatementKind::Insert(i) => { if !is_synthetic(&i.table) { out.push(i.table.clone()); } },
     _ => {},
   }
   out
+}
+
+/// Sentinel-schema markers set by the parser backends to flag bindings
+/// that are not real catalog tables: function-call FROM (`<func>`),
+/// subquery alias (`<subq>`), and CTE refs. sql001 / sql002 / sql349 /
+/// etc. should skip catalog lookups for these.
+fn is_synthetic(t: &TableRef) -> bool {
+  t.schema.as_deref().map_or(false, |s| s.starts_with('<'))
 }

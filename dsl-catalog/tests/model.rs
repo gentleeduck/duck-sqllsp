@@ -16,7 +16,8 @@ fn sample() -> Catalog {
           nullable: false,
           default: Some("gen_random_uuid()".into()),
           comment: None,
-    row_estimate: None,
+          generated: None,
+          json_keys: None,
         }],
         constraints: vec![],
         indexes: vec![],
@@ -40,7 +41,6 @@ fn sample() -> Catalog {
       cycle: false,
       owned_by_column: Some("public.users.id".into()),
       comment: None,
-    row_estimate: None,
     }],
     extensions: vec![Extension {
       name: "pgcrypto".into(),

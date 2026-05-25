@@ -72,6 +72,17 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
   // (INSERT VALUES / UPDATE SET / WHERE col = ...).
   let pos: usize = u32::from(offset) as usize;
   if inside_string_or_comment(source, pos) {
+    // Specific-card paths must run BEFORE the generic string-literal
+    // fallback. A cursor inside `'user_id_seq'` of `nextval(...)` wants
+    // the sequence card, not "text/string literal"; same for an arg
+    // inside `coalesce(name, 'fallback')` -- the function-arg card
+    // beats the generic literal card.
+    if let Some(md) = sequence_ref_at(source, offset) {
+      return Some(md);
+    }
+    if let Some(md) = function_arg_at(source, offset) {
+      return Some(md);
+    }
     if let Some(card) = string_literal_hover(source, pos, catalog) {
       return Some(card);
     }

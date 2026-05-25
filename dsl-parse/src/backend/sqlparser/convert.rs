@@ -125,16 +125,13 @@ fn table_factor(tf: &sp::TableFactor) -> TableRef {
     // `SELECT * FROM generate_series(1, 10) AS number` and friends.
     // The function call IS the table source; we use its return alias
     // (e.g. `number`) as the binding name so the resolver puts it in
-    // scope. Without this the alias is invisible and any reference
-    // to `number` looks like an unresolved identifier.
-    sp::TableFactor::Function { name, alias, .. } => {
-      let (schema, fn_name) = split_object_name(name);
+    // scope. Sentinel schema `<func>` marks this binding as synthetic
+    // so sql001 / sql002 don't try to look it up in the live catalog.
+    sp::TableFactor::Function { alias, .. } => {
       let alias_str = alias.as_ref().map(|a| a.name.value.clone());
       TableRef {
-        schema,
-        // Use the alias when present so the binding key matches the
-        // user's column reference; fall back to the function name.
-        name: alias_str.clone().unwrap_or(fn_name),
+        schema: Some("<func>".into()),
+        name: alias_str.clone().unwrap_or_default(),
         alias: alias_str,
         range: TextRange::default(),
       }
@@ -142,7 +139,7 @@ fn table_factor(tf: &sp::TableFactor) -> TableRef {
     sp::TableFactor::TableFunction { alias, .. } | sp::TableFactor::UNNEST { alias, .. } => {
       let alias_str = alias.as_ref().map(|a| a.name.value.clone());
       TableRef {
-        schema: None,
+        schema: Some("<func>".into()),
         name: alias_str.clone().unwrap_or_default(),
         alias: alias_str,
         range: TextRange::default(),
@@ -151,7 +148,7 @@ fn table_factor(tf: &sp::TableFactor) -> TableRef {
     sp::TableFactor::Derived { alias, .. } => {
       let alias_str = alias.as_ref().map(|a| a.name.value.clone());
       TableRef {
-        schema: None,
+        schema: Some("<subq>".into()),
         name: alias_str.clone().unwrap_or_default(),
         alias: alias_str,
         range: TextRange::default(),
