@@ -228,6 +228,60 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
     }
   }
 
+  // Alias -> table chip on every FROM/JOIN binding that has a
+  // user-typed alias (alias != table name). `FROM users u` adds a
+  // ` -> users` chip after the `u` token.
+  for stmt in &parsed.statements {
+    let StatementKind::Select(sel) = &stmt.kind else { continue };
+    let s: u32 = stmt.range.start().into();
+    let e: u32 = stmt.range.end().into();
+    let body = &doc.text[(s as usize).min(doc.text.len())..(e as usize).min(doc.text.len())];
+    let upper = body.to_ascii_uppercase();
+    for src in sel.from.iter().chain(sel.joins.iter().map(|j| &j.table)) {
+      let Some(alias) = &src.alias else { continue };
+      if alias.eq_ignore_ascii_case(&src.name) { continue }
+      let name_up = src.name.to_ascii_uppercase();
+      let mut from = 0usize;
+      while let Some(rel) = upper[from..].find(&name_up) {
+        let at = from + rel;
+        let after = at + name_up.len();
+        if at > 0 {
+          let prev = body.as_bytes()[at - 1] as char;
+          if prev.is_ascii_alphanumeric() || prev == '_' { from = after; continue }
+        }
+        if after < body.len() {
+          let nx = body.as_bytes()[after] as char;
+          if nx.is_ascii_alphanumeric() || nx == '_' { from = after; continue }
+        }
+        let mut k = after;
+        while k < body.len() && body.as_bytes()[k].is_ascii_whitespace() { k += 1 }
+        let kupper = upper[k..].to_string();
+        if kupper.starts_with("AS ") || kupper.starts_with("AS\t") || kupper.starts_with("AS\n") {
+          k += 2;
+          while k < body.len() && body.as_bytes()[k].is_ascii_whitespace() { k += 1 }
+        }
+        let alias_start = k;
+        while k < body.len() && (body.as_bytes()[k].is_ascii_alphanumeric() || body.as_bytes()[k] == b'_') { k += 1 }
+        if k == alias_start { from = after; continue }
+        let typed_alias = &body[alias_start..k];
+        if !typed_alias.eq_ignore_ascii_case(alias) { from = after; continue }
+        let abs_after_alias = s as usize + k;
+        let pos = byte_to_position(&doc.rope, abs_after_alias);
+        hints.push(InlayHint {
+          position: pos,
+          label: InlayHintLabel::String(format!(" -> {}", src.name)),
+          kind: Some(InlayHintKind::TYPE),
+          text_edits: None,
+          tooltip: None,
+          padding_left: Some(false),
+          padding_right: Some(false),
+          data: None,
+        });
+        break;
+      }
+    }
+  }
+
   // INSERT VALUES row-count -- after the closing `)` of the last
   // tuple, append ` -- 3 rows` (skipped when only one tuple).
   for stmt in &parsed.statements {
