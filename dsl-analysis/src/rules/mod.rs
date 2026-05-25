@@ -137,6 +137,7 @@ pub mod order_by_position;
 pub mod order_by_random;
 pub mod oracle_connect_by;
 pub mod oracle_dual;
+pub mod oracle_outer_join;
 pub mod oracle_rownum;
 pub mod owner_to_unknown_role;
 pub mod percentile_no_within;
@@ -562,5 +563,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(oracle_dual::Rule),
     Box::new(oracle_rownum::Rule),
     Box::new(oracle_connect_by::Rule),
+    Box::new(oracle_outer_join::Rule),
   ]
 }
