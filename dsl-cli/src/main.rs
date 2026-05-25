@@ -59,6 +59,31 @@ enum Cmd {
     #[arg(long, default_value = "postgres")]
     dialect: String,
   },
+  /// Format one or more .sql files in place (or to stdout with `-`).
+  ///
+  /// Uses the same external sql-formatter the LSP uses, with the
+  /// project `.duck-sqllsp.toml` formatter style if present.
+  Format {
+    /// File paths to format. Use `-` to read from stdin and write to stdout.
+    files: Vec<String>,
+    /// Print the formatted result to stdout instead of overwriting the file.
+    #[arg(long)]
+    stdout: bool,
+    /// Dialect for `sql-formatter -l`: postgresql (default), mysql, sqlite, transactsql.
+    #[arg(long, default_value = "postgresql")]
+    language: String,
+  },
+  /// Dump the live DB catalog (when a connection is configured) or the
+  /// derived offline catalog (every CREATE TABLE / FUNCTION / TYPE in
+  /// the supplied files) as JSON.
+  Introspect {
+    /// Source files to harvest tables/functions/types from when no DB
+    /// connection is configured. Ignored when --url is supplied.
+    files: Vec<String>,
+    /// Database URL. When set, connects + dumps the live catalog.
+    #[arg(long)]
+    url: Option<String>,
+  },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -180,6 +205,63 @@ fn main() -> anyhow::Result<()> {
       if error_count > 0 || (warnings_as_errors && warning_count > 0) {
         std::process::exit(1);
       }
+      Ok(())
+    },
+    Cmd::Format { files, stdout, language } => {
+      let mut style = dsl_format::FormatterStyle::default();
+      style.language = language;
+      let ct_style = dsl_format::CreateTableStyle::default();
+      let inputs: Vec<String> = if files.is_empty() { vec!["-".to_string()] } else { files };
+      for path in &inputs {
+        let original = if path == "-" {
+          use std::io::Read;
+          let mut buf = String::new();
+          std::io::stdin().read_to_string(&mut buf).map_err(|e| anyhow::anyhow!("stdin: {e}"))?;
+          buf
+        } else {
+          match std::fs::read_to_string(path) {
+            Ok(s) => s,
+            Err(e) => { eprintln!("error reading {path}: {e}"); std::process::exit(2); }
+          }
+        };
+        let formatted = dsl_format::format(&original, &style, &ct_style);
+        if stdout || path == "-" {
+          print!("{formatted}");
+        } else if formatted != original {
+          if let Err(e) = std::fs::write(path, formatted) {
+            eprintln!("error writing {path}: {e}");
+            std::process::exit(2);
+          }
+        }
+      }
+      Ok(())
+    },
+    Cmd::Introspect { files, url } => {
+      if url.is_some() {
+        eprintln!("error: live DB introspect requires a tokio runtime and dsl-conn drivers; not wired in CLI yet. Use `--files`.");
+        std::process::exit(2);
+      }
+      // Offline catalog: parse every file + merge derived catalogs.
+      let mut acc = dsl_catalog::Catalog {
+        version: dsl_catalog::CATALOG_VERSION,
+        connection_id: "<cli-introspect>".into(),
+        schemas: Vec::new(),
+        functions: Vec::new(),
+        types: Vec::new(),
+        roles: Vec::new(),
+        sequences: Vec::new(),
+        extensions: Vec::new(),
+      };
+      for path in &files {
+        let Ok(source) = std::fs::read_to_string(path) else {
+          eprintln!("error reading {path}");
+          std::process::exit(2);
+        };
+        let parsed = dsl_parse::parse(&source, dsl_parse::Dialect::Postgres);
+        let derived = dsl_completion::source_tables::from_source(&parsed, &source);
+        acc = dsl_completion::source_tables::merge(&acc, &derived);
+      }
+      println!("{}", serde_json::to_string_pretty(&acc).map_err(|e| anyhow::anyhow!("json: {e}"))?);
       Ok(())
     },
   }

@@ -23,6 +23,9 @@ dsl-analysis       = { workspace = true }
 dsl-parse          = { workspace = true }
 dsl-resolve        = { workspace = true }
 dsl-completion     = { workspace = true }
+dsl-format         = { workspace = true }
+dsl-catalog        = { workspace = true }
+serde_json         = { workspace = true }
 clap               = { workspace = true }
 tokio              = { workspace = true }
 tower-lsp          = { workspace = true }
