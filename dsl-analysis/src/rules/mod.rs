@@ -50,6 +50,7 @@ pub mod distinct_on_no_order;
 pub mod distinct_on_subq_no_order;
 pub mod distinct_with_aggregate;
 pub mod do_block_bare_select;
+pub mod empty_array_no_cast;
 pub mod empty_comment;
 pub mod empty_in_list;
 pub mod exit_outside_loop;
@@ -516,5 +517,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(select_trailing_comma::Rule),
     Box::new(copy_program_exec::Rule),
     Box::new(drop_table_no_if_exists::Rule),
+    Box::new(empty_array_no_cast::Rule),
   ]
 }
