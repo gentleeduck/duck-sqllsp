@@ -70,11 +70,25 @@ fn to_lsp_item(it: Item, style: &Style) -> CompletionItem {
   // documentation so users can see the final scaffold (with $1 / $0
   // placeholders cleaned out) before they pick it.
   let documentation = build_documentation(&it.documentation_md, it.is_snippet, &it.insert_text);
+  // For snippet items, also surface a one-line preview right next to
+  // the label via `label_details.detail` so the user sees the
+  // rendered expansion in the menu without opening the doc panel.
+  let label_details = if it.is_snippet {
+    let mut preview = render_snippet_preview(&it.insert_text);
+    if let Some(first_nl) = preview.find('\n') {
+      preview.truncate(first_nl);
+    }
+    let preview = preview.trim().to_string();
+    let detail = if preview.is_empty() { None } else { Some(format!("  {preview}")) };
+    Some(CompletionItemLabelDetails { detail, description: it.description })
+  } else {
+    it.description.map(|d| CompletionItemLabelDetails { detail: None, description: Some(d) })
+  };
   CompletionItem {
     label,
     kind: Some(kind(it.kind)),
     detail: it.detail,
-    label_details: it.description.map(|d| CompletionItemLabelDetails { detail: None, description: Some(d) }),
+    label_details,
     documentation,
     insert_text: Some(insert),
     insert_text_format: if it.is_snippet { Some(InsertTextFormat::SNIPPET) } else { None },
