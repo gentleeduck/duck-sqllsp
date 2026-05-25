@@ -13,6 +13,7 @@ pub mod begin_no_lock_mode;
 pub mod between_reversed;
 pub mod bool_compare_equals;
 pub mod boolean_in_text_column;
+pub mod case_branch_types;
 pub mod case_no_else;
 pub mod case_single_when;
 pub mod cast_text_in_distinct;
@@ -150,6 +151,7 @@ pub mod cast_literal_invalid;
 pub mod comment_on_unknown;
 pub mod default_references_column;
 pub mod fk_target_not_unique;
+pub mod for_update_left_join;
 pub mod for_update_of_unknown;
 pub mod inline_check_other_col;
 pub mod lateral_no_ref;
@@ -165,6 +167,7 @@ pub mod uuid_literal_format;
 pub mod null_into_not_null;
 pub mod schema_drift;
 pub mod vacuum_in_transaction;
+pub mod values_row_width;
 pub mod where_type_literal;
 
 use crate::LintRule;
@@ -342,5 +345,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(index_expr_volatile::Rule),
     Box::new(index_concurrently_in_tx::Rule),
     Box::new(rollup_cube_single::Rule),
+    Box::new(values_row_width::Rule),
+    Box::new(for_update_left_join::Rule),
+    Box::new(case_branch_types::Rule),
   ]
 }
