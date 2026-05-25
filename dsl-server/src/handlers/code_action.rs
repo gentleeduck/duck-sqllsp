@@ -716,6 +716,9 @@ fn byte_to_pos(text: &str, byte: usize) -> Position {
 /// REFACTOR: wrap or unwrap the identifier under the requested range in
 /// double quotes. Useful for case-sensitive Postgres identifiers and for
 /// promoting a bare name to a quoted one when it collides with a keyword.
+///
+/// Identifier-only: skips numeric literals, SQL keywords, tokens inside
+/// string literals, and tokens inside line comments.
 fn quote_toggle_action(uri: &Url, range: &Range, text: &str, out: &mut Vec<CodeActionOrCommand>) {
   if range.start.line != range.end.line {
     return;
@@ -730,6 +733,15 @@ fn quote_toggle_action(uri: &Url, range: &Range, text: &str, out: &mut Vec<CodeA
   let start_col = range.start.character as usize;
   if start_col >= line.len() {
     return;
+  }
+
+  // Skip when cursor is inside a `'...'` string literal.
+  if inside_string_literal(line, start_col) {
+    return;
+  }
+  // Skip when cursor is past a `--` line comment.
+  if let Some(c) = line.find("--") {
+    if start_col >= c { return }
   }
 
   // Expand selection backwards/forwards to the surrounding token.
@@ -752,6 +764,16 @@ fn quote_toggle_action(uri: &Url, range: &Range, text: &str, out: &mut Vec<CodeA
     (false, s, e, line[s..e].to_string())
   };
   if inner.is_empty() {
+    return;
+  }
+  // Reject non-identifiers: must start with letter or underscore.
+  let first = inner.as_bytes()[0];
+  if !(first.is_ascii_alphabetic() || first == b'_') {
+    return;
+  }
+  // Reject SQL keywords -- wrapping them would change semantics.
+  let upper = inner.to_ascii_uppercase();
+  if !is_quoted && IDENT_KEYWORD_BLOCKLIST.contains(&upper.as_str()) {
     return;
   }
 
@@ -784,6 +806,64 @@ fn quote_toggle_action(uri: &Url, range: &Range, text: &str, out: &mut Vec<CodeA
 fn is_id_char(c: char) -> bool {
   c.is_alphanumeric() || c == '_'
 }
+
+/// True when byte offset `col` sits between a `'` and the next `'` on
+/// the same line. Counts apostrophes only outside `--` comments.
+fn inside_string_literal(line: &str, col: usize) -> bool {
+  let bytes = line.as_bytes();
+  let cap = col.min(bytes.len());
+  let mut in_str = false;
+  let mut i = 0usize;
+  while i < cap {
+    if i + 1 < bytes.len() && bytes[i] == b'-' && bytes[i + 1] == b'-' && !in_str {
+      return false;
+    }
+    if bytes[i] == b'\'' {
+      // Doubled apostrophe escape `''` inside a string stays inside.
+      if in_str && i + 1 < bytes.len() && bytes[i + 1] == b'\'' { i += 2; continue }
+      in_str = !in_str;
+    }
+    i += 1;
+  }
+  in_str
+}
+
+/// SQL keywords that must NEVER be wrapped in double quotes via the
+/// refactor action -- quoting them changes their meaning from "keyword"
+/// to "identifier", which silently breaks the statement. The action's
+/// purpose is to quote *user-defined* identifiers; keep this list
+/// generous so we err on the side of leaving keywords alone.
+const IDENT_KEYWORD_BLOCKLIST: &[&str] = &[
+  "SELECT", "FROM", "WHERE", "GROUP", "ORDER", "BY", "HAVING", "LIMIT",
+  "OFFSET", "FETCH", "INNER", "OUTER", "LEFT", "RIGHT", "FULL", "CROSS",
+  "JOIN", "ON", "USING", "AS", "AND", "OR", "NOT", "IS", "NULL", "TRUE",
+  "FALSE", "IN", "BETWEEN", "LIKE", "ILIKE", "SIMILAR", "EXISTS", "ANY",
+  "ALL", "SOME", "CASE", "WHEN", "THEN", "ELSE", "END", "DISTINCT",
+  "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE", "RETURNING",
+  "WITH", "RECURSIVE", "MERGE", "MATCHED", "UNION", "INTERSECT", "EXCEPT",
+  "CREATE", "ALTER", "DROP", "RENAME", "TRUNCATE", "TABLE", "VIEW",
+  "INDEX", "TRIGGER", "FUNCTION", "PROCEDURE", "TYPE", "DOMAIN", "SCHEMA",
+  "EXTENSION", "SEQUENCE", "ROLE", "USER", "DATABASE", "POLICY", "COLUMN",
+  "CONSTRAINT", "PRIMARY", "FOREIGN", "KEY", "UNIQUE", "CHECK",
+  "REFERENCES", "CASCADE", "RESTRICT", "DEFAULT", "DEFERRABLE",
+  "INITIALLY", "DEFERRED", "IMMEDIATE",
+  "BEFORE", "AFTER", "INSTEAD", "OF", "ROW", "EACH", "STATEMENT",
+  "EXECUTE", "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "RELEASE",
+  "DECLARE", "CURSOR", "OPEN", "CLOSE", "FETCH", "MOVE",
+  "GRANT", "REVOKE", "TO", "PUBLIC", "ANALYZE", "VACUUM", "REINDEX",
+  "EXPLAIN", "COPY", "LOCK", "LISTEN", "NOTIFY", "RAISE",
+  "IF", "ELSIF", "LOOP", "WHILE", "FOR", "FOREACH", "EXIT", "CONTINUE",
+  "RETURN", "PERFORM", "ASSERT", "GET", "DIAGNOSTICS",
+  "LANGUAGE", "STRICT", "IMMUTABLE", "STABLE", "VOLATILE", "PARALLEL",
+  "SECURITY", "DEFINER", "INVOKER", "COST", "ROWS", "WINDOW", "FILTER",
+  "OVER", "PARTITION", "PRECEDING", "FOLLOWING", "UNBOUNDED", "CURRENT",
+  "RANGE", "GROUPS", "NULLS", "FIRST", "LAST", "ASC", "DESC",
+  "INT", "INTEGER", "BIGINT", "SMALLINT", "NUMERIC", "DECIMAL", "REAL",
+  "FLOAT", "DOUBLE", "PRECISION", "BOOLEAN", "BOOL", "TEXT", "VARCHAR",
+  "CHAR", "CHARACTER", "VARYING", "UUID", "DATE", "TIME", "TIMESTAMP",
+  "TIMESTAMPTZ", "INTERVAL", "BYTEA", "JSON", "JSONB", "ARRAY", "SERIAL",
+  "BIGSERIAL", "SMALLSERIAL", "GENERATED", "ALWAYS", "IDENTITY",
+];
 
 fn code_str(c: &Option<NumberOrString>) -> Option<String> {
   match c {
