@@ -52,6 +52,7 @@ pub mod exit_outside_loop;
 pub mod exists_select_star;
 pub mod explain_analyze_in_dml;
 pub mod extension_no_if_not_exists;
+pub mod extract_on_indexable;
 pub mod extract_unknown_field;
 pub mod generate_series_no_alias;
 pub mod gin_on_scalar;
@@ -448,5 +449,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(jsonb_build_odd_args::Rule),
     Box::new(chained_comparison::Rule),
     Box::new(union_inner_order_by::Rule),
+    Box::new(extract_on_indexable::Rule),
   ]
 }
