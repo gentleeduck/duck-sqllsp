@@ -176,7 +176,28 @@ fn main() -> anyhow::Result<()> {
         };
         let parsed = dsl_parse::parse(&source, dialect);
         let scopes = dsl_resolve::resolve_with_source(&parsed.statements, &source);
-        let catalog = dsl_completion::source_tables::from_source(&parsed, &source);
+        let mut catalog = dsl_completion::source_tables::from_source(&parsed, &source);
+        // Enrich offline catalog with sibling *.sql files in the same
+        // directory so cross-file references (a trigger in
+        // triggers.sql calling a function in functions.sql) resolve.
+        if path != "-" {
+          if let Some(parent) = std::path::Path::new(path).parent() {
+            if let Ok(rd) = std::fs::read_dir(parent) {
+              for entry in rd.flatten() {
+                let p = entry.path();
+                if p.as_os_str() == std::ffi::OsStr::new(path) { continue }
+                let Some(ext) = p.extension().and_then(|s| s.to_str()) else { continue };
+                if !matches!(ext.to_ascii_lowercase().as_str(), "sql" | "pgsql" | "psql") { continue }
+                let Ok(meta) = std::fs::metadata(&p) else { continue };
+                if meta.len() > 4 * 1024 * 1024 { continue }
+                let Ok(text) = std::fs::read_to_string(&p) else { continue };
+                let other = dsl_parse::parse(&text, dialect);
+                let derived = dsl_completion::source_tables::from_source(&other, &text);
+                catalog = dsl_completion::source_tables::merge(&catalog, &derived);
+              }
+            }
+          }
+        }
         let diags = dsl_analysis::run_with_dialect(&source, &parsed, &scopes, &catalog, dialect);
         for d in &diags {
           let sev_str = match d.severity {
