@@ -19,6 +19,7 @@ pub mod between_reversed;
 pub mod bool_compare_equals;
 pub mod boolean_in_text_column;
 pub mod bool_agg_nullable;
+pub mod brin_small_table;
 pub mod case_branch_types;
 pub mod case_no_else;
 pub mod case_single_when;
@@ -168,6 +169,7 @@ pub mod raise_using_errcode;
 pub mod redundant_index_on_pk;
 pub mod redundant_parens;
 pub mod redundant_unique_index;
+pub mod rename_column_breaks_view;
 pub mod reindex_in_tx;
 pub mod reindex_system;
 pub mod reserved_word_identifier;
@@ -598,5 +600,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(bool_agg_nullable::Rule),
     Box::new(percentile_non_numeric_order::Rule),
     Box::new(order_by_using_noncomparable::Rule),
+    Box::new(rename_column_breaks_view::Rule),
+    Box::new(brin_small_table::Rule),
   ]
 }

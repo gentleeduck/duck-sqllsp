@@ -82,6 +82,12 @@ pub struct Table {
   pub policies: Vec<Policy>,
   #[serde(default)]
   pub comment: Option<String>,
+  /// Live planner row estimate (`pg_class.reltuples`). None when not
+  /// fetched (offline mode, MySQL/SQLite drivers, brand-new table that
+  /// hasn't been ANALYZEd). Used by code-lens row-count hint and the
+  /// BRIN-on-small-table diagnostic.
+  #[serde(default)]
+  pub row_estimate: Option<f64>,
 }
 
 /// Row-level security policy attached to a table. Mirrors `pg_policies`.

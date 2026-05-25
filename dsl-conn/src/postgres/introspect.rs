@@ -187,6 +187,18 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
 
   // Tables
   let table_rows: Vec<(String, String, String)> = sqlx::query_as(TABLES_SQL).fetch_all(pool).await.map_err(map_err)?;
+  // Row estimates from pg_class.reltuples. Falls back to None silently
+  // on permission denied; never breaks introspect.
+  let row_estimates: Vec<(String, String, f32)> = sqlx::query_as(
+    "SELECT n.nspname::text, c.relname::text, c.reltuples \
+     FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid \
+     WHERE c.relkind IN ('r', 'p', 'm') \
+       AND n.nspname NOT IN ('pg_catalog', 'information_schema')"
+  ).fetch_all(pool).await.unwrap_or_default();
+  let estimate_lookup: BTreeMap<(String, String), f64> = row_estimates
+    .into_iter()
+    .map(|(s, n, r)| ((s, n), r as f64))
+    .collect();
   // (schema, name) -> table index inside Catalog.schemas[s].tables[i].
   let mut table_index: BTreeMap<(String, String), (String, usize)> = BTreeMap::new();
   for (schema_name, table_name, table_type) in table_rows {
@@ -208,6 +220,7 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
       triggers: Vec::new(),
       policies: Vec::new(),
       comment: None,
+      row_estimate: estimate_lookup.get(&(schema_name.clone(), table_name.clone())).copied(),
     });
     table_index.insert((schema_name, table_name), (entry.name.clone(), idx));
   }

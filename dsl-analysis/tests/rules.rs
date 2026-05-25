@@ -24,6 +24,7 @@ fn cat() -> Catalog {
     triggers: vec![],
     policies: vec![],
     comment: None,
+    row_estimate: None,
   };
   let orders = Table {
     schema: "public".into(),
@@ -38,6 +39,7 @@ fn cat() -> Catalog {
     triggers: vec![],
     policies: vec![],
     comment: None,
+    row_estimate: None,
   };
   let flags = Table {
     schema: "public".into(),
@@ -52,6 +54,7 @@ fn cat() -> Catalog {
     triggers: vec![],
     policies: vec![],
     comment: None,
+    row_estimate: None,
   };
   Catalog {
     version: CATALOG_VERSION,
@@ -3893,4 +3896,51 @@ fn sql344_quiet_when_unknown_column_type() {
   let d = diags("SELECT 1 FROM users ORDER BY name USING <;");
   // users.name is text → not in problematic family → quiet.
   assert!(!d.iter().any(|x| x.code == "sql344"));
+}
+
+// ===== sql345 RENAME COLUMN affects views =====
+
+#[test]
+fn sql345_flags_rename_referenced_by_view() {
+  let d = diags("CREATE VIEW v AS SELECT name FROM users;\nALTER TABLE users RENAME COLUMN name TO full_name;");
+  assert!(d.iter().any(|x| x.code == "sql345"));
+}
+
+#[test]
+fn sql345_quiet_when_no_view_uses_col() {
+  let d = diags("ALTER TABLE users RENAME COLUMN name TO full_name;");
+  assert!(!d.iter().any(|x| x.code == "sql345"));
+}
+
+// ===== sql346 BRIN on small table =====
+
+#[test]
+fn sql346_flags_brin_on_small_known_table() {
+  use dsl_analysis::run;
+  use dsl_resolve::resolve_with_source;
+  let mut c = cat();
+  // Mark users as a tiny table.
+  if let Some(t) = c.schemas[0].tables.iter_mut().find(|t| t.name == "users") {
+    t.row_estimate = Some(500.0);
+  }
+  let src = "CREATE INDEX idx_users_email ON users USING BRIN (email);";
+  let f = parse(src, Dialect::Postgres);
+  let s = resolve_with_source(&f.statements, src);
+  let d = run(src, &f, &s, &c);
+  assert!(d.iter().any(|x| x.code == "sql346"));
+}
+
+#[test]
+fn sql346_quiet_on_large_table() {
+  use dsl_analysis::run;
+  use dsl_resolve::resolve_with_source;
+  let mut c = cat();
+  if let Some(t) = c.schemas[0].tables.iter_mut().find(|t| t.name == "users") {
+    t.row_estimate = Some(500_000.0);
+  }
+  let src = "CREATE INDEX idx_users_email ON users USING BRIN (email);";
+  let f = parse(src, Dialect::Postgres);
+  let s = resolve_with_source(&f.statements, src);
+  let d = run(src, &f, &s, &c);
+  assert!(!d.iter().any(|x| x.code == "sql346"));
 }

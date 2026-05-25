@@ -44,6 +44,7 @@ pub async fn run(pool: &SqlitePool, spec: &ConnectionSpec) -> Result<Catalog, Dr
           triggers: Vec::new(),
           policies: Vec::new(),
           comment: None,
+          row_estimate: None,
         });
       },
       "trigger" => {

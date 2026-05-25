@@ -62,6 +62,7 @@ pub fn from_file(file: &ParsedFile) -> Catalog {
       // Real COMMENT ON TABLE statements get picked up in
       // scan_table_comments() below when present.
       comment: None,
+      row_estimate: None,
     };
     if schema_name == "public" {
       public.tables.push(table);

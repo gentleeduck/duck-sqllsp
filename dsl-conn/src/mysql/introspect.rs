@@ -57,6 +57,7 @@ pub async fn run(pool: &MySqlPool, spec: &ConnectionSpec) -> Result<Catalog, Dri
         triggers: Vec::new(),
         policies: Vec::new(),
         comment: None,
+        row_estimate: None,
       },
     );
   }
