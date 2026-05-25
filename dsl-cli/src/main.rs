@@ -33,6 +33,8 @@ enum Cmd {
   },
   /// Print version and capability info.
   Version,
+  /// List every registered lint rule (code + default severity).
+  Rules,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -55,6 +57,23 @@ fn main() -> anyhow::Result<()> {
     Cmd::Server { .. } => server::run(),
     Cmd::Version => {
       println!("duck-sqllsp {}", env!("CARGO_PKG_VERSION"));
+      Ok(())
+    },
+    Cmd::Rules => {
+      let mut rules: Vec<(String, &'static str)> = dsl_analysis::rules::all()
+        .into_iter()
+        .map(|r| (r.code().to_string(), match r.default_severity() {
+          dsl_analysis::Severity::Error => "error",
+          dsl_analysis::Severity::Warning => "warning",
+          dsl_analysis::Severity::Info => "info",
+          dsl_analysis::Severity::Hint => "hint",
+        }))
+        .collect();
+      rules.sort_by(|a, b| a.0.cmp(&b.0));
+      println!("{:6}  {:8}", "code", "severity");
+      for (code, sev) in rules {
+        println!("{:6}  {:8}", code, sev);
+      }
       Ok(())
     },
   }
