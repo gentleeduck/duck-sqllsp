@@ -135,6 +135,8 @@ pub mod select_into_strict_no_exception;
 pub mod select_no_from_no_agg;
 pub mod select_star_insert;
 pub mod set_constraints_outside_tx;
+pub mod set_local_outside_tx;
+pub mod set_role_in_function;
 pub mod set_role_no_reset;
 pub mod shell_command_in_sql;
 pub mod single_stmt_transaction;
@@ -426,5 +428,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(window_no_order::Rule),
     Box::new(current_setting_no_missing_ok::Rule),
     Box::new(do_block_bare_select::Rule),
+    Box::new(set_local_outside_tx::Rule),
+    Box::new(set_role_in_function::Rule),
   ]
 }
