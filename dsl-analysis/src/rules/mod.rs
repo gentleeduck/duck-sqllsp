@@ -140,6 +140,7 @@ pub mod select_for_update_in_recursive_cte;
 pub mod select_for_update_no_where;
 pub mod select_into_existing;
 pub mod select_into_outside_plpgsql;
+pub mod select_into_temp_shadows;
 pub mod select_into_shape;
 pub mod select_into_strict_no_exception;
 pub mod select_no_from_no_agg;
@@ -458,5 +459,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(cursor_with_hold_no_tx::Rule),
     Box::new(gist_on_scalar::Rule),
     Box::new(check_always_false::Rule),
+    Box::new(select_into_temp_shadows::Rule),
   ]
 }
