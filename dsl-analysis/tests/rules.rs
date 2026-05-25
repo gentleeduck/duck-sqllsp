@@ -3809,3 +3809,17 @@ fn sql336_quiet_with_e_prefix() {
   let d = diags("INSERT INTO blobs(b) VALUES (E'\\xDEADBEEF');");
   assert!(!d.iter().any(|x| x.code == "sql336"));
 }
+
+// ===== sql337 GROUP BY alias =====
+
+#[test]
+fn sql337_flags_group_by_alias() {
+  let d = diags("SELECT extract(year FROM created_at) AS yr FROM users GROUP BY yr;");
+  assert!(d.iter().any(|x| x.code == "sql337"));
+}
+
+#[test]
+fn sql337_quiet_group_by_expr() {
+  let d = diags("SELECT extract(year FROM created_at) AS yr FROM users GROUP BY extract(year FROM created_at);");
+  assert!(!d.iter().any(|x| x.code == "sql337"));
+}

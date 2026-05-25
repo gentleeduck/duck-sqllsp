@@ -134,6 +134,7 @@ pub mod nulls_first_last_no_order;
 pub mod now_default_on_timestamp;
 pub mod nullif_same_args;
 pub mod nullif_type_mismatch;
+pub mod group_by_alias;
 pub mod numeric_no_precision;
 pub mod on_update_cascade_pk;
 pub mod order_by_in_subquery;
@@ -582,5 +583,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(setseed_no_determinism_guard::Rule),
     Box::new(tablespace_specified::Rule),
     Box::new(bytea_literal_no_escape::Rule),
+    Box::new(group_by_alias::Rule),
   ]
 }
