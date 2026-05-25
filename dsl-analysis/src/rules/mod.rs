@@ -36,6 +36,7 @@ pub mod copy_header_no_csv;
 pub mod copy_no_format;
 pub mod copy_program_exec;
 pub mod count_one_vs_star;
+pub mod bytea_literal_no_escape;
 pub mod create_table_no_schema;
 pub mod drop_index_concurrently_in_tx;
 pub mod count_star_returns_one;
@@ -134,6 +135,7 @@ pub mod now_default_on_timestamp;
 pub mod nullif_same_args;
 pub mod nullif_type_mismatch;
 pub mod numeric_no_precision;
+pub mod on_update_cascade_pk;
 pub mod order_by_in_subquery;
 pub mod order_by_position;
 pub mod order_by_random;
@@ -185,6 +187,7 @@ pub mod select_no_from_no_agg;
 pub mod select_star_insert;
 pub mod select_trailing_comma;
 pub mod set_constraints_outside_tx;
+pub mod setseed_no_determinism_guard;
 pub mod set_local_outside_tx;
 pub mod set_role_in_function;
 pub mod set_role_no_reset;
@@ -197,6 +200,7 @@ pub mod substring_from_no_for;
 pub mod sql_lang_uses_new_old;
 pub mod system_catalog_dml;
 pub mod table_inherits;
+pub mod tablespace_specified;
 pub mod text_int_arithmetic;
 pub mod tg_var_in_non_trigger;
 pub mod time_with_timezone;
@@ -574,5 +578,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(substring_from_no_for::Rule),
     Box::new(drop_index_concurrently_in_tx::Rule),
     Box::new(pg_terminate_backend::Rule),
+    Box::new(on_update_cascade_pk::Rule),
+    Box::new(setseed_no_determinism_guard::Rule),
+    Box::new(tablespace_specified::Rule),
+    Box::new(bytea_literal_no_escape::Rule),
   ]
 }

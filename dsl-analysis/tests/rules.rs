@@ -3759,3 +3759,53 @@ fn sql332_quiet_when_absent() {
   let d = diags("SELECT 1;");
   assert!(!d.iter().any(|x| x.code == "sql332"));
 }
+
+// ===== sql333 ON UPDATE CASCADE on PK =====
+
+#[test]
+fn sql333_flags_on_update_cascade_with_pk() {
+  let d = diags("CREATE TABLE t (id int PRIMARY KEY REFERENCES other(id) ON UPDATE CASCADE);");
+  assert!(d.iter().any(|x| x.code == "sql333"));
+}
+
+#[test]
+fn sql333_quiet_without_pk() {
+  let d = diags("CREATE TABLE t (parent_id int REFERENCES other(id) ON UPDATE CASCADE);");
+  assert!(!d.iter().any(|x| x.code == "sql333"));
+}
+
+// ===== sql334 setseed without guard =====
+
+#[test]
+fn sql334_flags_lone_setseed() {
+  let d = diags("SELECT setseed(0.5);");
+  assert!(d.iter().any(|x| x.code == "sql334"));
+}
+
+#[test]
+fn sql334_quiet_inside_begin() {
+  let d = diags("BEGIN;\nSELECT setseed(0.5);");
+  assert!(!d.iter().any(|x| x.code == "sql334"));
+}
+
+// ===== sql335 TABLESPACE clause =====
+
+#[test]
+fn sql335_flags_tablespace_clause() {
+  let d = diags("CREATE TABLE t (id int) TABLESPACE fast_ssd;");
+  assert!(d.iter().any(|x| x.code == "sql335"));
+}
+
+// ===== sql336 bytea hex literal needs E prefix =====
+
+#[test]
+fn sql336_flags_bare_hex_bytea() {
+  let d = diags("INSERT INTO blobs(b) VALUES ('\\xDEADBEEF');");
+  assert!(d.iter().any(|x| x.code == "sql336"));
+}
+
+#[test]
+fn sql336_quiet_with_e_prefix() {
+  let d = diags("INSERT INTO blobs(b) VALUES (E'\\xDEADBEEF');");
+  assert!(!d.iter().any(|x| x.code == "sql336"));
+}
