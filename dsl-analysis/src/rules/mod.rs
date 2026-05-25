@@ -135,6 +135,7 @@ pub mod numeric_no_precision;
 pub mod order_by_in_subquery;
 pub mod order_by_position;
 pub mod order_by_random;
+pub mod oracle_dual;
 pub mod owner_to_unknown_role;
 pub mod percentile_no_within;
 pub mod plpgsql_assign_type;
@@ -556,5 +557,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(non_pg_date_fns::Rule),
     Box::new(mssql_go::Rule),
     Box::new(mssql_begin_tran::Rule),
+    Box::new(oracle_dual::Rule),
   ]
 }
