@@ -16,6 +16,7 @@ pub mod ast;
 pub mod dialect;
 pub mod error;
 pub mod parsed_file;
+pub mod plpgsql;
 pub mod split;
 
 pub mod backend;

@@ -19,7 +19,7 @@ categories.workspace = true
 # pure-Rust fallback for environments without a C toolchain.
 default = ["pg_query_backend", "sqlparser"]
 sqlparser = ["dep:sqlparser"]
-pg_query_backend = ["dep:pg_query"]
+pg_query_backend = ["dep:pg_query", "dep:serde_json"]
 
 [dependencies]
 sqlparser = { workspace = true, optional = true }
@@ -27,3 +27,4 @@ pg_query = { workspace = true, optional = true }
 thiserror = { workspace = true }
 text-size = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
