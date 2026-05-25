@@ -27,7 +27,19 @@ impl LintRule for Rule {
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
     let Some(into_at) = upper.find(" INTO ") else { return };
-    // Reject INTO STRICT / INTO TEMP / INTO TEMPORARY -- those are assignment / temp-table; skip.
+    // Only fire when the INTO is owned by a SELECT, not an INSERT.
+    // For an Unknown stmt that wraps a CREATE FUNCTION body, we may
+    // see `INSERT INTO ...` inside the body -- those are normal
+    // INSERTs, not the DDL-form `SELECT * INTO foo`.
+    let prefix_upper = &upper[..into_at];
+    let last_select = prefix_upper.rfind("SELECT");
+    let last_insert = prefix_upper.rfind("INSERT");
+    let select_owns = match (last_select, last_insert) {
+      (Some(s), Some(i)) => s > i,
+      (Some(_), None) => true,
+      _ => false,
+    };
+    if !select_owns { return }
     let after = into_at + " INTO ".len();
     let rest = body[after..].trim_start();
     let upper_rest = rest.to_ascii_uppercase();

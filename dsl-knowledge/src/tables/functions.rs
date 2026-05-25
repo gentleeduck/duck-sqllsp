@@ -1241,5 +1241,23 @@ pub fn build() -> HashMap<&'static str, Entry> {
   f!("pg_current_xact_id", "pg_current_xact_id() -> xid8", "Current transaction's xid8 (read-write).", "SELECT pg_current_xact_id();", pg("functions-info.html"));
   f!("pg_xact_status",     "pg_xact_status(xid8) -> text",  "Status of a transaction: committed / in progress / aborted.", "SELECT pg_xact_status(pg_current_xact_id());", pg("functions-info.html"));
 
+  // ---- Comparison / NULL counting ----
+  f!("num_nonnulls", "num_nonnulls(VARIADIC \"any\") -> int", "Count of non-NULL arguments. Useful in CHECK constraints to require exactly one of N columns.", "CHECK (num_nonnulls(promo_id, voucher_id) = 1)", pg("functions-comparison.html#FUNCTIONS-COMPARISON-FUNC-TABLE"));
+  f!("num_nulls",    "num_nulls(VARIADIC \"any\") -> int",    "Count of NULL arguments. Inverse of num_nonnulls.",                                                                  "SELECT num_nulls(a, b, c);",                    pg("functions-comparison.html#FUNCTIONS-COMPARISON-FUNC-TABLE"));
+
+  // ---- Sequence helpers (commonly missing) ----
+  f!("nextval",  "nextval(regclass) -> bigint",   "Advance sequence and return next value.",   "SELECT nextval('users_id_seq');", pg("functions-sequence.html"));
+  f!("currval",  "currval(regclass) -> bigint",   "Last value returned by nextval in this session.", "SELECT currval('users_id_seq');", pg("functions-sequence.html"));
+  f!("setval",   "setval(regclass, bigint [, boolean]) -> bigint", "Set the sequence's current value.",        "SELECT setval('users_id_seq', 1000);", pg("functions-sequence.html"));
+  f!("lastval",  "lastval() -> bigint",           "Last value returned by nextval anywhere in the session, any sequence.", "SELECT lastval();", pg("functions-sequence.html"));
+
+  // ---- Range constructors ----
+  f!("int4range", "int4range(lower int, upper int [, bounds text]) -> int4range", "Construct an int4 range.",   "SELECT int4range(1, 10);", pg("rangetypes.html"));
+  f!("int8range", "int8range(lower bigint, upper bigint [, bounds text]) -> int8range", "Construct an int8 range.", "SELECT int8range(1, 10);", pg("rangetypes.html"));
+  f!("numrange",  "numrange(lower numeric, upper numeric [, bounds text]) -> numrange", "Construct a numeric range.", "SELECT numrange(0.5, 1.5);", pg("rangetypes.html"));
+  f!("tsrange",   "tsrange(lower timestamp, upper timestamp [, bounds text]) -> tsrange", "Construct a timestamp range.", "SELECT tsrange(now(), now() + interval '1 day');", pg("rangetypes.html"));
+  f!("tstzrange", "tstzrange(lower timestamptz, upper timestamptz [, bounds text]) -> tstzrange", "Construct a timestamptz range.", "SELECT tstzrange(now(), now() + interval '1 day');", pg("rangetypes.html"));
+  f!("daterange", "daterange(lower date, upper date [, bounds text]) -> daterange", "Construct a date range.", "SELECT daterange('2024-01-01', '2024-12-31');", pg("rangetypes.html"));
+
   m
 }

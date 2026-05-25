@@ -51,6 +51,11 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let known = build_known_set(source, catalog);
+    // Build a set of byte offsets that sit inside table/column/constraint
+    // definition syntax. Identifiers landing in those positions are
+    // not function calls -- `CREATE TABLE users (...)` and
+    // `REFERENCES users(id)` and `CONSTRAINT u UNIQUE (col)` all
+    // have `<ident>(` shapes that look like calls but aren't.
     let bytes = body.as_bytes();
     let mut i = 0usize;
     while i < bytes.len() {
@@ -95,6 +100,13 @@ impl LintRule for Rule {
       let bare = full.rsplit('.').next().unwrap_or(full);
       let upper = bare.to_ascii_uppercase();
       if KEYWORDS.contains(&upper.as_str()) { continue }
+      // Skip when the preceding token is a DDL keyword that introduces
+      // a name slot (CREATE TABLE foo, REFERENCES bar, INSERT INTO baz,
+      // ALTER TABLE, etc). These syntactically match the function-call
+      // shape `<ident>(` but aren't calls.
+      let prev_word = preceding_word(body, id_start);
+      let prev_upper = prev_word.to_ascii_uppercase();
+      if PRECEDING_BLOCKLIST.contains(&prev_upper.as_str()) { continue }
       // Type-cast-style: `INT(x)` etc. -- already caught by KEYWORDS.
       // Method-style: name followed by `(*)` is COUNT-only; allow it.
       // Lookup.
@@ -142,6 +154,32 @@ fn build_known_set(body: &str, catalog: &Catalog) -> HashSet<String> {
     }
   }
   set
+}
+
+/// Words that put the NEXT identifier into a name slot rather than a
+/// function-call position. `<word> <ident>(` is therefore a definition,
+/// reference, or DDL clause -- not a function call we should validate.
+const PRECEDING_BLOCKLIST: &[&str] = &[
+  "TABLE", "INDEX", "VIEW", "TYPE", "DOMAIN", "SCHEMA", "EXTENSION",
+  "TRIGGER", "POLICY", "SEQUENCE", "FUNCTION", "PROCEDURE", "ROLE", "USER",
+  "GROUP", "DATABASE", "TABLESPACE", "OPERATOR", "CLASS",
+  "ON", "REFERENCES", "INTO", "FROM", "JOIN", "UPDATE", "DELETE",
+  "ALTER", "DROP", "RENAME", "COLUMN", "CONSTRAINT", "EXISTS",
+  "CASCADE", "RESTRICT", "USING", "WITH", "OF", "TO", "AS",
+  "UNIQUE", "PRIMARY", "FOREIGN", "KEY", "CHECK",
+  "BEFORE", "AFTER",
+];
+
+/// Pull the word ending at byte `end` (exclusive). Skips whitespace,
+/// punctuation, dots. Returns "" when there's no word boundary.
+fn preceding_word(body: &str, end: usize) -> &str {
+  let bytes = body.as_bytes();
+  let mut i = end;
+  while i > 0 && bytes[i - 1].is_ascii_whitespace() { i -= 1 }
+  let word_end = i;
+  while i > 0 && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_') { i -= 1 }
+  if i == word_end { return "" }
+  &body[i..word_end]
 }
 
 fn find_dollar_close(body: &str, dollar_at: usize) -> Option<usize> {
