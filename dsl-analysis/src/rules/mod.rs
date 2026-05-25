@@ -179,6 +179,7 @@ pub mod text_int_arithmetic;
 pub mod tg_var_in_non_trigger;
 pub mod time_with_timezone;
 pub mod timestamp_int_arithmetic;
+pub mod timestamp_precision_over;
 pub mod timestamp_without_tz;
 pub mod trailing_comma_values;
 pub mod transaction_isolation_no_set;
@@ -526,5 +527,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(information_schema_perf::Rule),
     Box::new(in_list_duplicates::Rule),
     Box::new(update_delete_limit::Rule),
+    Box::new(timestamp_precision_over::Rule),
   ]
 }
