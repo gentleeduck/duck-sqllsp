@@ -24,6 +24,7 @@ pub mod cast_text_in_distinct;
 pub mod cast_text_to_int_in_where;
 pub mod char_length_vs_length;
 pub mod check_always_true;
+pub mod chained_comparison;
 pub mod char_n_type;
 pub mod coalesce_single_arg;
 pub mod character_varying_no_limit;
@@ -70,6 +71,7 @@ pub mod insert_subquery_col_count;
 pub mod insert_type_literal;
 pub mod is_distinct_null;
 pub mod join_no_on;
+pub mod jsonb_build_odd_args;
 pub mod jsonb_contains_no_cast;
 pub mod jsonb_no_cast;
 pub mod jsonb_set_no_create;
@@ -442,5 +444,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(distinct_on_subq_no_order::Rule),
     Box::new(system_catalog_dml::Rule),
     Box::new(now_default_on_timestamp::Rule),
+    Box::new(jsonb_build_odd_args::Rule),
+    Box::new(chained_comparison::Rule),
   ]
 }
