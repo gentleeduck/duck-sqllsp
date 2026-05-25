@@ -6,6 +6,7 @@ pub mod advisory_lock_no_unlock;
 pub mod alter_table_no_owner;
 pub mod alter_type_add_value_in_tx;
 pub mod ambiguous_column;
+pub mod any_all_multicol;
 pub mod array_subscript_zero;
 pub mod backslash_in_string;
 pub mod bare_return_typed;
@@ -28,6 +29,7 @@ pub mod copy_file_path;
 pub mod copy_no_format;
 pub mod count_one_vs_star;
 pub mod count_star_returns_one;
+pub mod cte_dml_no_returning;
 pub mod cte_missing_recursive;
 pub mod ddl_in_immutable;
 pub mod deep_case_nesting;
@@ -38,6 +40,7 @@ pub mod distinct_on_no_order;
 pub mod distinct_with_aggregate;
 pub mod empty_comment;
 pub mod exit_outside_loop;
+pub mod exists_select_star;
 pub mod explain_analyze_in_dml;
 pub mod extract_unknown_field;
 pub mod generate_series_no_alias;
@@ -364,5 +367,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(set_constraints_outside_tx::Rule),
     Box::new(comment_clears_existing::Rule),
     Box::new(drop_cascade_chain::Rule),
+    Box::new(exists_select_star::Rule),
+    Box::new(any_all_multicol::Rule),
+    Box::new(cte_dml_no_returning::Rule),
   ]
 }
