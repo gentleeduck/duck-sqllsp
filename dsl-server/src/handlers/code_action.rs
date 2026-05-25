@@ -27,6 +27,10 @@ pub fn run(state: &ServerState, params: CodeActionParams) -> Option<CodeActionRe
         "sql015" => sql015_action(&uri, diag, &doc.text, &mut actions),
         "sql001" => sql001_action(&uri, diag, state, &mut actions),
         "sql013" => sql013_action(&uri, diag, &doc.text, &mut actions),
+        "sql302" => sql302_action(&uri, diag, &doc.text, &mut actions),
+        "sql314" => sql314_action(&uri, diag, &doc.text, &mut actions),
+        "sql319" => sql319_action(&uri, diag, &doc.text, &mut actions),
+        "sql323" => sql323_action(&uri, diag, &doc.text, &mut actions),
         _ => {},
       }
     }
@@ -975,4 +979,119 @@ fn levenshtein(a: &str, b: &str) -> usize {
     std::mem::swap(&mut prev, &mut curr);
   }
   prev[n]
+}
+
+/// Quickfix for sql314 (AUTO_INCREMENT keyword) -- replace with
+/// `GENERATED ALWAYS AS IDENTITY`. Removes the offending span and
+/// substitutes the SQL-standard form.
+fn sql314_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeActionOrCommand>) {
+  let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+  changes.insert(
+    uri.clone(),
+    vec![TextEdit { range: diag.range, new_text: "GENERATED ALWAYS AS IDENTITY".into() }],
+  );
+  out.push(CodeActionOrCommand::CodeAction(CodeAction {
+    title: "Replace `AUTO_INCREMENT` with `GENERATED ALWAYS AS IDENTITY`".into(),
+    kind: Some(CodeActionKind::QUICKFIX),
+    diagnostics: Some(vec![diag.clone()]),
+    edit: Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None }),
+    is_preferred: Some(true),
+    ..Default::default()
+  }));
+  let _ = text;
+}
+
+/// Quickfix for sql319 (ISNULL/NVL/IFNULL) -- swap the function name
+/// for `COALESCE` keeping args verbatim. The diag range covers just
+/// the function name token (the original rule selects only the name),
+/// so the replacement is a simple TextEdit on that span.
+fn sql319_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeActionOrCommand>) {
+  let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+  changes.insert(
+    uri.clone(),
+    vec![TextEdit { range: diag.range, new_text: "COALESCE".into() }],
+  );
+  out.push(CodeActionOrCommand::CodeAction(CodeAction {
+    title: "Replace with `COALESCE` (SQL standard)".into(),
+    kind: Some(CodeActionKind::QUICKFIX),
+    diagnostics: Some(vec![diag.clone()]),
+    edit: Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None }),
+    is_preferred: Some(true),
+    ..Default::default()
+  }));
+  let _ = text;
+}
+
+/// Quickfix for sql302 (DROP without IF EXISTS) -- insert IF EXISTS
+/// right after the verb. Diagnostic range covers the whole DROP
+/// statement; find the verb keyword (TABLE/INDEX/...) and splice
+/// `IF EXISTS ` in front of the target name.
+fn sql302_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeActionOrCommand>) {
+  // Walk the diag range's start line; find DROP + verb.
+  let line_idx = diag.range.start.line as usize;
+  let lines: Vec<&str> = text.lines().collect();
+  if line_idx >= lines.len() { return }
+  let line = lines[line_idx];
+  let upper = line.to_ascii_uppercase();
+  let verbs = [
+    "DROP TABLE ", "DROP INDEX ", "DROP VIEW ", "DROP MATERIALIZED VIEW ",
+    "DROP TRIGGER ", "DROP TYPE ", "DROP DOMAIN ", "DROP SEQUENCE ",
+    "DROP FUNCTION ", "DROP PROCEDURE ", "DROP SCHEMA ",
+  ];
+  for v in verbs {
+    if let Some(at) = upper.find(v) {
+      let insert_at = at + v.len();
+      let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+      changes.insert(
+        uri.clone(),
+        vec![TextEdit {
+          range: Range {
+            start: Position { line: line_idx as u32, character: insert_at as u32 },
+            end: Position { line: line_idx as u32, character: insert_at as u32 },
+          },
+          new_text: "IF EXISTS ".into(),
+        }],
+      );
+      out.push(CodeActionOrCommand::CodeAction(CodeAction {
+        title: "Add `IF EXISTS` (idempotent migration)".into(),
+        kind: Some(CodeActionKind::QUICKFIX),
+        diagnostics: Some(vec![diag.clone()]),
+        edit: Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None }),
+        is_preferred: Some(true),
+        ..Default::default()
+      }));
+      return;
+    }
+  }
+}
+
+/// Quickfix for sql323 (FROM DUAL) -- drop the ` FROM DUAL` span.
+/// Diagnostic range covers just `DUAL`; we expand left to include the
+/// preceding ` FROM ` so the resulting SQL is `SELECT 1;` etc.
+fn sql323_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeActionOrCommand>) {
+  let line_idx = diag.range.start.line as usize;
+  let lines: Vec<&str> = text.lines().collect();
+  if line_idx >= lines.len() { return }
+  let line = lines[line_idx];
+  let upper = line.to_ascii_uppercase();
+  let Some(from_at) = upper.find(" FROM DUAL") else { return };
+  let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+  changes.insert(
+    uri.clone(),
+    vec![TextEdit {
+      range: Range {
+        start: Position { line: line_idx as u32, character: from_at as u32 },
+        end: Position { line: line_idx as u32, character: (from_at + " FROM DUAL".len()) as u32 },
+      },
+      new_text: String::new(),
+    }],
+  );
+  out.push(CodeActionOrCommand::CodeAction(CodeAction {
+    title: "Drop `FROM DUAL` (PG has no DUAL table)".into(),
+    kind: Some(CodeActionKind::QUICKFIX),
+    diagnostics: Some(vec![diag.clone()]),
+    edit: Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None }),
+    is_preferred: Some(true),
+    ..Default::default()
+  }));
 }
