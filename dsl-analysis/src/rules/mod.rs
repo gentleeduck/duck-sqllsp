@@ -86,6 +86,7 @@ pub mod limit_for_update_subq;
 pub mod like_without_wildcard;
 pub mod limit_without_order;
 pub mod listen_unbounded;
+pub mod literal_div_zero;
 pub mod lock_table_no_tx;
 pub mod long_in_list;
 pub mod merge_missing_when;
@@ -196,6 +197,8 @@ pub mod array_fn_on_scalar;
 pub mod array_mixed_types;
 pub mod cast_literal_invalid;
 pub mod comment_clears_existing;
+pub mod comment_constraint_no_on;
+pub mod comment_fn_no_args;
 pub mod comment_on_unknown;
 pub mod default_references_column;
 pub mod default_values_no_default_col;
@@ -464,5 +467,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(select_into_temp_shadows::Rule),
     Box::new(set_transaction_in_function::Rule),
     Box::new(mysql_interval_syntax::Rule),
+    Box::new(comment_fn_no_args::Rule),
+    Box::new(literal_div_zero::Rule),
+    Box::new(comment_constraint_no_on::Rule),
   ]
 }
