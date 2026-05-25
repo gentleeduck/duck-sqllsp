@@ -34,6 +34,7 @@ pub mod commit_in_function;
 pub mod copy_file_path;
 pub mod copy_header_no_csv;
 pub mod copy_no_format;
+pub mod copy_program_exec;
 pub mod count_one_vs_star;
 pub mod count_star_returns_one;
 pub mod cte_dml_no_returning;
@@ -512,5 +513,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(identifier_too_long::Rule),
     Box::new(pk_duplicate_col::Rule),
     Box::new(select_trailing_comma::Rule),
+    Box::new(copy_program_exec::Rule),
   ]
 }
