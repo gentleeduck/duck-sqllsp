@@ -50,3 +50,14 @@ Reference: `dsl-completion/src/phase.rs` (Phase enum + tokenise), `dsl-completio
 
 Completion path: `tokenise` walks back from cursor token stream and returns a `Phase` -- new phases need a new variant
 + tokenise arm + engine handler arm that emits the right items.
+
+## Status
+
+All boxes closed. Shipped 3 commits:
+1. `dsl-completion: contexts module` -- C1-C12 special-context completion (INDEX USING, opclass, TRIGGER event/on/exec fn, CALL, POLICY, ALTER COLUMN TYPE).
+2. `dsl-analysis: 4 unknown-identifier diagnostics` -- D1 sql348 unknown_function, D2 sql349 insert_unknown_column, D3 sql350 returning_unknown_column, D4/D5 sql351 dml_where_unknown_column.
+3. `dsl-server/refresh: silent on no-active-connection` -- removes "failed to connect" notification spam in offline-only workflows; downgrades driver/introspect errors from ERROR to WARNING so editors don't pop modals.
+
+Offline-mode (O1-O6) was already wired: `state.rescan_workspace_offline()` walks the workspace for *.sql files at initialize + on did_change_watched_files; completion / hover / inlay_hints / diagnostics / workspace_symbol / execute_command merge the workspace-derived catalog with live + buffer-derived. No code change needed; the user-reported gap was the spammy "no active connection" message which is now silent.
+
+Trigger function unknown (D6) is covered by D1 (sql348 catches any unknown function call, including the one in EXECUTE FUNCTION). sql002 audit (D7) confirmed coverage of WHERE/HAVING/ORDER BY/GROUP BY column refs inside SELECT via `collect_column_refs` walker.
