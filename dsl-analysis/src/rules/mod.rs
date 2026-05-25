@@ -126,12 +126,20 @@ pub mod for_update_on_view;
 pub mod is_null_on_not_null;
 pub mod insert_into_generated;
 pub mod savepoint_outside_tx;
+pub mod secdef_no_search_path;
+pub mod trigger_wrong_row_alias;
 pub mod truncate_in_trigger;
 pub mod varchar_length;
 pub mod date_literal_format;
 pub mod alter_column_type;
+pub mod array_fn_on_scalar;
+pub mod cast_literal_invalid;
 pub mod comment_on_unknown;
+pub mod default_references_column;
+pub mod fk_target_not_unique;
 pub mod for_update_of_unknown;
+pub mod inline_check_other_col;
+pub mod lateral_no_ref;
 pub mod generated_uses_volatile;
 pub mod on_conflict_no_unique;
 pub mod truncate_with_fk;
@@ -300,5 +308,13 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(for_update_of_unknown::Rule),
     Box::new(generated_uses_volatile::Rule),
     Box::new(truncate_with_fk::Rule),
+    Box::new(cast_literal_invalid::Rule),
+    Box::new(fk_target_not_unique::Rule),
+    Box::new(array_fn_on_scalar::Rule),
+    Box::new(inline_check_other_col::Rule),
+    Box::new(default_references_column::Rule),
+    Box::new(lateral_no_ref::Rule),
+    Box::new(secdef_no_search_path::Rule),
+    Box::new(trigger_wrong_row_alias::Rule),
   ]
 }
