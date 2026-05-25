@@ -17,7 +17,13 @@ pub async fn refresh_catalog(state: ServerState, client: Client) {
   let active = match cfg.active() {
     Some(a) => a.clone(),
     None => {
-      client.log_message(MessageType::INFO, "no active connection; catalog empty").await;
+      // Silent no-op when no connection is configured. Offline-mode
+      // catalog comes from the workspace .sql scan (see state.rs);
+      // showing a "no connection" message every time the user opens a
+      // .sql file is noise when they intentionally don't want DB
+      // introspection. To re-enable the message set duckSqllsp.config
+      // explicitly.
+      tracing::debug!("no active connection; catalog stays at workspace-derived");
       return;
     },
   };
@@ -39,8 +45,11 @@ pub async fn refresh_catalog(state: ServerState, client: Client) {
   let driver = match dsl_conn::build(&active) {
     Ok(d) => d,
     Err(e) => {
-      client.log_message(MessageType::ERROR, format!("driver build failed: {e}")).await;
-      end_progress(&client, &token, Some(format!("driver build failed: {e}"))).await;
+      // Downgrade to WARNING; offline catalog still serves completion
+      // and hover. Editors that surface ERROR as a popup were noisy on
+      // every save when the DB was unreachable.
+      client.log_message(MessageType::WARNING, format!("driver `{}` unavailable: {e}", active.name)).await;
+      end_progress(&client, &token, Some(format!("driver `{}` unavailable", active.name))).await;
       return;
     },
   };
@@ -76,8 +85,10 @@ pub async fn refresh_catalog(state: ServerState, client: Client) {
       }
     },
     Err(e) => {
-      client.log_message(MessageType::ERROR, format!("introspect failed: {e}")).await;
-      end_progress(&client, &token, Some(format!("introspect failed: {e}"))).await;
+      // WARNING (not ERROR) so editors don't pop a modal. The
+      // workspace-derived catalog still serves completion / hover.
+      client.log_message(MessageType::WARNING, format!("introspect on `{}` failed: {e}", active.name)).await;
+      end_progress(&client, &token, Some(format!("introspect on `{}` failed", active.name))).await;
     },
   }
 }
