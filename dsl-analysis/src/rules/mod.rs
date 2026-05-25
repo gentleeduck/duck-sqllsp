@@ -121,6 +121,9 @@ pub mod update_from_no_pk_filter;
 pub mod update_set_no_change;
 pub mod update_set_type_literal;
 pub mod update_set_unknown_col;
+pub mod count_nullable;
+pub mod for_update_on_view;
+pub mod schema_drift;
 pub mod vacuum_in_transaction;
 pub mod where_type_literal;
 
@@ -256,5 +259,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(plpgsql_assign_type::Rule),
     Box::new(update_set_type_literal::Rule),
     Box::new(where_type_literal::Rule),
+    Box::new(schema_drift::Rule),
+    Box::new(count_nullable::Rule),
+    Box::new(for_update_on_view::Rule),
   ]
 }

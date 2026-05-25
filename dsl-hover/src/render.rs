@@ -246,12 +246,61 @@ pub fn column(t: &Table, c: &Column) -> String {
     let wrapped = dsl_knowledge::wrap_paragraphs(d, 64);
     s.push_str(&format!("- **default:** `{wrapped}`\n"));
   }
+  // Mention every constraint on this column from its table.
+  let constraints_for_col: Vec<&Constraint> = t
+    .constraints
+    .iter()
+    .filter(|con| con.columns.iter().any(|cn| cn.eq_ignore_ascii_case(&c.name)))
+    .collect();
+  if !constraints_for_col.is_empty() {
+    s.push_str("- **constraints:**\n");
+    for con in constraints_for_col {
+      let kind = match con.kind {
+        ConstraintKind::PrimaryKey => "PRIMARY KEY",
+        ConstraintKind::ForeignKey => "FOREIGN KEY",
+        ConstraintKind::Unique => "UNIQUE",
+        ConstraintKind::Check => "CHECK",
+      };
+      s.push_str(&format!("  - {kind} (`{}`)\n", con.name));
+    }
+  }
   if let Some(cm) = &c.comment {
     if !cm.trim().is_empty() {
       s.push_str(&format!("\n{}\n", dsl_knowledge::wrap_paragraphs(cm, 72)));
     }
   }
   s.push_str(&format!("\n_From table `{}.{}`_\n", t.schema, t.name));
+  s
+}
+
+/// Variant of [`column`] that also lists every FK in the catalog
+/// pointing at this column. The hover handler uses this when the
+/// catalog is in scope.
+pub fn column_with_catalog(t: &Table, c: &Column, cat: &dsl_catalog::Catalog) -> String {
+  let mut s = column(t, c);
+  let inbound: Vec<String> = cat
+    .tables()
+    .flat_map(|other| {
+      other
+        .constraints
+        .iter()
+        .filter_map(move |con| {
+          if !matches!(con.kind, ConstraintKind::ForeignKey) { return None; }
+          let refs = con.references.as_ref()?;
+          if !refs.table.eq_ignore_ascii_case(&t.name) { return None; }
+          if !refs.columns.iter().any(|x| x.eq_ignore_ascii_case(&c.name)) { return None; }
+          let local = con.columns.join(", ");
+          Some(format!("- `{}.{}` ({})", other.schema, other.name, local))
+        })
+    })
+    .collect();
+  if !inbound.is_empty() {
+    s.push_str("\n**Referenced by**\n\n");
+    for line in inbound {
+      s.push_str(&line);
+      s.push('\n');
+    }
+  }
   s
 }
 

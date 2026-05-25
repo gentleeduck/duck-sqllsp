@@ -62,6 +62,14 @@ pub fn hover(source: &str, offset: TextSize, catalog: &Catalog) -> Option<String
 /// every synthesised DDL fragment.
 pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: KeywordCase) -> Option<String> {
   KW_CASE.with(|c| c.set(case));
+  // Respect lexical boundaries: cursor inside `'...'` / `"..."` /
+  // `-- comment` / `/* ... */` / `$$ ... $$` body for a non-PL/pgSQL
+  // language returns None. Catches `'illegal order adding...'` so
+  // the ORDER keyword card doesn't fire on a literal.
+  let pos: usize = u32::from(offset) as usize;
+  if inside_string_or_comment(source, pos) {
+    return None;
+  }
   let parsed = dsl_parse::parse(source, dsl_parse::Dialect::Postgres);
   if let Some(md) = ddl::column_decl_at(&parsed, source, offset) {
     return Some(md);
@@ -314,6 +322,74 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
 /// name with a role shouldn't be hijacked. Surfaces:
 ///   * Catalog membership status (known / unknown / built-in).
 ///   * Source: live catalog vs convention whitelist.
+/// True when `pos` sits inside a single-quoted string literal, a
+/// double-quoted identifier, a `-- line comment`, or a `/* block
+/// comment */`. Walk byte-by-byte from BOF tracking the current
+/// lex mode; cheap and exact.
+fn inside_string_or_comment(src: &str, pos: usize) -> bool {
+  let bytes = src.as_bytes();
+  let n = bytes.len().min(pos.max(pos));
+  let mut i = 0usize;
+  let cap = pos.min(bytes.len());
+  while i < cap {
+    let c = bytes[i];
+    // Line comment runs to end of line.
+    if c == b'-' && i + 1 < bytes.len() && bytes[i + 1] == b'-' {
+      let mut j = i + 2;
+      while j < bytes.len() && bytes[j] != b'\n' { j += 1; }
+      if pos > i && pos <= j { return true; }
+      i = j + 1;
+      continue;
+    }
+    // Block comment.
+    if c == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'*' {
+      let start = i;
+      let mut j = i + 2;
+      while j + 1 < bytes.len() && !(bytes[j] == b'*' && bytes[j + 1] == b'/') { j += 1; }
+      let end = (j + 2).min(bytes.len());
+      if pos > start && pos < end { return true; }
+      i = end;
+      continue;
+    }
+    // Single-quoted string. `''` is an escape; treat as continued.
+    if c == b'\'' {
+      let start = i;
+      i += 1;
+      while i < bytes.len() {
+        if bytes[i] == b'\'' {
+          if i + 1 < bytes.len() && bytes[i + 1] == b'\'' { i += 2; continue; }
+          i += 1;
+          break;
+        }
+        i += 1;
+      }
+      if pos > start && pos < i { return true; }
+      continue;
+    }
+    // Dollar-quoted body: $tag$ ... $tag$.
+    if c == b'$' {
+      let tag_start = i;
+      let mut j = i + 1;
+      while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') { j += 1; }
+      if j < bytes.len() && bytes[j] == b'$' {
+        let tag = &src[tag_start..=j];
+        let body_start = j + 1;
+        let mut k = body_start;
+        while k + tag.len() <= bytes.len() && &src[k..k + tag.len()] != tag {
+          k += 1;
+        }
+        let body_end = k;
+        if pos >= body_start && pos < body_end { return true; }
+        i = (k + tag.len()).min(bytes.len());
+        continue;
+      }
+    }
+    i += 1;
+  }
+  let _ = n;
+  false
+}
+
 /// True when the cursor sits exactly on a `:` byte that's part of
 /// the `::` cast operator (either the first or second colon).
 fn cursor_on_double_colon(source: &str, offset: TextSize) -> bool {
