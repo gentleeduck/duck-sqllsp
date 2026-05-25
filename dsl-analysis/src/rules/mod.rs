@@ -107,6 +107,7 @@ pub mod multi_where;
 pub mod multiple_truncate_in_tx;
 pub mod mv_no_data_query;
 pub mod mysql_interval_syntax;
+pub mod mysql_table_comment;
 pub mod mutating_without_where;
 pub mod negative_limit_offset;
 pub mod nested_begin;
@@ -536,5 +537,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(psql_backslash::Rule),
     Box::new(string_agg_no_order::Rule),
     Box::new(serial_vs_identity::Rule),
+    Box::new(mysql_table_comment::Rule),
   ]
 }
