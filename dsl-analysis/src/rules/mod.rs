@@ -59,6 +59,7 @@ pub mod extract_unknown_field;
 pub mod generate_series_no_alias;
 pub mod gin_on_scalar;
 pub mod gist_on_scalar;
+pub mod grant_all_too_broad;
 pub mod grant_to_public;
 pub mod grant_with_grant_option;
 pub mod group_by_all;
@@ -492,5 +493,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(index_no_name::Rule),
     Box::new(table_inherits::Rule),
     Box::new(percentile_no_within::Rule),
+    Box::new(grant_all_too_broad::Rule),
   ]
 }
