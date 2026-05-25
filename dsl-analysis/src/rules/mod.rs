@@ -37,6 +37,7 @@ pub mod count_star_returns_one;
 pub mod cte_dml_no_returning;
 pub mod cte_missing_recursive;
 pub mod current_setting_no_missing_ok;
+pub mod cursor_with_hold_no_tx;
 pub mod ddl_in_immutable;
 pub mod deep_case_nesting;
 pub mod delete_no_where_in_fn;
@@ -452,5 +453,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(union_inner_order_by::Rule),
     Box::new(extract_on_indexable::Rule),
     Box::new(format_no_placeholders::Rule),
+    Box::new(cursor_with_hold_no_tx::Rule),
   ]
 }
