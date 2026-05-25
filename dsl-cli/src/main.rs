@@ -34,7 +34,11 @@ enum Cmd {
   /// Print version and capability info.
   Version,
   /// List every registered lint rule (code + default severity).
-  Rules,
+  Rules {
+    /// Emit machine-readable JSON instead of the human table.
+    #[arg(long)]
+    json: bool,
+  },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -59,7 +63,7 @@ fn main() -> anyhow::Result<()> {
       println!("duck-sqllsp {}", env!("CARGO_PKG_VERSION"));
       Ok(())
     },
-    Cmd::Rules => {
+    Cmd::Rules { json } => {
       let mut rules: Vec<(String, &'static str)> = dsl_analysis::rules::all()
         .into_iter()
         .map(|r| (r.code().to_string(), match r.default_severity() {
@@ -70,6 +74,15 @@ fn main() -> anyhow::Result<()> {
         }))
         .collect();
       rules.sort_by(|a, b| a.0.cmp(&b.0));
+      if json {
+        print!("[");
+        for (i, (code, sev)) in rules.iter().enumerate() {
+          if i > 0 { print!(","); }
+          print!("{{\"code\":\"{code}\",\"default_severity\":\"{sev}\"}}");
+        }
+        println!("]");
+        return Ok(());
+      }
       let mut by_sev: std::collections::BTreeMap<&str, usize> = Default::default();
       println!("{:6}  {:8}", "code", "severity");
       for (code, sev) in &rules {
