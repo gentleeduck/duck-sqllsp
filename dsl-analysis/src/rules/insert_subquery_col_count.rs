@@ -46,7 +46,11 @@ impl LintRule for Rule {
       t.columns.len()
     } else { return };
     // Locate the SELECT keyword that starts the source rowset.
-    let Some(sel_at) = upper.find("SELECT") else { return };
+    // CTEs (`WITH x AS (SELECT ...), y AS (SELECT ...) SELECT ...`) put
+    // one or more SELECTs *inside* parens before the actual source
+    // rowset SELECT. Pick the first depth-0 SELECT *after* the column
+    // list closes -- i.e. the SELECT not enclosed in parens.
+    let Some(sel_at) = first_top_level_select(body) else { return };
     // Find the end of the projection list (before FROM or `)`, end).
     let after_sel = sel_at + "SELECT".len();
     let tail = &upper[after_sel..];
@@ -72,6 +76,39 @@ impl LintRule for Rule {
       range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
     });
   }
+}
+
+/// First depth-0 occurrence of the word SELECT, skipping any SELECTs that
+/// sit inside parens (CTE bodies, scalar subqueries in DEFAULT clauses,
+/// `... VALUES ((SELECT ...))` etc.).
+fn first_top_level_select(body: &str) -> Option<usize> {
+  let bytes = body.as_bytes();
+  let n = bytes.len();
+  let mut depth = 0i32;
+  let mut i = 0usize;
+  while i < n {
+    match bytes[i] {
+      b'(' => { depth += 1; i += 1; continue; }
+      b')' => { depth -= 1; i += 1; continue; }
+      b'\'' => {
+        i += 1;
+        while i < n && bytes[i] != b'\'' { i += 1 }
+        if i < n { i += 1 }
+        continue;
+      }
+      _ => {}
+    }
+    if depth == 0 && i + 6 <= n {
+      let upper6 = body[i..i + 6].to_ascii_uppercase();
+      if upper6 == "SELECT" {
+        let prev_ok = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
+        let next_ok = i + 6 == n || !(bytes[i + 6].is_ascii_alphanumeric() || bytes[i + 6] == b'_');
+        if prev_ok && next_ok { return Some(i); }
+      }
+    }
+    i += 1;
+  }
+  None
 }
 
 fn count_top_level_commas(text: &str) -> usize {

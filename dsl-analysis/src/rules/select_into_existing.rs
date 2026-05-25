@@ -27,17 +27,17 @@ impl LintRule for Rule {
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
     let Some(into_at) = upper.find(" INTO ") else { return };
-    // Only fire when the INTO is owned by a SELECT, not an INSERT.
-    // For an Unknown stmt that wraps a CREATE FUNCTION body, we may
-    // see `INSERT INTO ...` inside the body -- those are normal
-    // INSERTs, not the DDL-form `SELECT * INTO foo`.
+    // Only fire when the INTO is owned by a SELECT, not an INSERT or
+    // MERGE. For an Unknown stmt that wraps a CREATE FUNCTION body,
+    // we may see `INSERT INTO ...` / `MERGE INTO ...` inside the body
+    // -- those are not the DDL-form `SELECT * INTO foo`.
     let prefix_upper = &upper[..into_at];
     let last_select = prefix_upper.rfind("SELECT");
     let last_insert = prefix_upper.rfind("INSERT");
-    let select_owns = match (last_select, last_insert) {
-      (Some(s), Some(i)) => s > i,
-      (Some(_), None) => true,
-      _ => false,
+    let last_merge = prefix_upper.rfind("MERGE");
+    let select_owns = match last_select {
+      None => false,
+      Some(s) => last_insert.map_or(true, |i| s > i) && last_merge.map_or(true, |m| s > m),
     };
     if !select_owns { return }
     let after = into_at + " INTO ".len();
