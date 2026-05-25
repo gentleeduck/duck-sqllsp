@@ -70,6 +70,9 @@ pub fn run(state: &ServerState, params: CodeActionParams) -> Option<CodeActionRe
   is_distinct_from_null_action(&uri, &params.range, &doc.text, &mut actions);
   // Append RETURNING * to UPDATE / DELETE / INSERT lacking one.
   add_returning_star_action(&uri, &params.range, &doc.text, &mut actions);
+  // Split a multi-column `UNIQUE (a, b, c)` constraint into separate
+  // single-column UNIQUEs when the cursor sits inside the paren list.
+  split_multi_unique_action(&uri, &params.range, &doc.text, &mut actions);
 
   if actions.is_empty() {
     return None;
@@ -1284,6 +1287,77 @@ fn sql322_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeAct
     is_preferred: Some(true),
     ..Default::default()
   }));
+}
+
+/// `UNIQUE (a, b, c)` -> `UNIQUE (a), UNIQUE (b), UNIQUE (c)`.
+/// Fires when the cursor overlaps a multi-column UNIQUE constraint
+/// paren list. Single-column UNIQUE is left alone (nothing to split).
+/// We don't touch named constraints (`CONSTRAINT n UNIQUE (...)`) to
+/// avoid silently rewriting one named constraint into N unnamed ones.
+fn split_multi_unique_action(uri: &Url, range: &Range, text: &str, out: &mut Vec<CodeActionOrCommand>) {
+  let Some(sel) = line_col_to_byte(text, range.start) else { return };
+  let upper = text.to_ascii_uppercase();
+  let bytes = text.as_bytes();
+  let mut search = 0;
+  while let Some(rel) = upper[search..].find("UNIQUE") {
+    let unique_at = search + rel;
+    let prev_ok = unique_at == 0 || !is_id_char(bytes[unique_at - 1] as char);
+    let next_ok = unique_at + 6 == bytes.len() || !is_id_char(bytes[unique_at + 6] as char);
+    if !(prev_ok && next_ok) { search = unique_at + 6; continue }
+    // Skip `CONSTRAINT <n> UNIQUE` — would lose the constraint name.
+    let look_back_start = upper[..unique_at].rfind(|c: char| c == ',' || c == '(' || c == ';' || c == '\n').map(|p| p + 1).unwrap_or(0);
+    let lead = upper[look_back_start..unique_at].trim_start();
+    if lead.to_ascii_uppercase().starts_with("CONSTRAINT") { search = unique_at + 6; continue }
+    // Find `(` after UNIQUE.
+    let mut j = unique_at + 6;
+    while j < bytes.len() && bytes[j].is_ascii_whitespace() { j += 1 }
+    if j >= bytes.len() || bytes[j] != b'(' { search = unique_at + 6; continue }
+    let Some(close) = matched_close(bytes, j) else { search = j + 1; continue };
+    if sel < unique_at || sel > close + 1 { search = close + 1; continue }
+    let inside = &text[j + 1..close];
+    let parts: Vec<&str> = top_level_comma_split(inside);
+    if parts.len() < 2 { return }
+    // Build the replacement: one UNIQUE (col) per part, comma-joined.
+    let mut new_text = String::new();
+    for (idx, p) in parts.iter().enumerate() {
+      if idx > 0 { new_text.push_str(", "); }
+      new_text.push_str("UNIQUE (");
+      new_text.push_str(p.trim());
+      new_text.push(')');
+    }
+    let r = byte_range_to_lsp(text, unique_at, close + 1);
+    let mut changes = HashMap::new();
+    changes.insert(uri.clone(), vec![TextEdit { range: r, new_text }]);
+    out.push(CodeActionOrCommand::CodeAction(CodeAction {
+      title: format!("Split UNIQUE constraint into {} single-column constraints", parts.len()),
+      kind: Some(CodeActionKind::REFACTOR),
+      diagnostics: None,
+      edit: Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None }),
+      is_preferred: None,
+      ..Default::default()
+    }));
+    return;
+  }
+}
+
+fn top_level_comma_split(s: &str) -> Vec<&str> {
+  let bytes = s.as_bytes();
+  let mut out = Vec::new();
+  let mut start = 0usize;
+  let mut depth = 0i32;
+  let mut i = 0usize;
+  while i < bytes.len() {
+    match bytes[i] {
+      b'(' => depth += 1,
+      b')' => depth -= 1,
+      b'\'' => { i += 1; while i < bytes.len() && bytes[i] != b'\'' { i += 1 } }
+      b',' if depth == 0 => { out.push(&s[start..i]); start = i + 1 }
+      _ => {}
+    }
+    i += 1;
+  }
+  out.push(&s[start..]);
+  out
 }
 
 fn lsp_range_to_offsets(text: &str, range: Range) -> (usize, usize) {
