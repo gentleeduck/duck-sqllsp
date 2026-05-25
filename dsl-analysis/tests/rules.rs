@@ -3431,3 +3431,93 @@ $$ LANGUAGE plpgsql;"#;
     our_diags.iter().map(|x| (&x.code, &x.message)).collect::<Vec<_>>(),
   );
 }
+
+// ===== sql244 check_always_true =====
+
+#[test]
+fn sql244_flags_check_true() {
+  let d = diags("CREATE TABLE t (a INT, CHECK (TRUE));");
+  assert!(d.iter().any(|x| x.code == "sql244"));
+}
+
+#[test]
+fn sql244_quiet_check_nontrivial() {
+  let d = diags("CREATE TABLE t (a INT, CHECK (a > 0));");
+  assert!(!d.iter().any(|x| x.code == "sql244"));
+}
+
+// ===== sql273 check_always_false =====
+
+#[test]
+fn sql273_flags_check_false() {
+  let d = diags("CREATE TABLE t (a INT, CHECK (FALSE));");
+  assert!(d.iter().any(|x| x.code == "sql273"));
+}
+
+#[test]
+fn sql273_flags_check_zero() {
+  let d = diags("CREATE TABLE t (a INT, CHECK (0));");
+  assert!(d.iter().any(|x| x.code == "sql273"));
+}
+
+#[test]
+fn sql273_quiet_check_nontrivial() {
+  let d = diags("CREATE TABLE t (a INT, CHECK (a > 0));");
+  assert!(!d.iter().any(|x| x.code == "sql273"));
+}
+
+// ===== sql211 rollback_outside_tx =====
+
+#[test]
+fn sql211_flags_bare_rollback() {
+  let d = diags("ROLLBACK;");
+  assert!(d.iter().any(|x| x.code == "sql211"));
+}
+
+#[test]
+fn sql211_quiet_inside_tx() {
+  let d = diags("BEGIN;\nROLLBACK;");
+  assert!(!d.iter().any(|x| x.code == "sql211"));
+}
+
+// ===== sql237 shell_command_in_sql =====
+
+#[test]
+fn sql237_flags_pg_dump_prefix() {
+  let d = diags("pg_dump app > app.sql");
+  assert!(d.iter().any(|x| x.code == "sql237"));
+}
+
+#[test]
+fn sql237_quiet_normal_select() {
+  let d = diags("SELECT 1;");
+  assert!(!d.iter().any(|x| x.code == "sql237"));
+}
+
+// ===== sql227 exists_select_star =====
+
+#[test]
+fn sql227_flags_exists_star() {
+  let d = diags("SELECT 1 WHERE EXISTS (SELECT * FROM users);");
+  assert!(d.iter().any(|x| x.code == "sql227"));
+}
+
+#[test]
+fn sql227_quiet_exists_one() {
+  let d = diags("SELECT 1 WHERE EXISTS (SELECT 1 FROM users);");
+  assert!(!d.iter().any(|x| x.code == "sql227"));
+}
+
+// ===== sql216 values_row_width =====
+
+#[test]
+fn sql216_flags_mismatched_widths() {
+  let d = diags("INSERT INTO t VALUES (1, 2), (1, 2, 3);");
+  assert!(d.iter().any(|x| x.code == "sql216"));
+}
+
+#[test]
+fn sql216_quiet_matched_widths() {
+  let d = diags("INSERT INTO t VALUES (1, 2), (3, 4);");
+  assert!(!d.iter().any(|x| x.code == "sql216"));
+}
