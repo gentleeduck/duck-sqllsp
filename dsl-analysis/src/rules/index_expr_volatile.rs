@@ -28,11 +28,25 @@ impl LintRule for Rule {
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let raw = &source[start..end];
+    // Strip comments + strings before scanning -- prevents matching
+    // `INDEX` inside `-- INCLUDE, partial indexes, ...` header
+    // comments (the comment contains `INDEXES` which substring-matches
+    // `INDEX`).
+    let body_owned = strip_noise(raw);
+    let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
-    if !upper.contains("CREATE") || !upper.contains("INDEX") { return }
-    // Find first `(` after the INDEX keyword pair.
-    let Some(idx_at) = upper.find("INDEX") else { return };
+    // Verify the statement actually starts with CREATE [UNIQUE] INDEX.
+    let trimmed = upper.trim_start();
+    if !(trimmed.starts_with("CREATE INDEX")
+      || trimmed.starts_with("CREATE UNIQUE INDEX")
+      || trimmed.starts_with("CREATE OR REPLACE INDEX"))
+    {
+      return;
+    }
+    // Word-bounded `INDEX` search (avoid hitting `INDEXES` in residual
+    // text -- defensive after strip_noise).
+    let Some(idx_at) = find_word(&upper, "INDEX") else { return };
     let after_idx = idx_at + "INDEX".len();
     let Some(open_rel) = body[after_idx..].find('(') else { return };
     let open = after_idx + open_rel;
@@ -56,6 +70,52 @@ impl LintRule for Rule {
       }
     }
   }
+}
+
+fn find_word(haystack: &str, needle: &str) -> Option<usize> {
+  let h = haystack.as_bytes();
+  let n = needle.as_bytes();
+  if n.is_empty() { return None }
+  let mut i = 0usize;
+  while i + n.len() <= h.len() {
+    if h[i..i + n.len()] == *n {
+      let prev_ok = i == 0 || !(h[i - 1].is_ascii_alphanumeric() || h[i - 1] == b'_');
+      let next_ok = i + n.len() == h.len() || !(h[i + n.len()].is_ascii_alphanumeric() || h[i + n.len()] == b'_');
+      if prev_ok && next_ok { return Some(i) }
+    }
+    i += 1;
+  }
+  None
+}
+
+fn strip_noise(s: &str) -> String {
+  let mut out: Vec<u8> = s.as_bytes().to_vec();
+  let n = out.len();
+  let mut i = 0usize;
+  while i < n {
+    if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
+      while i < n && out[i] != b'\n' { out[i] = b' '; i += 1 }
+      continue;
+    }
+    if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
+      let mut depth = 1u32;
+      out[i] = b' '; out[i + 1] = b' '; i += 2;
+      while i + 1 < n && depth > 0 {
+        if out[i] == b'/' && out[i + 1] == b'*' { depth += 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
+        else if out[i] == b'*' && out[i + 1] == b'/' { depth -= 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
+        else { out[i] = b' '; i += 1; }
+      }
+      continue;
+    }
+    if out[i] == b'\'' {
+      out[i] = b' '; i += 1;
+      while i < n && out[i] != b'\'' { out[i] = b' '; i += 1 }
+      if i < n { out[i] = b' '; i += 1 }
+      continue;
+    }
+    i += 1;
+  }
+  String::from_utf8(out).unwrap_or_else(|_| s.to_string())
 }
 
 fn find_matching_paren(s: &str, open: usize) -> Option<usize> {

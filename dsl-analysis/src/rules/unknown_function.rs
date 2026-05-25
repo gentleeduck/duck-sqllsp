@@ -53,6 +53,8 @@ const KEYWORDS: &[&str] = &[
   "RESTRICTED", "LEAKPROOF", "COST", "CALL",
   // Foreign-data-wrapper DDL: `... OPTIONS (...)`, `WRAPPER (...)`.
   "OPTIONS", "WRAPPER", "SERVER", "VALIDATOR", "HANDLER",
+  // CREATE INDEX ... INCLUDE (cols), ALTER TABLE ... USING INDEX (...).
+  "INCLUDE",
   // Publication / Subscription / Replication.
   "PUBLICATION", "SUBSCRIPTION", "REPLICATION", "SLOT",
   // Aggregate / Operator / Collation / Statistics names + FDW IMPORT.
