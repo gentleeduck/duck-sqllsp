@@ -3944,3 +3944,17 @@ fn sql346_quiet_on_large_table() {
   let d = run(src, &f, &s, &c);
   assert!(!d.iter().any(|x| x.code == "sql346"));
 }
+
+// ===== sql347 ALTER ENABLE/DISABLE TRIGGER lock =====
+
+#[test]
+fn sql347_flags_disable_trigger() {
+  let d = diags("ALTER TABLE users DISABLE TRIGGER all;");
+  assert!(d.iter().any(|x| x.code == "sql347"));
+}
+
+#[test]
+fn sql347_flags_enable_trigger() {
+  let d = diags("ALTER TABLE users ENABLE TRIGGER audit_t;");
+  assert!(d.iter().any(|x| x.code == "sql347"));
+}

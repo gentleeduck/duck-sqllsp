@@ -7,6 +7,7 @@ pub mod advisory_lock_literal_key;
 pub mod advisory_lock_no_unlock;
 pub mod after_trigger_return_row;
 pub mod alter_table_no_owner;
+pub mod alter_trigger_lock;
 pub mod alter_type_add_value_in_tx;
 pub mod ambiguous_column;
 pub mod any_all_multicol;
@@ -602,5 +603,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(order_by_using_noncomparable::Rule),
     Box::new(rename_column_breaks_view::Rule),
     Box::new(brin_small_table::Rule),
+    Box::new(alter_trigger_lock::Rule),
   ]
 }
