@@ -134,6 +134,7 @@ pub mod raise_using_errcode;
 pub mod redundant_index_on_pk;
 pub mod redundant_parens;
 pub mod redundant_unique_index;
+pub mod reindex_in_tx;
 pub mod reindex_system;
 pub mod reserved_word_identifier;
 pub mod return_type_literal;
@@ -502,5 +503,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(nullif_type_mismatch::Rule),
     Box::new(nested_begin::Rule),
     Box::new(copy_header_no_csv::Rule),
+    Box::new(reindex_in_tx::Rule),
   ]
 }
