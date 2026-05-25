@@ -262,6 +262,11 @@ fn scan_projection(proj: &str) -> (usize, Vec<String>) {
           continue;
         }
       }
+      // Skip when preceded by `).` -- composite / row deref like
+      // (jsonb_each(x)).key. The bare token isn't a column ref.
+      if start >= 2 && bytes[start - 1] == b'.' && bytes[start - 2] == b')' {
+        continue;
+      }
       if !is_noise(&lower) {
         let name = word.rsplit('.').next().unwrap_or(word).to_string();
         if !bare.contains(&name) {
