@@ -53,6 +53,8 @@ pub fn run(state: &ServerState, params: CodeActionParams) -> Option<CodeActionRe
   // Wrap the enclosing statement in `EXPLAIN ANALYZE BEGIN ... ROLLBACK`
   // for a one-shot perf check that doesn't mutate.
   explain_analyze_wrap_action(&uri, &params.range, &doc.text, &mut actions);
+  // `<expr> IS [NOT] DISTINCT FROM NULL` -> `<expr> IS [NOT] NULL`.
+  is_distinct_from_null_action(&uri, &params.range, &doc.text, &mut actions);
 
   if actions.is_empty() {
     return None;
@@ -480,6 +482,49 @@ fn expand_select_star_action(
 /// Wrap the enclosing statement in
 /// `BEGIN; EXPLAIN ANALYZE <stmt>; ROLLBACK;` so the planner runs the
 /// query (with real timings) but the rollback discards any mutation.
+/// Quick-fix for sql095: rewrites `<expr> IS [NOT] DISTINCT FROM NULL`
+/// into the equivalent `<expr> IS [NOT] NULL`. PG treats them the
+/// same; the shorter form is the idiomatic spelling and survives
+/// schema migrations better.
+fn is_distinct_from_null_action(uri: &Url, range: &Range, text: &str, out: &mut Vec<CodeActionOrCommand>) {
+  let Some(sel) = line_col_to_byte(text, range.start) else { return };
+  let upper = text.to_ascii_uppercase();
+  // Walk every IS [NOT] DISTINCT FROM NULL near the cursor and emit
+  // a quick-fix for the first one whose paren-span the cursor sits
+  // inside (or near).
+  for needle in ["IS NOT DISTINCT FROM NULL", "IS DISTINCT FROM NULL"] {
+    let mut from = 0usize;
+    while let Some(rel) = upper[from..].find(needle) {
+      let start_at = from + rel;
+      let end_at = start_at + needle.len();
+      // Only fire when the cursor sits inside or right at this span,
+      // OR within ~20 chars before it (so the user can trigger from
+      // the predicate's left side).
+      if sel >= start_at.saturating_sub(20) && sel <= end_at {
+        let replacement = if needle.contains("NOT") { "IS NOT NULL" } else { "IS NULL" };
+        let edit = TextEdit {
+          range: byte_range_to_lsp(text, start_at, end_at),
+          new_text: replacement.into(),
+        };
+        let mut changes = HashMap::new();
+        changes.insert(uri.clone(), vec![edit]);
+        out.push(CodeActionOrCommand::CodeAction(CodeAction {
+          title: format!("Rewrite to `{replacement}`"),
+          kind: Some(CodeActionKind::REFACTOR_REWRITE),
+          diagnostics: None,
+          edit: Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None }),
+          command: None,
+          is_preferred: Some(true),
+          disabled: None,
+          data: None,
+        }));
+        return;
+      }
+      from = end_at;
+    }
+  }
+}
+
 fn explain_analyze_wrap_action(uri: &Url, range: &Range, text: &str, out: &mut Vec<CodeActionOrCommand>) {
   let Some(sel) = line_col_to_byte(text, range.start) else { return };
   let bytes = text.as_bytes();

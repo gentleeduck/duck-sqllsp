@@ -88,6 +88,21 @@ impl LanguageServer for Backend {
           refresh::refresh_catalog(state, client).await;
         });
       }
+      // Fallback workspace root: when initialize never set one, derive
+      // it from the opened file's parent. Walk up looking for a
+      // .duck-sqllsp.toml / .git / Cargo.toml marker; otherwise use the
+      // immediate parent dir. Lets the workspace .sql scan kick in
+      // for clients (nvim) that don't always pass rootUri.
+      if self.state.workspace_root.read().is_none() {
+        let root = derive_workspace_root(&path);
+        if let Some(root) = root {
+          self.state.set_workspace_root(root);
+          let state = self.state.clone();
+          tokio::spawn(async move {
+            state.rescan_workspace_offline();
+          });
+        }
+      }
     }
     let uri = td.uri.clone();
     self.state.documents.open(td.uri, td.text, td.version);
@@ -290,6 +305,26 @@ impl LanguageServer for Backend {
 
 /// Pick a workspace path from initialize params, preferring workspace_folders
 /// then root_uri. Returns None when nothing usable is set.
+/// Walk up from `start` looking for a project marker
+/// (.duck-sqllsp.toml / .duck-sqllsp.json / .git / Cargo.toml); if
+/// none found, return the immediate parent. Used as a fallback for
+/// clients that didn't pass rootUri at initialize time.
+fn derive_workspace_root(start: &std::path::Path) -> Option<PathBuf> {
+  let mut dir: PathBuf =
+    if start.is_dir() { start.to_path_buf() } else { start.parent()?.to_path_buf() };
+  let immediate = dir.clone();
+  loop {
+    for marker in [".duck-sqllsp.toml", ".duck-sqllsp.json", ".git", "Cargo.toml", "package.json"] {
+      if dir.join(marker).exists() {
+        return Some(dir);
+      }
+    }
+    if !dir.pop() {
+      return Some(immediate);
+    }
+  }
+}
+
 fn workspace_root(params: &InitializeParams) -> Option<PathBuf> {
   if let Some(folders) = &params.workspace_folders {
     for f in folders {

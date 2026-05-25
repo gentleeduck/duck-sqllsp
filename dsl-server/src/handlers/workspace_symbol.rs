@@ -24,11 +24,15 @@ pub fn run(state: &ServerState, params: WorkspaceSymbolParams) -> Option<Vec<Sym
   // sequences / extensions / types / roles defined only in open files
   // show up in workspace symbol search too.
   let live = state.catalog.read().clone();
-  let cat = state.documents.snapshot().into_iter().fold(live, |acc, (_, doc)| {
+  let open_merged = state.documents.snapshot().into_iter().fold(live, |acc, (_, doc)| {
     let cache = doc.parsed();
     let derived = dsl_completion::source_tables::from_source(&cache.file, &doc.text);
     dsl_completion::source_tables::merge(&acc, &derived)
   });
+  // Also fold in the on-disk workspace scan so symbols hit objects
+  // defined in files the user hasn't opened yet.
+  let ws_offline = state.workspace_offline_snapshot();
+  let cat = dsl_completion::source_tables::merge(&open_merged, &ws_offline);
   // Score every candidate so the best match floats to the top.
   // (score, SymbolInformation) -- sort descending by score.
   let mut scored: Vec<(i32, SymbolInformation)> = Vec::new();

@@ -64,11 +64,23 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
   KW_CASE.with(|c| c.set(case));
   // Respect lexical boundaries: cursor inside `'...'` / `"..."` /
   // `-- comment` / `/* ... */` / `$$ ... $$` body for a non-PL/pgSQL
-  // language returns None. Catches `'illegal order adding...'` so
-  // the ORDER keyword card doesn't fire on a literal.
+  // language returns None for keywords. Catches `'illegal order
+  // adding...'` so the ORDER keyword card doesn't fire on a literal.
+  //
+  // Inside a quoted string, surface a small "literal" card naming
+  // the inferred destination column type when we can resolve one
+  // (INSERT VALUES / UPDATE SET / WHERE col = ...).
   let pos: usize = u32::from(offset) as usize;
   if inside_string_or_comment(source, pos) {
+    if let Some(card) = string_literal_hover(source, pos, catalog) {
+      return Some(card);
+    }
     return None;
+  }
+  // Cursor sits on a numeric literal -- small card naming the literal
+  // kind + the destination column type when resolvable.
+  if let Some(card) = numeric_literal_hover(source, pos, catalog) {
+    return Some(card);
   }
   let parsed = dsl_parse::parse(source, dsl_parse::Dialect::Postgres);
   if let Some(md) = ddl::column_decl_at(&parsed, source, offset) {
@@ -206,11 +218,135 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
   }
 
   if let Some(tok) = token::token_at(source, offset) {
+    // Field-list context priority: when the cursor sits inside a
+    // column-list paren (CREATE TABLE / INSERT cols / CREATE INDEX
+    // ON t (...) / RETURNING / GROUP BY / ORDER BY / SET / UNIQUE /
+    // PRIMARY KEY paren), the token is almost certainly an
+    // identifier of a column -- NOT a keyword. Skip the keyword
+    // card fallback so `password` in `(name, email, password)`
+    // doesn't pop the PASSWORD reserved-word reference.
+    if in_field_list_context(source, u32::from(offset) as usize) {
+      return None;
+    }
     if let Some(entry) = dsl_knowledge::lookup(&tok) {
       return Some(dsl_knowledge::render_markdown(entry));
     }
   }
   None
+}
+
+/// True when the cursor lies inside a parenthesised column list of:
+///   INSERT INTO t (...)
+///   CREATE TABLE t (...)
+///   CREATE INDEX ... ON t (...)
+///   CREATE UNIQUE INDEX ... ON t (...)
+///   PRIMARY KEY (...)
+///   UNIQUE (...)
+///   FOREIGN KEY (...) REFERENCES other (...)
+///   RETURNING ...
+///   GROUP BY ...
+///   ORDER BY ...
+///   UPDATE ... SET ... (the LHS of an assignment)
+///
+/// Used to suppress the keyword fallback so `password`, `order`,
+/// `role`, etc don't pop the reserved-word card when the user
+/// clearly wrote them as identifiers.
+fn in_field_list_context(src: &str, pos: usize) -> bool {
+  let bytes = src.as_bytes();
+  let mut i = pos.min(bytes.len());
+  // Walk back finding unbalanced `(` or a clause keyword on the way.
+  let mut depth = 0i32;
+  while i > 0 {
+    let b = bytes[i - 1];
+    if !b.is_ascii() { i -= 1; continue; }
+    let c = b as char;
+    if c == ')' { depth += 1; i -= 1; continue; }
+    if c == '(' {
+      if depth == 0 {
+        // Unbalanced `(` -- check what precedes the paren.
+        return preceded_by_field_list_intro(src, i - 1);
+      }
+      depth -= 1;
+      i -= 1;
+      continue;
+    }
+    if c == ';' { return false; }
+    // Clause-introducer keywords without needing a paren.
+    if depth == 0 {
+      for kw in ["RETURNING", "GROUP BY", "ORDER BY"] {
+        let len = kw.len();
+        if i >= len {
+          let slice = &src[i - len..i];
+          if slice.to_ascii_uppercase() == kw {
+            let prev_ok = i == len || !is_word_ch(bytes[i - len - 1]);
+            if prev_ok { return true; }
+          }
+        }
+      }
+      // UPDATE ... SET <col> = ... : when cursor sits on a column
+      // name on the LHS of a SET assignment.
+      if i >= 4 && src[i - 4..i].to_ascii_uppercase() == " SET" {
+        return true;
+      }
+    }
+    i -= 1;
+  }
+  false
+}
+
+fn is_word_ch(b: u8) -> bool { b.is_ascii_alphanumeric() || b == b'_' }
+
+fn preceded_by_field_list_intro(src: &str, paren_pos: usize) -> bool {
+  // Trim whitespace before `(`.
+  let bytes = src.as_bytes();
+  let mut k = paren_pos;
+  while k > 0 && bytes[k - 1].is_ascii() && bytes[k - 1].is_ascii_whitespace() {
+    k -= 1;
+  }
+  // Pull preceding word (could be the table name in CREATE TABLE t (...)
+  // or the keyword we care about).
+  let word_end = k;
+  while k > 0 && bytes[k - 1].is_ascii() && is_word_ch(bytes[k - 1]) {
+    k -= 1;
+  }
+  let last_word = &src[k..word_end];
+  let upper_word = last_word.to_ascii_uppercase();
+  // INSERT INTO t (   -- the previous word is the table name; check
+  // further back for INTO / TABLE / INDEX / KEY / UNIQUE / etc.
+  let head_upper = src[..k].to_ascii_uppercase();
+  let head_trimmed = head_upper.trim_end();
+  for kw in [
+    "INSERT INTO", "CREATE TABLE", "CREATE TABLE IF NOT EXISTS",
+    "CREATE TEMP TABLE", "CREATE TEMPORARY TABLE",
+    "CREATE INDEX", "CREATE UNIQUE INDEX",
+    "CREATE INDEX IF NOT EXISTS", "CREATE UNIQUE INDEX IF NOT EXISTS",
+    "PRIMARY KEY", "FOREIGN KEY", "UNIQUE", "REFERENCES",
+    "USING",
+  ] {
+    if head_trimmed.ends_with(kw) {
+      return true;
+    }
+    // Also: ON t ( for CREATE INDEX -- previous word is `t`, before
+    // that `ON`. Need to step back another word.
+  }
+  // Two-word lookback: previous word may be `t` (table); look further.
+  let mut k2 = k;
+  while k2 > 0 && bytes[k2 - 1].is_ascii() && bytes[k2 - 1].is_ascii_whitespace() {
+    k2 -= 1;
+  }
+  let word_end2 = k2;
+  while k2 > 0 && bytes[k2 - 1].is_ascii() && is_word_ch(bytes[k2 - 1]) {
+    k2 -= 1;
+  }
+  if word_end2 > k2 {
+    let upper2 = src[k2..word_end2].to_ascii_uppercase();
+    if upper2 == "ON" {
+      // CREATE INDEX ... ON t (
+      return true;
+    }
+  }
+  let _ = upper_word;
+  false
 }
 
 fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
@@ -322,6 +458,159 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
 /// name with a role shouldn't be hijacked. Surfaces:
 ///   * Catalog membership status (known / unknown / built-in).
 ///   * Source: live catalog vs convention whitelist.
+/// Numeric literal hover. Cursor on `123` / `12.5` / `-7` returns a
+/// tiny card naming kind (integer / float) + the assigned column
+/// type when in INSERT VALUES / UPDATE SET / WHERE.
+fn numeric_literal_hover(source: &str, pos: usize, catalog: &Catalog) -> Option<String> {
+  let bytes = source.as_bytes();
+  if pos >= bytes.len() { return None; }
+  let here = bytes[pos];
+  if !here.is_ascii_digit() && here != b'.' { return None; }
+  // Walk back over digits / `.` / `-+`.
+  let mut s = pos;
+  while s > 0 && (bytes[s - 1].is_ascii_digit() || bytes[s - 1] == b'.') {
+    s -= 1;
+  }
+  if s > 0 && (bytes[s - 1] == b'-' || bytes[s - 1] == b'+') {
+    // Only treat as sign when preceded by space / operator / `(` /
+    // `,` -- not when it's a subtraction in `a-1`.
+    if s == 1 || matches!(bytes[s - 2], b' ' | b'\t' | b'\n' | b',' | b'(' | b'=' | b'<' | b'>') {
+      s -= 1;
+    }
+  }
+  let mut e = pos;
+  while e < bytes.len() && (bytes[e].is_ascii_digit() || bytes[e] == b'.') {
+    e += 1;
+  }
+  let lit = &source[s..e];
+  if lit.is_empty() || lit == "-" || lit == "+" || lit == "." { return None; }
+  let kind = if lit.contains('.') { "float / numeric" } else { "integer" };
+  let mut card = format!("# `{lit}`\n\n_{kind} literal_\n");
+  if let Some((schema, table, col, ty)) = infer_assigned_column(source, s.saturating_sub(1), catalog) {
+    card.push_str(&format!(
+      "\n- **assigned to:** `{schema}.{table}.{col}`\n- **column type:** `{ty}`\n",
+    ));
+  }
+  Some(card)
+}
+
+/// String-literal hover card. Resolves the literal's destination
+/// column when the cursor sits inside a `'...'` in INSERT VALUES /
+/// UPDATE SET / WHERE / ON predicates, and surfaces the column's
+/// declared type. Falls back to a generic "text/string literal"
+/// card when no destination can be inferred.
+fn string_literal_hover(source: &str, pos: usize, catalog: &Catalog) -> Option<String> {
+  let bytes = source.as_bytes();
+  // Find the bounds of the enclosing single-quoted literal.
+  let mut s = pos;
+  while s > 0 && bytes[s - 1] != b'\'' {
+    s -= 1;
+  }
+  if s == 0 { return None; }
+  let lit_start = s; // first byte inside the quotes
+  let mut e = pos;
+  while e < bytes.len() && bytes[e] != b'\'' {
+    e += 1;
+  }
+  let lit_end = e;
+  let lit = if lit_end > lit_start { &source[lit_start..lit_end] } else { "" };
+
+  // Walk back from the opening quote to find the destination column.
+  let dest_col = infer_assigned_column(source, lit_start - 1, catalog);
+  let header = format!("# `'{}'`\n\n_text/string literal_\n", lit.chars().take(60).collect::<String>());
+  let mut body = header;
+  if let Some((schema, table, col, ty)) = dest_col {
+    body.push_str(&format!(
+      "\n- **assigned to:** `{schema}.{table}.{col}`\n- **column type:** `{ty}`\n",
+    ));
+    // Compatibility heuristic.
+    let lower = ty.to_ascii_lowercase();
+    if lower.contains("int") || lower.contains("numeric") || lower.contains("decimal")
+       || lower.contains("real") || lower.contains("double") || lower.contains("float") {
+      body.push_str(
+        "\n_Warning:_ destination is numeric -- the literal will be cast at runtime; \
+         malformed strings raise an `invalid input syntax` error.\n",
+      );
+    } else if lower.contains("bool") {
+      body.push_str(
+        "\n_Warning:_ destination is boolean -- PG accepts only `'t'`/`'f'`/`'true'`/\
+         `'false'`/`'yes'`/`'no'`/`'y'`/`'n'`/`'on'`/`'off'`/`'1'`/`'0'`.\n",
+      );
+    }
+  }
+  Some(body)
+}
+
+/// Walk back from the byte just before the literal's opening quote
+/// to figure out which column the literal is being assigned to.
+/// Returns `(schema, table, col, type)` when resolvable.
+fn infer_assigned_column(
+  source: &str,
+  before_quote: usize,
+  catalog: &Catalog,
+) -> Option<(String, String, String, String)> {
+  let bytes = source.as_bytes();
+  // Strip whitespace + commas back.
+  let mut i = before_quote;
+  while i > 0 && bytes[i - 1].is_ascii_whitespace() {
+    i -= 1;
+  }
+  // Three contexts: INSERT VALUES (positional), UPDATE SET col = '...',
+  // WHERE/ON col = '...'.
+  // For SET/WHERE: previous non-ws should be `=`; before that an
+  // identifier (possibly qualified).
+  if i > 0 && bytes[i - 1] == b'=' {
+    let mut k = i - 1;
+    while k > 0 && bytes[k - 1].is_ascii_whitespace() { k -= 1; }
+    let id_end = k;
+    while k > 0 && (bytes[k - 1].is_ascii_alphanumeric() || bytes[k - 1] == b'_' || bytes[k - 1] == b'.' || bytes[k - 1] == b'"') {
+      k -= 1;
+    }
+    let raw = &source[k..id_end];
+    let bare = raw.rsplit('.').next().unwrap_or(raw).trim_matches('"');
+    if bare.is_empty() { return None; }
+    // Look back further for the FROM / UPDATE / INSERT context to pin
+    // down which table the column lives in.
+    if let Some(table) = enclosing_table_name(source, k) {
+      if let Some(t) = catalog.find_table(None, &table) {
+        if let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(bare)) {
+          return Some((t.schema.clone(), t.name.clone(), c.name.clone(), c.data_type.clone()));
+        }
+      }
+    }
+    // Fall back: search every catalog table for the column name.
+    let hits = catalog.columns_named(bare);
+    if hits.len() == 1 {
+      let (t, c) = hits[0];
+      return Some((t.schema.clone(), t.name.clone(), c.name.clone(), c.data_type.clone()));
+    }
+    return None;
+  }
+  None
+}
+
+/// Best-effort: walk back through statement and return the latest
+/// table name following UPDATE / INSERT INTO / FROM keywords.
+fn enclosing_table_name(source: &str, before: usize) -> Option<String> {
+  let stmt_start = source[..before].rfind(';').map(|i| i + 1).unwrap_or(0);
+  let slice = &source[stmt_start..before];
+  let upper = slice.to_ascii_uppercase();
+  for kw in ["UPDATE ", "INSERT INTO ", "FROM "] {
+    if let Some(at) = upper.rfind(kw) {
+      let after = &slice[at + kw.len()..];
+      let lead = after.len() - after.trim_start().len();
+      let raw = &after[lead..];
+      let id_end = raw
+        .find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"')
+        .unwrap_or(raw.len());
+      if id_end == 0 { continue; }
+      let bare = raw[..id_end].rsplit('.').next().unwrap_or(&raw[..id_end]).trim_matches('"');
+      return Some(bare.to_string());
+    }
+  }
+  None
+}
+
 /// True when `pos` sits inside a single-quoted string literal, a
 /// double-quoted identifier, a `-- line comment`, or a `/* block
 /// comment */`. Walk byte-by-byte from BOF tracking the current

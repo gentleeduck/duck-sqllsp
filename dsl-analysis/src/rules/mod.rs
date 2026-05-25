@@ -123,6 +123,7 @@ pub mod update_set_type_literal;
 pub mod update_set_unknown_col;
 pub mod count_nullable;
 pub mod for_update_on_view;
+pub mod is_null_on_not_null;
 pub mod schema_drift;
 pub mod vacuum_in_transaction;
 pub mod where_type_literal;
@@ -262,5 +263,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(schema_drift::Rule),
     Box::new(count_nullable::Rule),
     Box::new(for_update_on_view::Rule),
+    Box::new(is_null_on_not_null::Rule),
   ]
 }
