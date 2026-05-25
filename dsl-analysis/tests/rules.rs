@@ -3521,3 +3521,171 @@ fn sql216_quiet_matched_widths() {
   let d = diags("INSERT INTO t VALUES (1, 2), (3, 4);");
   assert!(!d.iter().any(|x| x.code == "sql216"));
 }
+
+// ===== sql276 mysql_interval_syntax =====
+
+#[test]
+fn sql276_flags_unquoted_interval() {
+  let d = diags("SELECT now() + INTERVAL 1 DAY;");
+  assert!(d.iter().any(|x| x.code == "sql276"));
+}
+
+#[test]
+fn sql276_quiet_pg_interval() {
+  let d = diags("SELECT now() + INTERVAL '1 day';");
+  assert!(!d.iter().any(|x| x.code == "sql276"));
+}
+
+// ===== sql313 inline COMMENT in CREATE TABLE =====
+
+#[test]
+fn sql313_flags_inline_table_comment() {
+  let d = diags("CREATE TABLE t (id INT) COMMENT 'foo';");
+  assert!(d.iter().any(|x| x.code == "sql313"));
+}
+
+// ===== sql314 AUTO_INCREMENT =====
+
+#[test]
+fn sql314_flags_auto_increment() {
+  let d = diags("CREATE TABLE t (id INT AUTO_INCREMENT);");
+  assert!(d.iter().any(|x| x.code == "sql314"));
+}
+
+// ===== sql315 ENGINE= =====
+
+#[test]
+fn sql315_flags_engine_clause() {
+  let d = diags("CREATE TABLE t (id INT) ENGINE=InnoDB;");
+  assert!(d.iter().any(|x| x.code == "sql315"));
+}
+
+// ===== sql316 mysql types =====
+
+#[test]
+fn sql316_flags_tinyint() {
+  let d = diags("CREATE TABLE t (i TINYINT);");
+  assert!(d.iter().any(|x| x.code == "sql316"));
+}
+
+#[test]
+fn sql316_flags_longtext() {
+  let d = diags("CREATE TABLE t (n LONGTEXT);");
+  assert!(d.iter().any(|x| x.code == "sql316"));
+}
+
+// ===== sql317 MSSQL [bracket] quoting =====
+
+#[test]
+fn sql317_flags_bracket_id() {
+  let d = diags("SELECT [name] FROM users;");
+  assert!(d.iter().any(|x| x.code == "sql317"));
+}
+
+#[test]
+fn sql317_quiet_array_subscript() {
+  let d = diags("SELECT arr[0] FROM t;");
+  assert!(!d.iter().any(|x| x.code == "sql317"));
+}
+
+// ===== sql318 SELECT TOP =====
+
+#[test]
+fn sql318_flags_select_top() {
+  let d = diags("SELECT TOP 10 * FROM users;");
+  assert!(d.iter().any(|x| x.code == "sql318"));
+}
+
+// ===== sql319 ISNULL/NVL/IFNULL =====
+
+#[test]
+fn sql319_flags_isnull_fn() {
+  let d = diags("SELECT ISNULL(name, 'unknown') FROM users;");
+  assert!(d.iter().any(|x| x.code == "sql319"));
+}
+
+#[test]
+fn sql319_flags_nvl() {
+  let d = diags("SELECT NVL(name, 'unknown') FROM users;");
+  assert!(d.iter().any(|x| x.code == "sql319"));
+}
+
+// ===== sql320 GETDATE/SYSDATE =====
+
+#[test]
+fn sql320_flags_getdate() {
+  let d = diags("SELECT GETDATE();");
+  assert!(d.iter().any(|x| x.code == "sql320"));
+}
+
+#[test]
+fn sql320_flags_sysdate() {
+  let d = diags("SELECT SYSDATE FROM dual;");
+  assert!(d.iter().any(|x| x.code == "sql320"));
+}
+
+// ===== sql323 FROM DUAL =====
+
+#[test]
+fn sql323_flags_from_dual() {
+  let d = diags("SELECT 1 FROM DUAL;");
+  assert!(d.iter().any(|x| x.code == "sql323"));
+}
+
+// ===== sql324 ROWNUM =====
+
+#[test]
+fn sql324_flags_rownum() {
+  let d = diags("SELECT * FROM users WHERE ROWNUM <= 10;");
+  assert!(d.iter().any(|x| x.code == "sql324"));
+}
+
+// ===== sql326 Oracle (+) outer join =====
+
+#[test]
+fn sql326_flags_oracle_outer() {
+  let d = diags("SELECT * FROM a, b WHERE a.id = b.aid(+);");
+  assert!(d.iter().any(|x| x.code == "sql326"));
+}
+
+// ===== sql228 ANY/ALL multi-col subquery =====
+
+#[test]
+fn sql228_flags_two_col_subq() {
+  let d = diags("SELECT * FROM t WHERE id = ANY (SELECT 1, 2 FROM x);");
+  assert!(d.iter().any(|x| x.code == "sql228"));
+}
+
+#[test]
+fn sql228_quiet_single_col_subq() {
+  let d = diags("SELECT * FROM t WHERE id = ANY (SELECT 1 FROM x);");
+  assert!(!d.iter().any(|x| x.code == "sql228"));
+}
+
+// ===== sql290 percentile_cont without WITHIN GROUP =====
+
+#[test]
+fn sql290_flags_percentile_no_within() {
+  let d = diags("SELECT percentile_cont(0.5) FROM t;");
+  assert!(d.iter().any(|x| x.code == "sql290"));
+}
+
+#[test]
+fn sql290_quiet_percentile_with_within() {
+  let d = diags("SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY x) FROM t;");
+  assert!(!d.iter().any(|x| x.code == "sql290"));
+}
+
+// ===== sql294 nested BEGIN =====
+
+#[test]
+fn sql294_flags_nested_begin() {
+  let d = diags("BEGIN;\nBEGIN;");
+  assert!(d.iter().any(|x| x.code == "sql294"));
+}
+
+#[test]
+fn sql294_quiet_single_begin() {
+  let d = diags("BEGIN;");
+  assert!(!d.iter().any(|x| x.code == "sql294"));
+}
