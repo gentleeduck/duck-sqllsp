@@ -23,8 +23,22 @@ impl LintRule for Rule {
     let StatementKind::Insert(ins) = &stmt.kind else { return };
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let raw = &source[start..end];
+    // Strip line comments + block comments + string literals before
+    // scanning. `-- SELECT x;` in a leading comment must not be mistaken
+    // for the INSERT's source-rowset SELECT (was firing on
+    // `-- SELECT asdfsd from users;\nINSERT INTO users (a,b,c) VALUES(...)`).
+    let body_owned = strip_noise(raw);
+    let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
+    // VALUES form (`INSERT ... VALUES (...)`): no SELECT-source involved;
+    // tuple-arity mismatches are handled elsewhere. If VALUES occurs
+    // before any SELECT, skip.
+    match (upper.find("VALUES"), upper.find("SELECT")) {
+      (Some(v), Some(s)) if v < s => return,
+      (Some(_), None) => return,
+      _ => {},
+    }
     // Expected column count = explicit col list, else from catalog table.
     let expected = if !ins.columns.is_empty() {
       ins.columns.len()
@@ -79,6 +93,46 @@ fn count_top_level_commas(text: &str) -> usize {
     i += 1;
   }
   commas
+}
+
+/// Replace `-- ... \n` lines, `/* ... */` blocks, and `'...'` literals with
+/// equal-length space runs so byte offsets are preserved.
+fn strip_noise(s: &str) -> String {
+  let bytes = s.as_bytes();
+  let mut out: Vec<u8> = bytes.to_vec();
+  let n = out.len();
+  let mut i = 0usize;
+  while i < n {
+    if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
+      while i < n && out[i] != b'\n' {
+        out[i] = b' ';
+        i += 1;
+      }
+      continue;
+    }
+    if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
+      while i + 1 < n && !(out[i] == b'*' && out[i + 1] == b'/') {
+        out[i] = b' ';
+        i += 1;
+      }
+      if i + 1 < n {
+        out[i] = b' ';
+        out[i + 1] = b' ';
+        i += 2;
+      }
+      continue;
+    }
+    if out[i] == b'\'' {
+      let q = i;
+      i += 1;
+      while i < n && out[i] != b'\'' { i += 1 }
+      for k in q + 1..i.min(n) { out[k] = b' ' }
+      if i < n { i += 1; }
+      continue;
+    }
+    i += 1;
+  }
+  String::from_utf8(out).unwrap_or_else(|_| s.to_string())
 }
 
 fn paren_close_at_depth_zero(text: &str, from: usize) -> Option<usize> {

@@ -13,8 +13,11 @@
 //!     the empty tag `$$ ... $$`).
 //!   - Backslash escapes inside quoted strings.
 //!
-//! Block comments and line comments are not recognised; they are passed
-//! through to the parser unchanged. The parser handles them.
+//! Line comments (`--` to end-of-line) and block comments (`/* ... */`,
+//! including nested PG-style blocks) are stripped *for the purpose of
+//! finding statement boundaries*. A `;` inside a comment must not
+//! split the statement, otherwise the body fragment after `;` parses
+//! as broken SQL and produces a sql000 syntax error.
 
 use text_size::{TextRange, TextSize};
 
@@ -28,9 +31,40 @@ pub fn split_statements(src: &str) -> Vec<(String, TextRange)> {
   let mut in_single = false;
   let mut in_double = false;
   let mut dollar_tag: Option<String> = None;
+  let mut block_depth: u32 = 0;
 
   while i < bytes.len() {
     let c = bytes[i] as char;
+
+    // Block comment open / close (nestable, PG-flavoured).
+    if !in_single && !in_double && dollar_tag.is_none() {
+      if block_depth > 0 {
+        if i + 1 < bytes.len() && bytes[i] == b'*' && bytes[i + 1] == b'/' {
+          block_depth -= 1;
+          i += 2;
+          continue;
+        }
+        if i + 1 < bytes.len() && bytes[i] == b'/' && bytes[i + 1] == b'*' {
+          block_depth += 1;
+          i += 2;
+          continue;
+        }
+        i += 1;
+        continue;
+      }
+      if i + 1 < bytes.len() && bytes[i] == b'/' && bytes[i + 1] == b'*' {
+        block_depth = 1;
+        i += 2;
+        continue;
+      }
+      // Line comment: skip to end of line.
+      if i + 1 < bytes.len() && bytes[i] == b'-' && bytes[i + 1] == b'-' {
+        while i < bytes.len() && bytes[i] != b'\n' {
+          i += 1;
+        }
+        continue;
+      }
+    }
 
     if let Some(tag) = &dollar_tag {
       let closer = format!("${tag}$");

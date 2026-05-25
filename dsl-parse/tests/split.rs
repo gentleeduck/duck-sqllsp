@@ -43,6 +43,21 @@ fn respects_dollar_quoting_with_tag() {
 }
 
 #[test]
+fn ignores_semicolons_in_line_comments() {
+  let src = "-- cycle 33: hunt; false positives\nSELECT 1;";
+  let parts = split_statements(src);
+  assert_eq!(parts.len(), 1);
+  assert!(parts[0].0.contains("SELECT 1"));
+}
+
+#[test]
+fn ignores_semicolons_in_block_comments() {
+  let src = "/* a; b; c */ SELECT 1; /* nope; */ SELECT 2;";
+  let parts = split_statements(src);
+  assert_eq!(parts.len(), 2);
+}
+
+#[test]
 fn respects_empty_dollar_tag() {
   let src = "DO $$ BEGIN x := 1; END $$; SELECT 1;";
   let parts = split_statements(src);
