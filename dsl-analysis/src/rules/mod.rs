@@ -32,6 +32,7 @@ pub mod character_varying_no_limit;
 pub mod column_default_volatile;
 pub mod commit_in_function;
 pub mod copy_file_path;
+pub mod copy_header_no_csv;
 pub mod copy_no_format;
 pub mod count_one_vs_star;
 pub mod count_star_returns_one;
@@ -500,5 +501,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(limit_zero::Rule),
     Box::new(nullif_type_mismatch::Rule),
     Box::new(nested_begin::Rule),
+    Box::new(copy_header_no_csv::Rule),
   ]
 }
