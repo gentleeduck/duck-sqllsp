@@ -4,7 +4,7 @@
 //! as inherent methods on `Catalog` for ergonomic call sites:
 //! `catalog.find_table(Some("public"), "users")`.
 
-use crate::model::{Catalog, Column, Extension, IndexDef, Policy, Sequence, Table, Trigger, Type};
+use crate::model::{Catalog, Column, Constraint, Extension, IndexDef, Policy, Sequence, Table, Trigger, Type};
 
 impl Catalog {
   pub fn tables(&self) -> impl Iterator<Item = &Table> {
@@ -72,6 +72,16 @@ impl Catalog {
     for t in self.tables() {
       if let Some(i) = t.indexes.iter().find(|i| i.name == name) {
         return Some((t, i));
+      }
+    }
+    None
+  }
+
+  /// Find a constraint by name, plus its target table.
+  pub fn find_constraint(&self, name: &str) -> Option<(&Table, &Constraint)> {
+    for t in self.tables() {
+      if let Some(c) = t.constraints.iter().find(|c| c.name.eq_ignore_ascii_case(name)) {
+        return Some((t, c));
       }
     }
     None

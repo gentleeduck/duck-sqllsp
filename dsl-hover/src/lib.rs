@@ -455,6 +455,34 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
     }
     return Some(s);
   }
+  if let Some((t, c)) = catalog.find_constraint(token) {
+    let kind = match c.kind {
+      dsl_catalog::ConstraintKind::PrimaryKey => "PRIMARY KEY",
+      dsl_catalog::ConstraintKind::ForeignKey => "FOREIGN KEY",
+      dsl_catalog::ConstraintKind::Unique => "UNIQUE",
+      dsl_catalog::ConstraintKind::Check => "CHECK",
+    };
+    let mut s = format!(
+      "# `{}`\n_{} constraint on `{}.{}`_\n\n- **columns**: `{}`\n",
+      c.name,
+      kind,
+      t.schema,
+      t.name,
+      c.columns.join(", "),
+    );
+    if let Some(r) = &c.references {
+      s.push_str(&format!(
+        "- **references**: `{}.{}` ({})\n",
+        r.schema,
+        r.table,
+        r.columns.join(", "),
+      ));
+    }
+    if let Some(def) = &c.definition {
+      s.push_str(&format!("\n```sql\n{def}\n```\n"));
+    }
+    return Some(s);
+  }
   if let Some(s) = catalog.find_sequence(None, token) {
     let cycle = if s.cycle { "yes" } else { "no" };
     let owner = s.owned_by_column.as_deref().unwrap_or("(standalone)");
