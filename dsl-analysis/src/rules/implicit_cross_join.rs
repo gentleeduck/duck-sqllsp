@@ -25,6 +25,21 @@ impl LintRule for Rule {
     if s.from.len() <= 1 {
       return;
     }
+    // Skip when any FROM source is synthetic (function-call / subquery
+    // / CTE alias) -- those bind via outer-side correlation (LATERAL)
+    // or via subquery scope; the rule's "join must have qualifier on
+    // each table" heuristic doesn't fit.
+    if s.from.iter().any(|t| t.schema.as_deref().map_or(false, |sc| sc.starts_with('<'))) {
+      return;
+    }
+    // Skip LATERAL forms explicitly -- they're correlated joins, not
+    // cross joins.
+    let stmt_start: usize = u32::from(stmt.range.start()) as usize;
+    let stmt_end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
+    let stmt_upper_for_lateral = source[stmt_start..stmt_end].to_ascii_uppercase();
+    if stmt_upper_for_lateral.contains("LATERAL") {
+      return;
+    }
 
     // Collect FROM-side table names + aliases.
     let names: Vec<String> = s
