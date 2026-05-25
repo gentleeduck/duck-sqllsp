@@ -1172,6 +1172,76 @@ pub fn build() -> HashMap<&'static str, Entry> {
     "SELECT pg_try_advisory_lock(42);",
     pg("functions-admin.html#FUNCTIONS-ADVISORY-LOCKS")
   );
+  f!(
+    "pg_advisory_unlock",
+    "pg_advisory_unlock(bigint) -> boolean",
+    "Release a session-level advisory lock.",
+    "SELECT pg_advisory_unlock(42);",
+    pg("functions-admin.html#FUNCTIONS-ADVISORY-LOCKS")
+  );
+  f!(
+    "pg_advisory_unlock_all",
+    "pg_advisory_unlock_all() -> void",
+    "Release all session-level advisory locks held by the session.",
+    "SELECT pg_advisory_unlock_all();",
+    pg("functions-admin.html#FUNCTIONS-ADVISORY-LOCKS")
+  );
+  f!(
+    "pg_advisory_xact_lock",
+    "pg_advisory_xact_lock(bigint) -> void",
+    "Transaction-scoped advisory lock; released at COMMIT/ROLLBACK.",
+    "SELECT pg_advisory_xact_lock(42);",
+    pg("functions-admin.html#FUNCTIONS-ADVISORY-LOCKS")
+  );
+  f!(
+    "pg_try_advisory_xact_lock",
+    "pg_try_advisory_xact_lock(bigint) -> boolean",
+    "Non-blocking transaction-scoped advisory lock attempt.",
+    "SELECT pg_try_advisory_xact_lock(42);",
+    pg("functions-admin.html#FUNCTIONS-ADVISORY-LOCKS")
+  );
+  f!(
+    "pg_advisory_lock_shared",
+    "pg_advisory_lock_shared(bigint) -> void",
+    "Acquire a session-level shared advisory lock.",
+    "SELECT pg_advisory_lock_shared(42);",
+    pg("functions-admin.html#FUNCTIONS-ADVISORY-LOCKS")
+  );
+  f!(
+    "pg_try_advisory_lock_shared",
+    "pg_try_advisory_lock_shared(bigint) -> boolean",
+    "Non-blocking session-level shared advisory lock attempt.",
+    "SELECT pg_try_advisory_lock_shared(42);",
+    pg("functions-admin.html#FUNCTIONS-ADVISORY-LOCKS")
+  );
+  f!(
+    "pg_advisory_xact_lock_shared",
+    "pg_advisory_xact_lock_shared(bigint) -> void",
+    "Transaction-scoped shared advisory lock.",
+    "SELECT pg_advisory_xact_lock_shared(42);",
+    pg("functions-admin.html#FUNCTIONS-ADVISORY-LOCKS")
+  );
+  f!(
+    "hashtext",
+    "hashtext(text) -> integer",
+    "Hash a text value into an integer (useful for advisory-lock keys).",
+    "SELECT pg_advisory_lock(hashtext('job-x'));",
+    pg("functions-string.html")
+  );
+  f!(
+    "hashtextextended",
+    "hashtextextended(text, bigint) -> bigint",
+    "Extended (64-bit) hash of a text value with a seed.",
+    "SELECT hashtextextended('k', 0);",
+    pg("functions-string.html")
+  );
+  f!(
+    "hashbpchar",
+    "hashbpchar(character) -> integer",
+    "Hash function for `character`/`bpchar`.",
+    "SELECT hashbpchar('abc'::char(3));",
+    pg("functions-string.html")
+  );
 
   // ---- Trigonometric ----
   f!("sin",   "sin(double precision) -> double precision", "Sine, radians.",   "SELECT sin(0);", pg("functions-math.html"));
