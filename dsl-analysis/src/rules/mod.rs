@@ -210,6 +210,7 @@ pub mod insert_into_generated;
 pub mod savepoint_outside_tx;
 pub mod secdef_no_search_path;
 pub mod self_fk_no_deferrable;
+pub mod serial_vs_identity;
 pub mod trigger_wrong_row_alias;
 pub mod truncate_in_trigger;
 pub mod varchar_length;
@@ -534,5 +535,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(revoke_missing_from::Rule),
     Box::new(psql_backslash::Rule),
     Box::new(string_agg_no_order::Rule),
+    Box::new(serial_vs_identity::Rule),
   ]
 }
