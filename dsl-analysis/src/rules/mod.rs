@@ -103,6 +103,7 @@ pub mod mv_no_data_query;
 pub mod mysql_interval_syntax;
 pub mod mutating_without_where;
 pub mod negative_limit_offset;
+pub mod nested_begin;
 pub mod notify_unlistened;
 pub mod not_in_nullable;
 pub mod not_in_subquery;
@@ -498,5 +499,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(grant_all_too_broad::Rule),
     Box::new(limit_zero::Rule),
     Box::new(nullif_type_mismatch::Rule),
+    Box::new(nested_begin::Rule),
   ]
 }
