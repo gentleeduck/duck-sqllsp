@@ -1173,5 +1173,73 @@ pub fn build() -> HashMap<&'static str, Entry> {
     pg("functions-admin.html#FUNCTIONS-ADVISORY-LOCKS")
   );
 
+  // ---- Trigonometric ----
+  f!("sin",   "sin(double precision) -> double precision", "Sine, radians.",   "SELECT sin(0);", pg("functions-math.html"));
+  f!("cos",   "cos(double precision) -> double precision", "Cosine, radians.", "SELECT cos(0);", pg("functions-math.html"));
+  f!("tan",   "tan(double precision) -> double precision", "Tangent, radians.", "SELECT tan(0);", pg("functions-math.html"));
+  f!("asin",  "asin(double precision) -> double precision", "Arc sine, radians.",   "SELECT asin(1);", pg("functions-math.html"));
+  f!("acos",  "acos(double precision) -> double precision", "Arc cosine, radians.", "SELECT acos(1);", pg("functions-math.html"));
+  f!("atan",  "atan(double precision) -> double precision", "Arc tangent, radians.","SELECT atan(1);", pg("functions-math.html"));
+  f!("atan2", "atan2(y double, x double) -> double precision", "Arc tangent of y/x, radians.", "SELECT atan2(1, 1);", pg("functions-math.html"));
+
+  // ---- Bit aggregates ----
+  f!("bit_and", "bit_and(integer) -> integer", "Bitwise AND of all non-null values.", "SELECT bit_and(flags) FROM perms;", pg("functions-aggregate.html"));
+  f!("bit_or",  "bit_or(integer) -> integer",  "Bitwise OR of all non-null values.",  "SELECT bit_or(flags) FROM perms;", pg("functions-aggregate.html"));
+  f!("bit_xor", "bit_xor(integer) -> integer", "Bitwise XOR of all non-null values (PG14+).", "SELECT bit_xor(checksum) FROM blocks;", pg("functions-aggregate.html"));
+
+  // ---- Stats aggregates ----
+  f!("corr",       "corr(y double, x double) -> double precision", "Correlation coefficient.", "SELECT corr(price, qty) FROM items;", pg("functions-aggregate.html"));
+  f!("covar_pop",  "covar_pop(y, x) -> double precision",  "Population covariance.", "SELECT covar_pop(price, qty) FROM items;", pg("functions-aggregate.html"));
+  f!("covar_samp", "covar_samp(y, x) -> double precision", "Sample covariance.",     "SELECT covar_samp(price, qty) FROM items;", pg("functions-aggregate.html"));
+  f!("stddev_pop", "stddev_pop(numeric) -> numeric", "Population standard deviation.", "SELECT stddev_pop(grade) FROM tests;", pg("functions-aggregate.html"));
+  f!("stddev_samp","stddev_samp(numeric) -> numeric", "Sample standard deviation.",     "SELECT stddev_samp(grade) FROM tests;", pg("functions-aggregate.html"));
+  f!("var_pop",    "var_pop(numeric) -> numeric", "Population variance.", "SELECT var_pop(grade) FROM tests;", pg("functions-aggregate.html"));
+  f!("var_samp",   "var_samp(numeric) -> numeric", "Sample variance.",     "SELECT var_samp(grade) FROM tests;", pg("functions-aggregate.html"));
+
+  // ---- Full-text search ----
+  f!("to_tsvector",        "to_tsvector([config regconfig,] text) -> tsvector", "Convert text to a tsvector.", "SELECT to_tsvector('english', 'duck typing');", pg("textsearch-controls.html"));
+  f!("to_tsquery",         "to_tsquery([config,] text) -> tsquery", "Convert query text to tsquery.",          "SELECT to_tsquery('english', 'duck & typing');", pg("textsearch-controls.html"));
+  f!("plainto_tsquery",    "plainto_tsquery([config,] text) -> tsquery", "Plain phrase -> tsquery (no operators).", "SELECT plainto_tsquery('duck typing');", pg("textsearch-controls.html"));
+  f!("phraseto_tsquery",   "phraseto_tsquery([config,] text) -> tsquery", "Phrase tsquery using `<->`.", "SELECT phraseto_tsquery('duck typing');", pg("textsearch-controls.html"));
+  f!("websearch_to_tsquery","websearch_to_tsquery([config,] text) -> tsquery", "Web-search-style tsquery (quotes, OR, -term).", "SELECT websearch_to_tsquery('\"duck typing\" OR rust');", pg("textsearch-controls.html"));
+  f!("ts_rank",            "ts_rank(tsvector, tsquery) -> real",    "Rank a document against a query.", "SELECT ts_rank(doc, q) FROM ...", pg("textsearch-controls.html"));
+  f!("ts_rank_cd",         "ts_rank_cd(tsvector, tsquery) -> real", "Cover density rank.",              "SELECT ts_rank_cd(doc, q) FROM ...", pg("textsearch-controls.html"));
+  f!("ts_headline",        "ts_headline([config,] text, tsquery) -> text", "Snippet with matched terms highlighted.", "SELECT ts_headline('the duck quacks', q);", pg("textsearch-controls.html"));
+
+  // ---- JSONB path (SQL/JSON) ----
+  f!("jsonb_path_exists",       "jsonb_path_exists(jsonb, jsonpath) -> boolean", "True if any item matches the path.", "SELECT jsonb_path_exists(doc, '$.a.b ? (@ > 0)');", pg("functions-json.html"));
+  f!("jsonb_path_match",        "jsonb_path_match(jsonb, jsonpath) -> boolean",  "Match path returning a single boolean.", "SELECT jsonb_path_match(doc, 'exists($.x)');", pg("functions-json.html"));
+  f!("jsonb_path_query_first",  "jsonb_path_query_first(jsonb, jsonpath) -> jsonb", "First matching item or NULL.", "SELECT jsonb_path_query_first(doc, '$.items[0]');", pg("functions-json.html"));
+  f!("jsonb_path_query_array",  "jsonb_path_query_array(jsonb, jsonpath) -> jsonb", "All matches packed into a jsonb array.", "SELECT jsonb_path_query_array(doc, '$.items[*]');", pg("functions-json.html"));
+  f!("jsonb_insert", "jsonb_insert(target jsonb, path text[], new jsonb [, insert_after bool]) -> jsonb", "Insert a value at a jsonb path.", "SELECT jsonb_insert('{\"a\":[1]}'::jsonb, '{a,1}', '2');", pg("functions-json.html"));
+
+  // ---- Object lookups (regclass et al.) ----
+  f!("to_regclass",     "to_regclass(text) -> regclass", "OID lookup; NULL when missing (vs `::regclass` which errors).", "SELECT to_regclass('public.users');", pg("functions-info.html#FUNCTIONS-INFO-OBJECT"));
+  f!("to_regproc",      "to_regproc(text) -> regproc",   "OID lookup for a function name.", "SELECT to_regproc('lower');", pg("functions-info.html#FUNCTIONS-INFO-OBJECT"));
+  f!("to_regtype",      "to_regtype(text) -> regtype",   "OID lookup for a type name.",     "SELECT to_regtype('int4');", pg("functions-info.html#FUNCTIONS-INFO-OBJECT"));
+  f!("to_regnamespace", "to_regnamespace(text) -> regnamespace", "OID lookup for a schema.", "SELECT to_regnamespace('public');", pg("functions-info.html#FUNCTIONS-INFO-OBJECT"));
+  f!("to_regrole",      "to_regrole(text) -> regrole",   "OID lookup for a role.",          "SELECT to_regrole('postgres');", pg("functions-info.html#FUNCTIONS-INFO-OBJECT"));
+  f!("pg_get_userbyid", "pg_get_userbyid(oid) -> name",  "Role name for OID.",              "SELECT pg_get_userbyid(10);", pg("functions-info.html"));
+  f!("pg_get_serial_sequence", "pg_get_serial_sequence(table_name, column_name) -> text", "Sequence backing a SERIAL/IDENTITY column.", "SELECT pg_get_serial_sequence('users', 'id');", pg("functions-info.html"));
+
+  // ---- Size & stats ----
+  f!("pg_table_size",   "pg_table_size(regclass) -> bigint",  "On-disk size of a table (excluding indexes, TOAST sums separately).", "SELECT pg_size_pretty(pg_table_size('users'));", pg("functions-admin.html"));
+  f!("pg_indexes_size", "pg_indexes_size(regclass) -> bigint","Total size of all indexes attached to a relation.", "SELECT pg_size_pretty(pg_indexes_size('users'));", pg("functions-admin.html"));
+  f!("pg_relation_size","pg_relation_size(regclass [, fork]) -> bigint", "Size of one fork of a relation.", "SELECT pg_relation_size('users');", pg("functions-admin.html"));
+  f!("pg_total_relation_size", "pg_total_relation_size(regclass) -> bigint", "Total disk usage of a relation including indexes + TOAST.", "SELECT pg_size_pretty(pg_total_relation_size('users'));", pg("functions-admin.html"));
+  f!("pg_database_size","pg_database_size(name) -> bigint",   "Total disk usage of a database.", "SELECT pg_size_pretty(pg_database_size('app'));", pg("functions-admin.html"));
+
+  // ---- Enums / arrays ----
+  f!("enum_first", "enum_first(anyenum) -> anyenum", "First label of an enum.",  "SELECT enum_first(NULL::status);", pg("functions-enum.html"));
+  f!("enum_last",  "enum_last(anyenum) -> anyenum",  "Last label of an enum.",   "SELECT enum_last(NULL::status);", pg("functions-enum.html"));
+  f!("enum_range", "enum_range([anyenum [, anyenum]]) -> anyarray", "Array of enum labels in declared order.", "SELECT enum_range(NULL::status);", pg("functions-enum.html"));
+  f!("array_fill", "array_fill(anyelement, int[] [, int[]]) -> anyarray", "Create an array filled with copies of one value.", "SELECT array_fill(0, ARRAY[3]);", pg("functions-array.html"));
+
+  // ---- Misc heavy traffic ----
+  f!("concat_ws", "concat_ws(sep text, args...) -> text", "Concatenate non-null args with separator.", "SELECT concat_ws(', ', first, middle, last);", pg("functions-string.html"));
+  f!("to_regoperator", "to_regoperator(text) -> regoperator", "OID lookup for an operator with operand types.", "SELECT to_regoperator('=(int,int)');", pg("functions-info.html#FUNCTIONS-INFO-OBJECT"));
+  f!("pg_current_xact_id", "pg_current_xact_id() -> xid8", "Current transaction's xid8 (read-write).", "SELECT pg_current_xact_id();", pg("functions-info.html"));
+  f!("pg_xact_status",     "pg_xact_status(xid8) -> text",  "Status of a transaction: committed / in progress / aborted.", "SELECT pg_xact_status(pg_current_xact_id());", pg("functions-info.html"));
+
   m
 }
