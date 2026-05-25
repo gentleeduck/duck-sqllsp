@@ -23,6 +23,7 @@ pub mod case_single_when;
 pub mod cast_text_in_distinct;
 pub mod cast_text_to_int_in_where;
 pub mod char_length_vs_length;
+pub mod check_always_false;
 pub mod check_always_true;
 pub mod chained_comparison;
 pub mod char_n_type;
@@ -456,5 +457,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(format_no_placeholders::Rule),
     Box::new(cursor_with_hold_no_tx::Rule),
     Box::new(gist_on_scalar::Rule),
+    Box::new(check_always_false::Rule),
   ]
 }
