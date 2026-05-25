@@ -189,7 +189,9 @@ pub mod trigger_wrong_row_alias;
 pub mod truncate_in_trigger;
 pub mod varchar_length;
 pub mod date_literal_format;
+pub mod alter_add_check_no_not_valid;
 pub mod alter_column_type;
+pub mod alter_set_not_null_scan;
 pub mod alter_set_tablespace;
 pub mod alter_drop_just_created;
 pub mod array_eq_with_null;
@@ -470,5 +472,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(comment_fn_no_args::Rule),
     Box::new(literal_div_zero::Rule),
     Box::new(comment_constraint_no_on::Rule),
+    Box::new(alter_add_check_no_not_valid::Rule),
+    Box::new(alter_set_not_null_scan::Rule),
   ]
 }
