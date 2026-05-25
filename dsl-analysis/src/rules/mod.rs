@@ -129,6 +129,7 @@ pub mod savepoint_outside_tx;
 pub mod truncate_in_trigger;
 pub mod varchar_length;
 pub mod date_literal_format;
+pub mod comment_on_unknown;
 pub mod drop_column_fk;
 pub mod fk_unknown_column;
 pub mod int_range;
@@ -286,5 +287,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(int_range::Rule),
     Box::new(fk_unknown_column::Rule),
     Box::new(drop_column_fk::Rule),
+    Box::new(comment_on_unknown::Rule),
   ]
 }
