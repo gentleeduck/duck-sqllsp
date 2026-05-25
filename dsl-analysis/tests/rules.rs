@@ -232,57 +232,57 @@ fn sql017_ignores_columns_inside_aggregate_args() {
   assert!(!d.iter().any(|x| x.code == "sql017"));
 }
 
-// ===== sql020 prefer-alias =================================================
+// ===== sql021 prefer-alias =================================================
 
 #[test]
-fn sql020_warns_when_alias_exists() {
+fn sql021_warns_when_alias_exists() {
   let d = diags("SELECT users.id FROM users AS u;");
   assert!(
-    d.iter().any(|x| x.code == "sql020"),
-    "expected sql020, got {:?}",
+    d.iter().any(|x| x.code == "sql021"),
+    "expected sql021, got {:?}",
     d.iter().map(|x| x.code).collect::<Vec<_>>()
   );
 }
 
 #[test]
-fn sql020_quiet_when_no_alias() {
+fn sql021_quiet_when_no_alias() {
   let d = diags("SELECT users.id FROM users;");
-  assert!(!d.iter().any(|x| x.code == "sql020"));
+  assert!(!d.iter().any(|x| x.code == "sql021"));
 }
 
 #[test]
-fn sql020_quiet_when_using_alias() {
+fn sql021_quiet_when_using_alias() {
   let d = diags("SELECT u.id FROM users AS u;");
-  assert!(!d.iter().any(|x| x.code == "sql020"));
+  assert!(!d.iter().any(|x| x.code == "sql021"));
 }
 
 #[test]
-fn sql020_fires_for_each_bare_qualified_reference() {
+fn sql021_fires_for_each_bare_qualified_reference() {
   let d = diags("SELECT users.id, users.email FROM users u;");
-  let count = d.iter().filter(|x| x.code == "sql020").count();
-  assert!(count >= 2, "expected ≥2 sql020 hits, got {count}: {:?}", d);
+  let count = d.iter().filter(|x| x.code == "sql021").count();
+  assert!(count >= 2, "expected ≥2 sql021 hits, got {count}: {:?}", d);
 }
 
 #[test]
-fn sql020_severity_is_hint() {
+fn sql021_severity_is_hint() {
   let d = diags("SELECT users.id FROM users u;");
-  let hit = d.iter().find(|x| x.code == "sql020").expect("sql020 missing");
+  let hit = d.iter().find(|x| x.code == "sql021").expect("sql021 missing");
   assert_eq!(hit.severity, Severity::Hint);
 }
 
 #[test]
-fn sql020_quiet_on_ddl() {
+fn sql021_quiet_on_ddl() {
   // CREATE references the bare table name by design.
   let d = diags("CREATE INDEX ix ON users (id);");
-  assert!(!d.iter().any(|x| x.code == "sql020"));
+  assert!(!d.iter().any(|x| x.code == "sql021"));
 }
 
 #[test]
-fn sql020_quiet_when_bare_word_is_substring_only() {
+fn sql021_quiet_when_bare_word_is_substring_only() {
   // `users_archive` shouldn't trip the rule even though it contains
   // "users" as a substring.
   let d = diags("SELECT users_archive.id FROM users u;");
-  assert!(!d.iter().any(|x| x.code == "sql020"), "false positive: {:?}", d);
+  assert!(!d.iter().any(|x| x.code == "sql021"), "false positive: {:?}", d);
 }
 
 // ===== did-you-mean suggestions =============================================

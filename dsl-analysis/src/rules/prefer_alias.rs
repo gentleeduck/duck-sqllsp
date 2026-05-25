@@ -1,4 +1,4 @@
-//! sql020: prefer the declared alias over the bare table name.
+//! sql021: prefer the declared alias over the bare table name.
 //!
 //! When a statement declares `FROM users AS u`, references to columns
 //! should go through the alias (`u.id`), not through the raw table
@@ -17,7 +17,7 @@ pub struct Rule;
 
 impl LintRule for Rule {
   fn code(&self) -> &'static str {
-    "sql020"
+    "sql021"
   }
   fn default_severity(&self) -> Severity {
     Severity::Hint
@@ -51,7 +51,7 @@ impl LintRule for Rule {
     for (table, alias) in &aliases {
       for hit in find_qualified_uses(body, table) {
         out.push(Diagnostic {
-          code: "sql020",
+          code: "sql021",
           severity: Severity::Hint,
           message: format!("use alias `{alias}` instead of `{table}` (declared in this statement)"),
           range: shift_range(stmt.range, hit.0, hit.1),
