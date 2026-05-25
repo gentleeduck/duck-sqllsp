@@ -215,6 +215,20 @@ pub fn run(state: &ServerState, params: WorkspaceSymbolParams) -> Option<Vec<Sym
         container_name: Some(format!("{}.{}", t.schema, t.name)),
       });
     }
+    for c in &t.constraints {
+      if !query.is_empty() && !c.name.to_ascii_lowercase().contains(&query) {
+        continue;
+      }
+      #[allow(deprecated)]
+      out.push(SymbolInformation {
+        name: format!("{}.{}.{}", t.schema, t.name, c.name),
+        kind: SymbolKind::INTERFACE, // constraint -- closest LSP-symbol cue
+        tags: None,
+        deprecated: None,
+        location: Location { uri: synthetic.clone(), range: blank },
+        container_name: Some(format!("{}.{}", t.schema, t.name)),
+      });
+    }
   }
 
   if out.is_empty() { None } else { Some(out) }
