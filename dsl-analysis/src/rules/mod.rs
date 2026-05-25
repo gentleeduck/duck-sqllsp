@@ -42,6 +42,7 @@ pub mod delete_no_where_in_fn;
 pub mod deprecated_function;
 pub mod distinct_after_group_by;
 pub mod distinct_on_no_order;
+pub mod distinct_on_subq_no_order;
 pub mod distinct_with_aggregate;
 pub mod do_block_bare_select;
 pub mod empty_comment;
@@ -49,6 +50,7 @@ pub mod empty_in_list;
 pub mod exit_outside_loop;
 pub mod exists_select_star;
 pub mod explain_analyze_in_dml;
+pub mod extension_no_if_not_exists;
 pub mod extract_unknown_field;
 pub mod generate_series_no_alias;
 pub mod gin_on_scalar;
@@ -434,5 +436,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(set_role_in_function::Rule),
     Box::new(drop_function_no_args::Rule),
     Box::new(merge_missing_when::Rule),
+    Box::new(extension_no_if_not_exists::Rule),
+    Box::new(distinct_on_subq_no_order::Rule),
   ]
 }
