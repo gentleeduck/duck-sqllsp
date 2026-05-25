@@ -158,6 +158,7 @@ pub mod star_with_order_by_position;
 pub mod sql_lang_uses_new_old;
 pub mod system_catalog_dml;
 pub mod text_int_arithmetic;
+pub mod tg_var_in_non_trigger;
 pub mod time_with_timezone;
 pub mod timestamp_int_arithmetic;
 pub mod timestamp_without_tz;
@@ -221,6 +222,7 @@ pub mod window_no_order;
 pub mod drop_cascade_chain;
 pub mod drop_column_fk;
 pub mod drop_function_no_args;
+pub mod drop_role_no_reassign;
 pub mod drop_schema_no_cascade;
 pub mod fk_unknown_column;
 pub mod int_range;
@@ -478,5 +480,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(alter_set_not_null_scan::Rule),
     Box::new(where_true_placeholder::Rule),
     Box::new(analyze_in_tx::Rule),
+    Box::new(tg_var_in_non_trigger::Rule),
+    Box::new(drop_role_no_reassign::Rule),
   ]
 }
