@@ -42,6 +42,23 @@ enum Cmd {
     #[arg(long)]
     severity: Option<String>,
   },
+  /// Lint one or more .sql files; emit diagnostics to stdout.
+  ///
+  /// Exit status: 0 = no errors (warnings/hints OK); 1 = at least one
+  /// error-level diagnostic; 2 = an input file could not be read.
+  Lint {
+    /// File paths to lint. Use `-` to read SQL from stdin.
+    files: Vec<String>,
+    /// Output format: text (human, default) or json (one row per diagnostic).
+    #[arg(long, default_value = "text")]
+    format: String,
+    /// Treat warnings as errors (exit 1 if any warnings found).
+    #[arg(long)]
+    warnings_as_errors: bool,
+    /// SQL dialect: postgres (default), mysql, sqlite, generic.
+    #[arg(long, default_value = "postgres")]
+    dialect: String,
+  },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -99,7 +116,82 @@ fn main() -> anyhow::Result<()> {
       for (sev, n) in by_sev { println!("  {sev}: {n}"); }
       Ok(())
     },
+    Cmd::Lint { files, format, warnings_as_errors, dialect } => {
+      let dialect = match dialect.to_ascii_lowercase().as_str() {
+        "postgres" | "pg" => dsl_parse::Dialect::Postgres,
+        "mysql" => dsl_parse::Dialect::MySql,
+        "sqlite" => dsl_parse::Dialect::SQLite,
+        "generic" => dsl_parse::Dialect::Generic,
+        other => {
+          eprintln!("error: unknown dialect '{other}'; valid: postgres, mysql, sqlite, generic");
+          std::process::exit(2);
+        }
+      };
+      let json = matches!(format.as_str(), "json");
+      let mut error_count = 0usize;
+      let mut warning_count = 0usize;
+      if json { print!("["); }
+      let mut json_first = true;
+      let inputs: Vec<String> = if files.is_empty() { vec!["-".to_string()] } else { files };
+      for path in &inputs {
+        let source = if path == "-" {
+          use std::io::Read;
+          let mut buf = String::new();
+          std::io::stdin().read_to_string(&mut buf).map_err(|e| {
+            eprintln!("error reading stdin: {e}");
+            anyhow::anyhow!("stdin read failed")
+          })?;
+          buf
+        } else {
+          match std::fs::read_to_string(path) {
+            Ok(s) => s,
+            Err(e) => { eprintln!("error reading {path}: {e}"); std::process::exit(2); }
+          }
+        };
+        let parsed = dsl_parse::parse(&source, dialect);
+        let scopes = dsl_resolve::resolve_with_source(&parsed.statements, &source);
+        let catalog = dsl_completion::source_tables::from_source(&parsed, &source);
+        let diags = dsl_analysis::run(&source, &parsed, &scopes, &catalog);
+        for d in &diags {
+          let sev_str = match d.severity {
+            dsl_analysis::Severity::Error => { error_count += 1; "error" }
+            dsl_analysis::Severity::Warning => { warning_count += 1; "warning" }
+            dsl_analysis::Severity::Info => "info",
+            dsl_analysis::Severity::Hint => "hint",
+          };
+          let s: u32 = d.range.start().into();
+          let e: u32 = d.range.end().into();
+          let (line, col) = byte_to_line_col(&source, s as usize);
+          if json {
+            if !json_first { print!(","); }
+            json_first = false;
+            let msg_esc = d.message.replace('\\', "\\\\").replace('"', "\\\"");
+            print!(
+              "{{\"file\":\"{}\",\"line\":{},\"col\":{},\"start\":{},\"end\":{},\"severity\":\"{}\",\"code\":\"{}\",\"message\":\"{}\"}}",
+              path, line + 1, col + 1, s, e, sev_str, d.code, msg_esc,
+            );
+          } else {
+            println!("{path}:{}:{}: {sev_str} [{code}] {msg}", line + 1, col + 1, code = d.code, msg = d.message);
+          }
+        }
+      }
+      if json { println!("]"); }
+      if error_count > 0 || (warnings_as_errors && warning_count > 0) {
+        std::process::exit(1);
+      }
+      Ok(())
+    },
   }
+}
+
+fn byte_to_line_col(src: &str, off: usize) -> (usize, usize) {
+  let mut line = 0usize;
+  let mut col = 0usize;
+  for (i, b) in src.bytes().enumerate() {
+    if i >= off { break }
+    if b == b'\n' { line += 1; col = 0 } else { col += 1 }
+  }
+  (line, col)
 }
 
 fn init_tracing() {

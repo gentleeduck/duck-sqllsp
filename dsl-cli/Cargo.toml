@@ -20,6 +20,9 @@ path = "src/main.rs"
 [dependencies]
 dsl-server         = { workspace = true }
 dsl-analysis       = { workspace = true }
+dsl-parse          = { workspace = true }
+dsl-resolve        = { workspace = true }
+dsl-completion     = { workspace = true }
 clap               = { workspace = true }
 tokio              = { workspace = true }
 tower-lsp          = { workspace = true }
