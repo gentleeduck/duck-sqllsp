@@ -34,7 +34,12 @@ impl LintRule for Rule {
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let raw = &source[start..end];
+    // Strip string literals (e.g. INTERVAL '1 year') + line comments
+    // so YEAR/MONTH/DAY tokens inside SQL interval strings or doc
+    // comments don't get flagged as MySQL types.
+    let body_owned = strip_strings_and_comments(raw);
+    let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
     let bytes = upper.as_bytes();
     for (ty, suggest) in MYSQL_TYPES {
@@ -62,4 +67,28 @@ impl LintRule for Rule {
       }
     }
   }
+}
+
+fn strip_strings_and_comments(s: &str) -> String {
+  let mut out = String::with_capacity(s.len());
+  let bytes = s.as_bytes();
+  let n = bytes.len();
+  let mut i = 0usize;
+  while i < n {
+    if i + 1 < n && bytes[i] == b'-' && bytes[i + 1] == b'-' {
+      while i < n && bytes[i] != b'\n' { out.push(' '); i += 1 }
+    } else if bytes[i] == b'\'' {
+      out.push(' ');
+      i += 1;
+      while i < n && bytes[i] != b'\'' { out.push(' '); i += 1 }
+      if i < n { out.push(' '); i += 1 }
+    } else if bytes[i].is_ascii() {
+      out.push(bytes[i] as char);
+      i += 1;
+    } else {
+      out.push(' ');
+      i += 1;
+    }
+  }
+  out
 }

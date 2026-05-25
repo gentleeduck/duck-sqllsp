@@ -52,6 +52,7 @@ impl LintRule for Rule {
       PostTerminator,
     }
     let mut state = State::Normal;
+    let mut in_exception = false;
     let mut i = 0;
     while i < n {
       while i < n && bytes[i].is_ascii_whitespace() {
@@ -71,6 +72,10 @@ impl LintRule for Rule {
             depth += 1;
             state = State::Normal;
           },
+          "EXCEPTION" => {
+            in_exception = true;
+            state = State::Normal;
+          },
           "END" => {
             depth -= 1;
             state = State::Normal;
@@ -80,10 +85,16 @@ impl LintRule for Rule {
           },
           _ => {
             if state == State::PostTerminator && depth == 1 {
-              // EXCEPTION block / END / ELSE / ELSIF /
-              // WHEN reset to Normal -- they're legitimate
-              // continuations after RETURN.
-              if matches!(tok, "EXCEPTION" | "WHEN" | "ELSE" | "ELSIF") {
+              // Control-flow / handler-arm continuation keywords reset
+              // to Normal -- they're legitimate after RETURN. Also
+              // reset when the previous RETURN sat inside an EXCEPTION
+              // handler arm (`exception_depth > 0`).
+              if matches!(tok, "EXCEPTION" | "WHEN" | "ELSE" | "ELSIF" | "END") {
+                state = State::Normal;
+              } else if in_exception {
+                // After RETURN inside an EXCEPTION arm, the next
+                // statement starts a sibling arm (WHEN ... THEN ...)
+                // or the function's END. Don't flag.
                 state = State::Normal;
               } else {
                 let base = source.find(body_text).unwrap_or(start);
