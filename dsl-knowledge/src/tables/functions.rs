@@ -1242,6 +1242,17 @@ pub fn build() -> HashMap<&'static str, Entry> {
   f!("pg_xact_status",     "pg_xact_status(xid8) -> text",  "Status of a transaction: committed / in progress / aborted.", "SELECT pg_xact_status(pg_current_xact_id());", pg("functions-info.html"));
 
   // ---- Comparison / NULL counting ----
+  // Common math + date helpers that were missing.
+  f!("ceil",  "ceil(numeric) -> numeric",   "Round up to integer.",   "SELECT ceil(3.2);", pg("functions-math.html"));
+  f!("div",   "div(y numeric, x numeric) -> numeric", "Integer quotient of y/x.", "SELECT div(10, 3);", pg("functions-math.html"));
+  f!("justify_days",  "justify_days(interval) -> interval",  "Adjust 30-day periods into months.", "SELECT justify_days(interval '60 days');", pg("functions-datetime.html"));
+  f!("justify_hours", "justify_hours(interval) -> interval", "Adjust 24-hour periods into days.",  "SELECT justify_hours(interval '50 hours');", pg("functions-datetime.html"));
+  f!("justify_interval", "justify_interval(interval) -> interval", "Adjust both days and hours.", "SELECT justify_interval(interval '60 days 50 hours');", pg("functions-datetime.html"));
+  f!("sha256", "sha256(bytea) -> bytea", "SHA-256 digest.", "SELECT encode(sha256('hello'::bytea), 'hex');", pg("functions-binarystring.html"));
+  f!("sha224", "sha224(bytea) -> bytea", "SHA-224 digest.", "SELECT sha224('hello'::bytea);", pg("functions-binarystring.html"));
+  f!("sha384", "sha384(bytea) -> bytea", "SHA-384 digest.", "SELECT sha384('hello'::bytea);", pg("functions-binarystring.html"));
+  f!("sha512", "sha512(bytea) -> bytea", "SHA-512 digest.", "SELECT sha512('hello'::bytea);", pg("functions-binarystring.html"));
+
   // Window-only rank functions (siblings of row_number / rank already
   // listed above).
   f!("percent_rank", "percent_rank() -> double precision", "Relative rank of the current row (0..1), excluding the current row's peers.", "SELECT percent_rank() OVER (ORDER BY salary) FROM employees;", pg("functions-window.html"));

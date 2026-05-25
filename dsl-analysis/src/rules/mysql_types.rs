@@ -50,6 +50,20 @@ impl LintRule for Rule {
         let after = at + ty.len();
         let after_ok = after >= bytes.len() || !{ let p = bytes[after] as char; p.is_ascii_alphanumeric() || p == '_' };
         if !prev_ok || !after_ok { from = at + ty.len(); continue }
+        // Skip when the token is an EXTRACT/DATE_TRUNC/DATE_PART field
+        // name (YEAR, MONTH, DAY, HOUR, etc inside `EXTRACT(YEAR FROM ...)`).
+        let prefix_upper = &upper[..at];
+        if matches!(*ty, "YEAR" | "MONTH" | "DAY" | "HOUR" | "MINUTE" | "SECOND") {
+          let prefix_trim = prefix_upper.trim_end();
+          if prefix_trim.ends_with("EXTRACT(")
+            || prefix_trim.ends_with("DATE_PART(")
+            || prefix_trim.ends_with("DATE_TRUNC(")
+            || prefix_trim.ends_with(',')
+          {
+            from = after;
+            continue;
+          }
+        }
         // DOUBLE special-case: skip when followed by " PRECISION".
         if *ty == "DOUBLE" {
           let post = upper[after..].trim_start();
