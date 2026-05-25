@@ -33,8 +33,14 @@ impl LintRule for Rule {
         while s_end < bytes.len() && bytes[s_end] != b'\'' { s_end += 1 }
         if s_end >= bytes.len() { break }
         let lit = &body[s_start..s_end];
+        // Skip when the literal is explicitly cast to bytea right after.
+        let mut after = s_end + 1;
+        while after < bytes.len() && bytes[after].is_ascii_whitespace() { after += 1 }
+        let has_bytea_cast = after + 2 < bytes.len()
+          && bytes[after] == b':' && bytes[after + 1] == b':'
+          && body[after + 2..].trim_start().to_ascii_lowercase().starts_with("bytea");
         // Heuristic: starts with `\x` and only hex digits after, looks like a hex-bytea.
-        if !prefix_ok && lit.starts_with("\\x") && lit.len() >= 4 && lit[2..].bytes().all(|b| b.is_ascii_hexdigit()) {
+        if !has_bytea_cast && !prefix_ok && lit.starts_with("\\x") && lit.len() >= 4 && lit[2..].bytes().all(|b| b.is_ascii_hexdigit()) {
           let abs_s = start + i;
           let abs_e = start + s_end + 1;
           out.push(Diagnostic {

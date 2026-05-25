@@ -120,6 +120,21 @@ impl LintRule for Rule {
     if proj.contains("::") {
       return;
     }
+    // Skip typed-literal forms: `SELECT INTERVAL '1 day'`, `DATE '...'`,
+    // `TIMESTAMP '...'`, `TIME '...'`, `B'...'`, `X'...'`.
+    let proj_upper_trim = proj.trim_start();
+    if proj_upper_trim.starts_with("INTERVAL ")
+      || proj_upper_trim.starts_with("DATE ")
+      || proj_upper_trim.starts_with("TIME ")
+      || proj_upper_trim.starts_with("TIMESTAMP ")
+      || proj_upper_trim.starts_with("TIMESTAMPTZ ")
+      || proj_upper_trim.starts_with("B'")
+      || proj_upper_trim.starts_with("X'")
+      || proj_upper_trim.starts_with("E'")
+      || proj_upper_trim.starts_with("$$")
+    {
+      return;
+    }
     let abs_start = start;
     let abs_end = start + 6;
     out.push(Diagnostic {
