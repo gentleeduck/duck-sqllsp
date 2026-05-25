@@ -248,7 +248,20 @@ fn scan_projection(proj: &str) -> (usize, Vec<String>) {
         skip_next_alias = false;
         continue;
       }
-      // Bare identifier -- ignore keywords/types/aliasing
+      // Bare identifier -- ignore keywords/types/aliasing.
+      // Skip when followed by jsonb operators (`->`, `->>`, `#>`, `#>>`)
+      // or array/index access -- those are expressions that produce a
+      // value distinct from the bare column; flagging the column name
+      // itself is wrong because the user likely aliases the expression
+      // and GROUPs by the alias.
+      let mut p2 = i;
+      while p2 < n && (bytes[p2] as char).is_whitespace() { p2 += 1 }
+      if p2 < n {
+        let next = bytes[p2];
+        if next == b'-' || next == b'#' || next == b'[' {
+          continue;
+        }
+      }
       if !is_noise(&lower) {
         let name = word.rsplit('.').next().unwrap_or(word).to_string();
         if !bare.contains(&name) {
