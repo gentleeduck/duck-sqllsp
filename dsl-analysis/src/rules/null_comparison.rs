@@ -58,18 +58,26 @@ impl LintRule for Rule {
 }
 
 fn find_outside_strings(s: &str, needle: &str) -> Option<usize> {
-  let upper = s.to_ascii_uppercase();
   let needle_upper = needle.to_ascii_uppercase();
+  let needle_bytes = needle_upper.as_bytes();
   let bytes = s.as_bytes();
   let mut in_single = false;
   let mut i = 0;
-  while i + needle_upper.len() <= bytes.len() {
-    let c = bytes[i] as char;
-    if c == '\'' && (i == 0 || bytes[i - 1] != b'\\') {
+  while i + needle_bytes.len() <= bytes.len() {
+    let b = bytes[i];
+    if b == b'\'' && (i == 0 || bytes[i - 1] != b'\\') {
       in_single = !in_single;
     }
-    if !in_single && upper[i..].starts_with(&needle_upper) {
-      return Some(i);
+    if !in_single {
+      // Case-insensitive ASCII byte compare -- avoids slicing the
+      // uppercased string at byte offsets that may land inside a
+      // multi-byte UTF-8 codepoint (panic on `μ`/`α`/etc).
+      let mut matches = true;
+      for k in 0..needle_bytes.len() {
+        let cand = bytes[i + k].to_ascii_uppercase();
+        if cand != needle_bytes[k] { matches = false; break }
+      }
+      if matches { return Some(i) }
     }
     i += 1;
   }

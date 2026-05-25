@@ -85,15 +85,37 @@ pub fn run_with_dialect(
   catalog: &Catalog,
   dialect: Dialect,
 ) -> Vec<Diagnostic> {
+  // Silence panic messages from caught rule panics; catch_unwind still
+  // unwinds the stack normally, but the default hook prints to stderr.
+  let prev_hook = std::panic::take_hook();
+  std::panic::set_hook(Box::new(|_| {}));
   let mut out = parser_diags(&file.errors);
   let registered = rules::all();
   for (stmt, scope) in file.statements.iter().zip(scopes.iter()) {
     let trimmed = trim_stmt_range(stmt, source);
     for rule in &registered {
       if skip_for_dialect(dialect, rule.code()) { continue }
-      rule.check(source, &trimmed, scope, catalog, &mut out);
+      // Defensive: a rule that panics (e.g. byte-indexing a multi-byte
+      // codepoint) shouldn't kill diagnostics for the whole buffer.
+      // catch_unwind isolates the failure; the offending rule simply
+      // produces no diagnostic for this statement and the rest of the
+      // analysis continues.
+      let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut local: Vec<Diagnostic> = Vec::new();
+        rule.check(source, &trimmed, scope, catalog, &mut local);
+        local
+      }));
+      match result {
+        Ok(local) => out.extend(local),
+        Err(_) => {
+          // Silent on panic; rule simply doesn't contribute diagnostics
+          // for this statement. Add tracing later if needed.
+        },
+      }
     }
   }
+  // Restore the previous panic hook so non-rule panics surface normally.
+  std::panic::set_hook(prev_hook);
   // Belt-and-suspenders: some rules emit a different diagnostic code
   // than their `rule.code()` value (e.g. composite rules). Drop any
   // produced diagnostic whose emitted code is dialect-skipped.
