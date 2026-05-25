@@ -231,6 +231,7 @@ pub mod vacuum_in_transaction;
 pub mod values_row_width;
 pub mod values_subq_no_alias;
 pub mod view_select_star;
+pub mod where_true_placeholder;
 pub mod where_type_literal;
 
 use crate::LintRule;
@@ -474,5 +475,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(comment_constraint_no_on::Rule),
     Box::new(alter_add_check_no_not_valid::Rule),
     Box::new(alter_set_not_null_scan::Rule),
+    Box::new(where_true_placeholder::Rule),
   ]
 }
