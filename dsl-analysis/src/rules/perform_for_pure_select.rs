@@ -56,7 +56,17 @@ impl LintRule for Rule {
           || stmt_text.contains("NEXTVAL(")
           || stmt_text.contains("SETVAL(")
           || stmt_text.contains("RANDOM(")
-          || stmt_text.contains("LASTVAL(");
+          || stmt_text.contains("LASTVAL(")
+          || stmt_text.contains("SET_CONFIG(")
+          || stmt_text.contains("PG_TERMINATE_BACKEND(")
+          || stmt_text.contains("PG_CANCEL_BACKEND(")
+          || stmt_text.contains("DBLINK")
+          || stmt_text.contains("PG_RELOAD_CONF(")
+          || stmt_text.contains("PG_LOGICAL_")
+          || stmt_text.contains("PG_REPLICATION_")
+          || stmt_text.contains("PG_PROMOTE(")
+          || stmt_text.contains("PG_SWITCH_WAL(")
+          || stmt_text.contains("RAISE ");
         // Conservative: if the body has no FROM (so it's a pure
         // expression / single function call), and no side-effect
         // call, the PERFORM does nothing.
