@@ -29,6 +29,10 @@ const KEYWORDS: &[&str] = &[
   "INTERSECT", "EXCEPT", "PARTITION", "WINDOW", "RANGE", "ROWS", "GROUPS",
   "PRECEDING", "FOLLOWING", "UNBOUNDED", "CURRENT", "FIRST", "LAST", "NULLS",
   "FUNCTION", "PROCEDURE", "TRIGGER", "TABLE", "INDEX", "VIEW", "POLICY",
+  "INSERT", "UPDATE", "DELETE", "MERGE", "MATCHED", "EXCLUDED",
+  "GENERATED", "IDENTITY", "ALWAYS", "RESTART", "START", "INCREMENT",
+  "MINVALUE", "MAXVALUE", "CYCLE", "OWNED", "CURSOR", "FETCH", "MOVE",
+  "DECLARE", "OPEN", "CLOSE", "EXEC", "EXECUTE",
   "TRUE", "FALSE", "NULL", "DEFAULT", "PRIMARY", "REFERENCES", "UNIQUE",
   "CHECK", "FOREIGN", "KEY", "CONSTRAINT", "CASCADE", "RESTRICT", "RESTART",
   "SET", "OF", "TO", "BY", "INTO", "RETURN", "BEGIN", "END", "RAISE",
@@ -146,9 +150,67 @@ fn build_known_set(body: &str, catalog: &Catalog) -> HashSet<String> {
   for f in &catalog.functions {
     set.insert(f.name.to_ascii_uppercase());
   }
-  // Buffer-local CREATE FUNCTION names.
+  // Buffer-local CREATE FUNCTION names + CTE names + table names so
+  // `chain(...)` in a CTE-recursive ref or `users(...)` in a context we
+  // can't classify doesn't get falsely flagged as unknown.
   let upper_body = body.to_ascii_uppercase();
   let bytes = body.as_bytes();
+  // Catalog tables.
+  for t in catalog.tables() {
+    set.insert(t.name.to_ascii_uppercase());
+  }
+  // CTE names: `WITH [RECURSIVE] <name> [(...)] AS (...)`.
+  let mut from = 0usize;
+  while let Some(rel) = upper_body[from..].find("WITH") {
+    let mut k = from + rel + 4;
+    while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+    if upper_body[k..].starts_with("RECURSIVE") {
+      k += 9;
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+    }
+    // Loop reading "<name> [(...)] AS (..., )" then optional ", <name> ..."
+    loop {
+      let name_start = k;
+      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_') { k += 1 }
+      if k == name_start { break }
+      let name = &body[name_start..k];
+      set.insert(name.to_ascii_uppercase());
+      // Skip whitespace, optional `(col_list)`, AS, body paren, then look for `,` or `SELECT`.
+      let bump = body[k..].len() - body[k..].trim_start().len();
+      k += bump;
+      if k < bytes.len() && bytes[k] == b'(' {
+        // Skip balanced parens.
+        let mut depth = 1i32;
+        k += 1;
+        while k < bytes.len() && depth > 0 {
+          if bytes[k] == b'(' { depth += 1 } else if bytes[k] == b')' { depth -= 1 }
+          k += 1;
+        }
+        while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+      }
+      // Expect AS.
+      if !upper_body[k..].starts_with("AS") { break }
+      k += 2;
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+      // Optional MATERIALIZED / NOT MATERIALIZED.
+      for kw in ["MATERIALIZED ", "NOT MATERIALIZED "] {
+        if upper_body[k..].starts_with(kw) { k += kw.len() }
+      }
+      // Skip body paren.
+      if k >= bytes.len() || bytes[k] != b'(' { break }
+      let mut depth = 1i32;
+      k += 1;
+      while k < bytes.len() && depth > 0 {
+        if bytes[k] == b'(' { depth += 1 } else if bytes[k] == b')' { depth -= 1 }
+        k += 1;
+      }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+      if k >= bytes.len() || bytes[k] != b',' { break }
+      k += 1;
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+    }
+    from = k.max(from + rel + 4);
+  }
   for needle in ["CREATE OR REPLACE FUNCTION ", "CREATE FUNCTION ", "CREATE OR REPLACE PROCEDURE ", "CREATE PROCEDURE "] {
     let mut from = 0usize;
     while let Some(rel) = upper_body[from..].find(needle) {

@@ -190,6 +190,11 @@ fn scan_projection(proj: &str) -> (usize, Vec<String>) {
   let mut aggregates = 0usize;
   let mut bare = Vec::new();
   let mut i = 0usize;
+  // `AS <ident>` and `,` reset alias detection. When `skip_next_alias`
+  // is true, the next bare identifier is consumed as a projection alias
+  // (not a column reference) so `COUNT(*) AS c` doesn't get `c` flagged
+  // as a "bare column not in GROUP BY".
+  let mut skip_next_alias = false;
   while i < n {
     let c = bytes[i];
     if c == b'\'' {
@@ -219,21 +224,33 @@ fn scan_projection(proj: &str) -> (usize, Vec<String>) {
       if is_call {
         if AGG_FNS.iter().any(|f| *f == lower) {
           aggregates += 1;
-          // Skip paren body so columns inside aggregate aren't "bare"
           i = skip_parens(bytes, k);
         } else {
           i = skip_parens(bytes, k);
         }
         continue;
       }
+      // `AS` keyword: next bare identifier is an alias, not a col ref.
+      if lower == "as" {
+        skip_next_alias = true;
+        continue;
+      }
+      if skip_next_alias {
+        skip_next_alias = false;
+        continue;
+      }
       // Bare identifier -- ignore keywords/types/aliasing
       if !is_noise(&lower) {
-        // Strip table qualifier
         let name = word.rsplit('.').next().unwrap_or(word).to_string();
         if !bare.contains(&name) {
           bare.push(name);
         }
       }
+      continue;
+    }
+    if c == b',' {
+      skip_next_alias = false;
+      i += 1;
       continue;
     }
     if c == b'.' {

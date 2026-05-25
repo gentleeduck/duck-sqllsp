@@ -31,6 +31,14 @@ impl LintRule for Rule {
     if has_word(&upper, "FROM") {
       return;
     }
+    // Skip standalone VALUES / WITH ORDINALITY -- they carry their own
+    // data source even without a FROM clause.
+    if has_word(&upper, "VALUES") {
+      return;
+    }
+    if has_word(&upper, "ORDINALITY") {
+      return;
+    }
     // Skip common no-FROM expressions: literals, casts, function
     // calls that look like aggregates / time / random / version.
     const OK_FUNCS: &[&str] = &[
@@ -45,6 +53,43 @@ impl LintRule for Rule {
       "TXID_CURRENT(",
       "USER",
       "SESSION_USER",
+      // Set-returning functions and ARRAY constructors that legitimately
+      // produce rows without needing a FROM.
+      "UNNEST(",
+      "GENERATE_SERIES(",
+      "GENERATE_SUBSCRIPTS(",
+      "JSONB_ARRAY_ELEMENTS(",
+      "JSONB_ARRAY_ELEMENTS_TEXT(",
+      "JSONB_EACH(",
+      "JSONB_EACH_TEXT(",
+      "JSONB_OBJECT_KEYS(",
+      "JSON_ARRAY_ELEMENTS(",
+      "JSON_EACH(",
+      "JSON_EACH_TEXT(",
+      "JSON_OBJECT_KEYS(",
+      "REGEXP_MATCHES(",
+      "REGEXP_SPLIT_TO_TABLE(",
+      "STRING_TO_TABLE(",
+      "ARRAY[",
+      "ARRAY (",
+      "PG_SLEEP(",
+      "PG_TYPEOF(",
+      "TO_CHAR(",
+      "TO_TIMESTAMP(",
+      "TO_DATE(",
+      "TO_NUMBER(",
+      "MAKE_DATE(",
+      "MAKE_TIMESTAMP(",
+      "MAKE_INTERVAL(",
+      "CONCAT(",
+      "CONCAT_WS(",
+      "FORMAT(",
+      "GREATEST(",
+      "LEAST(",
+      "COALESCE(",
+      "NULLIF(",
+      "CAST(",
+      "EXTRACT(",
     ];
     if OK_FUNCS.iter().any(|f| upper.contains(f)) {
       return;

@@ -177,14 +177,73 @@ fn walk_join(j: &pg_query::protobuf::JoinExpr, from: &mut Vec<TableRef>, joins: 
       }
     },
     Some(PgNode::JoinExpr(inner)) => walk_join(inner, from, joins),
+    Some(PgNode::RangeFunction(rf)) => {
+      let alias = rf.alias.as_ref().map(|a| a.aliasname.clone()).filter(|n| !n.is_empty());
+      if let Some(alias_str) = alias {
+        if from.is_empty() {
+          from.push(TableRef {
+            schema: Some("<func>".into()),
+            name: alias_str.clone(),
+            alias: Some(alias_str),
+            range: TextRange::default(),
+          });
+        }
+      }
+    },
+    Some(PgNode::RangeSubselect(rs)) => {
+      let alias = rs.alias.as_ref().map(|a| a.aliasname.clone()).filter(|n| !n.is_empty());
+      if let Some(alias_str) = alias {
+        if from.is_empty() {
+          from.push(TableRef {
+            schema: Some("<subq>".into()),
+            name: alias_str.clone(),
+            alias: Some(alias_str),
+            range: TextRange::default(),
+          });
+        }
+      }
+    },
     _ => {},
   }
-  if let Some(PgNode::RangeVar(r)) = j.rarg.as_ref().and_then(|n| n.node.as_ref()) {
-    joins.push(JoinClause {
-      kind: join_kind(j.jointype),
-      table: rangevar_to_tableref(r),
-      on: j.quals.as_ref().map(|_| Expr::Other(String::new())),
-    });
+  match j.rarg.as_ref().and_then(|n| n.node.as_ref()) {
+    Some(PgNode::RangeVar(r)) => {
+      joins.push(JoinClause {
+        kind: join_kind(j.jointype),
+        table: rangevar_to_tableref(r),
+        on: j.quals.as_ref().map(|_| Expr::Other(String::new())),
+      });
+    },
+    Some(PgNode::RangeFunction(rf)) => {
+      let alias = rf.alias.as_ref().map(|a| a.aliasname.clone()).filter(|n| !n.is_empty());
+      if let Some(alias_str) = alias {
+        joins.push(JoinClause {
+          kind: join_kind(j.jointype),
+          table: TableRef {
+            schema: Some("<func>".into()),
+            name: alias_str.clone(),
+            alias: Some(alias_str),
+            range: TextRange::default(),
+          },
+          on: j.quals.as_ref().map(|_| Expr::Other(String::new())),
+        });
+      }
+    },
+    Some(PgNode::RangeSubselect(rs)) => {
+      let alias = rs.alias.as_ref().map(|a| a.aliasname.clone()).filter(|n| !n.is_empty());
+      if let Some(alias_str) = alias {
+        joins.push(JoinClause {
+          kind: join_kind(j.jointype),
+          table: TableRef {
+            schema: Some("<subq>".into()),
+            name: alias_str.clone(),
+            alias: Some(alias_str),
+            range: TextRange::default(),
+          },
+          on: j.quals.as_ref().map(|_| Expr::Other(String::new())),
+        });
+      }
+    },
+    _ => {},
   }
 }
 

@@ -129,6 +129,19 @@ fn column_exists(scope: &Scope, catalog: &Catalog, qualifier: Option<&str>, name
       return cte_cols.iter().any(|c| c == name);
     }
     if let Some(b) = scope.get(q) {
+      // Synthetic binding (function-call / subquery / CTE alias) --
+      // we can't enumerate columns, so accept anything.
+      if b.table.schema.as_deref().map_or(false, |s| s.starts_with('<')) {
+        return true;
+      }
+      // Follow alias to underlying CTE: `WITH foo AS (...) SELECT a.col FROM foo a`
+      // -- qualifier `a` resolves to binding{table=foo}; check cte_columns_of("foo").
+      if let Some(cte_cols) = scope.cte_columns_of(&b.table.name) {
+        if cte_cols.is_empty() {
+          return true;
+        }
+        return cte_cols.iter().any(|c| c == name);
+      }
       if let Some(t) = catalog.find_table(b.table.schema.as_deref(), &b.table.name) {
         return t.columns.iter().any(|c| c.name == name);
       }

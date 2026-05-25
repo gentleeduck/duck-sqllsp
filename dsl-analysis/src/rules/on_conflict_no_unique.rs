@@ -25,7 +25,11 @@ impl LintRule for Rule {
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let raw = &source[start..end];
+    // Strip line comments + string literals so `-- INSERT ... ON CONFLICT`
+    // doesn't trick find('(') into picking the wrong paren.
+    let body_owned = strip_comments_and_strings(raw);
+    let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
     let Some(insert_at) = upper.find("INSERT INTO ") else { return };
     let after_insert = insert_at + "INSERT INTO ".len();
@@ -85,4 +89,28 @@ impl LintRule for Rule {
       range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
     });
   }
+}
+
+fn strip_comments_and_strings(s: &str) -> String {
+  let mut out = String::with_capacity(s.len());
+  let bytes = s.as_bytes();
+  let n = bytes.len();
+  let mut i = 0usize;
+  while i < n {
+    if i + 1 < n && bytes[i] == b'-' && bytes[i + 1] == b'-' {
+      while i < n && bytes[i] != b'\n' { out.push(' '); i += 1 }
+    } else if bytes[i] == b'\'' {
+      out.push(' ');
+      i += 1;
+      while i < n && bytes[i] != b'\'' { out.push(' '); i += 1 }
+      if i < n { out.push(' '); i += 1 }
+    } else if bytes[i].is_ascii() {
+      out.push(bytes[i] as char);
+      i += 1;
+    } else {
+      out.push(' ');
+      i += 1;
+    }
+  }
+  out
 }
