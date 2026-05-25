@@ -105,6 +105,7 @@ pub mod missing_trigger_return;
 pub mod multi_raise_exception;
 pub mod multi_where;
 pub mod multiple_truncate_in_tx;
+pub mod mssql_begin_tran;
 pub mod mssql_bracket_quote;
 pub mod mssql_go;
 pub mod mssql_top;
@@ -554,5 +555,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(non_pg_null_fns::Rule),
     Box::new(non_pg_date_fns::Rule),
     Box::new(mssql_go::Rule),
+    Box::new(mssql_begin_tran::Rule),
   ]
 }
