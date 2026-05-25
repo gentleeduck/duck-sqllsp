@@ -106,6 +106,7 @@ pub mod multi_raise_exception;
 pub mod multi_where;
 pub mod multiple_truncate_in_tx;
 pub mod mssql_bracket_quote;
+pub mod mssql_go;
 pub mod mssql_top;
 pub mod mv_no_data_query;
 pub mod mysql_auto_increment;
@@ -552,5 +553,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(mssql_top::Rule),
     Box::new(non_pg_null_fns::Rule),
     Box::new(non_pg_date_fns::Rule),
+    Box::new(mssql_go::Rule),
   ]
 }
