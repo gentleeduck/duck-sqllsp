@@ -106,6 +106,7 @@ pub mod multi_raise_exception;
 pub mod multi_where;
 pub mod multiple_truncate_in_tx;
 pub mod mssql_bracket_quote;
+pub mod mssql_top;
 pub mod mv_no_data_query;
 pub mod mysql_auto_increment;
 pub mod mysql_engine;
@@ -546,5 +547,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(mysql_engine::Rule),
     Box::new(mysql_types::Rule),
     Box::new(mssql_bracket_quote::Rule),
+    Box::new(mssql_top::Rule),
   ]
 }
