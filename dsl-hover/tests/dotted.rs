@@ -10,8 +10,8 @@ fn cat() -> Catalog {
     name: "users".into(),
     kind: TableKind::Table,
     columns: vec![
-      Column { name: "id".into(), data_type: "uuid".into(), nullable: false, default: None, comment: None, generated: None },
-      Column { name: "email".into(), data_type: "text".into(), nullable: false, default: None, comment: None, generated: None },
+      Column { name: "id".into(), data_type: "uuid".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
+      Column { name: "email".into(), data_type: "text".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
     ],
     constraints: vec![],
     indexes: vec![],

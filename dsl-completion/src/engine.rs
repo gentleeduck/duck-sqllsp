@@ -1014,6 +1014,53 @@ fn json_path_keys_at(source: &str, offset: TextSize) -> Option<Vec<String>> {
   Some(keys.into_iter().collect())
 }
 
+/// Like [`json_path_keys_at`] but also consults `Column.json_keys` from
+/// the catalog. When the cursor sits on a `col->'...'` chain whose head
+/// resolves to a known jsonb column with stored top-level keys, surface
+/// those even when the buffer has no example literal to harvest.
+pub fn json_path_keys_at_with_catalog(
+  source: &str,
+  offset: TextSize,
+  catalog: &dsl_catalog::Catalog,
+) -> Option<Vec<String>> {
+  if let Some(keys) = json_path_keys_at(source, offset) {
+    return Some(keys);
+  }
+  // Walk back to the column name at the head of the `->'k'` chain.
+  let pos: usize = u32::from(offset) as usize;
+  let bytes = source.as_bytes();
+  if pos > bytes.len() { return None }
+  let mut s = pos;
+  while s > 0 && bytes[s - 1] != b'\'' { s -= 1 }
+  if s == 0 { return None }
+  let mut k = s - 1;
+  while k > 0 && bytes[k - 1].is_ascii_whitespace() { k -= 1 }
+  let has_double = k >= 3 && bytes[k - 1] == b'>' && bytes[k - 2] == b'>' && bytes[k - 3] == b'-';
+  let has_single = bytes[k - 1] == b'>' && bytes[k - 2] == b'-';
+  if !has_double && !has_single { return None }
+  let arrow_at = if has_double { k - 3 } else { k - 2 };
+  // Identifier just before the first arrow.
+  let mut j = arrow_at;
+  while j > 0 && bytes[j - 1].is_ascii_whitespace() { j -= 1 }
+  let id_end = j;
+  while j > 0 && (bytes[j - 1].is_ascii_alphanumeric() || bytes[j - 1] == b'_' || bytes[j - 1] == b'.' || bytes[j - 1] == b'"') {
+    j -= 1;
+  }
+  if j == id_end { return None }
+  let col_full = &source[j..id_end];
+  let col_bare = col_full.rsplit('.').next().unwrap_or(col_full).trim_matches('"');
+  for t in catalog.tables() {
+    if let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(col_bare)) {
+      if let Some(keys) = &c.json_keys {
+        if !keys.is_empty() {
+          return Some(keys.clone());
+        }
+      }
+    }
+  }
+  None
+}
+
 /// Walk backwards from `end` collecting `->'KEY'` (or `->>'KEY'`)
 /// segments in left-to-right order. Stops at the first non-segment
 /// token. Whitespace between segments is tolerated.

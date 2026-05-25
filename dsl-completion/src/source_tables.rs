@@ -51,6 +51,7 @@ pub fn from_file(file: &ParsedFile) -> Catalog {
           default: c.default.clone(),
           comment: None,
           generated: None,
+          json_keys: None,
         })
         .collect(),
       constraints: Vec::new(),

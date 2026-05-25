@@ -77,7 +77,7 @@ pub async fn run(pool: &MySqlPool, spec: &ConnectionSpec) -> Result<Catalog, Dri
     let default: Option<String> = row.try_get("COLUMN_DEFAULT").ok();
     let comment: Option<String> = row.try_get("COLUMN_COMMENT").ok().filter(|s: &String| !s.is_empty());
     if let Some(t) = by_table.get_mut(&(schema, table)) {
-      t.columns.push(Column { name, data_type, nullable: nullable_str.eq_ignore_ascii_case("YES"), default, comment, generated: None });
+      t.columns.push(Column { name, data_type, nullable: nullable_str.eq_ignore_ascii_case("YES"), default, comment, generated: None, json_keys: None });
     }
   }
 

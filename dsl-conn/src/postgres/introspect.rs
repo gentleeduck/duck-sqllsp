@@ -226,6 +226,7 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
             default,
             comment: None,
             generated: None,
+            json_keys: None,
           });
         }
       }

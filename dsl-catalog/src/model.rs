@@ -135,6 +135,13 @@ pub struct Column {
   /// hover renders the full form. None for non-generated columns.
   #[serde(default)]
   pub generated: Option<String>,
+  /// Known top-level JSON keys for a `json` / `jsonb` column. Used by
+  /// the JSON-path completion provider so typing
+  /// `jsonb_path_query(col, '$.|` can suggest known keys. Populated
+  /// from `-- @json-keys: a, b, c` annotation comments above the
+  /// column declaration or from a future runtime sample.
+  #[serde(default)]
+  pub json_keys: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
