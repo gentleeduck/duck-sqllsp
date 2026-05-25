@@ -44,6 +44,7 @@ pub mod exists_select_star;
 pub mod explain_analyze_in_dml;
 pub mod extract_unknown_field;
 pub mod generate_series_no_alias;
+pub mod gin_on_scalar;
 pub mod grant_to_public;
 pub mod grant_with_grant_option;
 pub mod group_by_all;
@@ -60,6 +61,7 @@ pub mod insert_subquery_col_count;
 pub mod insert_type_literal;
 pub mod is_distinct_null;
 pub mod join_no_on;
+pub mod jsonb_contains_no_cast;
 pub mod jsonb_no_cast;
 pub mod jsonb_set_no_create;
 pub mod jsonb_set_path_format;
@@ -77,6 +79,7 @@ pub mod missing_trigger_return;
 pub mod multi_raise_exception;
 pub mod multi_where;
 pub mod multiple_truncate_in_tx;
+pub mod mv_no_data_query;
 pub mod mutating_without_where;
 pub mod negative_limit_offset;
 pub mod notify_unlistened;
@@ -84,6 +87,7 @@ pub mod not_in_subquery;
 pub mod null_comparison;
 pub mod null_default_not_null;
 pub mod null_in_values;
+pub mod nulls_first_last_no_order;
 pub mod nullif_same_args;
 pub mod numeric_no_precision;
 pub mod order_by_position;
@@ -370,5 +374,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(exists_select_star::Rule),
     Box::new(any_all_multicol::Rule),
     Box::new(cte_dml_no_returning::Rule),
+    Box::new(gin_on_scalar::Rule),
+    Box::new(nulls_first_last_no_order::Rule),
+    Box::new(jsonb_contains_no_cast::Rule),
+    Box::new(mv_no_data_query::Rule),
   ]
 }
