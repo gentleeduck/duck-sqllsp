@@ -182,6 +182,7 @@ pub mod truncate_with_fk;
 pub mod window_frame_reversed;
 pub mod drop_cascade_chain;
 pub mod drop_column_fk;
+pub mod drop_schema_no_cascade;
 pub mod fk_unknown_column;
 pub mod int_range;
 pub mod using_clause_columns;
@@ -190,6 +191,8 @@ pub mod null_into_not_null;
 pub mod schema_drift;
 pub mod vacuum_in_transaction;
 pub mod values_row_width;
+pub mod values_subq_no_alias;
+pub mod view_select_star;
 pub mod where_type_literal;
 
 use crate::LintRule;
@@ -392,5 +395,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(array_eq_with_null::Rule),
     Box::new(alter_drop_just_created::Rule),
     Box::new(savepoint_name_reuse::Rule),
+    Box::new(view_select_star::Rule),
+    Box::new(drop_schema_no_cascade::Rule),
+    Box::new(values_subq_no_alias::Rule),
   ]
 }
