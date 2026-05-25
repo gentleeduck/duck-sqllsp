@@ -279,9 +279,16 @@ fn byte_to_line_col(src: &str, off: usize) -> (usize, usize) {
 
 fn init_tracing() {
   // Log to stderr so stdout stays clean for JSON-RPC.
+  //
+  // Default level is `warn`: anything noisier (INFO/DEBUG/TRACE) shows
+  // up in nvim's lsp.log as an `[ERROR][... rpc ... stderr ...]` line
+  // because nvim wraps any stderr output that way, regardless of the
+  // actual record level. Per-handler INFO spam was creating thousands
+  // of fake-error lines per session. Set DUCK_SQLLSP_LOG=info or =debug
+  // to opt back in.
   use tracing_subscriber::EnvFilter;
   let _ = tracing_subscriber::fmt()
-    .with_env_filter(EnvFilter::try_from_env("DUCK_SQLLSP_LOG").unwrap_or_else(|_| EnvFilter::new("info")))
+    .with_env_filter(EnvFilter::try_from_env("DUCK_SQLLSP_LOG").unwrap_or_else(|_| EnvFilter::new("warn")))
     .with_writer(std::io::stderr)
     .with_ansi(false)
     .try_init();
