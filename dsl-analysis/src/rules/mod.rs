@@ -46,6 +46,7 @@ pub mod implicit_cross_join;
 pub mod insert_col_value_count;
 pub mod insert_no_columns;
 pub mod insert_no_on_conflict;
+pub mod insert_subquery_col_count;
 pub mod insert_type_literal;
 pub mod is_distinct_null;
 pub mod join_no_on;
@@ -66,6 +67,7 @@ pub mod multi_where;
 pub mod multiple_truncate_in_tx;
 pub mod mutating_without_where;
 pub mod negative_limit_offset;
+pub mod notify_unlistened;
 pub mod not_in_subquery;
 pub mod null_comparison;
 pub mod null_default_not_null;
@@ -79,6 +81,7 @@ pub mod plpgsql_assign_type;
 pub mod perform_for_pure_select;
 pub mod prefer_alias;
 pub mod raise_arg_count;
+pub mod raise_no_level;
 pub mod raise_message_no_args;
 pub mod raise_using_errcode;
 pub mod redundant_index_on_pk;
@@ -119,6 +122,7 @@ pub mod unreachable_after_return;
 pub mod unresolved_table;
 pub mod update_from_no_pk_filter;
 pub mod update_set_no_change;
+pub mod update_set_alias_mismatch;
 pub mod update_set_type_literal;
 pub mod update_set_unknown_col;
 pub mod count_nullable;
@@ -316,5 +320,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(lateral_no_ref::Rule),
     Box::new(secdef_no_search_path::Rule),
     Box::new(trigger_wrong_row_alias::Rule),
+    Box::new(raise_no_level::Rule),
+    Box::new(update_set_alias_mismatch::Rule),
+    Box::new(notify_unlistened::Rule),
+    Box::new(insert_subquery_col_count::Rule),
   ]
 }
