@@ -96,6 +96,7 @@ pub mod multi_raise_exception;
 pub mod multi_where;
 pub mod multiple_truncate_in_tx;
 pub mod mv_no_data_query;
+pub mod mysql_interval_syntax;
 pub mod mutating_without_where;
 pub mod negative_limit_offset;
 pub mod notify_unlistened;
@@ -462,5 +463,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(check_always_false::Rule),
     Box::new(select_into_temp_shadows::Rule),
     Box::new(set_transaction_in_function::Rule),
+    Box::new(mysql_interval_syntax::Rule),
   ]
 }
