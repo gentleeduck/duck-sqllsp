@@ -133,6 +133,7 @@ pub mod pg_catalog_no_schema;
 pub mod pg_sleep_in_tx;
 pub mod pk_duplicate_col;
 pub mod prefer_alias;
+pub mod psql_backslash;
 pub mod raise_arg_count;
 pub mod raise_no_level;
 pub mod recursive_cte_no_union;
@@ -530,5 +531,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(update_delete_limit::Rule),
     Box::new(timestamp_precision_over::Rule),
     Box::new(revoke_missing_from::Rule),
+    Box::new(psql_backslash::Rule),
   ]
 }
