@@ -105,6 +105,12 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
     return Some(md);
   }
 
+  // Cursor on the NULL keyword -- card explains three-valued logic
+  // and the destination column nullability when resolvable.
+  if let Some(md) = null_keyword_hover(source, pos, catalog) {
+    return Some(md);
+  }
+
   // Cursor on a `*` token (SELECT projection / `u.*` / `count(*)`).
   // The lexer-based token_at skips non-word chars so the star never
   // makes it to the normal lookup path. Handle it explicitly.
@@ -477,6 +483,47 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
 /// name with a role shouldn't be hijacked. Surfaces:
 ///   * Catalog membership status (known / unknown / built-in).
 ///   * Source: live catalog vs convention whitelist.
+/// Cursor on the NULL keyword. Returns a small card explaining
+/// three-valued logic + the destination column's nullability when
+/// inferrable from INSERT VALUES / UPDATE SET / WHERE.
+fn null_keyword_hover(source: &str, pos: usize, catalog: &Catalog) -> Option<String> {
+  let bytes = source.as_bytes();
+  if pos >= bytes.len() { return None; }
+  // Read the word under the cursor.
+  let mut s = pos;
+  while s > 0 && (bytes[s - 1].is_ascii_alphanumeric() || bytes[s - 1] == b'_') {
+    s -= 1;
+  }
+  let mut e = pos;
+  while e < bytes.len() && (bytes[e].is_ascii_alphanumeric() || bytes[e] == b'_') {
+    e += 1;
+  }
+  if s == e { return None; }
+  if !source[s..e].eq_ignore_ascii_case("NULL") { return None; }
+  let mut card =
+    "# `NULL`\n\n_unknown / absent value_\n\nSQL uses three-valued logic. \
+     Any expression involving `NULL` (except `IS NULL` / `IS NOT NULL` / \
+     `IS [NOT] DISTINCT FROM`) returns `NULL`, not true/false. Use \
+     `COALESCE(x, default)` or `x IS NULL` for safe comparisons.\n"
+      .to_string();
+  if let Some((schema, table, col, ty)) = infer_assigned_column(source, s.saturating_sub(1), catalog) {
+    card.push_str(&format!(
+      "\n- **assigned to:** `{schema}.{table}.{col}`\n- **column type:** `{ty}`\n",
+    ));
+    // Find nullability flag in catalog.
+    if let Some(t) = catalog.find_table(Some(&schema), &table) {
+      if let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(&col)) {
+        if !c.nullable {
+          card.push_str(
+            "\n_Warning:_ destination column is **NOT NULL** -- PG will reject this INSERT with `null value in column \"...\" violates not-null constraint`.\n",
+          );
+        }
+      }
+    }
+  }
+  Some(card)
+}
+
 /// Hover card for the four JSONB path operators -- ->, ->>, #>, #>>.
 /// Each returns a different type so users get caught out by mixing
 /// them (especially -> vs ->>). Fires when the cursor sits on any
