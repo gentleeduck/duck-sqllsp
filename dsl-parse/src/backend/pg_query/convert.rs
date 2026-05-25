@@ -58,7 +58,8 @@ fn column_def(c: &PgCol) -> ColumnDef {
     .type_name
     .as_ref()
     .map(|t| {
-      t.names
+      let base = t
+        .names
         .iter()
         .filter_map(|n| n.node.as_ref())
         .filter_map(|n| match n {
@@ -66,7 +67,11 @@ fn column_def(c: &PgCol) -> ColumnDef {
           _ => None,
         })
         .collect::<Vec<_>>()
-        .join(".")
+        .join(".");
+      // Append `[]` per array dim so downstream rules (sql230 GIN on
+      // scalar) see the array suffix and don't false-positive on text[].
+      let arr = "[]".repeat(t.array_bounds.len());
+      format!("{base}{arr}")
     })
     .unwrap_or_default();
   // pg_query exposes nullability through constraints. A NOT NULL

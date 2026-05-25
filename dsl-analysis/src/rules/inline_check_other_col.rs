@@ -55,10 +55,29 @@ impl LintRule for Rule {
       let mut found_other = false;
       let mut other_name = String::new();
       while i < bytes.len() {
+        if bytes[i] == b'\'' {
+          // Skip string literal (handle '' escape).
+          i += 1;
+          while i < bytes.len() {
+            if bytes[i] == b'\'' {
+              if i + 1 < bytes.len() && bytes[i + 1] == b'\'' { i += 2; continue }
+              i += 1;
+              break;
+            }
+            i += 1;
+          }
+          continue;
+        }
         if bytes[i].is_ascii_alphabetic() || bytes[i] == b'_' {
           let s = i;
           while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') { i += 1 }
           let id = &expr[s..i];
+          // Skip if followed by `(` (function call name) -- not a column ref.
+          let mut k = i;
+          while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+          if k < bytes.len() && bytes[k] == b'(' {
+            continue;
+          }
           let up = id.to_ascii_uppercase();
           if !is_reserved(&up) && !id.eq_ignore_ascii_case(col_name) {
             found_other = true;
