@@ -19,8 +19,10 @@ pub mod cast_text_in_distinct;
 pub mod cast_text_to_int_in_where;
 pub mod char_length_vs_length;
 pub mod char_n_type;
+pub mod coalesce_single_arg;
 pub mod character_varying_no_limit;
 pub mod column_default_volatile;
+pub mod copy_file_path;
 pub mod copy_no_format;
 pub mod count_one_vs_star;
 pub mod count_star_returns_one;
@@ -35,6 +37,7 @@ pub mod distinct_with_aggregate;
 pub mod empty_comment;
 pub mod exit_outside_loop;
 pub mod explain_analyze_in_dml;
+pub mod extract_unknown_field;
 pub mod generate_series_no_alias;
 pub mod grant_to_public;
 pub mod grant_with_grant_option;
@@ -87,6 +90,7 @@ pub mod raise_using_errcode;
 pub mod redundant_index_on_pk;
 pub mod redundant_parens;
 pub mod redundant_unique_index;
+pub mod reindex_system;
 pub mod reserved_word_identifier;
 pub mod return_type_literal;
 pub mod returning_no_assign;
@@ -324,5 +328,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(update_set_alias_mismatch::Rule),
     Box::new(notify_unlistened::Rule),
     Box::new(insert_subquery_col_count::Rule),
+    Box::new(coalesce_single_arg::Rule),
+    Box::new(extract_unknown_field::Rule),
+    Box::new(copy_file_path::Rule),
+    Box::new(reindex_system::Rule),
   ]
 }
