@@ -42,15 +42,31 @@ pub async fn publish_for(client: &Client, state: &ServerState, uri: &Url) {
     return;
   }
 
+  // Per-rule severity overrides from .duck-sqllsp.toml.
+  let cfg = state.config_snapshot();
   let diagnostics = raw
     .into_iter()
-    .map(|d| Diagnostic {
-      range: to_lsp_range(&rope, d.range),
-      severity: Some(map_severity(d.severity)),
-      code: Some(tower_lsp::lsp_types::NumberOrString::String(d.code.to_string())),
-      source: Some("duck-sqllsp".into()),
-      message: d.message,
-      ..Default::default()
+    .filter_map(|d| {
+      let sev = if let Some(over) = cfg.rules.get(d.code) {
+        match over.to_ascii_lowercase().as_str() {
+          "off" | "ignore" | "none" => return None,
+          "error" => DiagnosticSeverity::ERROR,
+          "warning" | "warn" => DiagnosticSeverity::WARNING,
+          "info" | "information" => DiagnosticSeverity::INFORMATION,
+          "hint" => DiagnosticSeverity::HINT,
+          _ => map_severity(d.severity),
+        }
+      } else {
+        map_severity(d.severity)
+      };
+      Some(Diagnostic {
+        range: to_lsp_range(&rope, d.range),
+        severity: Some(sev),
+        code: Some(tower_lsp::lsp_types::NumberOrString::String(d.code.to_string())),
+        source: Some("duck-sqllsp".into()),
+        message: d.message,
+        ..Default::default()
+      })
     })
     .collect::<Vec<_>>();
 

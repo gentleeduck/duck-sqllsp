@@ -41,6 +41,12 @@ pub struct DuckSqllspConfig {
   pub require_connection: bool,
   #[serde(default)]
   pub style: Style,
+  /// Per-rule severity overrides. Keys are diagnostic codes (e.g.
+  /// `sql001`); values are `"error"` / `"warning"` / `"info"` /
+  /// `"hint"` / `"off"`. The server applies overrides post-rule so
+  /// rule implementations don't need to know about config.
+  #[serde(default)]
+  pub rules: std::collections::HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
