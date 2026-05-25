@@ -240,6 +240,7 @@ pub mod drop_column_fk;
 pub mod drop_function_no_args;
 pub mod drop_role_no_reassign;
 pub mod drop_schema_no_cascade;
+pub mod drop_table_no_if_exists;
 pub mod fk_unknown_column;
 pub mod int_range;
 pub mod using_clause_columns;
@@ -514,5 +515,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(pk_duplicate_col::Rule),
     Box::new(select_trailing_comma::Rule),
     Box::new(copy_program_exec::Rule),
+    Box::new(drop_table_no_if_exists::Rule),
   ]
 }
