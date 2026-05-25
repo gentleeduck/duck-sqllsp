@@ -105,6 +105,7 @@ pub mod mysql_interval_syntax;
 pub mod mutating_without_where;
 pub mod negative_limit_offset;
 pub mod nested_begin;
+pub mod notify_payload_too_large;
 pub mod notify_unlistened;
 pub mod not_in_nullable;
 pub mod not_in_subquery;
@@ -504,5 +505,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(nested_begin::Rule),
     Box::new(copy_header_no_csv::Rule),
     Box::new(reindex_in_tx::Rule),
+    Box::new(notify_payload_too_large::Rule),
   ]
 }
