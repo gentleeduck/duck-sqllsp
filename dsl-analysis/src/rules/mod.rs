@@ -202,6 +202,7 @@ pub mod is_null_on_not_null;
 pub mod insert_into_generated;
 pub mod savepoint_outside_tx;
 pub mod secdef_no_search_path;
+pub mod self_fk_no_deferrable;
 pub mod trigger_wrong_row_alias;
 pub mod truncate_in_trigger;
 pub mod varchar_length;
@@ -518,5 +519,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(copy_program_exec::Rule),
     Box::new(drop_table_no_if_exists::Rule),
     Box::new(empty_array_no_cast::Rule),
+    Box::new(self_fk_no_deferrable::Rule),
   ]
 }
