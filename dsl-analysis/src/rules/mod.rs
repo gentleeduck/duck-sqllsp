@@ -150,6 +150,7 @@ pub mod rollup_cube_single;
 pub mod returning_no_assign;
 pub mod returning_with_truncate;
 pub mod revoke_cascade;
+pub mod revoke_missing_from;
 pub mod row_constructor_single;
 pub mod row_count_after_dml;
 pub mod savepoint_name_reuse;
@@ -528,5 +529,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(in_list_duplicates::Rule),
     Box::new(update_delete_limit::Rule),
     Box::new(timestamp_precision_over::Rule),
+    Box::new(revoke_missing_from::Rule),
   ]
 }
