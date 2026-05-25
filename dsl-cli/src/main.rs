@@ -38,6 +38,9 @@ enum Cmd {
     /// Emit machine-readable JSON instead of the human table.
     #[arg(long)]
     json: bool,
+    /// Only list rules with this default severity (error/warning/info/hint).
+    #[arg(long)]
+    severity: Option<String>,
   },
 }
 
@@ -63,7 +66,8 @@ fn main() -> anyhow::Result<()> {
       println!("duck-sqllsp {}", env!("CARGO_PKG_VERSION"));
       Ok(())
     },
-    Cmd::Rules { json } => {
+    Cmd::Rules { json, severity } => {
+      let filter = severity.as_deref().map(|s| s.to_ascii_lowercase());
       let mut rules: Vec<(String, &'static str)> = dsl_analysis::rules::all()
         .into_iter()
         .map(|r| (r.code().to_string(), match r.default_severity() {
@@ -72,6 +76,7 @@ fn main() -> anyhow::Result<()> {
           dsl_analysis::Severity::Info => "info",
           dsl_analysis::Severity::Hint => "hint",
         }))
+        .filter(|(_, sev)| filter.as_deref().is_none_or(|f| *sev == f))
         .collect();
       rules.sort_by(|a, b| a.0.cmp(&b.0));
       if json {
