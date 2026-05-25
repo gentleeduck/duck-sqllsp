@@ -41,6 +41,7 @@ fn skip_for_dialect(dialect: Dialect, code: &str) -> bool {
   match dialect {
     Dialect::Postgres => false,
     Dialect::MySql => MYSQL_PORT_CODES.contains(&code) || CROSS_DIALECT_CODES.contains(&code),
+    Dialect::MsSql => MSSQL_PORT_CODES.contains(&code) || CROSS_DIALECT_CODES.contains(&code),
     Dialect::SQLite | Dialect::Generic => {
       MYSQL_PORT_CODES.contains(&code)
         || MSSQL_PORT_CODES.contains(&code)

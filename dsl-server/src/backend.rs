@@ -86,6 +86,7 @@ impl LanguageServer for Backend {
           config::Dialect::Postgresql => dsl_parse::Dialect::Postgres,
           config::Dialect::Mysql => dsl_parse::Dialect::MySql,
           config::Dialect::Sqlite => dsl_parse::Dialect::SQLite,
+          config::Dialect::Mssql => dsl_parse::Dialect::MsSql,
         };
         self.state.documents.set_dialect_all(dialect);
         let state = self.state.clone();
@@ -115,6 +116,7 @@ impl LanguageServer for Backend {
       config::Dialect::Postgresql => dsl_parse::Dialect::Postgres,
       config::Dialect::Mysql => dsl_parse::Dialect::MySql,
       config::Dialect::Sqlite => dsl_parse::Dialect::SQLite,
+          config::Dialect::Mssql => dsl_parse::Dialect::MsSql,
     };
     self.state.documents.open_with_dialect(td.uri, td.text, td.version, dialect);
     crate::diagnostics::publish_for(&self.client, &self.state, &uri).await;
@@ -273,6 +275,7 @@ impl LanguageServer for Backend {
       config::Dialect::Postgresql => dsl_parse::Dialect::Postgres,
       config::Dialect::Mysql => dsl_parse::Dialect::MySql,
       config::Dialect::Sqlite => dsl_parse::Dialect::SQLite,
+          config::Dialect::Mssql => dsl_parse::Dialect::MsSql,
     };
     self.state.documents.set_dialect_all(dialect);
     let state = self.state.clone();

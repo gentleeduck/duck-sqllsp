@@ -121,9 +121,10 @@ fn main() -> anyhow::Result<()> {
         "postgres" | "pg" => dsl_parse::Dialect::Postgres,
         "mysql" => dsl_parse::Dialect::MySql,
         "sqlite" => dsl_parse::Dialect::SQLite,
+        "mssql" | "tsql" | "sqlserver" => dsl_parse::Dialect::MsSql,
         "generic" => dsl_parse::Dialect::Generic,
         other => {
-          eprintln!("error: unknown dialect '{other}'; valid: postgres, mysql, sqlite, generic");
+          eprintln!("error: unknown dialect '{other}'; valid: postgres, mysql, sqlite, mssql, generic");
           std::process::exit(2);
         }
       };

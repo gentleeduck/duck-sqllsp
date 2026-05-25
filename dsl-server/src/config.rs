@@ -55,6 +55,7 @@ pub enum Dialect {
   Postgresql,
   Mysql,
   Sqlite,
+  Mssql,
 }
 
 impl Default for Dialect {

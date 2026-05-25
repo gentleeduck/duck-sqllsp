@@ -8,5 +8,7 @@ pub enum Dialect {
   Postgres,
   MySql,
   SQLite,
+  /// Microsoft SQL Server / Sybase / T-SQL.
+  MsSql,
   Generic,
 }

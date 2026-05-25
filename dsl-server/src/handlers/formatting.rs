@@ -35,6 +35,7 @@ pub fn run(state: &ServerState, params: DocumentFormattingParams) -> Option<Vec<
       dsl_parse::Dialect::Postgres => "postgresql".into(),
       dsl_parse::Dialect::MySql => "mysql".into(),
       dsl_parse::Dialect::SQLite => "sqlite".into(),
+      dsl_parse::Dialect::MsSql => "transactsql".into(),
       dsl_parse::Dialect::Generic => "sql".into(),
     };
   }
