@@ -23,6 +23,7 @@ pub mod char_n_type;
 pub mod coalesce_single_arg;
 pub mod character_varying_no_limit;
 pub mod column_default_volatile;
+pub mod commit_in_function;
 pub mod copy_file_path;
 pub mod copy_no_format;
 pub mod count_one_vs_star;
@@ -60,6 +61,7 @@ pub mod jsonb_no_cast;
 pub mod jsonb_set_no_create;
 pub mod like_leading_wildcard;
 pub mod like_with_no_collation;
+pub mod limit_for_update_subq;
 pub mod like_without_wildcard;
 pub mod limit_without_order;
 pub mod listen_unbounded;
@@ -88,6 +90,7 @@ pub mod perform_for_pure_select;
 pub mod prefer_alias;
 pub mod raise_arg_count;
 pub mod raise_no_level;
+pub mod recursive_cte_no_union;
 pub mod raise_message_no_args;
 pub mod raise_using_errcode;
 pub mod redundant_index_on_pk;
@@ -147,6 +150,7 @@ pub mod varchar_length;
 pub mod date_literal_format;
 pub mod alter_column_type;
 pub mod array_fn_on_scalar;
+pub mod array_mixed_types;
 pub mod cast_literal_invalid;
 pub mod comment_on_unknown;
 pub mod default_references_column;
@@ -348,5 +352,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(values_row_width::Rule),
     Box::new(for_update_left_join::Rule),
     Box::new(case_branch_types::Rule),
+    Box::new(commit_in_function::Rule),
+    Box::new(recursive_cte_no_union::Rule),
+    Box::new(array_mixed_types::Rule),
+    Box::new(limit_for_update_subq::Rule),
   ]
 }
