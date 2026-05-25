@@ -174,6 +174,7 @@ pub mod set_transaction_in_function;
 pub mod shell_command_in_sql;
 pub mod single_stmt_transaction;
 pub mod star_with_order_by_position;
+pub mod string_agg_no_order;
 pub mod sql_lang_uses_new_old;
 pub mod system_catalog_dml;
 pub mod table_inherits;
@@ -532,5 +533,6 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(timestamp_precision_over::Rule),
     Box::new(revoke_missing_from::Rule),
     Box::new(psql_backslash::Rule),
+    Box::new(string_agg_no_order::Rule),
   ]
 }
