@@ -2,6 +2,7 @@
 //!
 //! New rules: add the module, then push an instance into [`all`].
 
+pub mod advisory_lock_literal_key;
 pub mod advisory_lock_no_unlock;
 pub mod after_trigger_return_row;
 pub mod alter_table_no_owner;
@@ -21,6 +22,7 @@ pub mod case_single_when;
 pub mod cast_text_in_distinct;
 pub mod cast_text_to_int_in_where;
 pub mod char_length_vs_length;
+pub mod check_always_true;
 pub mod char_n_type;
 pub mod coalesce_single_arg;
 pub mod character_varying_no_limit;
@@ -97,6 +99,7 @@ pub mod order_by_random;
 pub mod owner_to_unknown_role;
 pub mod plpgsql_assign_type;
 pub mod perform_for_pure_select;
+pub mod pg_catalog_no_schema;
 pub mod pg_sleep_in_tx;
 pub mod prefer_alias;
 pub mod raise_arg_count;
@@ -177,6 +180,7 @@ pub mod for_update_of_unknown;
 pub mod inline_check_other_col;
 pub mod lateral_no_ref;
 pub mod generated_uses_volatile;
+pub mod on_conflict_do_nothing;
 pub mod on_conflict_no_unique;
 pub mod truncate_with_fk;
 pub mod window_frame_reversed;
@@ -398,5 +402,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(view_select_star::Rule),
     Box::new(drop_schema_no_cascade::Rule),
     Box::new(values_subq_no_alias::Rule),
+    Box::new(check_always_true::Rule),
+    Box::new(pg_catalog_no_schema::Rule),
+    Box::new(on_conflict_do_nothing::Rule),
+    Box::new(advisory_lock_literal_key::Rule),
   ]
 }
