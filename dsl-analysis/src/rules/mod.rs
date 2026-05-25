@@ -51,6 +51,7 @@ pub mod cursor_with_hold_no_tx;
 pub mod ddl_in_immutable;
 pub mod deep_case_nesting;
 pub mod delete_no_where_in_fn;
+pub mod dml_where_unknown_column;
 pub mod deprecated_function;
 pub mod distinct_after_group_by;
 pub mod distinct_on_no_order;
@@ -84,6 +85,7 @@ pub mod information_schema_perf;
 pub mod index_expr_volatile;
 pub mod index_no_name;
 pub mod insert_col_value_count;
+pub mod insert_unknown_column;
 pub mod insert_no_columns;
 pub mod insert_no_on_conflict;
 pub mod insert_subquery_col_count;
@@ -178,6 +180,7 @@ pub mod return_type_literal;
 pub mod rollback_outside_tx;
 pub mod rollup_cube_single;
 pub mod returning_no_assign;
+pub mod returning_unknown_column;
 pub mod returning_with_truncate;
 pub mod revoke_cascade;
 pub mod revoke_missing_from;
@@ -211,6 +214,7 @@ pub mod sql_lang_uses_new_old;
 pub mod system_catalog_dml;
 pub mod table_inherits;
 pub mod tablespace_specified;
+pub mod unknown_function;
 pub mod text_int_arithmetic;
 pub mod tg_var_in_non_trigger;
 pub mod time_with_timezone;
@@ -604,5 +608,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(rename_column_breaks_view::Rule),
     Box::new(brin_small_table::Rule),
     Box::new(alter_trigger_lock::Rule),
+    Box::new(unknown_function::Rule),
+    Box::new(insert_unknown_column::Rule),
+    Box::new(returning_unknown_column::Rule),
+    Box::new(dml_where_unknown_column::Rule),
   ]
 }

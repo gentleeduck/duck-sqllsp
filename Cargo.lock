@@ -420,6 +420,7 @@ name = "dsl-analysis"
 version = "0.1.0"
 dependencies = [
  "dsl-catalog",
+ "dsl-knowledge",
  "dsl-parse",
  "dsl-resolve",
  "serde",

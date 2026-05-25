@@ -3958,3 +3958,72 @@ fn sql347_flags_enable_trigger() {
   let d = diags("ALTER TABLE users ENABLE TRIGGER audit_t;");
   assert!(d.iter().any(|x| x.code == "sql347"));
 }
+
+// ===== sql348 unknown function =====
+
+#[test]
+fn sql348_flags_unknown_function() {
+  let d = diags("SELECT nonexistent_fn(1, 2);");
+  assert!(d.iter().any(|x| x.code == "sql348"));
+}
+
+#[test]
+fn sql348_quiet_on_builtin() {
+  let d = diags("SELECT length('foo');");
+  assert!(!d.iter().any(|x| x.code == "sql348"));
+}
+
+#[test]
+fn sql348_quiet_when_buffer_defines_fn() {
+  let d = diags("CREATE FUNCTION my_helper() RETURNS int AS $$ SELECT 1 $$ LANGUAGE sql;\nSELECT my_helper();");
+  assert!(!d.iter().any(|x| x.code == "sql348"));
+}
+
+#[test]
+fn sql348_quiet_on_keyword_call() {
+  // CAST is keyword-like; COALESCE is a built-in fn (listed in knowledge tables).
+  let d = diags("SELECT CAST('1' AS int), COALESCE(NULL, 1);");
+  assert!(!d.iter().any(|x| x.code == "sql348"));
+}
+
+// ===== sql349 INSERT unknown column =====
+
+#[test]
+fn sql349_flags_unknown_insert_column() {
+  let d = diags("INSERT INTO users (bogus) VALUES (1);");
+  assert!(d.iter().any(|x| x.code == "sql349"));
+}
+
+#[test]
+fn sql349_quiet_on_known_column() {
+  let d = diags("INSERT INTO users (id, name) VALUES ('00000000-0000-0000-0000-000000000000', 'x');");
+  assert!(!d.iter().any(|x| x.code == "sql349"));
+}
+
+// ===== sql350 RETURNING unknown column =====
+
+#[test]
+fn sql350_flags_unknown_returning() {
+  let d = diags("INSERT INTO users (name) VALUES ('x') RETURNING bogus;");
+  assert!(d.iter().any(|x| x.code == "sql350"));
+}
+
+#[test]
+fn sql350_quiet_returning_star() {
+  let d = diags("INSERT INTO users (name) VALUES ('x') RETURNING *;");
+  assert!(!d.iter().any(|x| x.code == "sql350"));
+}
+
+// ===== sql351 DML WHERE unknown column =====
+
+#[test]
+fn sql351_flags_unknown_delete_where() {
+  let d = diags("DELETE FROM users WHERE bogus = 1;");
+  assert!(d.iter().any(|x| x.code == "sql351"));
+}
+
+#[test]
+fn sql351_quiet_when_column_exists() {
+  let d = diags("DELETE FROM users WHERE id = '00000000-0000-0000-0000-000000000000';");
+  assert!(!d.iter().any(|x| x.code == "sql351"));
+}

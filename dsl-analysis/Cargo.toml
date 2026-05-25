@@ -17,5 +17,6 @@ categories.workspace = true
 dsl-parse = { workspace = true }
 dsl-resolve = { workspace = true }
 dsl-catalog = { workspace = true }
+dsl-knowledge = { workspace = true }
 text-size = { workspace = true }
 serde = { workspace = true }
