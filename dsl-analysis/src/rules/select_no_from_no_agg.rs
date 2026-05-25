@@ -108,6 +108,18 @@ impl LintRule for Rule {
     if proj.starts_with('*') {
       return;
     }
+    // Skip when the projection contains ANY function call -- the user
+    // is calling a SELECT-expression form, not querying a missing
+    // column. Covers `SELECT length('x')`, `SELECT to_tsvector(...)`,
+    // `SELECT regexp_replace(...)`, `SELECT lower(col)`, etc. without
+    // maintaining a hand-curated OK_FUNCS list.
+    if proj.contains('(') {
+      return;
+    }
+    // Skip casts: `SELECT '42'::int;` -- expression form.
+    if proj.contains("::") {
+      return;
+    }
     let abs_start = start;
     let abs_end = start + 6;
     out.push(Diagnostic {

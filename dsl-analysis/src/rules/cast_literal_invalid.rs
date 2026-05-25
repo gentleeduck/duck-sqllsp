@@ -51,9 +51,12 @@ impl LintRule for Rule {
           let mut k = type_start;
           while k < bytes.len() {
             let c = bytes[k] as char;
-            if c.is_ascii_alphanumeric() || c == '_' || c == '(' || c == ')' { k += 1 } else { break }
+            if c.is_ascii_alphanumeric() || c == '_' || c == '(' || c == ')' || c == '[' || c == ']' || c == ' ' { k += 1 } else { break }
           }
           let ty = body[type_start..k].trim();
+          // Skip array-type casts -- the literal is an array curly form
+          // `'{1,2,3}'`, not a scalar value that must parse as <type>.
+          if ty.ends_with("[]") || ty.to_ascii_uppercase().starts_with("ARRAY") { i = j + 1; continue }
           if !ty.is_empty() {
             if let Some(reason) = literal_cast_error(lit, ty) {
               out.push(Diagnostic {

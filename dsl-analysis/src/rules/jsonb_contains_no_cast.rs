@@ -1,7 +1,7 @@
-//! sql232: `<jsonb col> @> 'foo'` (or `<@`, `?`, `?|`, `?&`) where
-//! the RHS is a plain text literal without `::jsonb`. PG raises
-//! 42883 "operator does not exist: jsonb @> text" at runtime.
-//! Suggest the explicit ::jsonb cast.
+//! sql232: `<jsonb col> @> 'foo'` (or `<@`) where the RHS is a plain
+//! text literal without `::jsonb`. PG implicitly casts the literal
+//! at runtime; the explicit `::jsonb` cast nudges the planner and
+//! reads better. Hint, not error.
 
 use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
@@ -15,7 +15,7 @@ impl LintRule for Rule {
     "sql232"
   }
   fn default_severity(&self) -> Severity {
-    Severity::Error
+    Severity::Hint
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
@@ -38,9 +38,9 @@ impl LintRule for Rule {
         let lit_abs_e = lit_abs_s + after_lit;
         out.push(Diagnostic {
           code: "sql232",
-          severity: Severity::Error,
+          severity: Severity::Hint,
           message: format!(
-            "`{op}` against text literal -- LHS is jsonb; cast RHS with `::jsonb` (PG 42883)"
+            "`{op}` text literal -- PG implicitly casts; add `::jsonb` for clarity + planner determinism"
           ),
           range: text_size::TextRange::new((lit_abs_s as u32).into(), (lit_abs_e as u32).into()),
         });
