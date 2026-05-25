@@ -31,6 +31,15 @@ pub fn run(state: &ServerState, params: CodeActionParams) -> Option<CodeActionRe
         "sql314" => sql314_action(&uri, diag, &doc.text, &mut actions),
         "sql319" => sql319_action(&uri, diag, &doc.text, &mut actions),
         "sql323" => sql323_action(&uri, diag, &doc.text, &mut actions),
+        "sql084" => sql084_action(&uri, diag, &mut actions),
+        "sql069" => sql069_action(&uri, diag, &doc.text, &mut actions),
+        "sql091" => sql091_action(&uri, diag, &doc.text, &mut actions),
+        "sql276" => sql276_action(&uri, diag, &doc.text, &mut actions),
+        "sql313" => sql313_action(&uri, diag, &mut actions),
+        "sql315" => sql315_action(&uri, diag, &mut actions),
+        "sql317" => sql317_action(&uri, diag, &doc.text, &mut actions),
+        "sql321" => sql321_action(&uri, diag, &mut actions),
+        "sql322" => sql322_action(&uri, diag, &doc.text, &mut actions),
         _ => {},
       }
     }
@@ -1094,4 +1103,213 @@ fn sql323_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeAct
     is_preferred: Some(true),
     ..Default::default()
   }));
+}
+
+/// Quickfix for sql084 (`COUNT(1)`) -- replace span with `COUNT(*)`.
+fn sql084_action(uri: &Url, diag: &Diagnostic, out: &mut Vec<CodeActionOrCommand>) {
+  let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+  changes.insert(uri.clone(), vec![TextEdit { range: diag.range, new_text: "COUNT(*)".into() }]);
+  out.push(CodeActionOrCommand::CodeAction(CodeAction {
+    title: "Replace with `COUNT(*)`".into(),
+    kind: Some(CodeActionKind::QUICKFIX),
+    diagnostics: Some(vec![diag.clone()]),
+    edit: Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None }),
+    is_preferred: Some(true),
+    ..Default::default()
+  }));
+}
+
+/// Quickfix for sql069 (`NOT NULL DEFAULT NULL`) -- drop the
+/// `DEFAULT NULL` clause inside the column declaration the diag
+/// span covers.
+fn sql069_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeActionOrCommand>) {
+  let (start_off, end_off) = lsp_range_to_offsets(text, diag.range);
+  if start_off >= end_off || end_off > text.len() { return }
+  let snippet = &text[start_off..end_off];
+  let upper = snippet.to_ascii_uppercase();
+  let Some(at) = upper.find("DEFAULT NULL") else { return };
+  let abs_s = start_off + at;
+  let mut abs_e = abs_s + "DEFAULT NULL".len();
+  // Eat the preceding whitespace too so we don't leave a double space.
+  let bytes = text.as_bytes();
+  let mut s = abs_s;
+  while s > start_off && bytes[s - 1].is_ascii_whitespace() { s -= 1 }
+  // Eat trailing whitespace if any.
+  while abs_e < end_off && bytes[abs_e].is_ascii_whitespace() { abs_e += 1 }
+  let lsp_range = offsets_to_lsp_range(text, s, abs_e);
+  let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+  changes.insert(uri.clone(), vec![TextEdit { range: lsp_range, new_text: " ".into() }]);
+  out.push(CodeActionOrCommand::CodeAction(CodeAction {
+    title: "Drop `DEFAULT NULL` (column is NOT NULL)".into(),
+    kind: Some(CodeActionKind::QUICKFIX),
+    diagnostics: Some(vec![diag.clone()]),
+    edit: Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None }),
+    is_preferred: Some(true),
+    ..Default::default()
+  }));
+}
+
+/// Quickfix for sql091 (empty COMMENT) -- delete the whole statement
+/// span the diag covers.
+fn sql091_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeActionOrCommand>) {
+  let (start_off, end_off) = lsp_range_to_offsets(text, diag.range);
+  if start_off >= end_off || end_off > text.len() { return }
+  // Extend forward to swallow a trailing semicolon + newline so the
+  // file stays tidy.
+  let bytes = text.as_bytes();
+  let mut e = end_off;
+  while e < bytes.len() && bytes[e].is_ascii_whitespace() { e += 1 }
+  if e < bytes.len() && bytes[e] == b';' { e += 1 }
+  while e < bytes.len() && (bytes[e] == b' ' || bytes[e] == b'\t') { e += 1 }
+  if e < bytes.len() && bytes[e] == b'\n' { e += 1 }
+  let lsp_range = offsets_to_lsp_range(text, start_off, e);
+  let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+  changes.insert(uri.clone(), vec![TextEdit { range: lsp_range, new_text: String::new() }]);
+  out.push(CodeActionOrCommand::CodeAction(CodeAction {
+    title: "Delete empty COMMENT statement".into(),
+    kind: Some(CodeActionKind::QUICKFIX),
+    diagnostics: Some(vec![diag.clone()]),
+    edit: Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None }),
+    is_preferred: Some(true),
+    ..Default::default()
+  }));
+}
+
+/// Quickfix for sql276 (MySQL `INTERVAL N UNIT`) -- wrap the diag span
+/// as `INTERVAL '<N> <UNIT>'`. The rule's range covers the full
+/// `INTERVAL ... UNIT` fragment.
+fn sql276_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeActionOrCommand>) {
+  let (s, e) = lsp_range_to_offsets(text, diag.range);
+  if s >= e || e > text.len() { return }
+  let raw = &text[s..e];
+  let upper = raw.to_ascii_uppercase();
+  let Some(after_kw) = upper.strip_prefix("INTERVAL") else { return };
+  let body = after_kw.trim();
+  if body.is_empty() || body.starts_with('\'') { return }
+  let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+  changes.insert(uri.clone(), vec![TextEdit { range: diag.range, new_text: format!("INTERVAL '{body}'") }]);
+  out.push(CodeActionOrCommand::CodeAction(CodeAction {
+    title: "Quote INTERVAL operand (PG syntax)".into(),
+    kind: Some(CodeActionKind::QUICKFIX),
+    diagnostics: Some(vec![diag.clone()]),
+    edit: Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None }),
+    is_preferred: Some(true),
+    ..Default::default()
+  }));
+}
+
+/// Quickfix for sql313 (inline COMMENT in CREATE TABLE) -- drop the
+/// COMMENT '...' clause; diag span covers `COMMENT '...'` exactly.
+fn sql313_action(uri: &Url, diag: &Diagnostic, out: &mut Vec<CodeActionOrCommand>) {
+  let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+  changes.insert(uri.clone(), vec![TextEdit { range: diag.range, new_text: String::new() }]);
+  out.push(CodeActionOrCommand::CodeAction(CodeAction {
+    title: "Drop inline COMMENT (use separate COMMENT ON statement)".into(),
+    kind: Some(CodeActionKind::QUICKFIX),
+    diagnostics: Some(vec![diag.clone()]),
+    edit: Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None }),
+    is_preferred: Some(true),
+    ..Default::default()
+  }));
+}
+
+/// Quickfix for sql315 (`ENGINE = ...`) -- drop the clause span.
+fn sql315_action(uri: &Url, diag: &Diagnostic, out: &mut Vec<CodeActionOrCommand>) {
+  let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+  changes.insert(uri.clone(), vec![TextEdit { range: diag.range, new_text: String::new() }]);
+  out.push(CodeActionOrCommand::CodeAction(CodeAction {
+    title: "Drop `ENGINE=...` clause (PG has no storage engines)".into(),
+    kind: Some(CodeActionKind::QUICKFIX),
+    diagnostics: Some(vec![diag.clone()]),
+    edit: Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None }),
+    is_preferred: Some(true),
+    ..Default::default()
+  }));
+}
+
+/// Quickfix for sql317 (MSSQL `[ident]`) -- swap brackets for double
+/// quotes. Diag range covers the bracketed token exactly.
+fn sql317_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeActionOrCommand>) {
+  let (s, e) = lsp_range_to_offsets(text, diag.range);
+  if s >= e || e > text.len() { return }
+  let raw = &text[s..e];
+  if !raw.starts_with('[') || !raw.ends_with(']') { return }
+  let inner = &raw[1..raw.len() - 1];
+  let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+  changes.insert(uri.clone(), vec![TextEdit { range: diag.range, new_text: format!("\"{inner}\"") }]);
+  out.push(CodeActionOrCommand::CodeAction(CodeAction {
+    title: format!("Replace `[{inner}]` with `\"{inner}\"`"),
+    kind: Some(CodeActionKind::QUICKFIX),
+    diagnostics: Some(vec![diag.clone()]),
+    edit: Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None }),
+    is_preferred: Some(true),
+    ..Default::default()
+  }));
+}
+
+/// Quickfix for sql321 (MSSQL `GO` separator) -- replace span with `;`.
+fn sql321_action(uri: &Url, diag: &Diagnostic, out: &mut Vec<CodeActionOrCommand>) {
+  let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+  changes.insert(uri.clone(), vec![TextEdit { range: diag.range, new_text: ";".into() }]);
+  out.push(CodeActionOrCommand::CodeAction(CodeAction {
+    title: "Replace `GO` with `;` (PG statement terminator)".into(),
+    kind: Some(CodeActionKind::QUICKFIX),
+    diagnostics: Some(vec![diag.clone()]),
+    edit: Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None }),
+    is_preferred: Some(true),
+    ..Default::default()
+  }));
+}
+
+/// Quickfix for sql322 (`BEGIN TRAN`) -- replace with `BEGIN`.
+fn sql322_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeActionOrCommand>) {
+  let (s, e) = lsp_range_to_offsets(text, diag.range);
+  if s >= e || e > text.len() { return }
+  let raw = &text[s..e];
+  let upper = raw.to_ascii_uppercase();
+  let new_text = if upper.starts_with("BEGIN TRANSACTION") {
+    "BEGIN".to_string()
+  } else if upper.starts_with("BEGIN TRAN") {
+    "BEGIN".to_string()
+  } else {
+    return;
+  };
+  let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+  changes.insert(uri.clone(), vec![TextEdit { range: diag.range, new_text }]);
+  out.push(CodeActionOrCommand::CodeAction(CodeAction {
+    title: "Replace `BEGIN TRAN` with `BEGIN`".into(),
+    kind: Some(CodeActionKind::QUICKFIX),
+    diagnostics: Some(vec![diag.clone()]),
+    edit: Some(WorkspaceEdit { changes: Some(changes), document_changes: None, change_annotations: None }),
+    is_preferred: Some(true),
+    ..Default::default()
+  }));
+}
+
+fn lsp_range_to_offsets(text: &str, range: Range) -> (usize, usize) {
+  (lsp_pos_to_offset(text, range.start), lsp_pos_to_offset(text, range.end))
+}
+
+fn lsp_pos_to_offset(text: &str, pos: Position) -> usize {
+  let mut line = 0u32;
+  let mut col = 0u32;
+  for (i, ch) in text.char_indices() {
+    if line == pos.line && col == pos.character { return i }
+    if ch == '\n' { line += 1; col = 0 } else { col += ch.len_utf16() as u32 }
+  }
+  text.len()
+}
+
+fn offsets_to_lsp_range(text: &str, start: usize, end: usize) -> Range {
+  Range { start: offset_to_lsp_pos(text, start), end: offset_to_lsp_pos(text, end) }
+}
+
+fn offset_to_lsp_pos(text: &str, off: usize) -> Position {
+  let mut line = 0u32;
+  let mut col = 0u32;
+  for (i, ch) in text.char_indices() {
+    if i >= off { break }
+    if ch == '\n' { line += 1; col = 0 } else { col += ch.len_utf16() as u32 }
+  }
+  Position { line, character: col }
 }
