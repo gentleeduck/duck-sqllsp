@@ -26,6 +26,19 @@ impl LintRule for Rule {
     };
     let mut refs: Vec<(Option<String>, String, TextRange)> = Vec::new();
     collect(s, &mut refs);
+    // Restrict ambiguity check to tables actually in this SELECT's
+    // FROM + JOIN -- CTE definitions that are declared in WITH but
+    // not referenced by the outer SELECT shouldn't shadow real
+    // columns.
+    let mut from_names: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for t in &s.from {
+      from_names.insert(t.name.to_ascii_lowercase());
+      if let Some(a) = &t.alias { from_names.insert(a.to_ascii_lowercase()); }
+    }
+    for j in &s.joins {
+      from_names.insert(j.table.name.to_ascii_lowercase());
+      if let Some(a) = &j.table.alias { from_names.insert(a.to_ascii_lowercase()); }
+    }
 
     for (qualifier, name, col_range) in refs {
       if qualifier.is_some() {
@@ -37,6 +50,15 @@ impl LintRule for Rule {
       let mut hits: Vec<String> = Vec::new();
       let mut seen_tables: Vec<(Option<String>, String)> = Vec::new();
       for b in scope.tables() {
+        // Only consider bindings that the outer SELECT actually
+        // references in FROM/JOIN -- otherwise CTEs declared in
+        // WITH but unused at this level get counted as "in scope".
+        if !from_names.is_empty()
+          && !from_names.contains(&b.alias.to_ascii_lowercase())
+          && !from_names.contains(&b.table.name.to_ascii_lowercase())
+        {
+          continue;
+        }
         let key = (b.table.schema.clone(), b.table.name.clone());
         if seen_tables.contains(&key) {
           continue;

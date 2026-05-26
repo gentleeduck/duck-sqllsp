@@ -26,13 +26,47 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
-    if !upper.contains("SELECT DISTINCT") {
+    // Only check the OUTERMOST SELECT projection. The previous text
+    // scan over the whole body wrongly combined DISTINCT in one
+    // subquery with an aggregate in another.
+    let bytes = upper.as_bytes();
+    let n = bytes.len();
+    let select_pos = upper.trim_start().find("SELECT").map(|p| (upper.len() - upper.trim_start().len()) + p);
+    let Some(select_pos) = select_pos else { return };
+    let after_sel = select_pos + "SELECT".len();
+    // Find depth-0 FROM after the SELECT.
+    let mut depth = 0i32;
+    let mut from_at: Option<usize> = None;
+    let mut i = after_sel;
+    while i + 4 <= n {
+      match bytes[i] {
+        b'(' => { depth += 1; i += 1; continue; }
+        b')' => { depth -= 1; i += 1; continue; }
+        b'\'' => {
+          i += 1;
+          while i < n && bytes[i] != b'\'' { i += 1 }
+          if i < n { i += 1 }
+          continue;
+        }
+        _ => {}
+      }
+      if depth == 0 && i + 5 <= n && &upper[i..i + 5] == " FROM" {
+        from_at = Some(i + 1);
+        break;
+      }
+      i += 1;
+    }
+    let proj_end = from_at.unwrap_or(n);
+    let proj = &upper[after_sel..proj_end];
+    if !proj.trim_start().starts_with("DISTINCT") {
       return;
     }
-    if upper.contains("GROUP BY") {
+    // Has GROUP BY anywhere at depth 0?
+    if has_group_by_top(&upper, from_at.unwrap_or(n)) {
       return;
     }
-    // Look for any aggregate function call.
+    // Look for any aggregate function call in the top-level
+    // projection only.
     const AGGS: &[&str] = &[
       "COUNT(",
       "SUM(",
@@ -47,7 +81,7 @@ impl LintRule for Rule {
       "BOOL_OR(",
       "EVERY(",
     ];
-    if !AGGS.iter().any(|a| upper.contains(a)) {
+    if !AGGS.iter().any(|a| proj.contains(a)) {
       return;
     }
     let Some(distinct_pos) = upper.find("DISTINCT") else { return };
@@ -60,4 +94,30 @@ impl LintRule for Rule {
       range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
     });
   }
+}
+
+fn has_group_by_top(upper: &str, from: usize) -> bool {
+  let bytes = upper.as_bytes();
+  let n = bytes.len();
+  let mut depth = 0i32;
+  let mut i = from;
+  while i + 8 <= n {
+    match bytes[i] {
+      b'(' => { depth += 1; i += 1; continue; }
+      b')' => { depth -= 1; i += 1; continue; }
+      b'\'' => {
+        i += 1;
+        while i < n && bytes[i] != b'\'' { i += 1 }
+        if i < n { i += 1 }
+        continue;
+      }
+      _ => {}
+    }
+    if depth == 0 && &upper[i..i + 8] == "GROUP BY" {
+      let prev_ok = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
+      if prev_ok { return true; }
+    }
+    i += 1;
+  }
+  false
 }
