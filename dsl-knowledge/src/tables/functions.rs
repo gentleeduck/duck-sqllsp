@@ -1330,6 +1330,12 @@ pub fn build() -> HashMap<&'static str, Entry> {
   f!("statement_timestamp",   "statement_timestamp() -> timestamp with time zone", "TIMESTAMPTZ of statement start.", "SELECT statement_timestamp();", pg("functions-datetime.html"));
   f!("transaction_timestamp", "transaction_timestamp() -> timestamp with time zone", "Alias for now(); TIMESTAMPTZ of transaction start.", "SELECT transaction_timestamp();", pg("functions-datetime.html"));
   f!("timeofday",         "timeofday() -> text", "Wall-clock time as text (legacy).", "SELECT timeofday();", pg("functions-datetime.html"));
+  f!("substr",            "substr(text, start int [, len int]) -> text", "Positional substring (PG alias for SQL-standard substring(... FROM n FOR m)).", "SELECT substr('hello', 2, 3);", pg("functions-string.html"));
+  f!("trim",              "trim([LEADING|TRAILING|BOTH] [chars] FROM text) -> text | trim(text [, chars]) -> text", "Trim characters from both/leading/trailing.", "SELECT trim(BOTH 'x' FROM 'xxhixx');", pg("functions-string.html"));
+  f!("char_length",       "char_length(text) -> integer", "Character count of text.", "SELECT char_length('héllo');", pg("functions-string.html"));
+  f!("character_length",  "character_length(text) -> integer", "Character count of text (SQL-standard spelling).", "SELECT character_length('héllo');", pg("functions-string.html"));
+  f!("md5",               "md5(text|bytea) -> text", "MD5 hash hex digest.", "SELECT md5('hello');", pg("functions-string.html"));
+  f!("position",          "position(needle IN haystack) -> integer", "SQL-standard 1-based index of needle.", "SELECT position('world' IN 'hello world');", pg("functions-string.html"));
 
   // ---- Trigonometric ----
   f!("sin",   "sin(double precision) -> double precision", "Sine, radians.",   "SELECT sin(0);", pg("functions-math.html"));
