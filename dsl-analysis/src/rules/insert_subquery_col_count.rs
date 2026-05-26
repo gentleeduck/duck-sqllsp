@@ -60,7 +60,7 @@ impl LintRule for Rule {
     // Also stop at UNION/INTERSECT/EXCEPT so a multi-branch
     // `INSERT INTO t SELECT 1, 2, 3 UNION ALL SELECT 4, 5, 6` doesn't
     // glue every branch into one projection (would over-count commas).
-    let stop_union = ["UNION", "INTERSECT", "EXCEPT"]
+    let stop_union = ["UNION", "INTERSECT", "EXCEPT", "RETURNING", "ORDER", "LIMIT", "OFFSET", "FETCH"]
       .iter()
       .filter_map(|kw| find_word_kw(tail, kw))
       .min();
