@@ -58,6 +58,25 @@ impl LintRule for Rule {
         if i < bytes.len() { i += 1 }
         continue;
       }
+      // Cast operator `::type`: skip the type identifier so it's not
+      // treated as a bare column ref. Was firing on `WHERE c = 'x'::myenum`.
+      if i + 1 < bytes.len() && bytes[i] == b':' && bytes[i + 1] == b':' {
+        i += 2;
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
+        while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_' || bytes[i] == b'.') { i += 1 }
+        // Optional `(N)` size spec.
+        if i < bytes.len() && bytes[i] == b'(' {
+          let mut depth = 1i32;
+          i += 1;
+          while i < bytes.len() && depth > 0 {
+            match bytes[i] { b'(' => depth += 1, b')' => depth -= 1, _ => {} }
+            i += 1;
+          }
+        }
+        // Optional `[]` array suffix.
+        while i + 1 < bytes.len() && bytes[i] == b'[' && bytes[i + 1] == b']' { i += 2 }
+        continue;
+      }
       if !(bytes[i].is_ascii_alphabetic() || bytes[i] == b'_') { i += 1; continue }
       let s = i;
       while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') { i += 1 }

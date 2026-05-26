@@ -152,13 +152,17 @@ fn compatible(kind: LitKind, declared: &str) -> bool {
   // returns fully qualified type names for built-ins.
   let d = d.split('(').next().unwrap_or(&d).trim();
   let d = d.rsplit('.').next().unwrap_or(d).trim();
+  let d = d.trim_end_matches(|c: char| c == ']' || c == '[' || c.is_ascii_digit() || c.is_ascii_whitespace());
   let int_types =
     ["INT", "INTEGER", "BIGINT", "SMALLINT", "INT4", "INT8", "INT2", "SERIAL", "BIGSERIAL", "SMALLSERIAL"];
   let num_types = ["NUMERIC", "DECIMAL", "REAL", "DOUBLE", "FLOAT", "MONEY"];
-  let str_types = ["TEXT", "VARCHAR", "CHAR", "CHARACTER", "CITEXT", "NAME"];
+  let str_types = ["TEXT", "VARCHAR", "CHAR", "CHARACTER", "CITEXT", "NAME", "JSON", "JSONB", "XML", "BYTEA"];
   let uuid_types = ["UUID"];
   let bool_types = ["BOOLEAN", "BOOL"];
   let time_types = ["DATE", "TIMESTAMP", "TIMESTAMPTZ", "TIME", "INTERVAL"];
+  let all_known: &[&[&str]] = &[&int_types, &num_types, &str_types, &uuid_types, &bool_types, &time_types];
+  let is_known = all_known.iter().any(|grp| grp.iter().any(|t| d.starts_with(t)));
+  if !is_known { return true; }
   match kind {
     LitKind::Str => {
       str_types.iter().any(|t| d.starts_with(t))
