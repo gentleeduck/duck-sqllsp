@@ -57,7 +57,14 @@ impl LintRule for Rule {
     let stop_from = tail.find(" FROM ").map(|p| p + " FROM ".len() - " FROM ".len());
     let stop_close = paren_close_at_depth_zero(body, after_sel);
     let stop_semi = tail.find(';');
-    let stop = [stop_from, stop_close.map(|p| p - after_sel), stop_semi]
+    // Also stop at UNION/INTERSECT/EXCEPT so a multi-branch
+    // `INSERT INTO t SELECT 1, 2, 3 UNION ALL SELECT 4, 5, 6` doesn't
+    // glue every branch into one projection (would over-count commas).
+    let stop_union = ["UNION", "INTERSECT", "EXCEPT"]
+      .iter()
+      .filter_map(|kw| find_word_kw(tail, kw))
+      .min();
+    let stop = [stop_from, stop_close.map(|p| p - after_sel), stop_semi, stop_union]
       .iter().flatten().copied().min();
     let proj_end = after_sel + stop.unwrap_or(tail.len());
     let proj = &body[after_sel..proj_end];
@@ -76,6 +83,22 @@ impl LintRule for Rule {
       range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
     });
   }
+}
+
+fn find_word_kw(haystack: &str, kw: &str) -> Option<usize> {
+  let h = haystack.as_bytes();
+  let n = kw.len();
+  if n == 0 { return None; }
+  let mut i = 0usize;
+  while i + n <= h.len() {
+    if haystack[i..i + n].eq_ignore_ascii_case(kw) {
+      let prev_ok = i == 0 || !(h[i - 1].is_ascii_alphanumeric() || h[i - 1] == b'_');
+      let next_ok = i + n == h.len() || !(h[i + n].is_ascii_alphanumeric() || h[i + n] == b'_');
+      if prev_ok && next_ok { return Some(i); }
+    }
+    i += 1;
+  }
+  None
 }
 
 /// First depth-0 occurrence of the word SELECT, skipping any SELECTs that

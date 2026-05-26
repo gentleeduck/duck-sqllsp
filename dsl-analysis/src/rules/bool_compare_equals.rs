@@ -41,8 +41,7 @@ impl LintRule for Rule {
     // predicate. Treat any CREATE/ALTER stmt that contains `OPTIONS (`
     // or `WITH (` followed by k=v pairs as opt-out from this rule.
     if (trimmed.starts_with("CREATE ") || trimmed.starts_with("ALTER ") || trimmed.starts_with("COPY "))
-      && (trimmed.contains(" OPTIONS (") || trimmed.contains(" OPTIONS(")
-          || trimmed.contains(" WITH (") || trimmed.contains(" WITH("))
+      && contains_with_or_options_paren(&trimmed)
     {
       return;
     }
@@ -131,4 +130,30 @@ fn strip_quoted_and_comments(s: &str) -> String {
 
 fn is_word(c: char) -> bool {
   c.is_alphanumeric() || c == '_'
+}
+
+/// True if `s` contains `WITH (` or `OPTIONS (` as a whole keyword
+/// (i.e. preceded by whitespace / start, optionally with whitespace
+/// before the `(`). Catches multi-line forms like
+/// `CREATE VIEW v\nWITH (security_barrier = true)`.
+fn contains_with_or_options_paren(s: &str) -> bool {
+  let bytes = s.as_bytes();
+  let n = bytes.len();
+  for kw in ["WITH", "OPTIONS"] {
+    let mut from = 0usize;
+    while let Some(rel) = s[from..].find(kw) {
+      let at = from + rel;
+      let prev_ok = at == 0 || !{ let c = bytes[at - 1] as char; c.is_ascii_alphanumeric() || c == '_' };
+      let after = at + kw.len();
+      let next_ok = after < n && !{ let c = bytes[after] as char; c.is_ascii_alphanumeric() || c == '_' };
+      if prev_ok && next_ok {
+        // Walk forward through whitespace; require `(` next.
+        let mut k = after;
+        while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+        if k < n && bytes[k] == b'(' { return true; }
+      }
+      from = at + kw.len();
+    }
+  }
+  false
 }
