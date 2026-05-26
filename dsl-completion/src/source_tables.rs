@@ -105,6 +105,11 @@ pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
   cat.extensions = scan_extensions(source);
   cat.functions = scan_functions(source);
   cat.roles = scan_roles(source);
+  // Add PARTITION OF child tables by copying the parent's columns.
+  // The CREATE TABLE child PARTITION OF parent form has no inline
+  // columns, so from_file misses them; downstream rules (sql002 etc)
+  // then can't resolve `child.col`.
+  inherit_partition_columns(&mut cat, source);
   // Walk every CREATE TABLE body and pull inline + table-level
   // PRIMARY KEY / UNIQUE / FOREIGN KEY constraints from the source.
   // The AST doesn't carry these (CreateTableStmt::columns only has
@@ -157,6 +162,83 @@ pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
 ///   [USING (<expr>)]
 ///   [WITH CHECK (<expr>)]`
 /// -> map<table_lower, Vec<Policy>>.
+/// `CREATE TABLE child PARTITION OF parent ...` declares `child`
+/// inheriting parent's full column list. The AST converter only sees
+/// the explicit `table_elts`, so the child lands in the catalog with
+/// zero columns -- unknown-column rules can't resolve `child.col`.
+/// Walk the source, find every PARTITION OF and copy parent columns
+/// onto matching children already in the catalog.
+fn inherit_partition_columns(cat: &mut Catalog, src: &str) {
+  let cleaned = strip_string_literals(src);
+  let upper = cleaned.to_ascii_uppercase();
+  let bytes = cleaned.as_bytes();
+  let n = bytes.len();
+  let needle = "CREATE TABLE";
+  let mut from = 0usize;
+  let mut pairs: Vec<(String, String)> = Vec::new();
+  while let Some(rel) = upper[from..].find(needle) {
+    let at = from + rel;
+    let mut k = at + needle.len();
+    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+    if upper[k..].starts_with("IF NOT EXISTS") {
+      k += "IF NOT EXISTS".len();
+      while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+    }
+    let id_start = k;
+    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') { k += 1 }
+    let child = cleaned[id_start..k].trim_matches('"').to_string();
+    from = k;
+    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+    if !upper[k..].starts_with("PARTITION OF") { continue }
+    k += "PARTITION OF".len();
+    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+    let p_start = k;
+    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') { k += 1 }
+    let parent = cleaned[p_start..k].trim_matches('"').to_string();
+    pairs.push((child, parent));
+  }
+  if pairs.is_empty() { return }
+  // For each pair, locate parent in catalog, copy its columns onto child.
+  for (child_fq, parent_fq) in pairs {
+    let p_bare = parent_fq.rsplit('.').next().unwrap_or(&parent_fq).to_string();
+    let c_bare = child_fq.rsplit('.').next().unwrap_or(&child_fq).to_string();
+    let parent_cols: Option<Vec<Column>> = cat
+      .schemas
+      .iter()
+      .flat_map(|s| s.tables.iter())
+      .find(|t| t.name.eq_ignore_ascii_case(&p_bare))
+      .map(|t| t.columns.clone());
+    let Some(cols) = parent_cols else { continue };
+    for schema in cat.schemas.iter_mut() {
+      for t in schema.tables.iter_mut() {
+        if t.name.eq_ignore_ascii_case(&c_bare) && t.columns.is_empty() {
+          t.columns = cols.clone();
+        }
+      }
+    }
+  }
+}
+
+fn strip_string_literals(s: &str) -> String {
+  let mut out: Vec<u8> = s.as_bytes().to_vec();
+  let n = out.len();
+  let mut i = 0usize;
+  while i < n {
+    if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
+      while i < n && out[i] != b'\n' { out[i] = b' '; i += 1 }
+      continue;
+    }
+    if out[i] == b'\'' {
+      out[i] = b' '; i += 1;
+      while i < n && out[i] != b'\'' { out[i] = b' '; i += 1 }
+      if i < n { out[i] = b' '; i += 1 }
+      continue;
+    }
+    i += 1;
+  }
+  String::from_utf8(out).unwrap_or_else(|_| s.to_string())
+}
+
 fn scan_policies(src: &str) -> std::collections::HashMap<String, Vec<Policy>> {
   let upper = src.to_ascii_uppercase();
   let bytes = src.as_bytes();

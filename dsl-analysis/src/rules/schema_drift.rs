@@ -26,6 +26,10 @@ impl LintRule for Rule {
 
   fn check(&self, _source: &str, stmt: &Statement, _scope: &Scope, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let StatementKind::CreateTable(ct) = &stmt.kind else { return };
+    // PARTITION OF / LIKE-only / inheritance forms have no explicit
+    // column list -- comparing zero buffer cols against the inherited
+    // live cols would always report drift. Skip.
+    if ct.columns.is_empty() { return }
     // Heuristic for "live catalog present": at least one table has a
     // non-empty constraint or index list. The source-derived offline
     // catalog has none of those.
