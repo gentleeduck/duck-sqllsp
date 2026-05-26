@@ -1336,6 +1336,23 @@ pub fn build() -> HashMap<&'static str, Entry> {
   f!("character_length",  "character_length(text) -> integer", "Character count of text (SQL-standard spelling).", "SELECT character_length('héllo');", pg("functions-string.html"));
   f!("md5",               "md5(text|bytea) -> text", "MD5 hash hex digest.", "SELECT md5('hello');", pg("functions-string.html"));
   f!("position",          "position(needle IN haystack) -> integer", "SQL-standard 1-based index of needle.", "SELECT position('world' IN 'hello world');", pg("functions-string.html"));
+  f!("cbrt",          "cbrt(double) -> double precision", "Cube root.", "SELECT cbrt(27);", pg("functions-math.html"));
+  f!("gcd",           "gcd(int, int) -> integer", "Greatest common divisor.", "SELECT gcd(12, 18);", pg("functions-math.html"));
+  f!("lcm",           "lcm(int, int) -> integer", "Least common multiple.", "SELECT lcm(4, 6);", pg("functions-math.html"));
+  f!("scale",         "scale(numeric) -> integer", "Scale of a numeric value (digits after decimal).", "SELECT scale(1.230);", pg("functions-math.html"));
+  f!("min_scale",     "min_scale(numeric) -> integer", "Minimum scale needed to represent value exactly.", "SELECT min_scale(1.230);", pg("functions-math.html"));
+  f!("trim_scale",    "trim_scale(numeric) -> numeric", "Strip trailing zeros after decimal point.", "SELECT trim_scale(1.2300);", pg("functions-math.html"));
+  f!("width_bucket",  "width_bucket(operand, b1, b2, count int) -> integer", "Histogram bucket number for operand in count equal-width buckets between b1 and b2.", "SELECT width_bucket(5.0, 0, 10, 4);", pg("functions-math.html"));
+  // Statistical / regression aggregates.
+  f!("regr_slope",     "regr_slope(y, x) -> double precision", "Slope of the linear regression line.", "SELECT regr_slope(price, qty) FROM items;", pg("functions-aggregate.html"));
+  f!("regr_intercept", "regr_intercept(y, x) -> double precision", "Intercept of the linear regression line.", "SELECT regr_intercept(price, qty) FROM items;", pg("functions-aggregate.html"));
+  f!("regr_r2",        "regr_r2(y, x) -> double precision", "Square of the correlation coefficient (R²).", "SELECT regr_r2(price, qty) FROM items;", pg("functions-aggregate.html"));
+  f!("regr_count",     "regr_count(y, x) -> bigint", "Count of input rows in which both inputs are non-null.", "SELECT regr_count(price, qty) FROM items;", pg("functions-aggregate.html"));
+  f!("regr_avgx",      "regr_avgx(y, x) -> double precision", "Average of the x values.", "SELECT regr_avgx(price, qty) FROM items;", pg("functions-aggregate.html"));
+  f!("regr_avgy",      "regr_avgy(y, x) -> double precision", "Average of the y values.", "SELECT regr_avgy(price, qty) FROM items;", pg("functions-aggregate.html"));
+  f!("regr_sxx",       "regr_sxx(y, x) -> double precision", "Sum of squares of the x values.", "SELECT regr_sxx(price, qty) FROM items;", pg("functions-aggregate.html"));
+  f!("regr_syy",       "regr_syy(y, x) -> double precision", "Sum of squares of the y values.", "SELECT regr_syy(price, qty) FROM items;", pg("functions-aggregate.html"));
+  f!("regr_sxy",       "regr_sxy(y, x) -> double precision", "Sum of products of x*y.", "SELECT regr_sxy(price, qty) FROM items;", pg("functions-aggregate.html"));
 
   // ---- Trigonometric ----
   f!("sin",   "sin(double precision) -> double precision", "Sine, radians.",   "SELECT sin(0);", pg("functions-math.html"));
