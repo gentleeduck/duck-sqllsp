@@ -154,8 +154,11 @@ fn count_top_level_commas(text: &str) -> usize {
   let mut i = 0usize;
   while i < bytes.len() {
     match bytes[i] {
-      b'(' => depth += 1,
-      b')' => depth -= 1,
+      // Track `[` / `]` too so commas inside ARRAY['a','b'] / CASE
+      // ... THEN ARRAY[...] ELSE ARRAY[...] END projections don't
+      // inflate the projection count.
+      b'(' | b'[' => depth += 1,
+      b')' | b']' => depth -= 1,
       b',' if depth == 0 => commas += 1,
       b'\'' => {
         i += 1;

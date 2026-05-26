@@ -20,7 +20,10 @@ impl LintRule for Rule {
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let raw = &source[start..end];
-    let raw_upper = raw.to_ascii_uppercase();
+    // Strip line+block comments so a leading `-- header` comment
+    // doesn't mask the real CREATE/ALTER TABLE anchor.
+    let raw_clean_owned = strip_dollar_and_noise(raw);
+    let raw_upper = raw_clean_owned.to_ascii_uppercase();
     // Skip when this is a CREATE TABLE / ALTER TABLE -- generate_series
     // in a column DEFAULT clause is a value expression, not a FROM
     // source. Even if PG would reject the DDL, that's a different rule.
@@ -44,6 +47,22 @@ impl LintRule for Rule {
     let mut i = 0;
     while i + 15 <= n {
       if &upper[i..i + 15] == "GENERATE_SERIES" && (i == 0 || !is_word(bytes[i - 1] as char)) {
+        // Only fire when generate_series is used as a FROM/JOIN source.
+        // The preceding token (skipping whitespace) should be FROM /
+        // JOIN / `,`. In SELECT lists (`SELECT generate_series(...)`)
+        // and in ARRAY(SELECT generate_series(...)) constructors, the
+        // function is a value expression -- no alias needed.
+        let mut p = i;
+        while p > 0 && bytes[p - 1].is_ascii_whitespace() { p -= 1 }
+        let word_end = p;
+        while p > 0 && (bytes[p - 1].is_ascii_alphanumeric() || bytes[p - 1] == b'_') { p -= 1 }
+        let prev_word = &upper[p..word_end];
+        let comma_before = word_end > 0 && bytes[word_end - 1] == b',';
+        let is_from_source = matches!(prev_word, "FROM" | "JOIN" | "LATERAL") || comma_before;
+        if !is_from_source {
+          i += 1;
+          continue;
+        }
         let mut j = i + 15;
         while j < n && bytes[j].is_ascii_whitespace() {
           j += 1;
