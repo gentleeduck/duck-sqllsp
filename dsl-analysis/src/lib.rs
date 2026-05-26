@@ -8,6 +8,7 @@
 pub mod ct_model;
 pub mod diagnostic;
 pub mod rules;
+pub mod textutil;
 pub mod typing;
 
 pub use diagnostic::{Diagnostic, Severity};
