@@ -32,12 +32,24 @@ impl LintRule for Rule {
     let slice_owned = strip_noise(raw_slice);
     let slice = slice_owned.as_str();
     let ctes = collect_cte_names(slice);
+    // Views declared anywhere in the buffer count as resolvable
+    // tables too -- the parser doesn't model CREATE VIEW yet, so it
+    // never lands in catalog.tables(). Lenient text scan picks up
+    // both regular and materialized views, schema-qualified or not.
+    let buffer_views = collect_view_names(source);
 
     for r in refs {
       if r.name.is_empty() {
         continue;
       }
       if ctes.iter().any(|c| c.eq_ignore_ascii_case(&r.name)) {
+        continue;
+      }
+      let fq_lc = match &r.schema {
+        Some(s) => format!("{}.{}", s.to_ascii_lowercase(), r.name.to_ascii_lowercase()),
+        None => r.name.to_ascii_lowercase(),
+      };
+      if buffer_views.iter().any(|v| v == &fq_lc || v == &r.name.to_ascii_lowercase()) {
         continue;
       }
       // PG system catalogs (`pg_class`, `pg_proc`, `pg_stat_activity`,
@@ -162,6 +174,51 @@ fn collect_cte_names(src: &str) -> Vec<String> {
 
 fn is_word(c: char) -> bool {
   c.is_alphanumeric() || c == '_'
+}
+
+/// Collect names of views (regular + materialized) declared anywhere
+/// in `source`. Returns both the bare and schema-qualified lower-cased
+/// names so the caller can match either form. Lenient text scan.
+fn collect_view_names(source: &str) -> Vec<String> {
+  let cleaned = strip_noise(source);
+  let upper = cleaned.to_ascii_uppercase();
+  let mut out: Vec<String> = Vec::new();
+  for pat in [
+    "CREATE VIEW", "CREATE OR REPLACE VIEW",
+    "CREATE TEMP VIEW", "CREATE TEMPORARY VIEW",
+    "CREATE RECURSIVE VIEW", "CREATE OR REPLACE RECURSIVE VIEW",
+    "CREATE MATERIALIZED VIEW", "CREATE MATERIALIZED VIEW IF NOT EXISTS",
+  ] {
+    let mut from = 0usize;
+    while let Some(rel) = upper[from..].find(pat) {
+      let at = from + rel;
+      let after = at + pat.len();
+      let bytes = cleaned.as_bytes();
+      let mut k = after;
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+      // Optional IF NOT EXISTS.
+      if upper[k..].starts_with("IF NOT EXISTS") {
+        k += "IF NOT EXISTS".len();
+        while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+      }
+      let name_start = k;
+      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') {
+        k += 1;
+      }
+      if k > name_start {
+        let name = cleaned[name_start..k].to_ascii_lowercase();
+        // bare name (after schema dot) + full qualified form.
+        let bare = name.rsplit('.').next().unwrap_or(&name).trim_matches('"').to_string();
+        let cleaned_name = name.replace('"', "");
+        out.push(cleaned_name);
+        if !out.contains(&bare) {
+          out.push(bare);
+        }
+      }
+      from = k;
+    }
+  }
+  out
 }
 
 fn strip_noise(s: &str) -> String {
