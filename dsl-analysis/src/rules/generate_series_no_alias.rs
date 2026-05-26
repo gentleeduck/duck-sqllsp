@@ -20,6 +20,19 @@ impl LintRule for Rule {
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let raw = &source[start..end];
+    let raw_upper = raw.to_ascii_uppercase();
+    // Skip when this is a CREATE TABLE / ALTER TABLE -- generate_series
+    // in a column DEFAULT clause is a value expression, not a FROM
+    // source. Even if PG would reject the DDL, that's a different rule.
+    let raw_trim = raw_upper.trim_start();
+    if raw_trim.starts_with("CREATE TABLE")
+      || raw_trim.starts_with("CREATE TEMP TABLE")
+      || raw_trim.starts_with("CREATE TEMPORARY TABLE")
+      || raw_trim.starts_with("CREATE UNLOGGED TABLE")
+      || raw_trim.starts_with("ALTER TABLE")
+    {
+      return;
+    }
     // Strip $$...$$ dollar-quoted blocks + comments + strings so a
     // `generate_series` call inside a CREATE FUNCTION body doesn't
     // false-fire (the function body is opaque to this text scan).

@@ -1037,7 +1037,14 @@ fn scan_functions(src: &str) -> Vec<Function> {
   let upper = src.to_ascii_uppercase();
   let bytes = src.as_bytes();
   let mut out = Vec::new();
-  for prefix in ["CREATE OR REPLACE FUNCTION ", "CREATE FUNCTION ", "CREATE PROCEDURE "] {
+  for prefix in [
+    "CREATE OR REPLACE FUNCTION ",
+    "CREATE FUNCTION ",
+    "CREATE PROCEDURE ",
+    "CREATE OR REPLACE PROCEDURE ",
+    "CREATE AGGREGATE ",
+    "CREATE OR REPLACE AGGREGATE ",
+  ] {
     let mut from = 0usize;
     while let Some(rel) = upper[from..].find(prefix) {
       let stmt_start = from + rel;
