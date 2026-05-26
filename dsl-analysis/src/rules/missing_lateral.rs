@@ -86,7 +86,11 @@ impl LintRule for Rule {
               .rsplit_once("LATERAL")
               .map(|(_, tail)| tail.trim().is_empty() || tail.chars().all(|c| c.is_whitespace()))
               .unwrap_or(false);
-            if !has_lateral && !inner_up.starts_with("SELECT") {
+            // PG documents that for **functions** in the FROM clause
+            // the LATERAL keyword is OPTIONAL -- a function-call FROM
+            // can reference earlier FROM items without it. Only flag
+            // subselects (`FROM a, (SELECT a.x ...)`) that omit LATERAL.
+            if !has_lateral && inner_up.trim_start().starts_with("SELECT") {
               let abs_start = start + from_at + 6 + id_start;
               let abs_end = start + from_at + 6 + j;
               out.push(Diagnostic {

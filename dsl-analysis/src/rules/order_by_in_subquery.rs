@@ -30,8 +30,14 @@ impl LintRule for Rule {
       let Some(close) = find_matching_paren(body, open) else { break };
       let inner = &body[open + 1..close];
       let inner_upper = inner.to_ascii_uppercase();
-      if inner_upper.trim_start().starts_with("SELECT") && inner_upper.contains("ORDER BY")
-        && !inner_upper.contains("LIMIT") && !inner_upper.contains("OFFSET") && !inner_upper.contains("FETCH")
+      // Only flag `ORDER BY` at depth 0 *inside* the subquery -- not
+      // ORDER BY nested in `WITHIN GROUP (ORDER BY ...)` aggregate
+      // syntax or in a window-function `OVER (ORDER BY ...)` frame.
+      let has_top_order_by = contains_at_depth_zero(&inner_upper, "ORDER BY");
+      let has_top_limit = contains_at_depth_zero(&inner_upper, "LIMIT")
+        || contains_at_depth_zero(&inner_upper, "OFFSET")
+        || contains_at_depth_zero(&inner_upper, "FETCH");
+      if inner_upper.trim_start().starts_with("SELECT") && has_top_order_by && !has_top_limit
       {
         // Outer must wrap further SQL (the subquery is in a context, not a top stmt).
         let prefix_upper = body[..open].to_ascii_uppercase();
@@ -47,6 +53,34 @@ impl LintRule for Rule {
       i = close + 1;
     }
   }
+}
+
+fn contains_at_depth_zero(haystack_upper: &str, needle_upper: &str) -> bool {
+  let bytes = haystack_upper.as_bytes();
+  let n = bytes.len();
+  let nlen = needle_upper.len();
+  let mut depth = 0i32;
+  let mut i = 0usize;
+  while i + nlen <= n {
+    match bytes[i] {
+      b'(' => { depth += 1; i += 1; continue; }
+      b')' => { depth -= 1; i += 1; continue; }
+      b'\'' => {
+        i += 1;
+        while i < n && bytes[i] != b'\'' { i += 1 }
+        if i < n { i += 1 }
+        continue;
+      }
+      _ => {}
+    }
+    if depth == 0 && haystack_upper[i..i + nlen].eq_ignore_ascii_case(needle_upper) {
+      let prev_ok = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
+      let next_ok = i + nlen == n || !(bytes[i + nlen].is_ascii_alphanumeric() || bytes[i + nlen] == b'_');
+      if prev_ok && next_ok { return true; }
+    }
+    i += 1;
+  }
+  false
 }
 
 fn find_matching_paren(s: &str, open: usize) -> Option<usize> {

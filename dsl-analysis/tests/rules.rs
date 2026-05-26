@@ -2997,10 +2997,14 @@ fn golden_audit_log_table_zero_warnings() {
 // ===== sql151 missing LATERAL ==============================================
 
 #[test]
-fn sql151_flags_fn_in_from_using_outer_col() {
+fn sql151_quiet_for_implicit_lateral_function() {
+  // PG documents that LATERAL is OPTIONAL in front of a function in
+  // the FROM list -- `generate_series(u.id, 10)` after `users u` is
+  // implicitly lateral. Don't fire here.
   let d = diags("SELECT * FROM users u, generate_series(u.id, 10);");
-  assert!(d.iter().any(|x| x.code == "sql151"));
+  assert!(!d.iter().any(|x| x.code == "sql151"));
 }
+
 
 #[test]
 fn sql151_quiet_with_lateral() {
