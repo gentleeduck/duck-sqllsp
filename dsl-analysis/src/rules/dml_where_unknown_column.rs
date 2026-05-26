@@ -43,10 +43,25 @@ impl LintRule for Rule {
     let Some(where_at) = upper.find(" WHERE ") else { return };
     let after = where_at + 7;
     let rest = &body[after..];
-    let stop = rest
-      .find(|c: char| c == ';')
-      .or_else(|| upper[after..].find(" RETURNING ").map(|p| p))
-      .unwrap_or(rest.len());
+    // Stop at the first of `;`, RETURNING, ORDER BY, GROUP BY, LIMIT,
+    // OFFSET, FOR (UPDATE/SHARE), HAVING. Earlier code used `or_else`
+    // which preferred `;` even if a RETURNING came first -- the alias
+    // in RETURNING then got scanned as a WHERE column.
+    let upper_rest = &upper[after..];
+    let stop = [
+      rest.find(';'),
+      find_word_pos(upper_rest, "RETURNING"),
+      find_word_pos(upper_rest, "ORDER"),
+      find_word_pos(upper_rest, "GROUP"),
+      find_word_pos(upper_rest, "HAVING"),
+      find_word_pos(upper_rest, "LIMIT"),
+      find_word_pos(upper_rest, "OFFSET"),
+      find_word_pos(upper_rest, "FETCH"),
+    ]
+    .into_iter()
+    .flatten()
+    .min()
+    .unwrap_or(rest.len());
     let predicate = &rest[..stop];
     // Walk identifiers; skip strings, qualified refs, function calls.
     let bytes = predicate.as_bytes();
@@ -134,6 +149,39 @@ fn strip_line_comments(s: &str) -> String {
     }
   }
   out
+}
+
+/// First position where `needle` appears as a whole word in `haystack`,
+/// at depth 0 with respect to parens (so `(SELECT ... ORDER BY x)` in
+/// a subquery doesn't stop the predicate scan early). Case-sensitive
+/// match against an upper-case haystack.
+fn find_word_pos(haystack_upper: &str, needle_upper: &str) -> Option<usize> {
+  let h = haystack_upper.as_bytes();
+  let n = needle_upper.len();
+  let len = h.len();
+  if n == 0 { return None; }
+  let mut depth = 0i32;
+  let mut i = 0usize;
+  while i + n <= len {
+    match h[i] {
+      b'(' => { depth += 1; i += 1; continue; }
+      b')' => { depth -= 1; i += 1; continue; }
+      b'\'' => {
+        i += 1;
+        while i < len && h[i] != b'\'' { i += 1 }
+        if i < len { i += 1 }
+        continue;
+      }
+      _ => {}
+    }
+    if depth == 0 && haystack_upper[i..i + n].eq_ignore_ascii_case(needle_upper) {
+      let prev_ok = i == 0 || !(h[i - 1].is_ascii_alphanumeric() || h[i - 1] == b'_');
+      let next_ok = i + n == len || !(h[i + n].is_ascii_alphanumeric() || h[i + n] == b'_');
+      if prev_ok && next_ok { return Some(i); }
+    }
+    i += 1;
+  }
+  None
 }
 
 fn contains_word(haystack: &str, needle: &str) -> bool {
