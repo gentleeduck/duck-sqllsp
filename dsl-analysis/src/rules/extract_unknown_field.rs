@@ -12,7 +12,8 @@ pub struct Rule;
 
 const FIELDS: &[&str] = &[
   "century", "day", "decade", "dow", "doy", "epoch", "hour", "isodow",
-  "isoyear", "julian", "microseconds", "millennium", "milliseconds",
+  "isoyear", "julian", "microsecond", "microseconds", "millennium",
+  "millisecond", "milliseconds",
   "minute", "month", "quarter", "second", "timezone", "timezone_hour",
   "timezone_minute", "week", "year",
 ];
