@@ -116,7 +116,9 @@ fn literal_family(s: &str) -> Option<&'static str> {
   if let Some(stripped) = t.strip_prefix('\'') {
     if stripped.ends_with('\'') { return Some("text") }
   }
-  if t.parse::<i64>().is_ok() { return Some("integer") }
-  if t.parse::<f64>().is_ok() { return Some("numeric") }
+  // Integers and decimals are both numeric in PG -- they unify via
+  // implicit promotion. Collapse to a single family so a CASE that
+  // mixes `0` and `0.20` doesn't trip sql218.
+  if t.parse::<i64>().is_ok() || t.parse::<f64>().is_ok() { return Some("numeric") }
   None
 }
