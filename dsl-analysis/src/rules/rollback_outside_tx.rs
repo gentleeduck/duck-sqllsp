@@ -37,7 +37,9 @@ impl LintRule for Rule {
     let prelude = prelude_clean.to_ascii_uppercase();
     let begins = count_occurrences(&prelude, "BEGIN") + count_occurrences(&prelude, "START TRANSACTION");
     // `ROLLBACK TO [SAVEPOINT]` / `COMMIT PREPARED` don't end the active tx.
-    let closes = count_excluding_followups(&prelude, "COMMIT", &["PREPARED"])
+    // `ON COMMIT {DROP|DELETE|PRESERVE}` in temp-table DDL is a clause
+    // keyword, not a tx-close.
+    let closes = count_with_prev_exclude(&prelude, "COMMIT", &["ON"], &["PREPARED"])
       + count_excluding_followups(&prelude, "ROLLBACK", &["TO", "PREPARED"]);
     if begins > closes { return }
     let lead = upper.len() - trimmed.len();
@@ -50,6 +52,39 @@ impl LintRule for Rule {
       range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
     });
   }
+}
+
+fn count_with_prev_exclude(haystack: &str, needle: &str, excluded_prev: &[&str], excluded_next: &[&str]) -> usize {
+  let bytes = haystack.as_bytes();
+  let n = bytes.len();
+  let nlen = needle.len();
+  let mut count = 0;
+  let mut i = 0;
+  while i + nlen <= n {
+    if &haystack[i..i + nlen] == needle {
+      let prev_ok = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
+      let next_ok = i + nlen == n || !(bytes[i + nlen].is_ascii_alphanumeric() || bytes[i + nlen] == b'_');
+      if prev_ok && next_ok {
+        let mut p = i;
+        while p > 0 && bytes[p - 1].is_ascii_whitespace() { p -= 1 }
+        let word_end = p;
+        while p > 0 && (bytes[p - 1].is_ascii_alphanumeric() || bytes[p - 1] == b'_') { p -= 1 }
+        let prev_word = &haystack[p..word_end];
+        let prev_excluded = excluded_prev.iter().any(|w| prev_word.eq_ignore_ascii_case(w));
+        let mut k = i + nlen;
+        while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+        let after = &haystack[k..];
+        let next_excluded = excluded_next.iter().any(|ex| {
+          let elen = ex.len();
+          after.len() >= elen && after[..elen].eq_ignore_ascii_case(ex)
+            && (after.len() == elen || !(after.as_bytes()[elen].is_ascii_alphanumeric() || after.as_bytes()[elen] == b'_'))
+        });
+        if !prev_excluded && !next_excluded { count += 1 }
+      }
+    }
+    i += 1;
+  }
+  count
 }
 
 fn count_excluding_followups(haystack: &str, needle: &str, excluded: &[&str]) -> usize {

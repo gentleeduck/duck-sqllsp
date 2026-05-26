@@ -28,7 +28,10 @@ impl LintRule for Rule {
     let prelude = prelude_clean.to_ascii_uppercase();
     let begins = count_kw(&prelude, "BEGIN") + count_phrase(&prelude, "START TRANSACTION");
     // `ROLLBACK TO [SAVEPOINT]` / `COMMIT PREPARED` don't end the tx.
-    let closes = count_excluding_followups(&prelude, "COMMIT", &["PREPARED"])
+    // CREATE TEMP TABLE ... ON COMMIT {DROP|DELETE|PRESERVE} ROWS has
+    // `COMMIT` as a clause keyword, not a tx-close. Exclude any
+    // COMMIT preceded by ON. count_with_prev_exclude does that.
+    let closes = count_with_prev_exclude(&prelude, "COMMIT", &["ON"], &["PREPARED"])
       + count_excluding_followups(&prelude, "ROLLBACK", &["TO", "PREPARED"]);
     if begins > closes { return }
     let abs_s = start;
@@ -59,6 +62,44 @@ fn count_kw(s: &str, needle: &str) -> usize {
 
 fn count_phrase(s: &str, needle: &str) -> usize {
   s.matches(needle).count()
+}
+
+/// Count word-bounded occurrences of `needle`, excluding ones that are
+/// preceded by any word in `excluded_prev` (e.g. `ON COMMIT`) or
+/// followed by any word in `excluded_next` (e.g. `COMMIT PREPARED`).
+fn count_with_prev_exclude(haystack: &str, needle: &str, excluded_prev: &[&str], excluded_next: &[&str]) -> usize {
+  let bytes = haystack.as_bytes();
+  let n = bytes.len();
+  let nlen = needle.len();
+  let mut count = 0;
+  let mut i = 0;
+  while i + nlen <= n {
+    if &haystack[i..i + nlen] == needle {
+      let prev_ok = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
+      let next_ok = i + nlen == n || !(bytes[i + nlen].is_ascii_alphanumeric() || bytes[i + nlen] == b'_');
+      if prev_ok && next_ok {
+        // Walk backwards through whitespace to find prev word.
+        let mut p = i;
+        while p > 0 && bytes[p - 1].is_ascii_whitespace() { p -= 1 }
+        let word_end = p;
+        while p > 0 && (bytes[p - 1].is_ascii_alphanumeric() || bytes[p - 1] == b'_') { p -= 1 }
+        let prev_word = &haystack[p..word_end];
+        let prev_excluded = excluded_prev.iter().any(|w| prev_word.eq_ignore_ascii_case(w));
+        // Walk forward through whitespace to find next word.
+        let mut k = i + nlen;
+        while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+        let after = &haystack[k..];
+        let next_excluded = excluded_next.iter().any(|ex| {
+          let elen = ex.len();
+          after.len() >= elen && after[..elen].eq_ignore_ascii_case(ex)
+            && (after.len() == elen || !(after.as_bytes()[elen].is_ascii_alphanumeric() || after.as_bytes()[elen] == b'_'))
+        });
+        if !prev_excluded && !next_excluded { count += 1 }
+      }
+    }
+    i += 1;
+  }
+  count
 }
 
 fn count_excluding_followups(haystack: &str, needle: &str, excluded: &[&str]) -> usize {
