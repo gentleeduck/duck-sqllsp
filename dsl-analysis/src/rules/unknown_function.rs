@@ -55,6 +55,9 @@ const KEYWORDS: &[&str] = &[
   // parenthesised expression (`THEN (x->>'y')::int` etc) and look
   // like a call; they are control-flow keywords, not callables.
   "CASE", "WHEN", "THEN", "ELSE", "END",
+  // CHECK constraints in CREATE DOMAIN use the VALUE keyword;
+  // INSERT ... OVERRIDING {SYSTEM|USER} VALUE uses VALUE too.
+  "VALUE", "OVERRIDING",
   // Foreign-data-wrapper DDL: `... OPTIONS (...)`, `WRAPPER (...)`.
   "OPTIONS", "WRAPPER", "SERVER", "VALIDATOR", "HANDLER",
   // CREATE INDEX ... INCLUDE (cols), ALTER TABLE ... USING INDEX (...).
