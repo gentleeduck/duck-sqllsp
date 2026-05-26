@@ -55,6 +55,19 @@ impl LintRule for Rule {
           }
           continue;
         },
+        b'"' => {
+          // Double-quoted identifier (`"where"`, `"user"`, ...).
+          // Skip its contents so the WHERE / FROM / etc. inside the
+          // identifier doesn't get counted as a keyword.
+          i += 1;
+          while i < n && bytes[i] != b'"' {
+            i += 1;
+          }
+          if i < n {
+            i += 1;
+          }
+          continue;
+        },
         b'-' if i + 1 < n && bytes[i + 1] == b'-' => {
           // Line comment -- skip to end of line. Was matching WHERE
           // inside `-- WHERE foo` and flagging the next real WHERE
