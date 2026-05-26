@@ -26,10 +26,27 @@ impl LintRule for Rule {
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
-    // Skip SET statements: `SET param = true/false` is an assignment
-    // to a GUC parameter, not a boolean comparison.
-    let trimmed = body.trim_start().to_ascii_uppercase();
+    // Skip SET statements + DDL with key=value option lists (PROVIDER /
+    // LOCALE / DETERMINISTIC for COLLATION; storage parameters for
+    // tables; FDW OPTIONS etc). Strip comments first so a leading
+    // `-- header` line doesn't mask the keyword anchor.
+    let cleaned = strip_quoted_and_comments(body);
+    let trimmed = cleaned.trim_start().to_ascii_uppercase();
     if trimmed.starts_with("SET ") || trimmed.starts_with("RESET ") || trimmed.starts_with("ALTER SYSTEM ") {
+      return;
+    }
+    // CREATE / ALTER COLLATION/EXTENSION/SUBSCRIPTION/PUBLICATION/SERVER/
+    // FOREIGN TABLE/INDEX/USER MAPPING all carry `(key = value, ...)`
+    // option lists where `key = false` is a config value, not a
+    // predicate. Treat any CREATE/ALTER stmt that contains `OPTIONS (`
+    // or `WITH (` followed by k=v pairs as opt-out from this rule.
+    if (trimmed.starts_with("CREATE ") || trimmed.starts_with("ALTER ") || trimmed.starts_with("COPY "))
+      && (trimmed.contains(" OPTIONS (") || trimmed.contains(" OPTIONS(")
+          || trimmed.contains(" WITH (") || trimmed.contains(" WITH("))
+    {
+      return;
+    }
+    if trimmed.starts_with("CREATE COLLATION") || trimmed.starts_with("CREATE EXTENSION") {
       return;
     }
     let bytes = body.as_bytes();
