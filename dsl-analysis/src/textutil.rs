@@ -94,3 +94,104 @@ pub fn strip_noise_full(s: &str) -> String {
   }
   String::from_utf8(out).unwrap_or_else(|_| s.to_string())
 }
+
+/// Like [`strip_noise_full`] but does NOT strip `$tag$...$tag$` dollar-
+/// quoted blocks. Use this when the rule needs to inspect text inside
+/// PL/pgSQL function bodies (e.g. checking for `RETURN` in a trigger
+/// function), but still wants comment / string literal stripping for
+/// the regular SQL.
+pub fn strip_comments_strings(s: &str) -> String {
+  let mut out: Vec<u8> = s.as_bytes().to_vec();
+  let n = out.len();
+  let mut i = 0usize;
+  while i < n {
+    if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
+      while i < n && out[i] != b'\n' {
+        out[i] = b' ';
+        i += 1;
+      }
+      continue;
+    }
+    if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
+      let mut depth = 1u32;
+      out[i] = b' ';
+      out[i + 1] = b' ';
+      i += 2;
+      while i + 1 < n && depth > 0 {
+        if out[i] == b'/' && out[i + 1] == b'*' {
+          depth += 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else if out[i] == b'*' && out[i + 1] == b'/' {
+          depth -= 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else {
+          out[i] = b' ';
+          i += 1;
+        }
+      }
+      continue;
+    }
+    if out[i] == b'\'' {
+      out[i] = b' ';
+      i += 1;
+      while i < n && out[i] != b'\'' {
+        out[i] = b' ';
+        i += 1;
+      }
+      if i < n {
+        out[i] = b' ';
+        i += 1;
+      }
+      continue;
+    }
+    i += 1;
+  }
+  String::from_utf8(out).unwrap_or_else(|_| s.to_string())
+}
+
+/// Strip only line and block comments, leaving strings and dollar blocks
+/// intact. Useful for rules that need to read string literal contents
+/// (e.g. `COMMENT ON ... IS ''` empty-comment check).
+pub fn strip_comments_only(s: &str) -> String {
+  let mut out: Vec<u8> = s.as_bytes().to_vec();
+  let n = out.len();
+  let mut i = 0usize;
+  while i < n {
+    if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
+      while i < n && out[i] != b'\n' {
+        out[i] = b' ';
+        i += 1;
+      }
+      continue;
+    }
+    if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
+      let mut depth = 1u32;
+      out[i] = b' ';
+      out[i + 1] = b' ';
+      i += 2;
+      while i + 1 < n && depth > 0 {
+        if out[i] == b'/' && out[i + 1] == b'*' {
+          depth += 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else if out[i] == b'*' && out[i + 1] == b'/' {
+          depth -= 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else {
+          out[i] = b' ';
+          i += 1;
+        }
+      }
+      continue;
+    }
+    i += 1;
+  }
+  String::from_utf8(out).unwrap_or_else(|_| s.to_string())
+}
