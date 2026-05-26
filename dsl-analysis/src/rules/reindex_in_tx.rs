@@ -29,7 +29,7 @@ impl LintRule for Rule {
     let prelude_clean = strip_noise_and_dollar(&source[..start]);
     let prelude = prelude_clean.to_ascii_uppercase();
     let begins = count_kw(&prelude, "BEGIN") + count_phrase(&prelude, "START TRANSACTION");
-    let closes = count_kw_excluding(&prelude, "COMMIT", &["PREPARED"])
+    let closes = count_kw_prev_next(&prelude, "COMMIT", &["ON"], &["PREPARED"])
       + count_kw_excluding(&prelude, "ROLLBACK", &["TO", "PREPARED"]);
     if begins <= closes { return }
     let lead = body.len() - body.trim_start().len();
@@ -84,6 +84,39 @@ fn count_kw_excluding(s: &str, needle: &str, excluded: &[&str]) -> usize {
     from = after_pos;
   }
   n
+}
+
+fn count_kw_prev_next(s: &str, needle: &str, excluded_prev: &[&str], excluded_next: &[&str]) -> usize {
+  let bytes = s.as_bytes();
+  let nl = needle.len();
+  let n = bytes.len();
+  let mut count = 0usize;
+  let mut i = 0usize;
+  while i + nl <= n {
+    if &s[i..i + nl] == needle {
+      let prev_ok = i == 0 || !{ let p = bytes[i - 1] as char; p.is_ascii_alphanumeric() || p == '_' };
+      let next_ok_kw = i + nl == n || !{ let p = bytes[i + nl] as char; p.is_ascii_alphanumeric() || p == '_' };
+      if prev_ok && next_ok_kw {
+        let mut p = i;
+        while p > 0 && bytes[p - 1].is_ascii_whitespace() { p -= 1 }
+        let word_end = p;
+        while p > 0 && (bytes[p - 1].is_ascii_alphanumeric() || bytes[p - 1] == b'_') { p -= 1 }
+        let prev_word = &s[p..word_end];
+        let prev_excluded = excluded_prev.iter().any(|w| prev_word.eq_ignore_ascii_case(w));
+        let mut k = i + nl;
+        while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+        let after = &s[k..];
+        let next_excluded = excluded_next.iter().any(|ex| {
+          let elen = ex.len();
+          after.len() >= elen && after[..elen].eq_ignore_ascii_case(ex)
+            && (after.len() == elen || !{ let p = after.as_bytes()[elen] as char; p.is_ascii_alphanumeric() || p == '_' })
+        });
+        if !prev_excluded && !next_excluded { count += 1 }
+      }
+    }
+    i += 1;
+  }
+  count
 }
 
 fn strip_noise_and_dollar(s: &str) -> String {

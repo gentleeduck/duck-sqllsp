@@ -35,7 +35,7 @@ impl LintRule for Rule {
     let before_clean = strip_noise_and_dollar(&source[..start]);
     let before_upper = before_clean.to_ascii_uppercase();
     let begins = count_word(&before_upper, "BEGIN") + count_word(&before_upper, "START TRANSACTION");
-    let commits = count_word_excluding(&before_upper, "COMMIT", &["PREPARED"])
+    let commits = count_with_prev_exclude(&before_upper, "COMMIT", &["ON"], &["PREPARED"])
       + count_word_excluding(&before_upper, "ROLLBACK", &["TO", "PREPARED"]);
     if begins <= commits {
       return;
@@ -76,6 +76,39 @@ fn count_word(haystack: &str, needle: &str) -> usize {
 
 fn is_word(c: char) -> bool {
   c.is_alphanumeric() || c == '_'
+}
+
+fn count_with_prev_exclude(haystack: &str, needle: &str, excluded_prev: &[&str], excluded_next: &[&str]) -> usize {
+  let h = haystack.as_bytes();
+  let n = h.len();
+  let w = needle.len();
+  let mut c = 0;
+  let mut i = 0;
+  while i + w <= n {
+    if &haystack[i..i + w] == needle {
+      let prev_ok = i == 0 || !is_word(h[i - 1] as char);
+      let next_ok = i + w == n || !is_word(h[i + w] as char);
+      if prev_ok && next_ok {
+        let mut p = i;
+        while p > 0 && h[p - 1].is_ascii_whitespace() { p -= 1 }
+        let word_end = p;
+        while p > 0 && is_word(h[p - 1] as char) { p -= 1 }
+        let prev_word = &haystack[p..word_end];
+        let prev_excluded = excluded_prev.iter().any(|wd| prev_word.eq_ignore_ascii_case(wd));
+        let mut k = i + w;
+        while k < n && h[k].is_ascii_whitespace() { k += 1 }
+        let after = &haystack[k..];
+        let next_excluded = excluded_next.iter().any(|ex| {
+          let elen = ex.len();
+          after.len() >= elen && after[..elen].eq_ignore_ascii_case(ex)
+            && (after.len() == elen || !is_word(after.as_bytes()[elen] as char))
+        });
+        if !prev_excluded && !next_excluded { c += 1 }
+      }
+    }
+    i += 1;
+  }
+  c
 }
 
 fn count_word_excluding(haystack: &str, needle: &str, excluded: &[&str]) -> usize {
