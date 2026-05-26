@@ -19,6 +19,9 @@ impl LintRule for Rule {
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
+    // Important: do NOT strip string literals here; that turns
+    // `('a', 'b')` into `(   ,    )` which then has a "trailing"
+    // comma right before `)`. Keep the raw body for this rule.
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
     // Only inspect statements that mention VALUES (INSERT, INSERT
