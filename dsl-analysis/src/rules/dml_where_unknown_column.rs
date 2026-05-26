@@ -24,6 +24,17 @@ impl LintRule for Rule {
       _ => return,
     };
     let Some(t) = catalog.find_table(table_ref.schema.as_deref(), &table_ref.name) else { return };
+    // Build an effective column set: catalog cols + ALTER ADD COLUMN
+    // + ALTER RENAME COLUMN new-side. Without this, migrations that
+    // ADD or RENAME a column and then UPDATE/DELETE it falsely
+    // trigger "unknown column".
+    let mut valid_cols: std::collections::HashSet<String> = t.columns
+      .iter()
+      .map(|c| c.name.to_ascii_lowercase())
+      .collect();
+    for col in alter_added_or_renamed(source, &table_ref.name) {
+      valid_cols.insert(col);
+    }
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
@@ -110,6 +121,7 @@ impl LintRule for Rule {
       if i < bytes.len() && bytes[i] == b'(' { continue }
       let upper_tok = token.to_ascii_uppercase();
       if is_keyword(&upper_tok) { continue }
+      if valid_cols.contains(&token.to_ascii_lowercase()) { continue }
       if t.columns.iter().any(|c| c.name.eq_ignore_ascii_case(token)) { continue }
       // Token may be a table name (subquery references) -- skip.
       if catalog.tables().any(|tb| tb.name.eq_ignore_ascii_case(token)) { continue }
@@ -182,6 +194,108 @@ fn find_word_pos(haystack_upper: &str, needle_upper: &str) -> Option<usize> {
     i += 1;
   }
   None
+}
+
+/// Collect all column names added or renamed-to by ALTER TABLE
+/// statements in source for `table`. Lenient text scan.
+fn alter_added_or_renamed(source: &str, table: &str) -> Vec<String> {
+  let cleaned = strip_noise_full(source);
+  let source = cleaned.as_str();
+  let upper = source.to_ascii_uppercase();
+  let bytes = source.as_bytes();
+  let n = bytes.len();
+  let needle = "ALTER TABLE";
+  let table_lc = table.to_ascii_lowercase();
+  let mut out = Vec::new();
+  let mut from = 0usize;
+  while let Some(rel) = upper[from..].find(needle) {
+    let at = from + rel;
+    let mut k = at + needle.len();
+    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+    for kw in ["ONLY ", "IF EXISTS "] {
+      if upper[k..].starts_with(kw) {
+        k += kw.len();
+        while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+      }
+    }
+    let id_start = k;
+    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') { k += 1 }
+    let id = source[id_start..k].trim_matches('"').to_ascii_lowercase();
+    let bare = id.rsplit('.').next().unwrap_or(&id).to_string();
+    from = k;
+    if bare != table_lc { continue }
+    let stmt_end = source[k..].find(';').map(|i| k + i).unwrap_or(n);
+    let stmt_body_upper = &upper[k..stmt_end];
+    let stmt_body = &source[k..stmt_end];
+    let pb = stmt_body.as_bytes();
+    // ADD COLUMN <name>
+    let mut local = 0usize;
+    while let Some(p_rel) = stmt_body_upper[local..].find("ADD COLUMN") {
+      let p = local + p_rel + "ADD COLUMN".len();
+      let mut q = p;
+      while q < pb.len() && pb[q].is_ascii_whitespace() { q += 1 }
+      if stmt_body_upper[q..].starts_with("IF NOT EXISTS") {
+        q += "IF NOT EXISTS".len();
+        while q < pb.len() && pb[q].is_ascii_whitespace() { q += 1 }
+      }
+      let name_start = q;
+      while q < pb.len() && (pb[q].is_ascii_alphanumeric() || pb[q] == b'_' || pb[q] == b'"') { q += 1 }
+      if q > name_start {
+        out.push(stmt_body[name_start..q].trim_matches('"').to_ascii_lowercase());
+      }
+      local = q;
+    }
+    // RENAME COLUMN <old> TO <new> -- new name only.
+    let mut local = 0usize;
+    while let Some(p_rel) = stmt_body_upper[local..].find("RENAME COLUMN") {
+      let p = local + p_rel + "RENAME COLUMN".len();
+      let mut q = p;
+      while q < pb.len() && pb[q].is_ascii_whitespace() { q += 1 }
+      while q < pb.len() && (pb[q].is_ascii_alphanumeric() || pb[q] == b'_' || pb[q] == b'"') { q += 1 }
+      while q < pb.len() && pb[q].is_ascii_whitespace() { q += 1 }
+      if stmt_body_upper[q..].starts_with("TO") {
+        q += 2;
+        while q < pb.len() && pb[q].is_ascii_whitespace() { q += 1 }
+        let name_start = q;
+        while q < pb.len() && (pb[q].is_ascii_alphanumeric() || pb[q] == b'_' || pb[q] == b'"') { q += 1 }
+        if q > name_start {
+          out.push(stmt_body[name_start..q].trim_matches('"').to_ascii_lowercase());
+        }
+      }
+      local = q;
+    }
+  }
+  out
+}
+
+fn strip_noise_full(s: &str) -> String {
+  let mut out: Vec<u8> = s.as_bytes().to_vec();
+  let n = out.len();
+  let mut i = 0usize;
+  while i < n {
+    if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
+      while i < n && out[i] != b'\n' { out[i] = b' '; i += 1 }
+      continue;
+    }
+    if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
+      let mut depth = 1u32;
+      out[i] = b' '; out[i + 1] = b' '; i += 2;
+      while i + 1 < n && depth > 0 {
+        if out[i] == b'/' && out[i + 1] == b'*' { depth += 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
+        else if out[i] == b'*' && out[i + 1] == b'/' { depth -= 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
+        else { out[i] = b' '; i += 1; }
+      }
+      continue;
+    }
+    if out[i] == b'\'' {
+      out[i] = b' '; i += 1;
+      while i < n && out[i] != b'\'' { out[i] = b' '; i += 1 }
+      if i < n { out[i] = b' '; i += 1 }
+      continue;
+    }
+    i += 1;
+  }
+  String::from_utf8(out).unwrap_or_else(|_| s.to_string())
 }
 
 fn contains_word(haystack: &str, needle: &str) -> bool {

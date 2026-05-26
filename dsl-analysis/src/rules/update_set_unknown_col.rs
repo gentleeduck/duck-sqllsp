@@ -38,6 +38,12 @@ impl LintRule for Rule {
     for col in alter_added_columns(source, &u.table.name) {
       valid.insert(col);
     }
+    // Also pick up the *new* names from `ALTER TABLE ... RENAME COLUMN
+    // old TO new`. The original `old` stays in the valid set too --
+    // worst case is a missed unknown-col diagnostic, not a false fire.
+    for (_old, new) in alter_renamed_columns(source, &u.table.name) {
+      valid.insert(new);
+    }
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
@@ -124,6 +130,56 @@ fn alter_added_columns(source: &str, table: &str) -> Vec<String> {
         out.push(stmt_body[name_start..q].trim_matches('"').to_ascii_lowercase());
       }
       local = q;
+    }
+  }
+  out
+}
+
+/// Scan for `ALTER TABLE <table_name> RENAME COLUMN <old> TO <new>`
+/// and return (old, new) pairs.
+fn alter_renamed_columns(source: &str, table: &str) -> Vec<(String, String)> {
+  let cleaned = strip_noise(source);
+  let source = cleaned.as_str();
+  let upper = source.to_ascii_uppercase();
+  let bytes = source.as_bytes();
+  let n = bytes.len();
+  let needle = "ALTER TABLE";
+  let table_lc = table.to_ascii_lowercase();
+  let mut out = Vec::new();
+  let mut from = 0usize;
+  while let Some(rel) = upper[from..].find(needle) {
+    let at = from + rel;
+    let mut k = at + needle.len();
+    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+    for kw in ["ONLY ", "IF EXISTS "] {
+      if upper[k..].starts_with(kw) {
+        k += kw.len();
+        while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+      }
+    }
+    let id_start = k;
+    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') { k += 1 }
+    let id = source[id_start..k].trim_matches('"').to_ascii_lowercase();
+    let bare = id.rsplit('.').next().unwrap_or(&id);
+    from = k;
+    if bare != table_lc { continue }
+    // Skip whitespace then look for RENAME COLUMN.
+    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+    if !upper[k..].starts_with("RENAME COLUMN") { continue }
+    k += "RENAME COLUMN".len();
+    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+    let old_start = k;
+    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'"') { k += 1 }
+    let old_name = source[old_start..k].trim_matches('"').to_ascii_lowercase();
+    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+    if !upper[k..].starts_with("TO") { continue }
+    k += 2;
+    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+    let new_start = k;
+    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'"') { k += 1 }
+    let new_name = source[new_start..k].trim_matches('"').to_ascii_lowercase();
+    if !old_name.is_empty() && !new_name.is_empty() {
+      out.push((old_name, new_name));
     }
   }
   out
