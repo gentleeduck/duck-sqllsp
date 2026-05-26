@@ -58,6 +58,8 @@ const KEYWORDS: &[&str] = &[
   // CHECK constraints in CREATE DOMAIN use the VALUE keyword;
   // INSERT ... OVERRIDING {SYSTEM|USER} VALUE uses VALUE too.
   "VALUE", "OVERRIDING",
+  // COPY ... WITH (FORCE_NOT_NULL (cols), FORCE_NULL (cols)) options.
+  "FORCE_NOT_NULL", "FORCE_NULL", "FORCE_QUOTE",
   // Foreign-data-wrapper DDL: `... OPTIONS (...)`, `WRAPPER (...)`.
   "OPTIONS", "WRAPPER", "SERVER", "VALIDATOR", "HANDLER",
   // CREATE INDEX ... INCLUDE (cols), ALTER TABLE ... USING INDEX (...).
