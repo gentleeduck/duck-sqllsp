@@ -35,13 +35,21 @@ impl LintRule for Rule {
         let proj_end = inner_upper.find(" FROM ").unwrap_or(inner.len());
         let proj = &inner[7..proj_end].trim();
         let cols = 1 + count_top_level_commas(proj);
-        if cols > 1 && !proj.contains('*') {
+        // Row-constructor LHS: `(a, b, c) IN (SELECT ... )` -- the
+        // tuple width must match the subquery column count. Count
+        // the LHS row width and require equality, not exactly 1.
+        let lhs_width = lhs_row_width(body, at);
+        let required = lhs_width.unwrap_or(1);
+        if cols != required && !proj.contains('*') {
+          let msg = if required == 1 {
+            format!("ANY/ALL/IN subquery returns {cols} columns -- exactly 1 required (PG 42601)")
+          } else {
+            format!("ANY/ALL/IN subquery returns {cols} columns -- LHS row constructor has {required} (PG 42601)")
+          };
           out.push(Diagnostic {
             code: "sql228",
             severity: Severity::Error,
-            message: format!(
-              "ANY/ALL/IN subquery returns {cols} columns -- exactly 1 required (PG 42601)"
-            ),
+            message: msg,
             range: text_size::TextRange::new(((start + open) as u32).into(), ((start + close + 1) as u32).into()),
           });
         }
@@ -49,6 +57,44 @@ impl LintRule for Rule {
       }
     }
   }
+}
+
+/// When the keyword sits right after a `)`, walk back to its matching
+/// `(` and count top-level commas inside -- giving the LHS row-width.
+/// Returns None when LHS is not a paren-wrapped row.
+fn lhs_row_width(body: &str, kw_at: usize) -> Option<usize> {
+  let bytes = body.as_bytes();
+  let mut j = kw_at;
+  while j > 0 && bytes[j - 1].is_ascii_whitespace() { j -= 1; }
+  // Step back through an optional `NOT` keyword so `(a, b) NOT IN (...)`
+  // detects the LHS row constructor too.
+  if j >= 3 && body[..j].to_ascii_uppercase().ends_with("NOT") {
+    let nstart = j - 3;
+    let prev_is_word = nstart > 0 && (bytes[nstart - 1].is_ascii_alphanumeric() || bytes[nstart - 1] == b'_');
+    if !prev_is_word {
+      j = nstart;
+      while j > 0 && bytes[j - 1].is_ascii_whitespace() { j -= 1; }
+    }
+  }
+  if j == 0 || bytes[j - 1] != b')' { return None; }
+  let close = j - 1;
+  let mut depth = 1i32;
+  let mut i = close;
+  while i > 0 {
+    i -= 1;
+    match bytes[i] {
+      b')' => depth += 1,
+      b'(' => {
+        depth -= 1;
+        if depth == 0 {
+          let inner = &body[i + 1..close];
+          return Some(1 + count_top_level_commas(inner));
+        }
+      }
+      _ => {}
+    }
+  }
+  None
 }
 
 fn count_top_level_commas(text: &str) -> usize {
