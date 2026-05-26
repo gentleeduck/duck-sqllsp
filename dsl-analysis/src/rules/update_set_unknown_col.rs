@@ -32,7 +32,12 @@ impl LintRule for Rule {
       // sql001 already covers unresolved table.
       return;
     };
-    let valid: std::collections::HashSet<String> = t.columns.iter().map(|c| c.name.to_ascii_lowercase()).collect();
+    let mut valid: std::collections::HashSet<String> = t.columns.iter().map(|c| c.name.to_ascii_lowercase()).collect();
+    // Source may add columns via ALTER TABLE between the CREATE and
+    // the UPDATE; pull those into the valid set too. Lenient scan.
+    for col in alter_added_columns(source, &u.table.name) {
+      valid.insert(col);
+    }
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
@@ -62,4 +67,59 @@ impl LintRule for Rule {
       }
     }
   }
+}
+
+/// Lenient scan for `ALTER TABLE <table_name> ... ADD COLUMN <col>`.
+/// Returns the lower-cased column names found in source. Doesn't
+/// distinguish IF NOT EXISTS, schema qualifiers, etc -- catalog
+/// already has those, this only supplements.
+fn alter_added_columns(source: &str, table: &str) -> Vec<String> {
+  let mut out = Vec::new();
+  let upper = source.to_ascii_uppercase();
+  let bytes = source.as_bytes();
+  let n = bytes.len();
+  let needle = "ALTER TABLE";
+  let table_lc = table.to_ascii_lowercase();
+  let mut from = 0usize;
+  while let Some(rel) = upper[from..].find(needle) {
+    let at = from + rel;
+    let mut k = at + needle.len();
+    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+    // Optional ONLY / IF EXISTS prefix.
+    for kw in ["ONLY ", "IF EXISTS "] {
+      if upper[k..].starts_with(kw) {
+        k += kw.len();
+        while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+      }
+    }
+    let id_start = k;
+    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') { k += 1 }
+    let id = source[id_start..k].trim_matches('"').to_ascii_lowercase();
+    let bare = id.rsplit('.').next().unwrap_or(&id);
+    from = k;
+    if bare != table_lc { continue }
+    // Scan `ADD COLUMN <name>` within this ALTER stmt (up to `;`).
+    let stmt_end = source[k..].find(';').map(|i| k + i).unwrap_or(n);
+    let stmt_body_upper = &upper[k..stmt_end];
+    let stmt_body = &source[k..stmt_end];
+    let mut local = 0usize;
+    while let Some(p_rel) = stmt_body_upper[local..].find("ADD COLUMN") {
+      let p = local + p_rel + "ADD COLUMN".len();
+      let pb = stmt_body.as_bytes();
+      let mut q = p;
+      while q < pb.len() && pb[q].is_ascii_whitespace() { q += 1 }
+      // Skip optional IF NOT EXISTS.
+      if stmt_body_upper[q..].starts_with("IF NOT EXISTS") {
+        q += "IF NOT EXISTS".len();
+        while q < pb.len() && pb[q].is_ascii_whitespace() { q += 1 }
+      }
+      let name_start = q;
+      while q < pb.len() && (pb[q].is_ascii_alphanumeric() || pb[q] == b'_' || pb[q] == b'"') { q += 1 }
+      if q > name_start {
+        out.push(stmt_body[name_start..q].trim_matches('"').to_ascii_lowercase());
+      }
+      local = q;
+    }
+  }
+  out
 }

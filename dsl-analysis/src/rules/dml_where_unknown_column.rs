@@ -32,9 +32,11 @@ impl LintRule for Rule {
     let cleaned = strip_line_comments(body);
     let upper = cleaned.to_ascii_uppercase();
     // CTE / subquery in the body -- columns from `WITH t AS (...)`
-    // aren't in this statement's resolver scope; bail rather than
-    // false-flag every CTE name as an unknown column.
-    if upper.contains("WITH ") || upper.contains(" SELECT ") {
+    // and aliases from `FROM (SELECT ...) sub` aren't in this
+    // statement's resolver scope; bail rather than false-flag.
+    // Match SELECT word-boundary so `FROM (SELECT ...)` triggers too
+    // (the earlier ` SELECT ` substring missed it -- no space before).
+    if upper.contains("WITH ") || contains_word(&upper, "SELECT") {
       return;
     }
     let body = cleaned.as_str();
@@ -113,6 +115,22 @@ fn strip_line_comments(s: &str) -> String {
     }
   }
   out
+}
+
+fn contains_word(haystack: &str, needle: &str) -> bool {
+  let h = haystack.as_bytes();
+  let n = needle.as_bytes();
+  if n.is_empty() { return false; }
+  let mut i = 0;
+  while i + n.len() <= h.len() {
+    if h[i..i + n.len()] == *n {
+      let prev_ok = i == 0 || !(h[i - 1].is_ascii_alphanumeric() || h[i - 1] == b'_');
+      let next_ok = i + n.len() == h.len() || !(h[i + n.len()].is_ascii_alphanumeric() || h[i + n.len()] == b'_');
+      if prev_ok && next_ok { return true; }
+    }
+    i += 1;
+  }
+  false
 }
 
 fn is_keyword(t: &str) -> bool {
