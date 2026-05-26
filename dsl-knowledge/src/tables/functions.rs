@@ -1270,6 +1270,42 @@ pub fn build() -> HashMap<&'static str, Entry> {
     "SELECT make_timestamptz(2026, 5, 26, 9, 0, 0, 'UTC');",
     pg("functions-datetime.html#FUNCTIONS-DATETIME-CONSTRUCT")
   );
+  // String helpers commonly used in dynamic SQL.
+  f!("quote_literal",  "quote_literal(text) -> text", "Quote a literal so it's a safe SQL string literal.", "SELECT quote_literal($$it's$$);", pg("functions-string.html"));
+  f!("quote_ident",    "quote_ident(text) -> text", "Quote an identifier so it parses as a single name.", "SELECT quote_ident('weird name');", pg("functions-string.html"));
+  f!("quote_nullable", "quote_nullable(anyelement) -> text", "Like quote_literal but renders NULL as the unquoted token.", "SELECT quote_nullable(NULL);", pg("functions-string.html"));
+  f!("translate",      "translate(text, from text, to text) -> text", "Per-character substitution.", "SELECT translate('hello','el','EL');", pg("functions-string.html"));
+  f!("repeat",         "repeat(text, n int) -> text", "Repeat the input n times.", "SELECT repeat('ab', 3);", pg("functions-string.html"));
+  f!("reverse",        "reverse(text) -> text", "Reverse the characters.", "SELECT reverse('hello');", pg("functions-string.html"));
+  f!("replace",        "replace(text, from text, to text) -> text", "Replace every occurrence.", "SELECT replace('a b a','a','x');", pg("functions-string.html"));
+  f!("split_part",     "split_part(text, sep text, n int) -> text", "Return the n-th field after splitting on sep.", "SELECT split_part('a,b,c', ',', 2);", pg("functions-string.html"));
+  f!("strpos",         "strpos(haystack text, needle text) -> integer", "1-based index of needle in haystack, 0 if not found.", "SELECT strpos('hello world','world');", pg("functions-string.html"));
+  f!("btrim",          "btrim(text, chars text) -> text", "Trim chars from both ends (default whitespace).", "SELECT btrim('  hi  ');", pg("functions-string.html"));
+  f!("ltrim",          "ltrim(text, chars text) -> text", "Trim chars from the left.", "SELECT ltrim('xxxhi','x');", pg("functions-string.html"));
+  f!("rtrim",          "rtrim(text, chars text) -> text", "Trim chars from the right.", "SELECT rtrim('hiyyy','y');", pg("functions-string.html"));
+  f!("initcap",        "initcap(text) -> text", "Capitalize the first letter of each word.", "SELECT initcap('hello WORLD');", pg("functions-string.html"));
+  f!("octet_length",   "octet_length(text|bytea) -> integer", "Length in bytes.", "SELECT octet_length('héllo');", pg("functions-string.html"));
+  f!("bit_length",     "bit_length(text|bytea|bit) -> integer", "Length in bits.", "SELECT bit_length('a');", pg("functions-string.html"));
+  f!("ord",            "ord(text) -> integer", "Codepoint of the first character.", "SELECT ord('A');", pg("functions-string.html"));
+  // Bit / byte ops on bytea/bit.
+  f!("get_bit",  "get_bit(bytea|bit, n int) -> integer", "Extract the n-th bit.", "SELECT get_bit(B'10101010', 3);", pg("functions-binarystring.html"));
+  f!("set_bit",  "set_bit(bytea|bit, n int, v int) -> same", "Set the n-th bit to v.", "SELECT set_bit(B'10000000', 3, 1);", pg("functions-binarystring.html"));
+  f!("get_byte", "get_byte(bytea, n int) -> integer", "Extract the n-th byte.", "SELECT get_byte('\\xDEADBEEF'::bytea, 1);", pg("functions-binarystring.html"));
+  f!("set_byte", "set_byte(bytea, n int, v int) -> bytea", "Set the n-th byte to v.", "SELECT set_byte('\\xDEAD'::bytea, 0, 255);", pg("functions-binarystring.html"));
+  // Conversion / encoding helpers.
+  f!("convert_from", "convert_from(bytea, src_encoding text) -> text", "Decode bytes from a specific encoding to TEXT.", "SELECT convert_from(E'\\\\xC3\\\\xA9'::bytea, 'UTF8');", pg("functions-string.html"));
+  f!("convert_to",   "convert_to(text, dest_encoding text) -> bytea", "Encode TEXT into bytes in the requested encoding.", "SELECT convert_to('hi', 'UTF8');", pg("functions-string.html"));
+  f!("convert",      "convert(bytea, src text, dest text) -> bytea", "Recode bytes between encodings.", "SELECT convert('hi'::bytea, 'LATIN1', 'UTF8');", pg("functions-string.html"));
+  // pg_catalog admin helpers.
+  f!("pg_relation_filepath",     "pg_relation_filepath(regclass) -> text", "Path (relative to data directory) of the relation's main file.", "SELECT pg_relation_filepath('users');", pg("functions-admin.html"));
+  f!("pg_get_viewdef",            "pg_get_viewdef(regclass) -> text", "SELECT statement that defines a view.", "SELECT pg_get_viewdef('my_view'::regclass);", pg("functions-info.html"));
+  f!("pg_get_function_arguments", "pg_get_function_arguments(oid) -> text", "Argument signature of a function.", "SELECT pg_get_function_arguments(p.oid) FROM pg_proc p;", pg("functions-info.html"));
+  f!("pg_get_function_result",    "pg_get_function_result(oid) -> text", "Return-type signature of a function.", "SELECT pg_get_function_result(p.oid) FROM pg_proc p;", pg("functions-info.html"));
+  f!("pg_get_functiondef",        "pg_get_functiondef(oid) -> text", "Full CREATE FUNCTION text.", "SELECT pg_get_functiondef('public.fn'::regproc);", pg("functions-info.html"));
+  f!("pg_get_triggerdef",         "pg_get_triggerdef(oid) -> text", "CREATE TRIGGER text.", "SELECT pg_get_triggerdef(t.oid) FROM pg_trigger t LIMIT 1;", pg("functions-info.html"));
+  f!("pg_get_constraintdef",      "pg_get_constraintdef(oid) -> text", "Constraint definition text.", "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c LIMIT 1;", pg("functions-info.html"));
+  f!("pg_terminate_backend",      "pg_terminate_backend(pid int) -> boolean", "Terminate a backend by PID (needs pg_signal_backend role).", "SELECT pg_terminate_backend(12345);", pg("functions-admin.html"));
+  f!("pg_cancel_backend",         "pg_cancel_backend(pid int) -> boolean", "Cancel the current query on a backend by PID.", "SELECT pg_cancel_backend(12345);", pg("functions-admin.html"));
 
   // ---- Trigonometric ----
   f!("sin",   "sin(double precision) -> double precision", "Sine, radians.",   "SELECT sin(0);", pg("functions-math.html"));

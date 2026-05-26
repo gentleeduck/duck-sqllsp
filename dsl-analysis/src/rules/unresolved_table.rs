@@ -40,6 +40,20 @@ impl LintRule for Rule {
       if ctes.iter().any(|c| c.eq_ignore_ascii_case(&r.name)) {
         continue;
       }
+      // PG system catalogs (`pg_class`, `pg_proc`, `pg_stat_activity`,
+      // `pg_indexes`, ...) and `information_schema.*` are always
+      // present in any live database but rarely populated in the
+      // offline derived catalog. Don't flag them as missing tables.
+      let bare_lc = r.name.to_ascii_lowercase();
+      if bare_lc.starts_with("pg_") || bare_lc.starts_with("information_schema") {
+        continue;
+      }
+      if r.schema.as_deref().map_or(false, |s| {
+        let s_lc = s.to_ascii_lowercase();
+        s_lc == "pg_catalog" || s_lc == "information_schema"
+      }) {
+        continue;
+      }
       if catalog.find_table(r.schema.as_deref(), &r.name).is_some() {
         continue;
       }
