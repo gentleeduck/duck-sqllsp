@@ -1353,6 +1353,11 @@ pub fn build() -> HashMap<&'static str, Entry> {
   f!("regr_sxx",       "regr_sxx(y, x) -> double precision", "Sum of squares of the x values.", "SELECT regr_sxx(price, qty) FROM items;", pg("functions-aggregate.html"));
   f!("regr_syy",       "regr_syy(y, x) -> double precision", "Sum of squares of the y values.", "SELECT regr_syy(price, qty) FROM items;", pg("functions-aggregate.html"));
   f!("regr_sxy",       "regr_sxy(y, x) -> double precision", "Sum of products of x*y.", "SELECT regr_sxy(price, qty) FROM items;", pg("functions-aggregate.html"));
+  f!("array_to_json",  "array_to_json(anyarray [, pretty bool]) -> json", "Convert an array to a JSON array.", "SELECT array_to_json(ARRAY[1,2,3]);", pg("functions-json.html"));
+  f!("row_to_json",    "row_to_json(record [, pretty bool]) -> json", "Convert a row to a JSON object.", "SELECT row_to_json(t) FROM users t;", pg("functions-json.html"));
+  f!("date_bin",       "date_bin(interval, source ts, origin ts) -> timestamp(tz)", "Snap a timestamp to the nearest bucket of size `interval` aligned to `origin`.", "SELECT date_bin('15 minutes', now(), '2000-01-01');", pg("functions-datetime.html"));
+  f!("timezone",       "timezone(zone text, ts timestamp(tz)) -> timestamp(tz) | timezone(zone, time) -> time", "SQL-standard alternate to `AT TIME ZONE`.", "SELECT timezone('UTC', now());", pg("functions-datetime.html"));
+  f!("isfinite",       "isfinite(date|timestamp|interval) -> boolean", "True when value is not -infinity/+infinity.", "SELECT isfinite(now());", pg("functions-datetime.html"));
 
   // ---- Trigonometric ----
   f!("sin",   "sin(double precision) -> double precision", "Sine, radians.",   "SELECT sin(0);", pg("functions-math.html"));
