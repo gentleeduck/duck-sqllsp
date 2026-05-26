@@ -53,11 +53,17 @@ impl LintRule for Rule {
 fn inside_trigger_function(source: &str, pos: usize) -> bool {
   let upper = source.to_ascii_uppercase();
   let prior = &upper[..pos];
-  // Find the most recent $$ opener.
+  // We're inside an open $$...$$ block iff an odd number of $$
+  // delimiters appear before `pos`. Just rfind-ing the most recent
+  // $$ was wrong when the most recent one was a *closing* marker --
+  // a `CREATE TRIGGER ... OR TRUNCATE ON tbl` statement *after* a
+  // CREATE FUNCTION ... $$ body $$ would still see the closing $$
+  // as the "opener" and falsely fire.
+  let dollar_count = prior.matches("$$").count();
+  if dollar_count % 2 == 0 { return false; }
+  // The opener is at the *last* $$ in `prior` -- because the count
+  // is odd, this is the unmatched opener.
   let Some(dollar_at) = prior.rfind("$$") else { return false };
-  // Make sure there's no closing $$ between dollar_at and pos.
-  let between = &source[dollar_at + 2..pos];
-  if between.contains("$$") { return false; }
   // Find the function header.
   let head = &upper[..dollar_at];
   for kw in ["CREATE OR REPLACE FUNCTION ", "CREATE FUNCTION "] {

@@ -80,8 +80,32 @@ impl LintRule for Rule {
             depth -= 1;
             state = State::Normal;
           },
-          "RETURN" | "RAISE" if depth == 1 && state == State::Normal => {
+          "RETURN" if depth == 1 && state == State::Normal => {
             state = State::InTerminator;
+          },
+          "RAISE" if depth == 1 && state == State::Normal => {
+            // Only RAISE EXCEPTION terminates control flow. RAISE
+            // NOTICE/INFO/WARNING/DEBUG/LOG just emit a message and
+            // continue. Peek the next word.
+            let mut j = i;
+            while j < n && bytes[j].is_ascii_whitespace() { j += 1 }
+            let s2 = j;
+            while j < n && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') { j += 1 }
+            let next_tok = &stripped[s2..j];
+            // Bare `RAISE;` (re-raise current exception) also
+            // terminates. `RAISE EXCEPTION ...` and the SQLSTATE
+            // form `RAISE SQLSTATE '...'` also terminate.
+            let terminates = next_tok.eq_ignore_ascii_case("EXCEPTION")
+              || next_tok.eq_ignore_ascii_case("SQLSTATE")
+              || next_tok.is_empty();
+            if terminates {
+              state = State::InTerminator;
+            } else {
+              // RAISE NOTICE/etc: walk through the message text to the
+              // closing `;` so the post-`;` content still parses as
+              // Normal (not as part of a terminator).
+              state = State::Normal;
+            }
           },
           _ => {
             if state == State::PostTerminator && depth == 1 {

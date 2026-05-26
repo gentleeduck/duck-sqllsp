@@ -1306,6 +1306,30 @@ pub fn build() -> HashMap<&'static str, Entry> {
   f!("pg_get_constraintdef",      "pg_get_constraintdef(oid) -> text", "Constraint definition text.", "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c LIMIT 1;", pg("functions-info.html"));
   f!("pg_terminate_backend",      "pg_terminate_backend(pid int) -> boolean", "Terminate a backend by PID (needs pg_signal_backend role).", "SELECT pg_terminate_backend(12345);", pg("functions-admin.html"));
   f!("pg_cancel_backend",         "pg_cancel_backend(pid int) -> boolean", "Cancel the current query on a backend by PID.", "SELECT pg_cancel_backend(12345);", pg("functions-admin.html"));
+  f!("pg_trigger_depth",          "pg_trigger_depth() -> integer", "Current nesting level of PG triggers (0 outside any trigger).", "SELECT pg_trigger_depth();", pg("functions-info.html"));
+  f!("array_ndims",               "array_ndims(anyarray) -> integer", "Number of dimensions of the array.", "SELECT array_ndims(ARRAY[[1,2],[3,4]]);", pg("functions-array.html"));
+  f!("array_upper",               "array_upper(anyarray, dim int) -> integer", "Upper bound of the requested dimension.", "SELECT array_upper(ARRAY[10,20,30], 1);", pg("functions-array.html"));
+  f!("array_lower",               "array_lower(anyarray, dim int) -> integer", "Lower bound of the requested dimension.", "SELECT array_lower(ARRAY[10,20,30], 1);", pg("functions-array.html"));
+  f!("array_dims",                "array_dims(anyarray) -> text", "Textual representation of the array dimensions.", "SELECT array_dims(ARRAY[[1,2],[3,4]]);", pg("functions-array.html"));
+  f!("array_prepend",             "array_prepend(elt anyelement, arr anyarray) -> anyarray", "Prepend an element.", "SELECT array_prepend(0, ARRAY[1,2,3]);", pg("functions-array.html"));
+  f!("array_append",              "array_append(arr anyarray, elt anyelement) -> anyarray", "Append an element (also operator `||`).", "SELECT array_append(ARRAY[1,2], 3);", pg("functions-array.html"));
+  f!("array_remove",              "array_remove(arr anyarray, elt anyelement) -> anyarray", "Remove all occurrences of elt from the array.", "SELECT array_remove(ARRAY[1,2,3,2], 2);", pg("functions-array.html"));
+  f!("array_replace",             "array_replace(arr anyarray, from anyelement, to anyelement) -> anyarray", "Replace every from with to.", "SELECT array_replace(ARRAY[1,2,3,2], 2, 99);", pg("functions-array.html"));
+  f!("array_cat",                 "array_cat(a anyarray, b anyarray) -> anyarray", "Concatenate two arrays.", "SELECT array_cat(ARRAY[1,2], ARRAY[3,4]);", pg("functions-array.html"));
+  f!("array_position",            "array_position(arr anyarray, elt anyelement) -> integer", "1-based index of elt, NULL if not present.", "SELECT array_position(ARRAY[10,20,30,40], 30);", pg("functions-array.html"));
+  f!("array_positions",           "array_positions(arr anyarray, elt anyelement) -> int[]", "All 1-based indexes of elt.", "SELECT array_positions(ARRAY[1,2,1,3], 1);", pg("functions-array.html"));
+  f!("array_to_string",           "array_to_string(arr anyarray, sep text [, null_str text]) -> text", "Join array elements with sep.", "SELECT array_to_string(ARRAY[1,2,3], ',', '*');", pg("functions-array.html"));
+  f!("string_to_array",           "string_to_array(text, sep text [, null_str text]) -> text[]", "Split text into a text[].", "SELECT string_to_array('a,b,,c', ',');", pg("functions-array.html"));
+  f!("cardinality",               "cardinality(anyarray) -> integer", "Total element count across all dimensions.", "SELECT cardinality(ARRAY[1,2,3]);", pg("functions-array.html"));
+  f!("trim_array",                "trim_array(anyarray, n int) -> anyarray", "Return all but the last n elements.", "SELECT trim_array(ARRAY[1,2,3,4], 1);", pg("functions-array.html"));
+  // current_* time/date are SQL-standard functions; they also work without parens.
+  f!("current_time",      "current_time [(p int)] -> time with time zone", "Current TIME WITH TIME ZONE (optional precision).", "SELECT current_time(3);", pg("functions-datetime.html"));
+  f!("current_timestamp", "current_timestamp [(p int)] -> timestamp with time zone", "Current TIMESTAMPTZ (optional precision).", "SELECT current_timestamp(0);", pg("functions-datetime.html"));
+  f!("current_date",      "current_date -> date", "Current DATE (no parens).", "SELECT current_date;", pg("functions-datetime.html"));
+  f!("clock_timestamp",   "clock_timestamp() -> timestamp with time zone", "Wall-clock TIMESTAMPTZ; changes within a transaction.", "SELECT clock_timestamp();", pg("functions-datetime.html"));
+  f!("statement_timestamp",   "statement_timestamp() -> timestamp with time zone", "TIMESTAMPTZ of statement start.", "SELECT statement_timestamp();", pg("functions-datetime.html"));
+  f!("transaction_timestamp", "transaction_timestamp() -> timestamp with time zone", "Alias for now(); TIMESTAMPTZ of transaction start.", "SELECT transaction_timestamp();", pg("functions-datetime.html"));
+  f!("timeofday",         "timeofday() -> text", "Wall-clock time as text (legacy).", "SELECT timeofday();", pg("functions-datetime.html"));
 
   // ---- Trigonometric ----
   f!("sin",   "sin(double precision) -> double precision", "Sine, radians.",   "SELECT sin(0);", pg("functions-math.html"));
