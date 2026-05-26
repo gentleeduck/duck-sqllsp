@@ -32,14 +32,20 @@ impl LintRule for Rule {
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
 
-    // Find each `VALUES (...)` tuple after the col list. Count
-    // top-level commas inside the paren list -> count of values.
+    // Only check INSERT ... VALUES (...) form -- not INSERT ... SELECT.
+    // If the body contains SELECT at depth 0 between the column list
+    // and the would-be VALUES, the INSERT uses a SELECT source and the
+    // VALUES we see is inside a derived table (`FROM (VALUES ...)`).
     let bytes = body.as_bytes();
     let n = bytes.len();
     let values_kw = upper.find("VALUES");
     let Some(values_at) = values_kw else {
       return;
     };
+    let prefix_upper = &upper[..values_at];
+    if contains_word_depth0(prefix_upper, "SELECT") {
+      return;
+    }
     let mut k = values_at + 6;
     while k < n && bytes[k].is_ascii_whitespace() {
       k += 1;
@@ -68,6 +74,34 @@ impl LintRule for Rule {
       });
     }
   }
+}
+
+fn contains_word_depth0(haystack_upper: &str, needle: &str) -> bool {
+  let h = haystack_upper.as_bytes();
+  let nlen = needle.len();
+  let n = h.len();
+  let mut depth = 0i32;
+  let mut i = 0;
+  while i + nlen <= n {
+    match h[i] {
+      b'(' => { depth += 1; i += 1; continue; }
+      b')' => { depth -= 1; i += 1; continue; }
+      b'\'' => {
+        i += 1;
+        while i < n && h[i] != b'\'' { i += 1 }
+        if i < n { i += 1 }
+        continue;
+      }
+      _ => {}
+    }
+    if depth == 0 && haystack_upper[i..i + nlen].eq_ignore_ascii_case(needle) {
+      let prev_ok = i == 0 || !(h[i - 1].is_ascii_alphanumeric() || h[i - 1] == b'_');
+      let next_ok = i + nlen == n || !(h[i + nlen].is_ascii_alphanumeric() || h[i + nlen] == b'_');
+      if prev_ok && next_ok { return true; }
+    }
+    i += 1;
+  }
+  false
 }
 
 fn match_paren(bytes: &[u8], open: usize) -> Option<usize> {

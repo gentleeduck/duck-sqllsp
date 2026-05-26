@@ -75,6 +75,11 @@ impl LintRule for Rule {
 /// already has those, this only supplements.
 fn alter_added_columns(source: &str, table: &str) -> Vec<String> {
   let mut out = Vec::new();
+  // Strip comments + strings so a `-- multi-clause ALTER TABLE`
+  // header doesn't get matched and then advance `from` past the
+  // real ALTER TABLE statement on the next line.
+  let cleaned = strip_noise(source);
+  let source = cleaned.as_str();
   let upper = source.to_ascii_uppercase();
   let bytes = source.as_bytes();
   let n = bytes.len();
@@ -122,4 +127,34 @@ fn alter_added_columns(source: &str, table: &str) -> Vec<String> {
     }
   }
   out
+}
+
+fn strip_noise(s: &str) -> String {
+  let mut out: Vec<u8> = s.as_bytes().to_vec();
+  let n = out.len();
+  let mut i = 0usize;
+  while i < n {
+    if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
+      while i < n && out[i] != b'\n' { out[i] = b' '; i += 1 }
+      continue;
+    }
+    if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
+      let mut depth = 1u32;
+      out[i] = b' '; out[i + 1] = b' '; i += 2;
+      while i + 1 < n && depth > 0 {
+        if out[i] == b'/' && out[i + 1] == b'*' { depth += 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
+        else if out[i] == b'*' && out[i + 1] == b'/' { depth -= 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
+        else { out[i] = b' '; i += 1; }
+      }
+      continue;
+    }
+    if out[i] == b'\'' {
+      out[i] = b' '; i += 1;
+      while i < n && out[i] != b'\'' { out[i] = b' '; i += 1 }
+      if i < n { out[i] = b' '; i += 1 }
+      continue;
+    }
+    i += 1;
+  }
+  String::from_utf8(out).unwrap_or_else(|_| s.to_string())
 }
