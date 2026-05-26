@@ -22,7 +22,9 @@ impl LintRule for Rule {
     let StatementKind::Select(_) = &stmt.kind else { return };
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let raw = &source[start..end];
+    let body_owned = crate::textutil::strip_noise_full(raw);
+    let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
     // Iterate over both FOR UPDATE OF and FOR SHARE OF.
     for needle in ["FOR UPDATE OF ", "FOR SHARE OF ", "FOR NO KEY UPDATE OF ", "FOR KEY SHARE OF "] {

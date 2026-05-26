@@ -22,7 +22,9 @@ impl LintRule for Rule {
     if !s.projections.iter().any(|p| matches!(p, dsl_parse::Projection::Star)) { return }
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let raw = &source[start..end];
+    let body_owned = crate::textutil::strip_noise_full(raw);
+    let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
     let Some(at) = upper.find("ORDER BY ") else { return };
     let after = at + "ORDER BY ".len();

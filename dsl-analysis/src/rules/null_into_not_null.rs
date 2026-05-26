@@ -26,7 +26,9 @@ impl LintRule for Rule {
 
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let raw = &source[start..end];
+    let body_owned = crate::textutil::strip_noise_full(raw);
+    let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
     let Some(values_at) = upper.find("VALUES") else { return };
     let bytes = body.as_bytes();

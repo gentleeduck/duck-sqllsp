@@ -21,7 +21,9 @@ impl LintRule for Rule {
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let raw = &source[start..end];
+    let body_owned = crate::textutil::strip_noise_full(raw);
+    let body = body_owned.as_str();
     let lower = body.to_ascii_lowercase();
     for fname in ["pg_sleep(", "pg_sleep_for(", "pg_sleep_until("] {
       let Some(rel) = lower.find(fname) else { continue };
