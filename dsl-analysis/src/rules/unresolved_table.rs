@@ -25,7 +25,12 @@ impl LintRule for Rule {
     // CTE names declared in the same statement count as virtual tables.
     let start: u32 = stmt.range.start().into();
     let end: u32 = stmt.range.end().into();
-    let slice = &source[start as usize..(end as usize).min(source.len())];
+    let raw_slice = &source[start as usize..(end as usize).min(source.len())];
+    // Strip line/block comments + strings before CTE walk so a
+    // leading header comment like `-- WITH RECURSIVE foo` doesn't
+    // hijack the "WITH" anchor and make the rule see zero CTEs.
+    let slice_owned = strip_noise(raw_slice);
+    let slice = slice_owned.as_str();
     let ctes = collect_cte_names(slice);
 
     for r in refs {
@@ -143,6 +148,36 @@ fn collect_cte_names(src: &str) -> Vec<String> {
 
 fn is_word(c: char) -> bool {
   c.is_alphanumeric() || c == '_'
+}
+
+fn strip_noise(s: &str) -> String {
+  let mut out: Vec<u8> = s.as_bytes().to_vec();
+  let n = out.len();
+  let mut i = 0usize;
+  while i < n {
+    if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
+      while i < n && out[i] != b'\n' { out[i] = b' '; i += 1 }
+      continue;
+    }
+    if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
+      let mut depth = 1u32;
+      out[i] = b' '; out[i + 1] = b' '; i += 2;
+      while i + 1 < n && depth > 0 {
+        if out[i] == b'/' && out[i + 1] == b'*' { depth += 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
+        else if out[i] == b'*' && out[i + 1] == b'/' { depth -= 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
+        else { out[i] = b' '; i += 1; }
+      }
+      continue;
+    }
+    if out[i] == b'\'' {
+      out[i] = b' '; i += 1;
+      while i < n && out[i] != b'\'' { out[i] = b' '; i += 1 }
+      if i < n { out[i] = b' '; i += 1 }
+      continue;
+    }
+    i += 1;
+  }
+  String::from_utf8(out).unwrap_or_else(|_| s.to_string())
 }
 
 fn skip_parens(bytes: &[u8], i: usize) -> usize {

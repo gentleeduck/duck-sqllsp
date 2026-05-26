@@ -51,6 +51,10 @@ const KEYWORDS: &[&str] = &[
   "DO", "LANGUAGE", "PLPGSQL", "SQL", "STABLE", "IMMUTABLE", "VOLATILE",
   "SECURITY", "DEFINER", "INVOKER", "STRICT", "PARALLEL", "SAFE", "UNSAFE",
   "RESTRICTED", "LEAKPROOF", "COST", "CALL",
+  // CASE / WHEN / THEN / ELSE / END can each show up right before a
+  // parenthesised expression (`THEN (x->>'y')::int` etc) and look
+  // like a call; they are control-flow keywords, not callables.
+  "CASE", "WHEN", "THEN", "ELSE", "END",
   // Foreign-data-wrapper DDL: `... OPTIONS (...)`, `WRAPPER (...)`.
   "OPTIONS", "WRAPPER", "SERVER", "VALIDATOR", "HANDLER",
   // CREATE INDEX ... INCLUDE (cols), ALTER TABLE ... USING INDEX (...).
