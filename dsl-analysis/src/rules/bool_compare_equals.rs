@@ -48,7 +48,9 @@ impl LintRule for Rule {
     if trimmed.starts_with("CREATE COLLATION") || trimmed.starts_with("CREATE EXTENSION") {
       return;
     }
-    let bytes = body.as_bytes();
+    // Use the cleaned body so commented `WHERE x = true` examples
+    // don't false-fire; offsets stay 1:1 with the original source.
+    let bytes = cleaned.as_bytes();
     let n = bytes.len();
     let needles: &[(&[u8], &str)] = &[
       (b"= TRUE", "drop `= true`"),
