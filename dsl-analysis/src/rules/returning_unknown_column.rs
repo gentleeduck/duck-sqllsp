@@ -31,16 +31,32 @@ impl LintRule for Rule {
     let body_owned = strip_line_comments(raw_body);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
-    let Some(ret_at) = upper.find("RETURNING ") else { return };
-    let after = ret_at + 10;
+    // Find the OUTERMOST RETURNING (depth=0). A CTE body like
+    // `WITH foo AS (UPDATE ... RETURNING id, data) INSERT INTO ...`
+    // has its RETURNING inside parens; that RETURNING isn't the
+    // outer statement's RETURNING -- and its column list shouldn't
+    // be validated against the outer target table.
+    let Some(ret_at) = find_top_returning(body) else { return };
+    let after = ret_at + "RETURNING".len();
     let rest = &body[after..];
     let stop = rest.find(';').unwrap_or(rest.len());
     let list = &rest[..stop];
-    for raw in list.split(',') {
-      let token = raw.trim().trim_matches('"');
-      // Skip * and qualified or expression forms.
-      if token == "*" || token.contains(' ') || token.contains('(') || token.contains('.') { continue }
-      if token.is_empty() { continue }
+    // Walk top-level (paren-depth 0) commas.
+    for raw in split_top_level_commas(list) {
+      let token_full = raw.trim();
+      // Strip a trailing alias: `col AS alias`.
+      let token = token_full
+        .split_whitespace()
+        .next()
+        .unwrap_or(token_full)
+        .trim_matches('"');
+      // Skip *, expression forms, string literals, function calls.
+      if token == "*" || token.is_empty() { continue }
+      if token.starts_with('\'') || token.starts_with('"') { continue }
+      if token.contains('(') || token.contains('.') || token.contains('-') || token.contains('+') { continue }
+      // First char must be a letter/underscore to be a bare column.
+      let first = token.chars().next();
+      if !first.map_or(false, |c| c.is_ascii_alphabetic() || c == '_') { continue }
       if t.columns.iter().any(|c| c.name.eq_ignore_ascii_case(token)) { continue }
       let local = list.find(token).unwrap_or(0);
       let abs_s = start + after + local;
@@ -53,6 +69,64 @@ impl LintRule for Rule {
       });
     }
   }
+}
+
+/// First depth-0 occurrence of the word `RETURNING` -- skips RETURNINGs
+/// that sit inside a CTE body's parens.
+fn find_top_returning(s: &str) -> Option<usize> {
+  let bytes = s.as_bytes();
+  let n = bytes.len();
+  let kw = "RETURNING";
+  let klen = kw.len();
+  let mut depth = 0i32;
+  let mut i = 0usize;
+  while i + klen <= n {
+    match bytes[i] {
+      b'(' => { depth += 1; i += 1; continue; }
+      b')' => { depth -= 1; i += 1; continue; }
+      b'\'' => {
+        i += 1;
+        while i < n && bytes[i] != b'\'' { i += 1 }
+        if i < n { i += 1 }
+        continue;
+      }
+      _ => {}
+    }
+    if depth == 0 && s[i..i + klen].eq_ignore_ascii_case(kw) {
+      let prev_ok = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
+      let next_ok = i + klen == n || !(bytes[i + klen].is_ascii_alphanumeric() || bytes[i + klen] == b'_');
+      if prev_ok && next_ok { return Some(i); }
+    }
+    i += 1;
+  }
+  None
+}
+
+fn split_top_level_commas(s: &str) -> Vec<&str> {
+  let bytes = s.as_bytes();
+  let n = bytes.len();
+  let mut out = Vec::new();
+  let mut start = 0usize;
+  let mut depth = 0i32;
+  let mut i = 0usize;
+  while i < n {
+    match bytes[i] {
+      b'(' | b'[' => depth += 1,
+      b')' | b']' => depth -= 1,
+      b'\'' => {
+        i += 1;
+        while i < n && bytes[i] != b'\'' { i += 1 }
+      }
+      b',' if depth == 0 => {
+        out.push(&s[start..i]);
+        start = i + 1;
+      }
+      _ => {}
+    }
+    i += 1;
+  }
+  if start < n { out.push(&s[start..]); }
+  out
 }
 
 /// Replace `-- comment` runs with spaces so offsets stay 1:1.

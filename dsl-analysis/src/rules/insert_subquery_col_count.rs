@@ -88,12 +88,25 @@ impl LintRule for Rule {
 fn find_word_kw(haystack: &str, kw: &str) -> Option<usize> {
   let h = haystack.as_bytes();
   let n = kw.len();
+  let len = h.len();
   if n == 0 { return None; }
+  let mut depth = 0i32;
   let mut i = 0usize;
-  while i + n <= h.len() {
-    if haystack[i..i + n].eq_ignore_ascii_case(kw) {
+  while i + n <= len {
+    match h[i] {
+      b'(' => { depth += 1; i += 1; continue; }
+      b')' => { depth -= 1; i += 1; continue; }
+      b'\'' => {
+        i += 1;
+        while i < len && h[i] != b'\'' { i += 1 }
+        if i < len { i += 1 }
+        continue;
+      }
+      _ => {}
+    }
+    if depth == 0 && haystack[i..i + n].eq_ignore_ascii_case(kw) {
       let prev_ok = i == 0 || !(h[i - 1].is_ascii_alphanumeric() || h[i - 1] == b'_');
-      let next_ok = i + n == h.len() || !(h[i + n].is_ascii_alphanumeric() || h[i + n] == b'_');
+      let next_ok = i + n == len || !(h[i + n].is_ascii_alphanumeric() || h[i + n] == b'_');
       if prev_ok && next_ok { return Some(i); }
     }
     i += 1;
