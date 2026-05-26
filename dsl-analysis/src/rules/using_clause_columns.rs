@@ -23,12 +23,27 @@ impl LintRule for Rule {
     if sel.from.is_empty() || sel.joins.is_empty() {
       return;
     }
-    let Some(left) = catalog.find_table(sel.from[0].schema.as_deref(), &sel.from[0].name) else { return };
+    let Some(left_first) = catalog.find_table(sel.from[0].schema.as_deref(), &sel.from[0].name) else { return };
 
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
+
+    // Build a cumulative set of column names visible on the LEFT side
+    // of each JOIN: start with the first FROM table + every other FROM
+    // table (comma-separated FROMs are equivalent to CROSS JOIN), then
+    // add the right side after each JOIN. For the i-th JOIN, the
+    // visible-left set is everything before the JOIN.
+    let mut visible: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for c in &left_first.columns {
+      visible.insert(c.name.to_ascii_lowercase());
+    }
+    for fr in sel.from.iter().skip(1) {
+      if let Some(t) = catalog.find_table(fr.schema.as_deref(), &fr.name) {
+        for c in &t.columns { visible.insert(c.name.to_ascii_lowercase()); }
+      }
+    }
 
     // Scan every USING (...) -- pair it with the surrounding JOIN's
     // right side table via parallel walk through sel.joins.
@@ -52,13 +67,25 @@ impl LintRule for Rule {
       let Some(join) = join_iter.next() else { break };
       let right = catalog.find_table(join.table.schema.as_deref(), &join.table.name);
       for col in cols {
-        let in_left = left.columns.iter().any(|c| c.name.eq_ignore_ascii_case(col));
+        let col_lc = col.to_ascii_lowercase();
+        let in_left = visible.contains(&col_lc);
         let in_right = right.is_some_and(|r| r.columns.iter().any(|c| c.name.eq_ignore_ascii_case(col)));
         if in_left && in_right { continue; }
+        // The AST doesn't distinguish USING vs ON joins. When the
+        // query mixes them the text-based pairing of USING -> next
+        // join may misalign and falsely flag a valid USING. Only fire
+        // when the column is missing from EVERY known table (no
+        // catalog table in the query has it).
+        let in_any_join_table = sel.joins.iter().any(|j| {
+          catalog
+            .find_table(j.table.schema.as_deref(), &j.table.name)
+            .is_some_and(|t| t.columns.iter().any(|c| c.name.eq_ignore_ascii_case(col)))
+        });
+        if in_any_join_table { continue; }
         let abs_s = start + k + 1;
         let abs_e = start + close;
         let detail = if !in_left {
-          format!("`{col}` missing on left `{}.{}`", left.schema, left.name)
+          format!("`{col}` missing on left (`{}.{}` and earlier joins)", left_first.schema, left_first.name)
         } else {
           format!("`{col}` missing on right `{}`", join.table.name)
         };
@@ -68,6 +95,11 @@ impl LintRule for Rule {
           message: format!("USING clause invalid: {detail}"),
           range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
         });
+      }
+      // After processing this JOIN, merge its right-side columns into
+      // the visible-left set for subsequent USING clauses.
+      if let Some(r) = right {
+        for c in &r.columns { visible.insert(c.name.to_ascii_lowercase()); }
       }
       from = close + 1;
     }

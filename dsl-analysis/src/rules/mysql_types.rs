@@ -69,6 +69,30 @@ impl LintRule for Rule {
           let post = upper[after..].trim_start();
           if post.starts_with("PRECISION") { from = after; continue }
         }
+        // The type might actually be a column NAME -- skip when the
+        // very next non-whitespace token is another identifier that
+        // looks like a real type (not a constraint keyword). E.g.
+        // `blob jsonb NOT NULL` has `blob` as column name, `jsonb`
+        // as the actual type, so we shouldn't flag.
+        let post_upper = upper[after..].trim_start();
+        let post_bytes = post_upper.as_bytes();
+        if !post_bytes.is_empty() && (post_bytes[0].is_ascii_alphabetic() || post_bytes[0] == b'_') {
+          let mut k = 0usize;
+          while k < post_bytes.len() && (post_bytes[k].is_ascii_alphanumeric() || post_bytes[k] == b'_') { k += 1 }
+          let next_word = &post_upper[..k];
+          // Constraint keywords + storage modifiers that legitimately
+          // follow a type name; if any of these follow, treat BLOB as
+          // the type (fire).
+          let constraint_kws = [
+            "NOT", "NULL", "DEFAULT", "PRIMARY", "UNIQUE", "REFERENCES",
+            "CHECK", "GENERATED", "COLLATE", "COMPRESSION", "STORAGE",
+            "CONSTRAINT", "DEFERRABLE", "INITIALLY",
+          ];
+          if !constraint_kws.contains(&next_word) {
+            from = after;
+            continue;
+          }
+        }
         let abs_s = start + at;
         let abs_e = abs_s + ty.len();
         out.push(Diagnostic {
