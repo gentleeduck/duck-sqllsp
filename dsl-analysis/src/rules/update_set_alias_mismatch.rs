@@ -19,7 +19,7 @@ impl LintRule for Rule {
     Severity::Error
   }
 
-  fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
+  fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let StatementKind::Update(u) = &stmt.kind else { return };
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
@@ -53,6 +53,12 @@ impl LintRule for Rule {
       let Some((qual, _col)) = lhs.split_once('.') else { continue };
       let qual = qual.trim().trim_matches('"');
       if allowed.iter().any(|a| a.eq_ignore_ascii_case(qual)) { continue }
+      // Composite-column field assignment: `SET col.field = ...` where
+      // `col` is a composite-typed column of the target table. PG
+      // accepts this and updates the named field of the composite.
+      if let Some(t) = catalog.find_table(u.table.schema.as_deref(), &u.table.name) {
+        if t.columns.iter().any(|c| c.name.eq_ignore_ascii_case(qual)) { continue }
+      }
       let off = set_text.find(lhs).unwrap_or(0);
       let abs_s = start + after_set + off;
       let abs_e = abs_s + lhs.len();
