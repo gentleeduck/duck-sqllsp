@@ -136,6 +136,19 @@ pub fn run_with_dialect(
   // produced diagnostic whose emitted code is dialect-skipped.
   out.retain(|d| !skip_for_dialect(dialect, d.code));
   apply_suppressions(source, &mut out);
+  // Drop exact duplicates (same code + same range + same message).
+  // Rules occasionally emit identical hits when, e.g., a multi-stmt
+  // chunk has overlapping scans -- pruning here keeps the UI clean.
+  let mut seen: std::collections::HashSet<(String, u32, u32, String)> =
+    std::collections::HashSet::new();
+  out.retain(|d| {
+    seen.insert((
+      d.code.to_string(),
+      u32::from(d.range.start()),
+      u32::from(d.range.end()),
+      d.message.clone(),
+    ))
+  });
   out
 }
 
