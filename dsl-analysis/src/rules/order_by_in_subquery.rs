@@ -37,6 +37,14 @@ impl LintRule for Rule {
       let has_top_limit = contains_at_depth_zero(&inner_upper, "LIMIT")
         || contains_at_depth_zero(&inner_upper, "OFFSET")
         || contains_at_depth_zero(&inner_upper, "FETCH");
+      // Walk back to find what precedes the `(` -- skip when it's
+      // `ARRAY` (constructor preserves order) or aggregate functions
+      // like `array_agg`/`jsonb_agg` that consume the inner ordering.
+      let prev_word_upper = preceding_word(body, open);
+      if matches!(prev_word_upper.as_str(), "ARRAY") {
+        i = close + 1;
+        continue;
+      }
       if inner_upper.trim_start().starts_with("SELECT") && has_top_order_by && !has_top_limit
       {
         // Outer must wrap further SQL (the subquery is in a context, not a top stmt).
@@ -81,6 +89,15 @@ fn contains_at_depth_zero(haystack_upper: &str, needle_upper: &str) -> bool {
     i += 1;
   }
   false
+}
+
+fn preceding_word(body: &str, at: usize) -> String {
+  let bytes = body.as_bytes();
+  let mut i = at;
+  while i > 0 && bytes[i - 1].is_ascii_whitespace() { i -= 1 }
+  let word_end = i;
+  while i > 0 && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_') { i -= 1 }
+  body[i..word_end].to_ascii_uppercase()
 }
 
 fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
