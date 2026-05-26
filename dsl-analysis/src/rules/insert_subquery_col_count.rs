@@ -54,7 +54,7 @@ impl LintRule for Rule {
     // Find the end of the projection list (before FROM or `)`, end).
     let after_sel = sel_at + "SELECT".len();
     let tail = &upper[after_sel..];
-    let stop_from = tail.find(" FROM ").map(|p| p + " FROM ".len() - " FROM ".len());
+    let stop_from = find_word_kw(tail, "FROM");
     let stop_close = paren_close_at_depth_zero(body, after_sel);
     let stop_semi = tail.find(';');
     // Also stop at UNION/INTERSECT/EXCEPT so a multi-branch
