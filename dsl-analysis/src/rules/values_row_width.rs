@@ -75,8 +75,10 @@ fn count_top_level_commas(text: &str) -> usize {
   let mut i = 0usize;
   while i < bytes.len() {
     match bytes[i] {
-      b'(' => depth += 1,
-      b')' => depth -= 1,
+      // Treat `[`/`]` like parens so commas inside `ARRAY[ROW(a,b),
+      // ROW(c,d)]` don't count as separate VALUES tuple values.
+      b'(' | b'[' => depth += 1,
+      b')' | b']' => depth -= 1,
       b',' if depth == 0 => commas += 1,
       b'\'' => {
         i += 1;
