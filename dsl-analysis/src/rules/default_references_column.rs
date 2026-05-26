@@ -25,7 +25,9 @@ impl LintRule for Rule {
     let StatementKind::CreateTable(ct) = &stmt.kind else { return };
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let raw = &source[start..end];
+    let body_owned = crate::textutil::strip_noise_full(raw);
+    let body = body_owned.as_str();
     let Some(paren_at) = body.find('(') else { return };
     let Some(close_rel) = find_matching_paren(body, paren_at) else { return };
     let cols_text = &body[paren_at + 1..close_rel];

@@ -19,6 +19,9 @@ impl LintRule for Rule {
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
+    // Don't strip noise here: the rule's job is to inspect the
+    // string literal AFTER `IS`, and our stripper turns `''` into
+    // spaces (which then look like a missing-empty-string).
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
     if !upper.starts_with("COMMENT ") {
