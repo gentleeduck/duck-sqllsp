@@ -1358,6 +1358,16 @@ pub fn build() -> HashMap<&'static str, Entry> {
   f!("date_bin",       "date_bin(interval, source ts, origin ts) -> timestamp(tz)", "Snap a timestamp to the nearest bucket of size `interval` aligned to `origin`.", "SELECT date_bin('15 minutes', now(), '2000-01-01');", pg("functions-datetime.html"));
   f!("timezone",       "timezone(zone text, ts timestamp(tz)) -> timestamp(tz) | timezone(zone, time) -> time", "SQL-standard alternate to `AT TIME ZONE`.", "SELECT timezone('UTC', now());", pg("functions-datetime.html"));
   f!("isfinite",       "isfinite(date|timestamp|interval) -> boolean", "True when value is not -infinity/+infinity.", "SELECT isfinite(now());", pg("functions-datetime.html"));
+  // Text search internals.
+  f!("numnode",        "numnode(tsquery) -> integer", "Number of lexemes + operators in a tsquery.", "SELECT numnode(to_tsquery('a & b'));", pg("textsearch-features.html"));
+  f!("ts_lexize",      "ts_lexize(dict regdictionary, token text) -> text[]", "Apply a text-search dictionary to a token.", "SELECT ts_lexize('simple', 'hello');", pg("functions-textsearch.html"));
+  f!("ts_parse",       "ts_parse(parser_name text, text) -> SETOF (tokid int, token text)", "Tokenize text using a parser.", "SELECT * FROM ts_parse('default', 'hello world');", pg("functions-textsearch.html"));
+  f!("ts_token_type",  "ts_token_type(parser_name text) -> SETOF (tokid int, alias text, descr text)", "List token types a parser recognises.", "SELECT * FROM ts_token_type('default');", pg("functions-textsearch.html"));
+  f!("ts_debug",       "ts_debug(config_name text, doc text) -> SETOF (alias, descr, token, dictionaries, dictionary, lexemes)", "Diagnose tokenization of a string.", "SELECT * FROM ts_debug('english', 'hello world');", pg("functions-textsearch.html"));
+  f!("tsvector_to_array", "tsvector_to_array(tsvector) -> text[]", "Lexeme array from a tsvector.", "SELECT tsvector_to_array(to_tsvector('hello world'));", pg("functions-textsearch.html"));
+  f!("array_to_tsvector", "array_to_tsvector(text[]) -> tsvector", "Build a tsvector from an array of lexemes.", "SELECT array_to_tsvector(ARRAY['a', 'b']);", pg("functions-textsearch.html"));
+  f!("strip",          "strip(tsvector) -> tsvector", "Strip positions/weights from a tsvector.", "SELECT strip(to_tsvector('hello world'));", pg("functions-textsearch.html"));
+  f!("length",         "length(text|bit|tsvector|...) -> integer", "Length / lexeme count depending on argument.", "SELECT length(to_tsvector('hello world'));", pg("functions-string.html"));
 
   // ---- Trigonometric ----
   f!("sin",   "sin(double precision) -> double precision", "Sine, radians.",   "SELECT sin(0);", pg("functions-math.html"));
