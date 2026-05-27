@@ -8,10 +8,10 @@ pub struct Catalog {
   pub connection_id: String,
   pub schemas: Vec<Schema>,
   pub functions: Vec<Function>,
-  /// User-defined types (enum / domain / composite). Populated by
-  /// PG introspection from `pg_type` + `information_schema.domains`
-  /// + `pg_class` (composites). Default empty so older on-disk
-  /// catalog snapshots continue to deserialise.
+  /// User-defined types (enum / domain / composite). Populated by PG
+  /// introspection from `pg_type`, `information_schema.domains`, and
+  /// `pg_class` (composites). Default empty so older on-disk catalog
+  /// snapshots continue to deserialise.
   #[serde(default)]
   pub types: Vec<Type>,
   /// Role names from `pg_roles` -- consumed by sql169
@@ -88,6 +88,12 @@ pub struct Table {
   /// BRIN-on-small-table diagnostic.
   #[serde(default)]
   pub row_estimate: Option<f64>,
+  /// Object owner role. Populated by live introspection (`pg_class.relowner`)
+  /// or by source-text scan of `ALTER TABLE ... OWNER TO <role>` /
+  /// `CREATE TABLE ... OWNER <role>`. Used by the hover renderer to
+  /// show ownership at-a-glance.
+  #[serde(default)]
+  pub owner: Option<String>,
 }
 
 /// Row-level security policy attached to a table. Mirrors `pg_policies`.
@@ -163,6 +169,15 @@ pub struct Constraint {
   /// catalog snapshots still deserialise.
   #[serde(default)]
   pub definition: Option<String>,
+  /// True when this constraint was declared inline on a column
+  /// (`id int PRIMARY KEY` or `... REFERENCES other(id)`). The hover
+  /// renderer folds inline constraints back onto the column row instead
+  /// of emitting a separate `CONSTRAINT ...` line, which mirrors how the
+  /// user wrote the table. `false` for table-level constraints and for
+  /// anything coming back from live PG introspection (those are always
+  /// rendered as top-level).
+  #[serde(default)]
+  pub inline: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

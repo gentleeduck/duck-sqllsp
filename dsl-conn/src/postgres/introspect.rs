@@ -77,13 +77,10 @@ WHERE con.contype IN ('p','f','u','c')
 ORDER BY n.nspname, c.relname, con.conname
 ";
 
-// User-defined indexes. Filter out the implicit indexes attached to a
-// PK / unique constraint (we already render those through the
-// constraint table). One row per (index, column) so the per-index
-// column list can be assembled in Rust.
 // Every index on a user table -- including the implicit ones attached
 // to PRIMARY KEY / UNIQUE constraints. The hover renderer shows them
-// all so users see what btree the planner actually has.
+// all so users see what btree the planner actually has. One row per
+// (index, column); the per-index column list is assembled in Rust.
 const INDEXES_SQL: &str = "
 SELECT
     n.nspname AS schema,
@@ -187,18 +184,50 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
 
   // Tables
   let table_rows: Vec<(String, String, String)> = sqlx::query_as(TABLES_SQL).fetch_all(pool).await.map_err(map_err)?;
-  // Row estimates from pg_class.reltuples. Falls back to None silently
-  // on permission denied; never breaks introspect.
-  let row_estimates: Vec<(String, String, f32)> = sqlx::query_as(
-    "SELECT n.nspname::text, c.relname::text, c.reltuples \
-     FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid \
+  // Row estimates. `pg_class.reltuples` is the planner's estimate but is
+  // `-1` for tables that have never been ANALYZED and stays `0` for
+  // tables under the autovacuum threshold (50 rows by default). To get
+  // a useful chip on small / freshly-seeded tables, also pull
+  // `pg_stat_user_tables.n_live_tup` (the stats collector's live row
+  // count) and prefer it when `reltuples <= 0`. Falls back to None
+  // silently on permission denied; never breaks introspect.
+  let row_estimates: Vec<(String, String, f32, Option<i64>)> = sqlx::query_as(
+    "SELECT n.nspname::text, c.relname::text, c.reltuples, s.n_live_tup \
+     FROM pg_class c \
+     JOIN pg_namespace n ON c.relnamespace = n.oid \
+     LEFT JOIN pg_stat_user_tables s ON s.relid = c.oid \
      WHERE c.relkind IN ('r', 'p', 'm') \
-       AND n.nspname NOT IN ('pg_catalog', 'information_schema')"
-  ).fetch_all(pool).await.unwrap_or_default();
+       AND n.nspname NOT IN ('pg_catalog', 'information_schema')",
+  )
+  .fetch_all(pool)
+  .await
+  .unwrap_or_default();
   let estimate_lookup: BTreeMap<(String, String), f64> = row_estimates
     .into_iter()
-    .map(|(s, n, r)| ((s, n), r as f64))
+    .map(|(s, n, reltuples, live)| {
+      let chosen = if reltuples > 0.0 {
+        reltuples as f64
+      } else {
+        live.map(|v| v as f64).unwrap_or(0.0)
+      };
+      ((s, n), chosen)
+    })
     .collect();
+  // Per-table owner name resolved through pg_authid. Silently empty on
+  // permission errors so the rest of introspect still works.
+  let owner_rows: Vec<(String, String, String)> = sqlx::query_as(
+    "SELECT n.nspname::text, c.relname::text, COALESCE(a.rolname, '')::text \
+     FROM pg_class c \
+     JOIN pg_namespace n ON c.relnamespace = n.oid \
+     LEFT JOIN pg_authid a ON c.relowner = a.oid \
+     WHERE c.relkind IN ('r', 'p', 'm', 'v') \
+       AND n.nspname NOT IN ('pg_catalog', 'information_schema')",
+  )
+  .fetch_all(pool)
+  .await
+  .unwrap_or_default();
+  let owner_lookup: BTreeMap<(String, String), String> =
+    owner_rows.into_iter().filter(|(_, _, o)| !o.is_empty()).map(|(s, n, o)| ((s, n), o)).collect();
   // (schema, name) -> table index inside Catalog.schemas[s].tables[i].
   let mut table_index: BTreeMap<(String, String), (String, usize)> = BTreeMap::new();
   for (schema_name, table_name, table_type) in table_rows {
@@ -221,6 +250,7 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
       policies: Vec::new(),
       comment: None,
       row_estimate: estimate_lookup.get(&(schema_name.clone(), table_name.clone())).copied(),
+      owner: owner_lookup.get(&(schema_name.clone(), table_name.clone())).cloned(),
     });
     table_index.insert((schema_name, table_name), (entry.name.clone(), idx));
   }
@@ -229,20 +259,19 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
   let column_rows: Vec<(String, String, String, String, String, Option<String>)> =
     sqlx::query_as(COLUMNS_SQL).fetch_all(pool).await.map_err(map_err)?;
   for (schema_name, table_name, column_name, data_type, is_nullable, default) in column_rows {
-    if let Some((_, idx)) = table_index.get(&(schema_name.clone(), table_name.clone())) {
-      if let Some(s) = schemas.get_mut(&schema_name) {
-        if let Some(t) = s.tables.get_mut(*idx) {
-          t.columns.push(Column {
-            name: column_name,
-            data_type,
-            nullable: is_nullable == "YES",
-            default,
-            comment: None,
-            generated: None,
-            json_keys: None,
-          });
-        }
-      }
+    if let Some((_, idx)) = table_index.get(&(schema_name.clone(), table_name.clone()))
+      && let Some(s) = schemas.get_mut(&schema_name)
+      && let Some(t) = s.tables.get_mut(*idx)
+    {
+      t.columns.push(Column {
+        name: column_name,
+        data_type,
+        nullable: is_nullable == "YES",
+        default,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      });
     }
   }
 
@@ -268,34 +297,36 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
   >(CONSTRAINTS_SQL)
   .fetch_all(pool)
   .await;
-  match constraint_rows {
-    Ok(rows) => {
-      for (schema, table_name, name, kind_str, columns, ref_schema, ref_table, ref_columns, check_expr) in rows {
-        let kind = match kind_str.as_str() {
-          "p" => ConstraintKind::PrimaryKey,
-          "f" => ConstraintKind::ForeignKey,
-          "u" => ConstraintKind::Unique,
-          "c" => ConstraintKind::Check,
-          _ => continue,
-        };
-        let cols: Vec<String> =
-          columns.map(|s| s.split(',').map(|p| p.trim().to_string()).collect()).unwrap_or_default();
-        let ref_cols: Vec<String> =
-          ref_columns.map(|s| s.split(',').map(|p| p.trim().to_string()).collect()).unwrap_or_default();
-        let references = match (ref_schema, ref_table) {
-          (Some(rs), Some(rt)) => Some(ConstraintRef { schema: rs, table: rt, columns: ref_cols }),
-          _ => None,
-        };
-        if let Some((_, idx)) = table_index.get(&(schema.clone(), table_name.clone())) {
-          if let Some(s) = schemas.get_mut(&schema) {
-            if let Some(t) = s.tables.get_mut(*idx) {
-              t.constraints.push(Constraint { name, kind, columns: cols, references, definition: check_expr });
-            }
-          }
-        }
+  if let Ok(rows) = constraint_rows {
+    for (schema, table_name, name, kind_str, columns, ref_schema, ref_table, ref_columns, check_expr) in rows {
+      let kind = match kind_str.as_str() {
+        "p" => ConstraintKind::PrimaryKey,
+        "f" => ConstraintKind::ForeignKey,
+        "u" => ConstraintKind::Unique,
+        "c" => ConstraintKind::Check,
+        _ => continue,
+      };
+      let cols: Vec<String> = columns.map(|s| s.split(',').map(|p| p.trim().to_string()).collect()).unwrap_or_default();
+      let ref_cols: Vec<String> =
+        ref_columns.map(|s| s.split(',').map(|p| p.trim().to_string()).collect()).unwrap_or_default();
+      let references = match (ref_schema, ref_table) {
+        (Some(rs), Some(rt)) => Some(ConstraintRef { schema: rs, table: rt, columns: ref_cols }),
+        _ => None,
+      };
+      if let Some((_, idx)) = table_index.get(&(schema.clone(), table_name.clone()))
+        && let Some(s) = schemas.get_mut(&schema)
+        && let Some(t) = s.tables.get_mut(*idx)
+      {
+        t.constraints.push(Constraint {
+          name,
+          kind,
+          columns: cols,
+          references,
+          definition: check_expr,
+          inline: false,
+        });
       }
-    },
-    Err(_) => {},
+    }
   }
 
   // Indexes (excluding the implicit primary-key / unique indexes already
@@ -305,6 +336,7 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
   if let Ok(rows) =
     sqlx::query_as::<_, (String, String, String, String, bool, String)>(INDEXES_SQL).fetch_all(pool).await
   {
+    #[allow(clippy::type_complexity)]
     let mut grouped: BTreeMap<(String, String, String), (Vec<String>, bool, String)> = BTreeMap::new();
     for (schema, table, idx_name, column, unique, definition) in rows {
       let entry = grouped.entry((schema, table, idx_name)).or_default();
@@ -313,17 +345,16 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
       entry.2 = definition;
     }
     for ((schema, table_name, name), (cols, unique, definition)) in grouped {
-      if let Some((_, idx)) = table_index.get(&(schema.clone(), table_name.clone())) {
-        if let Some(s) = schemas.get_mut(&schema) {
-          if let Some(t) = s.tables.get_mut(*idx) {
-            t.indexes.push(IndexDef {
-              name,
-              columns: cols,
-              unique,
-              definition: if definition.is_empty() { None } else { Some(definition) },
-            });
-          }
-        }
+      if let Some((_, idx)) = table_index.get(&(schema.clone(), table_name.clone()))
+        && let Some(s) = schemas.get_mut(&schema)
+        && let Some(t) = s.tables.get_mut(*idx)
+      {
+        t.indexes.push(IndexDef {
+          name,
+          columns: cols,
+          unique,
+          definition: if definition.is_empty() { None } else { Some(definition) },
+        });
       }
     }
   }
@@ -333,12 +364,11 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
     sqlx::query_as::<_, (String, String, String, String, String, String, String)>(TRIGGERS_SQL).fetch_all(pool).await
   {
     for (schema, table_name, name, timing, event, granularity, function) in rows {
-      if let Some((_, idx)) = table_index.get(&(schema.clone(), table_name.clone())) {
-        if let Some(s) = schemas.get_mut(&schema) {
-          if let Some(t) = s.tables.get_mut(*idx) {
-            t.triggers.push(Trigger { name, timing, event, granularity, function });
-          }
-        }
+      if let Some((_, idx)) = table_index.get(&(schema.clone(), table_name.clone()))
+        && let Some(s) = schemas.get_mut(&schema)
+        && let Some(t) = s.tables.get_mut(*idx)
+      {
+        t.triggers.push(Trigger { name, timing, event, granularity, function });
       }
     }
   }
@@ -350,19 +380,18 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
       .await
   {
     for (schema, table_name, name, permissive, roles, command, using_expr, check_expr) in rows {
-      if let Some((_, idx)) = table_index.get(&(schema.clone(), table_name.clone())) {
-        if let Some(s) = schemas.get_mut(&schema) {
-          if let Some(t) = s.tables.get_mut(*idx) {
-            t.policies.push(Policy {
-              name,
-              permissive: if permissive { "PERMISSIVE".into() } else { "RESTRICTIVE".into() },
-              roles,
-              command,
-              using_expr,
-              check_expr,
-            });
-          }
-        }
+      if let Some((_, idx)) = table_index.get(&(schema.clone(), table_name.clone()))
+        && let Some(s) = schemas.get_mut(&schema)
+        && let Some(t) = s.tables.get_mut(*idx)
+      {
+        t.policies.push(Policy {
+          name,
+          permissive: if permissive { "PERMISSIVE".into() } else { "RESTRICTIVE".into() },
+          roles,
+          command,
+          using_expr,
+          check_expr,
+        });
       }
     }
   }

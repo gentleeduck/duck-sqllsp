@@ -45,6 +45,7 @@ pub async fn run(pool: &SqlitePool, spec: &ConnectionSpec) -> Result<Catalog, Dr
           policies: Vec::new(),
           comment: None,
           row_estimate: None,
+          owner: None,
         });
       },
       "trigger" => {
@@ -91,7 +92,15 @@ async fn fetch_columns(pool: &SqlitePool, table: &str) -> Result<Vec<Column>, Dr
     let data_type: String = row.try_get("type").map_err(io_err)?;
     let notnull: i64 = row.try_get("notnull").map_err(io_err)?;
     let default: Option<String> = row.try_get("dflt_value").ok();
-    out.push(Column { name, data_type, nullable: notnull == 0, default, comment: None, generated: None, json_keys: None });
+    out.push(Column {
+      name,
+      data_type,
+      nullable: notnull == 0,
+      default,
+      comment: None,
+      generated: None,
+      json_keys: None,
+    });
   }
   Ok(out)
 }
@@ -134,6 +143,7 @@ async fn fetch_fks(pool: &SqlitePool, table: &str) -> Result<Vec<Constraint>, Dr
         columns: cols,
         references: Some(ConstraintRef { schema: SCHEMA_NAME.into(), table: ref_table, columns: ref_cols }),
         definition: None,
+        inline: false,
       })
       .collect(),
   )

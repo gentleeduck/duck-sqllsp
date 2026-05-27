@@ -58,6 +58,7 @@ pub async fn run(pool: &MySqlPool, spec: &ConnectionSpec) -> Result<Catalog, Dri
         policies: Vec::new(),
         comment: None,
         row_estimate: None,
+        owner: None,
       },
     );
   }
@@ -78,7 +79,15 @@ pub async fn run(pool: &MySqlPool, spec: &ConnectionSpec) -> Result<Catalog, Dri
     let default: Option<String> = row.try_get("COLUMN_DEFAULT").ok();
     let comment: Option<String> = row.try_get("COLUMN_COMMENT").ok().filter(|s: &String| !s.is_empty());
     if let Some(t) = by_table.get_mut(&(schema, table)) {
-      t.columns.push(Column { name, data_type, nullable: nullable_str.eq_ignore_ascii_case("YES"), default, comment, generated: None, json_keys: None });
+      t.columns.push(Column {
+        name,
+        data_type,
+        nullable: nullable_str.eq_ignore_ascii_case("YES"),
+        default,
+        comment,
+        generated: None,
+        json_keys: None,
+      });
     }
   }
 
@@ -117,6 +126,7 @@ pub async fn run(pool: &MySqlPool, spec: &ConnectionSpec) -> Result<Catalog, Dri
          WHERE tc.table_schema NOT IN ({ADMIN_SCHEMAS}) \
          ORDER BY tc.table_schema, tc.table_name, tc.constraint_name, kcu.ordinal_position"
   );
+  #[allow(clippy::type_complexity)]
   let mut con_acc: BTreeMap<(String, String, String), (ConstraintKind, Vec<String>, Option<ConstraintRef>)> =
     BTreeMap::new();
   for row in sqlx::query(&kc_sql).fetch_all(pool).await.map_err(io_err)? {
@@ -145,7 +155,7 @@ pub async fn run(pool: &MySqlPool, spec: &ConnectionSpec) -> Result<Catalog, Dri
   }
   for ((schema, table, cname), (kind, columns, references)) in con_acc {
     if let Some(t) = by_table.get_mut(&(schema, table)) {
-      t.constraints.push(Constraint { name: cname, kind, columns, references, definition: None });
+      t.constraints.push(Constraint { name: cname, kind, columns, references, definition: None, inline: false });
     }
   }
 
