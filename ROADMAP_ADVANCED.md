@@ -1,10 +1,10 @@
-# duck-sqllsp — Advanced Semantic Analysis + Remaining Gaps
+# duck-sqllsp -- Advanced Semantic Analysis + Remaining Gaps
 
 Captured 2026-05-24. Living document.
 
 ---
 
-## A. Variable-typed-as-table → column completion
+## A. Variable-typed-as-table -> column completion
 
 **Goal**: when the user writes
 
@@ -30,11 +30,11 @@ though `r` is a local variable, not a FROM-binding.
 3. **Dot context resolver** (engine.rs `dot_alias` path): when alias not
    in FROM scope, look it up in the plpgsql locals table; if its type
    resolves to a catalog table, emit that table's columns.
-4. **Hover**: same trick — when cursor on `r.id`, render as `users.id`.
+4. **Hover**: same trick -- when cursor on `r.id`, render as `users.id`.
 5. **Tests**:
    - `DECLARE r users; ... r.<TAB>` lists users columns.
-   - `r.email` hover → `users.email` card.
-   - Negative: `DECLARE r INT;` → no row-style completion.
+   - `r.email` hover -> `users.email` card.
+   - Negative: `DECLARE r INT;` -> no row-style completion.
    - Composite types from `CREATE TYPE addr AS (street ...)` resolve too.
 
 ### Estimated effort
@@ -42,7 +42,7 @@ though `r` is a local variable, not a FROM-binding.
 
 ---
 
-## B. Advanced semantic analysis — function return correctness
+## B. Advanced semantic analysis -- function return correctness
 
 **Goal**: catch real semantic errors at edit time instead of waiting
 for `psql` to choke.
@@ -56,10 +56,10 @@ for `psql` to choke.
 | sql032 | Error | `RETURN;` (bare) inside a function that declares non-void return type. |
 | sql033 | Error | `RETURNS TABLE(col t, ...)` body has no `RETURN QUERY` / `RETURN NEXT` matching the row shape. |
 | sql034 | Error | `RETURN <table_name>` where the table's column shape doesn't match the declared row type. |
-| sql035 | Warning | Trigger function references `NEW` in a `BEFORE DELETE` trigger (NEW is NULL there) — or `OLD` in `BEFORE INSERT`. |
+| sql035 | Warning | Trigger function references `NEW` in a `BEFORE DELETE` trigger (NEW is NULL there) -- or `OLD` in `BEFORE INSERT`. |
 | sql036 | Warning | `RAISE EXCEPTION` with format string but missing positional args (`%` count mismatch). |
 | sql037 | Warning | `SELECT INTO var` where `var` row shape doesn't match the SELECT projection. |
-| sql038 | Error | `INSERT INTO t (a, b) VALUES (1)` — column count vs value count mismatch. |
+| sql038 | Error | `INSERT INTO t (a, b) VALUES (1)` -- column count vs value count mismatch. |
 | sql039 | Error | `INSERT INTO t (a, b) VALUES (1, 'x')` where column type doesn't accept the literal. |
 | sql040 | Warning | Function declared `IMMUTABLE` calls a `VOLATILE` function (purity violation). |
 | sql041 | Warning | `LANGUAGE sql` function body references `NEW` / `OLD` (only valid in plpgsql). |
@@ -76,10 +76,10 @@ for `psql` to choke.
 2. **Function signature index**: parse all `CREATE FUNCTION` bodies in
    the buffer + live catalog, store (params, return_type, language).
 3. **PL/pgSQL body walker**: shallow control-flow over IF/LOOP/RETURN
-   branches. Doesn't need full SSA — branch-reaches-end analysis is
+   branches. Doesn't need full SSA -- branch-reaches-end analysis is
    enough for sql030/sql045.
-4. **Catalog hooks for type coercion**: which casts are implicit (int →
-   numeric ok, text → int not). Use a static table for v1.
+4. **Catalog hooks for type coercion**: which casts are implicit (int ->
+   numeric ok, text -> int not). Use a static table for v1.
 
 ### Estimated effort
 - Type enum + inference: 1 day
@@ -111,7 +111,7 @@ for `psql` to choke.
 
 | Issue | Fix difficulty |
 |-------|----------------|
-| `expr::TEXT[]` cast to array type — subscript ambiguity | Medium (grammar refactor for type in cast position) |
+| `expr::TEXT[]` cast to array type -- subscript ambiguity | Medium (grammar refactor for type in cast position) |
 | `SELECT ... WHERE ...` without FROM | Easy (split `from` rule, move WHERE to select-level) |
 | PL/pgSQL `EXCEPTION` handler block | Medium |
 | PL/pgSQL cursor declarations (`DECLARE c CURSOR FOR ...`) | Medium |
@@ -120,9 +120,9 @@ for `psql` to choke.
 
 ### Completion gaps
 
-- JSON path keys (`metadata->>'|'`) — would need sample-row sniffing
+- JSON path keys (`metadata->>'|'`) -- would need sample-row sniffing
 - Composite column projection in CTE body (we expose CTE name only)
-- Subquery aliasing (`FROM (SELECT ...) AS t(a, b)`) — parser doesn't
+- Subquery aliasing (`FROM (SELECT ...) AS t(a, b)`) -- parser doesn't
   surface the column list yet
 - Function call argument hints (signature_help already there; tie to
   cursor position over each arg better)
@@ -131,13 +131,13 @@ for `psql` to choke.
 ### Hover gaps
 
 - Trigger / sequence / policy when cursor is on their name as the target
-- `::cast` operator hover explaining the source → target conversion
+- `::cast` operator hover explaining the source -> target conversion
 - Constraint clause hover (`PRIMARY KEY`, `CHECK`, `EXCLUDE`)
 - PL/pgSQL `tg_op` / `tg_when` / `tg_level` / `tg_name` magic var hovers
 
 ### Formatter gaps
 
-- PL/pgSQL body formatter — currently passes through sql-formatter raw.
+- PL/pgSQL body formatter -- currently passes through sql-formatter raw.
   Aligning IF/THEN/RAISE/GET DIAGNOSTICS like hand-written code needs
   a dedicated pass (extend dsl-format with `plpgsql_align.rs`).
 - Configurable per-keyword indent table (hardcoded right now)
@@ -146,7 +146,7 @@ for `psql` to choke.
 
 ### Hardening gaps
 
-- Fuzz parser harness (cargo-fuzz) — pin crashes/panics
+- Fuzz parser harness (cargo-fuzz) -- pin crashes/panics
 - Property tests for ct_align beyond idempotency (no token loss,
   monotonic length growth, structure preservation)
 - Catalog cache invalidation on schema-change events (currently full
@@ -158,12 +158,12 @@ for `psql` to choke.
 
 ### Performance gaps
 
-- Incremental parsing — full re-parse per edit today; tree-sitter
+- Incremental parsing -- full re-parse per edit today; tree-sitter
   incremental would cut latency on big files
 - Catalog lazy-load per schema instead of eager dump
 - Completion item dedup is O(n²) in the worst case (HashSet helps)
 - Hover precompute on idle (so first hover after focus isn't blocking)
-- Document sync uses FULL not INCREMENTAL — switch to incremental
+- Document sync uses FULL not INCREMENTAL -- switch to incremental
 - Catalog persistence: load from disk on init, refresh in background
 
 ### UX gaps
@@ -203,10 +203,10 @@ for `psql` to choke.
 
 If forced to pick one, do them in this order:
 
-1. **A** (variable-typed-as-table completion) — small, high DX win
-2. **B Tier 1** (sql030 missing-RETURN-NEW, sql032, sql038, sql044) — 1 day
-3. **Hardening: cargo-fuzz harness** — catches latent panics
-4. **Incremental parsing** — perf win across the board
+1. **A** (variable-typed-as-table completion) -- small, high DX win
+2. **B Tier 1** (sql030 missing-RETURN-NEW, sql032, sql038, sql044) -- 1 day
+3. **Hardening: cargo-fuzz harness** -- catches latent panics
+4. **Incremental parsing** -- perf win across the board
 5. **C completion / hover gaps for trigger / sequence / policy**
 6. **B Tier 2** (with the type inference engine)
 7. **MSSQL driver** when a user requests it
