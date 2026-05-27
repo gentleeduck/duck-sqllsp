@@ -81,6 +81,12 @@ pub struct FormatterStyle {
   /// the end of the previous line.
   #[serde(rename = "logicalOperatorNewline", alias = "logical_operator_newline", default = "default_lon")]
   pub logical_operator_newline: String,
+  /// `singleLine` -- after sql-formatter runs, collapse every DML
+  /// statement (SELECT / INSERT / UPDATE / DELETE / WITH) onto a single
+  /// line. CREATE TABLE / FUNCTION / VIEW DDL is left untouched so
+  /// table layouts stay readable. Default off.
+  #[serde(rename = "singleLine", alias = "single_line", default)]
+  pub single_line: bool,
 }
 
 impl Default for FormatterStyle {
@@ -96,6 +102,7 @@ impl Default for FormatterStyle {
       newline_before_semicolon: false,
       expression_width: default_expr_width(),
       logical_operator_newline: default_lon(),
+      single_line: false,
     }
   }
 }

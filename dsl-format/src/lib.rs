@@ -27,10 +27,191 @@ pub use style::{CreateTableStyle, FormatterStyle};
 /// unchanged when the external binary is missing -- callers can then
 /// decide whether to skip emitting a no-op TextEdit.
 pub fn format(input: &str, fmt_style: &FormatterStyle, ct_style: &CreateTableStyle) -> String {
+  // Strip a leading UTF-8 BOM (`U+FEFF`). PG ignores it but tools that
+  // preserve it leave invisible bytes in the file, which version control
+  // and other formatters then fight over. BOMs inside string literals
+  // or comments are preserved -- only the leading one is meaningful
+  // metadata, and the convention is to drop it on format.
+  let input = input.strip_prefix('\u{feff}').unwrap_or(input);
   let after_external = external::run_sql_formatter(input, fmt_style).unwrap_or_else(|| input.to_string());
   let after_align = align::rewrite(&after_external, ct_style);
   let after_tighten = tighten_call_parens(&after_align);
-  normalize_blank_lines(&after_tighten)
+  let after_normalised = normalize_blank_lines(&after_tighten);
+  if fmt_style.single_line { collapse_dml_lines(&after_normalised) } else { after_normalised }
+}
+
+/// Collapse each DML statement (SELECT / INSERT / UPDATE / DELETE / WITH)
+/// onto a single line. Walks top-level statements, joining internal
+/// whitespace runs into single spaces. Leaves CREATE TABLE / FUNCTION /
+/// VIEW / TRIGGER / etc untouched so table layouts stay readable.
+fn collapse_dml_lines(input: &str) -> String {
+  let stmts = split_top_level_statements(input);
+  let mut out = String::with_capacity(input.len());
+  for stmt in stmts {
+    let upper = stmt.trim_start().to_ascii_uppercase();
+    let is_dml = upper.starts_with("SELECT")
+      || upper.starts_with("INSERT")
+      || upper.starts_with("UPDATE")
+      || upper.starts_with("DELETE")
+      || upper.starts_with("WITH")
+      || upper.starts_with("VALUES");
+    if is_dml {
+      out.push_str(&collapse_whitespace(&stmt));
+    } else {
+      out.push_str(&stmt);
+    }
+    if !out.ends_with('\n') {
+      out.push('\n');
+    }
+  }
+  out
+}
+
+/// Split `src` at every top-level `;`, returning each statement (with
+/// its trailing `;`). Honours single-quoted strings, line comments,
+/// block comments, and `$$ ... $$` bodies so semicolons inside any of
+/// those don't split.
+fn split_top_level_statements(src: &str) -> Vec<String> {
+  let bytes = src.as_bytes();
+  let n = bytes.len();
+  let mut out = Vec::new();
+  let mut start = 0usize;
+  let mut i = 0usize;
+  while i < n {
+    match bytes[i] {
+      b'\'' => {
+        i += 1;
+        while i < n && bytes[i] != b'\'' {
+          i += 1;
+        }
+        if i < n {
+          i += 1;
+        }
+      },
+      b'-' if i + 1 < n && bytes[i + 1] == b'-' => {
+        while i < n && bytes[i] != b'\n' {
+          i += 1;
+        }
+      },
+      b'/' if i + 1 < n && bytes[i + 1] == b'*' => {
+        i += 2;
+        while i + 1 < n && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+          i += 1;
+        }
+        if i + 1 < n {
+          i += 2;
+        }
+      },
+      b'$' if i + 1 < n && bytes[i + 1] == b'$' => {
+        i += 2;
+        while i + 1 < n && !(bytes[i] == b'$' && bytes[i + 1] == b'$') {
+          i += 1;
+        }
+        if i + 1 < n {
+          i += 2;
+        }
+      },
+      b';' => {
+        i += 1;
+        out.push(src[start..i].to_string());
+        start = i;
+      },
+      _ => {
+        i += 1;
+      },
+    }
+  }
+  if start < n {
+    out.push(src[start..].to_string());
+  }
+  out
+}
+
+/// Replace every whitespace run inside `s` with a single space, but
+/// preserve single-quoted strings + dollar-quoted bodies + line comments
+/// (those would change semantics if collapsed). Also keep a single
+/// leading newline so adjacent statements visually separate.
+fn collapse_whitespace(s: &str) -> String {
+  let bytes = s.as_bytes();
+  let n = bytes.len();
+  let leading_nl = bytes.iter().take_while(|b| **b == b'\n' || **b == b'\r').count();
+  let leading = "\n".repeat(leading_nl.min(1));
+  let mut out = String::with_capacity(s.len());
+  out.push_str(&leading);
+  let mut i = leading_nl;
+  let mut prev_space = true; // suppress leading run
+  while i < n {
+    match bytes[i] {
+      b'\'' => {
+        out.push('\'');
+        i += 1;
+        while i < n && bytes[i] != b'\'' {
+          out.push(bytes[i] as char);
+          i += 1;
+        }
+        if i < n {
+          out.push('\'');
+          i += 1;
+        }
+        prev_space = false;
+      },
+      b'-' if i + 1 < n && bytes[i + 1] == b'-' => {
+        // Line comment up to end of line. To keep the rest on one line,
+        // convert to a block comment.
+        let mut end = i + 2;
+        while end < n && bytes[end] != b'\n' {
+          end += 1;
+        }
+        let comment = &s[i + 2..end];
+        out.push_str("/* ");
+        out.push_str(comment.trim());
+        out.push_str(" */");
+        i = end;
+        prev_space = false;
+      },
+      b'/' if i + 1 < n && bytes[i + 1] == b'*' => {
+        let start = i;
+        i += 2;
+        while i + 1 < n && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+          i += 1;
+        }
+        if i + 1 < n {
+          i += 2;
+        }
+        out.push_str(&s[start..i]);
+        prev_space = false;
+      },
+      b'$' if i + 1 < n && bytes[i + 1] == b'$' => {
+        let start = i;
+        i += 2;
+        while i + 1 < n && !(bytes[i] == b'$' && bytes[i + 1] == b'$') {
+          i += 1;
+        }
+        if i + 1 < n {
+          i += 2;
+        }
+        out.push_str(&s[start..i]);
+        prev_space = false;
+      },
+      c if (c as char).is_whitespace() => {
+        if !prev_space {
+          out.push(' ');
+          prev_space = true;
+        }
+        i += 1;
+      },
+      c => {
+        out.push(c as char);
+        i += 1;
+        prev_space = false;
+      },
+    }
+  }
+  // Strip a trailing space before `;` to keep `SELECT 1;` not `SELECT 1 ;`.
+  if out.ends_with(' ') {
+    out.pop();
+  }
+  out
 }
 
 /// Drop the space between a function name and its opening `(`. PG's
@@ -52,8 +233,7 @@ fn tighten_call_parens(input: &str) -> String {
       out.push('\'');
       i += 1;
       while i < bytes.len() && bytes[i] != b'\'' {
-        out.push(bytes[i] as char);
-        i += 1;
+        i = push_one_char(&mut out, input, i);
       }
       if i < bytes.len() {
         out.push('\'');
@@ -63,8 +243,7 @@ fn tighten_call_parens(input: &str) -> String {
     }
     if i + 1 < bytes.len() && bytes[i] == b'-' && bytes[i + 1] == b'-' {
       while i < bytes.len() && bytes[i] != b'\n' {
-        out.push(bytes[i] as char);
-        i += 1;
+        i = push_one_char(&mut out, input, i);
       }
       continue;
     }
@@ -93,25 +272,90 @@ fn tighten_call_parens(input: &str) -> String {
       out.push_str(id);
       continue;
     }
-    out.push(bytes[i] as char);
-    i += 1;
+    i = push_one_char(&mut out, input, i);
   }
   out
+}
+
+/// Push the UTF-8 char starting at byte index `i` of `src` onto `out`
+/// and return the new index past that char. Multi-byte aware -- using
+/// `bytes[i] as char` here would reinterpret each UTF-8 continuation
+/// byte as a Latin-1 codepoint, mangling every non-ASCII character.
+pub(crate) fn push_one_char(out: &mut String, src: &str, i: usize) -> usize {
+  let c = src[i..].chars().next().expect("caller guarantees i < src.len()");
+  out.push(c);
+  i + c.len_utf8()
 }
 
 /// SQL keywords whose following `(` is a grouping / sub-query / IN-list
 /// paren rather than a function call. Keep the space for readability.
 const KEEP_SPACE_BEFORE_PAREN: &[&str] = &[
-  "SELECT", "IN", "NOT", "EXISTS", "VALUES", "RETURNING", "WHERE",
-  "HAVING", "ON", "USING", "FROM", "INTO", "AS", "WITH", "CASE",
-  "WHEN", "THEN", "ELSE", "ANY", "ALL", "SOME", "AND", "OR", "BY",
-  "IS", "BETWEEN", "LIKE", "ILIKE", "SIMILAR", "OVERLAPS", "FILTER",
-  "OVER", "PARTITION", "WITHIN", "PRECEDING", "FOLLOWING",
-  "UNBOUNDED", "FOR", "ROW", "ROWS", "GROUPS", "RANGE",
-  "DEFAULT", "REFERENCES", "CHECK", "UNIQUE", "PRIMARY", "FOREIGN",
-  "KEY", "CONSTRAINT", "DISTINCT", "GROUP", "ORDER", "LIMIT",
-  "OFFSET", "FETCH", "INTERSECT", "UNION", "EXCEPT", "DO", "LANGUAGE",
-  "MATCH", "TO", "OF", "RESTRICT", "CASCADE",
+  "SELECT",
+  "IN",
+  "NOT",
+  "EXISTS",
+  "VALUES",
+  "RETURNING",
+  "WHERE",
+  "HAVING",
+  "ON",
+  "USING",
+  "FROM",
+  "INTO",
+  "AS",
+  "WITH",
+  "CASE",
+  "WHEN",
+  "THEN",
+  "ELSE",
+  "ANY",
+  "ALL",
+  "SOME",
+  "AND",
+  "OR",
+  "BY",
+  "IS",
+  "BETWEEN",
+  "LIKE",
+  "ILIKE",
+  "SIMILAR",
+  "OVERLAPS",
+  "FILTER",
+  "OVER",
+  "PARTITION",
+  "WITHIN",
+  "PRECEDING",
+  "FOLLOWING",
+  "UNBOUNDED",
+  "FOR",
+  "ROW",
+  "ROWS",
+  "GROUPS",
+  "RANGE",
+  "DEFAULT",
+  "REFERENCES",
+  "CHECK",
+  "UNIQUE",
+  "PRIMARY",
+  "FOREIGN",
+  "KEY",
+  "CONSTRAINT",
+  "DISTINCT",
+  "GROUP",
+  "ORDER",
+  "LIMIT",
+  "OFFSET",
+  "FETCH",
+  "INTERSECT",
+  "UNION",
+  "EXCEPT",
+  "DO",
+  "LANGUAGE",
+  "MATCH",
+  "TO",
+  "OF",
+  "RESTRICT",
+  "CASCADE",
 ];
 
 #[cfg(test)]
@@ -168,7 +412,7 @@ fn normalize_blank_lines(input: &str) -> String {
     out.push(line);
     prev_blank = blank;
   }
-  while out.last().map_or(false, |l| l.chars().all(|c| c.is_whitespace())) {
+  while out.last().is_some_and(|l| l.chars().all(|c| c.is_whitespace())) {
     out.pop();
   }
   let mut s = out.join("\n");

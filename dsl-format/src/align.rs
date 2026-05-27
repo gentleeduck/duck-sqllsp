@@ -52,8 +52,7 @@ fn align_plpgsql_bodies(source: &str) -> String {
       i = close + 2;
       continue;
     }
-    out.push(bytes[i] as char);
-    i += 1;
+    i = crate::push_one_char(&mut out, source, i);
   }
   out
 }
@@ -87,8 +86,7 @@ fn align_body_text(body: &str) -> String {
         cur.push('\'');
         i += 1;
         while i < n && bytes[i] != b'\'' {
-          cur.push(bytes[i] as char);
-          i += 1;
+          i = crate::push_one_char(&mut cur, trimmed, i);
         }
         if i < n {
           cur.push('\'');
@@ -97,8 +95,7 @@ fn align_body_text(body: &str) -> String {
       },
       b'-' if i + 1 < n && bytes[i + 1] == b'-' => {
         while i < n && bytes[i] != b'\n' {
-          cur.push(bytes[i] as char);
-          i += 1;
+          i = crate::push_one_char(&mut cur, trimmed, i);
         }
       },
       b';' => {
@@ -143,8 +140,7 @@ fn align_body_text(body: &str) -> String {
             continue;
           }
         }
-        cur.push(bytes[i] as char);
-        i += 1;
+        i = crate::push_one_char(&mut cur, trimmed, i);
       },
     }
   }
@@ -303,7 +299,7 @@ fn break_constraint_clauses(source: &str) -> String {
 fn inject_break_in(text: &str, needle_with_space: &str, contexts: &[&str], indent: usize) -> String {
   let upper = text.to_ascii_uppercase();
   let needle_upper = needle_with_space.to_ascii_uppercase();
-  let pad: String = std::iter::repeat(' ').take(indent).collect();
+  let pad: String = std::iter::repeat_n(' ', indent).collect();
   let mut out = String::with_capacity(text.len() + 16);
   let mut from = 0usize;
   while let Some(rel) = upper[from..].find(&needle_upper) {
@@ -548,6 +544,14 @@ struct ColParts {
   nullability: String, // "NOT NULL", "NULL", or empty
   default: String,     // "DEFAULT ..." or empty
   extra: String,       // REFERENCES / CHECK / GENERATED / COLLATE / PRIMARY KEY / UNIQUE etc.
+  /// Inline `/* ... */` or `-- ...` comment the user attached to this
+  /// column on the same line. Emitted on its own indented line above
+  /// the column row so the column name aligns with siblings.
+  leading_comment: String,
+  /// Trailing inline comment that originally followed the column on
+  /// the same line. Appended AFTER the row's comma so the comma
+  /// doesn't accidentally land inside a `-- ...` line comment.
+  trailing_comment: String,
 }
 
 /// Tear a column declaration apart into (name, type, tail) where the
@@ -586,33 +590,31 @@ fn split_column(entry: &str) -> (String, String, String) {
   let mut depth = 0i32;
   while i < n {
     let c = bytes[i] as char;
-    if depth == 0 {
-      if c.is_whitespace() {
-        // Peek the next word -- stop if it's a tail keyword.
-        let mut j = i;
-        while j < n && (bytes[j] as char).is_whitespace() {
-          j += 1;
-        }
-        let mut k = j;
-        while k < n && (bytes[k].is_ascii_alphabetic() || bytes[k] == b'_') {
-          k += 1;
-        }
-        let word_upper = entry[j..k].to_ascii_uppercase();
-        let is_tail = matches!(
-          word_upper.as_str(),
-          "NOT" | "NULL" | "DEFAULT" | "REFERENCES" | "CHECK" | "GENERATED" | "PRIMARY" | "UNIQUE" | "COLLATE"
-        );
-        // Special case: `WITH TIME ZONE`, `WITHOUT TIME ZONE`,
-        // `DOUBLE PRECISION`, `CHARACTER VARYING`, `BIT VARYING`.
-        let is_type_continuation =
-          matches!(word_upper.as_str(), "WITH" | "WITHOUT" | "PRECISION" | "VARYING" | "TIME" | "ZONE" | "CHARACTER");
-        if is_tail && !is_type_continuation {
-          break;
-        }
-        // Otherwise the type continues -- pad with one space.
-        i = j;
-        continue;
+    if depth == 0 && c.is_whitespace() {
+      // Peek the next word -- stop if it's a tail keyword.
+      let mut j = i;
+      while j < n && (bytes[j] as char).is_whitespace() {
+        j += 1;
       }
+      let mut k = j;
+      while k < n && (bytes[k].is_ascii_alphabetic() || bytes[k] == b'_') {
+        k += 1;
+      }
+      let word_upper = entry[j..k].to_ascii_uppercase();
+      let is_tail = matches!(
+        word_upper.as_str(),
+        "NOT" | "NULL" | "DEFAULT" | "REFERENCES" | "CHECK" | "GENERATED" | "PRIMARY" | "UNIQUE" | "COLLATE"
+      );
+      // Special case: `WITH TIME ZONE`, `WITHOUT TIME ZONE`,
+      // `DOUBLE PRECISION`, `CHARACTER VARYING`, `BIT VARYING`.
+      let is_type_continuation =
+        matches!(word_upper.as_str(), "WITH" | "WITHOUT" | "PRECISION" | "VARYING" | "TIME" | "ZONE" | "CHARACTER");
+      if is_tail && !is_type_continuation {
+        break;
+      }
+      // Otherwise the type continues -- pad with one space.
+      i = j;
+      continue;
     }
     match c {
       '(' => depth += 1,
@@ -628,9 +630,112 @@ fn split_column(entry: &str) -> (String, String, String) {
 
 /// Like `split_column`, but the tail is further decomposed into
 /// nullability / DEFAULT / extra so the aligner can pad each sub-column.
+/// Pull a leading `/* ... */` or `-- ...` (to first newline) comment
+/// off the entry. Returns `(comment, remainder)` where `comment`
+/// is empty when none is present. Whitespace between the comment
+/// and the column body is dropped.
+fn strip_leading_comment(entry: &str) -> (String, String) {
+  let s = entry.trim_start();
+  if let Some(rest) = s.strip_prefix("/*")
+    && let Some(close) = rest.find("*/")
+  {
+    let comment = format!("/*{}*/", &rest[..close]);
+    let after = rest[close + 2..].trim_start();
+    return (comment, after.to_string());
+  }
+  if let Some(rest) = s.strip_prefix("--") {
+    if let Some(nl) = rest.find('\n') {
+      let comment = format!("--{}", &rest[..nl]);
+      let after = rest[nl + 1..].trim_start();
+      return (comment, after.to_string());
+    }
+    // Comment runs to end -- whole entry was just a comment.
+    return (format!("--{}", rest), String::new());
+  }
+  (String::new(), entry.to_string())
+}
+
+/// Pull a trailing `-- ...` (rest of line) or final `/* ... */`
+/// comment off the entry. Returns `(comment, remainder)` where the
+/// remainder has the comment AND any trailing whitespace removed.
+/// Only considers comments that aren't followed by more SQL content
+/// -- so `a int /* note */ NOT NULL` leaves the comment in place.
+fn strip_trailing_comment(entry: &str) -> (String, String) {
+  let trimmed = entry.trim_end();
+  // Walk the entry tracking `'...'` strings and balanced `/* */`
+  // blocks so the dash-dash test only fires when the cursor is on
+  // an actual line-comment marker outside a string.
+  let bytes = trimmed.as_bytes();
+  let n = bytes.len();
+  let mut i = 0usize;
+  let mut last_line_comment: Option<usize> = None;
+  let mut last_block_comment: Option<usize> = None;
+  while i < n {
+    let b = bytes[i];
+    if b == b'\'' {
+      i += 1;
+      while i < n && bytes[i] != b'\'' {
+        i += 1;
+      }
+      i = (i + 1).min(n);
+      last_line_comment = None;
+      last_block_comment = None;
+      continue;
+    }
+    if i + 1 < n && b == b'-' && bytes[i + 1] == b'-' {
+      // Line comment runs to next newline -- if no newline (typical for
+      // a single-line entry), it consumes the rest.
+      let after = trimmed[i + 2..].find('\n').map(|p| i + 2 + p);
+      if after.is_none() {
+        last_line_comment = Some(i);
+      }
+      // Otherwise: comment ends mid-entry; skip past it.
+      i = after.unwrap_or(n);
+      continue;
+    }
+    if i + 1 < n && b == b'/' && bytes[i + 1] == b'*' {
+      // Block comment.
+      let mut j = i + 2;
+      let mut depth = 1i32;
+      while j + 1 < n && depth > 0 {
+        if bytes[j] == b'/' && bytes[j + 1] == b'*' {
+          depth += 1;
+          j += 2;
+        } else if bytes[j] == b'*' && bytes[j + 1] == b'/' {
+          depth -= 1;
+          j += 2;
+        } else {
+          j += 1;
+        }
+      }
+      if depth == 0 && j == n {
+        last_block_comment = Some(i);
+      } else {
+        last_block_comment = None;
+      }
+      i = j.min(n);
+      continue;
+    }
+    if !b.is_ascii_whitespace() {
+      last_line_comment = None;
+      last_block_comment = None;
+    }
+    i += 1;
+  }
+  let cut = last_line_comment.or(last_block_comment);
+  if let Some(start) = cut {
+    let comment = trimmed[start..].trim().to_string();
+    let head = trimmed[..start].trim_end().to_string();
+    return (comment, head);
+  }
+  (String::new(), entry.to_string())
+}
+
 fn split_parts(entry: &str) -> ColParts {
-  let (name, ty, tail) = split_column(entry);
-  let mut parts = ColParts { name, ty, ..ColParts::default() };
+  let (lead, mid) = strip_leading_comment(entry);
+  let (trail, rest) = strip_trailing_comment(&mid);
+  let (name, ty, tail) = split_column(&rest);
+  let mut parts = ColParts { name, ty, leading_comment: lead, trailing_comment: trail, ..ColParts::default() };
 
   let mut remaining = tail.as_str().trim();
   // NOT NULL / NULL must appear before DEFAULT in legal Postgres DDL,
@@ -750,7 +855,7 @@ fn format_block(header: &str, body: &str, style: &CreateTableStyle) -> String {
   let null_w = columns.iter().map(|p| p.nullability.len()).max().unwrap_or(0);
   let def_w = columns.iter().map(|p| p.default.len()).max().unwrap_or(0);
   let gap = " ".repeat(style.column_gap.min(2)); // tighter gap for sub-columns
-  let inter_gap = " ".repeat(1); // single space between sub-columns
+  let inter_gap = " ".to_string(); // single space between sub-columns
 
   let mut s = String::new();
   s.push_str(header);
@@ -764,9 +869,15 @@ fn format_block(header: &str, body: &str, style: &CreateTableStyle) -> String {
     s.push('\n');
   }
 
-  let order: Vec<String> = {
-    let mut rows: Vec<String> = Vec::with_capacity(columns.len() + constraints.len() + 1);
+  let order: Vec<(String, String)> = {
+    let mut rows: Vec<(String, String)> = Vec::with_capacity(columns.len() + constraints.len() + 1);
     for p in &columns {
+      // Inline `/* ... */` / `-- ...` comment attached to the column
+      // line: emit on its own indented row so the column name still
+      // aligns with siblings.
+      if !p.leading_comment.is_empty() {
+        rows.push((format!("    {}", p.leading_comment), String::new()));
+      }
       // name + gap + type
       let mut row = format!("    {:<nw$}{}{:<tw$}", p.name, gap, p.ty, nw = name_w, tw = type_w);
       // Nullability sub-column. Right-aligned so a bare `NULL`
@@ -785,22 +896,28 @@ fn format_block(header: &str, body: &str, style: &CreateTableStyle) -> String {
         row.push_str(&inter_gap);
         row.push_str(&p.extra);
       }
-      rows.push(row.trim_end().to_string());
+      rows.push((row.trim_end().to_string(), p.trailing_comment.clone()));
     }
     if style.constraints_at_end && !constraints.is_empty() && !columns.is_empty() {
-      rows.push(String::new());
+      rows.push((String::new(), String::new()));
     }
     for c in &constraints {
-      rows.push(format!("    {c}"));
+      rows.push((format!("    {c}"), String::new()));
     }
     rows
   };
 
   let last = order.len().saturating_sub(1);
-  for (i, mut line) in order.into_iter().enumerate() {
-    let is_blank = line.trim().is_empty();
-    if !is_blank && i < last {
+  for (i, (mut line, trail)) in order.into_iter().enumerate() {
+    let trimmed = line.trim_start();
+    let is_blank = trimmed.is_empty();
+    let is_comment = trimmed.starts_with("--") || trimmed.starts_with("/*");
+    if !is_blank && !is_comment && i < last {
       line.push(',');
+    }
+    if !trail.is_empty() {
+      line.push(' ');
+      line.push_str(&trail);
     }
     s.push_str(&line);
     s.push('\n');
