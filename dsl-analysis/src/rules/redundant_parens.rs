@@ -42,40 +42,41 @@ impl LintRule for Rule {
           while j < n && bytes[j].is_ascii_whitespace() {
             j += 1;
           }
-          if j < n && bytes[j] == b'(' {
-            if let Some(close) = match_paren(bytes, j) {
-              // After the close paren, the next non-ws
-              // char must be `;` or end-of-clause keyword
-              // (GROUP/ORDER/LIMIT/OFFSET/UNION/EXCEPT/INTERSECT/RETURNING).
-              let mut k = close + 1;
-              while k < n && bytes[k].is_ascii_whitespace() {
-                k += 1;
-              }
-              let trailing_ok = k == n
-                || bytes[k] == b';'
-                || starts_with_ci(bytes, k, b"GROUP")
-                || starts_with_ci(bytes, k, b"ORDER")
-                || starts_with_ci(bytes, k, b"LIMIT")
-                || starts_with_ci(bytes, k, b"OFFSET")
-                || starts_with_ci(bytes, k, b"UNION")
-                || starts_with_ci(bytes, k, b"EXCEPT")
-                || starts_with_ci(bytes, k, b"INTERSECT")
-                || starts_with_ci(bytes, k, b"RETURNING")
-                || starts_with_ci(bytes, k, b"HAVING");
-              if !trailing_ok {
-                i = j;
-                continue;
-              }
-              let inner = &body[j + 1..close];
-              if !has_top_level_and_or(inner) {
-                out.push(Diagnostic {
-                  code: "sql055",
-                  severity: Severity::Hint,
-                  message: "redundant parens around single WHERE condition".into(),
-                  range: stmt.range,
-                });
-                return;
-              }
+          if j < n
+            && bytes[j] == b'('
+            && let Some(close) = match_paren(bytes, j)
+          {
+            // After the close paren, the next non-ws
+            // char must be `;` or end-of-clause keyword
+            // (GROUP/ORDER/LIMIT/OFFSET/UNION/EXCEPT/INTERSECT/RETURNING).
+            let mut k = close + 1;
+            while k < n && bytes[k].is_ascii_whitespace() {
+              k += 1;
+            }
+            let trailing_ok = k == n
+              || bytes[k] == b';'
+              || starts_with_ci(bytes, k, b"GROUP")
+              || starts_with_ci(bytes, k, b"ORDER")
+              || starts_with_ci(bytes, k, b"LIMIT")
+              || starts_with_ci(bytes, k, b"OFFSET")
+              || starts_with_ci(bytes, k, b"UNION")
+              || starts_with_ci(bytes, k, b"EXCEPT")
+              || starts_with_ci(bytes, k, b"INTERSECT")
+              || starts_with_ci(bytes, k, b"RETURNING")
+              || starts_with_ci(bytes, k, b"HAVING");
+            if !trailing_ok {
+              i = j;
+              continue;
+            }
+            let inner = &body[j + 1..close];
+            if !has_top_level_and_or(inner) {
+              out.push(Diagnostic {
+                code: "sql055",
+                severity: Severity::Hint,
+                message: "redundant parens around single WHERE condition".into(),
+                range: stmt.range,
+              });
+              return;
             }
           }
         }

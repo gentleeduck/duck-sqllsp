@@ -23,9 +23,13 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let trimmed = body.trim_start();
-    if !trimmed.starts_with('\\') { return }
+    if !trimmed.starts_with('\\') {
+      return;
+    }
     let bytes = trimmed.as_bytes();
-    if bytes.len() < 2 || !bytes[1].is_ascii_alphabetic() { return }
+    if bytes.len() < 2 || !bytes[1].is_ascii_alphabetic() {
+      return;
+    }
     let lead = body.len() - trimmed.len();
     let abs_s = start + lead;
     let line_end = trimmed.find('\n').unwrap_or(trimmed.len());

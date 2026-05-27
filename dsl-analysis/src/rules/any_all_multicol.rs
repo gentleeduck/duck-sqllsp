@@ -28,10 +28,13 @@ impl LintRule for Rule {
       while let Some(rel) = upper[from..].find(kw) {
         let at = from + rel;
         let open = at + kw.len() - 1;
-        let Some(close) = find_matching_paren(body, open) else { from = open; break };
+        let Some(close) = find_matching_paren(body, open) else { break };
         let inner = &body[open + 1..close];
         let inner_upper = inner.to_ascii_uppercase();
-        if !inner_upper.trim_start().starts_with("SELECT") { from = close + 1; continue }
+        if !inner_upper.trim_start().starts_with("SELECT") {
+          from = close + 1;
+          continue;
+        }
         let proj_end = inner_upper.find(" FROM ").unwrap_or(inner.len());
         let proj = &inner[7..proj_end].trim();
         let cols = 1 + count_top_level_commas(proj);
@@ -65,7 +68,9 @@ impl LintRule for Rule {
 fn lhs_row_width(body: &str, kw_at: usize) -> Option<usize> {
   let bytes = body.as_bytes();
   let mut j = kw_at;
-  while j > 0 && bytes[j - 1].is_ascii_whitespace() { j -= 1; }
+  while j > 0 && bytes[j - 1].is_ascii_whitespace() {
+    j -= 1;
+  }
   // Step back through an optional `NOT` keyword so `(a, b) NOT IN (...)`
   // detects the LHS row constructor too.
   if j >= 3 && body[..j].to_ascii_uppercase().ends_with("NOT") {
@@ -73,10 +78,14 @@ fn lhs_row_width(body: &str, kw_at: usize) -> Option<usize> {
     let prev_is_word = nstart > 0 && (bytes[nstart - 1].is_ascii_alphanumeric() || bytes[nstart - 1] == b'_');
     if !prev_is_word {
       j = nstart;
-      while j > 0 && bytes[j - 1].is_ascii_whitespace() { j -= 1; }
+      while j > 0 && bytes[j - 1].is_ascii_whitespace() {
+        j -= 1;
+      }
     }
   }
-  if j == 0 || bytes[j - 1] != b')' { return None; }
+  if j == 0 || bytes[j - 1] != b')' {
+    return None;
+  }
   let close = j - 1;
   let mut depth = 1i32;
   let mut i = close;
@@ -90,8 +99,8 @@ fn lhs_row_width(body: &str, kw_at: usize) -> Option<usize> {
           let inner = &body[i + 1..close];
           return Some(1 + count_top_level_commas(inner));
         }
-      }
-      _ => {}
+      },
+      _ => {},
     }
   }
   None
@@ -109,9 +118,11 @@ fn count_top_level_commas(text: &str) -> usize {
       b',' if depth == 0 => commas += 1,
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -125,12 +136,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

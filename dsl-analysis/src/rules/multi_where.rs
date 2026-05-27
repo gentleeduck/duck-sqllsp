@@ -72,7 +72,9 @@ impl LintRule for Rule {
           // Line comment -- skip to end of line. Was matching WHERE
           // inside `-- WHERE foo` and flagging the next real WHERE
           // as a duplicate.
-          while i < n && bytes[i] != b'\n' { i += 1 }
+          while i < n && bytes[i] != b'\n' {
+            i += 1
+          }
           continue;
         },
         _ => {},
@@ -90,10 +92,7 @@ impl LintRule for Rule {
               // WHERE and this one means we're in separate set-op
               // branches -- each branch gets its own WHERE.
               let between = &upper[prev_where..i];
-              if has_word_kw(between, "UNION")
-                || has_word_kw(between, "INTERSECT")
-                || has_word_kw(between, "EXCEPT")
-              {
+              if has_word_kw(between, "UNION") || has_word_kw(between, "INTERSECT") || has_word_kw(between, "EXCEPT") {
                 first = Some(i);
                 i += 5;
                 continue;
@@ -125,13 +124,17 @@ fn is_word(c: char) -> bool {
 fn has_word_kw(haystack: &str, needle: &str) -> bool {
   let h = haystack.as_bytes();
   let n = needle.as_bytes();
-  if n.is_empty() { return false; }
+  if n.is_empty() {
+    return false;
+  }
   let mut i = 0;
   while i + n.len() <= h.len() {
     if h[i..i + n.len()] == *n {
       let prev_ok = i == 0 || !is_word(h[i - 1] as char);
       let next_ok = i + n.len() == h.len() || !is_word(h[i + n.len()] as char);
-      if prev_ok && next_ok { return true; }
+      if prev_ok && next_ok {
+        return true;
+      }
     }
     i += 1;
   }

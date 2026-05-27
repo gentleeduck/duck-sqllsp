@@ -45,7 +45,7 @@ impl LintRule for Rule {
     // referencing this table.
     let after_stmt = &source[end..];
     let after_upper = after_stmt.to_ascii_uppercase();
-    let needle_owner = format!("ALTER TABLE");
+    let needle_owner = "ALTER TABLE".to_string();
     let mut i = 0;
     while let Some(rel) = after_upper[i..].find(&needle_owner) {
       let at = i + rel;

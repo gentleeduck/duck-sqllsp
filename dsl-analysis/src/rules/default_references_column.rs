@@ -37,36 +37,54 @@ impl LintRule for Rule {
     for span in split_top_level(cols_text) {
       let frag = &cols_text[span.start..span.end];
       let frag_upper = frag.to_ascii_uppercase();
-      if !frag_upper.contains("DEFAULT") { continue }
+      if !frag_upper.contains("DEFAULT") {
+        continue;
+      }
       let Some(def_at) = frag_upper.find("DEFAULT") else { continue };
       // Ensure DEFAULT is a separate token (not part of an identifier).
       if def_at > 0 {
         let prev = frag.as_bytes()[def_at - 1] as char;
-        if prev.is_ascii_alphanumeric() || prev == '_' { continue }
+        if prev.is_ascii_alphanumeric() || prev == '_' {
+          continue;
+        }
       }
       let after = def_at + "DEFAULT".len();
       let expr_text = frag[after..].trim();
       let col_name = frag.split_whitespace().next().unwrap_or("").trim_matches('"').to_ascii_lowercase();
-      if col_name.is_empty() { continue }
+      if col_name.is_empty() {
+        continue;
+      }
       let bytes = expr_text.as_bytes();
       let mut i = 0usize;
       while i < bytes.len() {
         if bytes[i] == b'\'' {
           i += 1;
-          while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-          if i < bytes.len() { i += 1 }
+          while i < bytes.len() && bytes[i] != b'\'' {
+            i += 1
+          }
+          if i < bytes.len() {
+            i += 1
+          }
           continue;
         }
         if bytes[i].is_ascii_alphabetic() || bytes[i] == b'_' {
           let s = i;
-          while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') { i += 1 }
+          while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+            i += 1
+          }
           let id_raw = &expr_text[s..i];
           // Function call? skip.
           let mut k = i;
-          while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
-          if k < bytes.len() && bytes[k] == b'(' { continue }
+          while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+            k += 1
+          }
+          if k < bytes.len() && bytes[k] == b'(' {
+            continue;
+          }
           let lc = id_raw.to_ascii_lowercase();
-          if is_reserved(&id_raw.to_ascii_uppercase()) { continue }
+          if is_reserved(&id_raw.to_ascii_uppercase()) {
+            continue;
+          }
           if sibling_names.contains(&lc) && lc != col_name {
             let abs_s = start + paren_at + 1 + span.start;
             let abs_e = start + paren_at + 1 + span.end;
@@ -88,7 +106,10 @@ impl LintRule for Rule {
   }
 }
 
-struct Span { start: usize, end: usize }
+struct Span {
+  start: usize,
+  end: usize,
+}
 
 fn split_top_level(text: &str) -> Vec<Span> {
   let mut out = Vec::new();
@@ -100,12 +121,17 @@ fn split_top_level(text: &str) -> Vec<Span> {
     match bytes[i] {
       b'(' => depth += 1,
       b')' => depth -= 1,
-      b',' if depth == 0 => { out.push(Span { start, end: i }); start = i + 1 }
+      b',' if depth == 0 => {
+        out.push(Span { start, end: i });
+        start = i + 1
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -120,12 +146,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -133,9 +166,22 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
 }
 
 fn is_reserved(up: &str) -> bool {
-  matches!(up,
-    "NULL" | "TRUE" | "FALSE" | "CURRENT_DATE" | "CURRENT_TIME" | "CURRENT_TIMESTAMP"
-    | "NOW" | "LOCALTIME" | "LOCALTIMESTAMP" | "CURRENT_USER" | "SESSION_USER" | "USER"
-    | "CAST" | "AS" | "ARRAY"
+  matches!(
+    up,
+    "NULL"
+      | "TRUE"
+      | "FALSE"
+      | "CURRENT_DATE"
+      | "CURRENT_TIME"
+      | "CURRENT_TIMESTAMP"
+      | "NOW"
+      | "LOCALTIME"
+      | "LOCALTIMESTAMP"
+      | "CURRENT_USER"
+      | "SESSION_USER"
+      | "USER"
+      | "CAST"
+      | "AS"
+      | "ARRAY"
   )
 }

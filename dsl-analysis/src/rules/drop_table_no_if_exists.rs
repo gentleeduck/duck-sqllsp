@@ -24,12 +24,24 @@ impl LintRule for Rule {
     let upper = body.to_ascii_uppercase();
     let trim = upper.trim_start();
     let droppable = [
-      "DROP TABLE", "DROP INDEX", "DROP VIEW", "DROP MATERIALIZED VIEW",
-      "DROP TRIGGER", "DROP TYPE", "DROP DOMAIN", "DROP SEQUENCE",
-      "DROP FUNCTION", "DROP PROCEDURE", "DROP SCHEMA",
+      "DROP TABLE",
+      "DROP INDEX",
+      "DROP VIEW",
+      "DROP MATERIALIZED VIEW",
+      "DROP TRIGGER",
+      "DROP TYPE",
+      "DROP DOMAIN",
+      "DROP SEQUENCE",
+      "DROP FUNCTION",
+      "DROP PROCEDURE",
+      "DROP SCHEMA",
     ];
-    if !droppable.iter().any(|d| trim.starts_with(d)) { return }
-    if upper.contains("IF EXISTS") { return }
+    if !droppable.iter().any(|d| trim.starts_with(d)) {
+      return;
+    }
+    if upper.contains("IF EXISTS") {
+      return;
+    }
     let lead = body.len() - body.trim_start().len();
     let abs_s = start + lead;
     let abs_e = start + body.find(';').unwrap_or(body.len());

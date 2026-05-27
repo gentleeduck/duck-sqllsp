@@ -29,11 +29,17 @@ impl LintRule for Rule {
       let Some(at) = upper.find(needle) else { continue };
       // Must be preceded by ORDER BY somewhere earlier.
       let before = &upper[..at];
-      if before.contains("ORDER BY") { continue }
+      if before.contains("ORDER BY") {
+        continue;
+      }
       // Inside a window function frame? Skip if WINDOW preceded.
-      if before.contains("WINDOW ") { continue }
+      if before.contains("WINDOW ") {
+        continue;
+      }
       // CREATE INDEX accepts NULLS FIRST/LAST as a column modifier.
-      if before.contains("CREATE INDEX") || before.contains("CREATE UNIQUE INDEX") { continue }
+      if before.contains("CREATE INDEX") || before.contains("CREATE UNIQUE INDEX") {
+        continue;
+      }
       let abs_s = start + at;
       let abs_e = abs_s + needle.len();
       out.push(Diagnostic {

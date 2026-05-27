@@ -25,8 +25,12 @@ impl LintRule for Rule {
     while i < bytes.len() {
       if bytes[i] == b'\'' {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-        if i < bytes.len() { i += 1 }
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+        if i < bytes.len() {
+          i += 1
+        }
         continue;
       }
       if bytes[i] == b'(' && i + 2 < bytes.len() && bytes[i + 1] == b'+' && bytes[i + 2] == b')' {
@@ -39,7 +43,8 @@ impl LintRule for Rule {
             out.push(Diagnostic {
               code: "sql326",
               severity: Severity::Error,
-              message: "`(+)` outer-join hint is Oracle pre-ANSI syntax -- PG uses explicit `LEFT JOIN` / `RIGHT JOIN`".into(),
+              message: "`(+)` outer-join hint is Oracle pre-ANSI syntax -- PG uses explicit `LEFT JOIN` / `RIGHT JOIN`"
+                .into(),
               range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
             });
             i += 3;

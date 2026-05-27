@@ -28,11 +28,16 @@ impl LintRule for Rule {
     let Some(at) = upper.find(needle) else { return };
     let after = at + needle.len();
     let rest = body[after..].trim_start();
-    let id_end = rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(rest.len());
+    let id_end =
+      rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(rest.len());
     let name = rest[..id_end].to_string();
-    if name.is_empty() { return }
+    if name.is_empty() {
+      return;
+    }
     let post = rest[id_end..].trim_start();
-    if post.starts_with('(') { return }
+    if post.starts_with('(') {
+      return;
+    }
     let lead = body.len() - body.trim_start().len();
     let abs_s = start + lead;
     let abs_e = start + body.find(';').unwrap_or(body.len());

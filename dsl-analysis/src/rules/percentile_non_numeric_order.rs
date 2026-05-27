@@ -37,12 +37,16 @@ impl LintRule for Rule {
       let Some(ob_at) = win_upper.find("ORDER BY ") else { continue };
       let ob_rest = &window_body[ob_at + 9..];
       let first = ob_rest.split(|c: char| c == ',' || c == ')' || c.is_whitespace()).next().unwrap_or("").trim();
-      if first.is_empty() { continue }
+      if first.is_empty() {
+        continue;
+      }
       let (qual, col) = split_dotted(first);
       let Some(fam) = column_family(scope, catalog, qual.as_deref(), &col) else { continue };
       let comparable = fam.is_numeric()
         || matches!(fam, TypeFamily::Date | TypeFamily::Time | TypeFamily::Timestamp | TypeFamily::Interval);
-      if comparable { continue }
+      if comparable {
+        continue;
+      }
       let abs_s = start + rel;
       let abs_e = start + over_at + open + 1 + close_rel + 1;
       out.push(Diagnostic {
@@ -50,7 +54,10 @@ impl LintRule for Rule {
         severity: Severity::Hint,
         message: format!(
           "{} OVER (ORDER BY {}) -- `{}` has family `{}`, ranking will be lexicographic not numeric",
-          &needle[..needle.len() - 2], first, col, fam.name()
+          &needle[..needle.len() - 2],
+          first,
+          col,
+          fam.name()
         ),
         range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
       });
@@ -76,9 +83,19 @@ fn matched_close(bytes: &[u8], open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i) } }
-      b'\'' => { i += 1; while i < bytes.len() && bytes[i] != b'\'' { i += 1 } }
-      _ => {}
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
+      b'\'' => {
+        i += 1;
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

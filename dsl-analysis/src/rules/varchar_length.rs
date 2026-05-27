@@ -78,8 +78,8 @@ fn parse_varchar_length(decl: &str) -> Option<usize> {
   let upper = decl.to_ascii_uppercase();
   let upper = upper.rsplit('.').next().unwrap_or(&upper).trim();
   for prefix in ["VARCHAR", "CHARACTER VARYING", "CHARACTER", "CHAR"] {
-    if upper.starts_with(prefix) {
-      let rest = &upper[prefix.len()..].trim();
+    if let Some(rest) = upper.strip_prefix(prefix) {
+      let rest = rest.trim();
       if rest.starts_with('(') {
         let inner = &rest[1..rest.find(')').unwrap_or(rest.len())];
         if let Ok(n) = inner.trim().parse::<usize>() {
@@ -103,12 +103,14 @@ fn match_paren(bytes: &[u8], open: usize) -> Option<usize> {
         if depth == 0 {
           return Some(i);
         }
-      }
+      },
       b'\'' => {
         i += 1;
-        while i < n && bytes[i] != b'\'' { i += 1; }
-      }
-      _ => {}
+        while i < n && bytes[i] != b'\'' {
+          i += 1;
+        }
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -126,15 +128,17 @@ fn split_top_commas(s: &str) -> Vec<&str> {
     match bytes[i] {
       b'\'' => {
         i += 1;
-        while i < n && bytes[i] != b'\'' { i += 1; }
-      }
+        while i < n && bytes[i] != b'\'' {
+          i += 1;
+        }
+      },
       b'(' => depth += 1,
       b')' => depth -= 1,
       b',' if depth == 0 => {
         out.push(&s[start..i]);
         start = i + 1;
-      }
-      _ => {}
+      },
+      _ => {},
     }
     i += 1;
   }

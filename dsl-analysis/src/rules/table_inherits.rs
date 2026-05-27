@@ -24,15 +24,21 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
-    if !upper.contains("CREATE TABLE") { return }
+    if !upper.contains("CREATE TABLE") {
+      return;
+    }
     let Some(at) = upper.find("INHERITS") else { return };
     if at > 0 {
       let prev = body.as_bytes()[at - 1] as char;
-      if prev.is_ascii_alphanumeric() || prev == '_' { return }
+      if prev.is_ascii_alphanumeric() || prev == '_' {
+        return;
+      }
     }
     let after = at + "INHERITS".len();
     let rest = body[after..].trim_start();
-    if !rest.starts_with('(') { return }
+    if !rest.starts_with('(') {
+      return;
+    }
     let abs_s = start + at;
     let abs_e = abs_s + "INHERITS".len();
     out.push(Diagnostic {

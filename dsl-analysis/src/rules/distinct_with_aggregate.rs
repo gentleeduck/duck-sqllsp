@@ -40,15 +40,27 @@ impl LintRule for Rule {
     let mut i = after_sel;
     while i + 4 <= n {
       match bytes[i] {
-        b'(' => { depth += 1; i += 1; continue; }
-        b')' => { depth -= 1; i += 1; continue; }
+        b'(' => {
+          depth += 1;
+          i += 1;
+          continue;
+        },
+        b')' => {
+          depth -= 1;
+          i += 1;
+          continue;
+        },
         b'\'' => {
           i += 1;
-          while i < n && bytes[i] != b'\'' { i += 1 }
-          if i < n { i += 1 }
+          while i < n && bytes[i] != b'\'' {
+            i += 1
+          }
+          if i < n {
+            i += 1
+          }
           continue;
-        }
-        _ => {}
+        },
+        _ => {},
       }
       if depth == 0 && i + 5 <= n && &upper[i..i + 5] == " FROM" {
         from_at = Some(i + 1);
@@ -103,19 +115,33 @@ fn has_group_by_top(upper: &str, from: usize) -> bool {
   let mut i = from;
   while i + 8 <= n {
     match bytes[i] {
-      b'(' => { depth += 1; i += 1; continue; }
-      b')' => { depth -= 1; i += 1; continue; }
+      b'(' => {
+        depth += 1;
+        i += 1;
+        continue;
+      },
+      b')' => {
+        depth -= 1;
+        i += 1;
+        continue;
+      },
       b'\'' => {
         i += 1;
-        while i < n && bytes[i] != b'\'' { i += 1 }
-        if i < n { i += 1 }
+        while i < n && bytes[i] != b'\'' {
+          i += 1
+        }
+        if i < n {
+          i += 1
+        }
         continue;
-      }
-      _ => {}
+      },
+      _ => {},
     }
     if depth == 0 && &upper[i..i + 8] == "GROUP BY" {
       let prev_ok = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
-      if prev_ok { return true; }
+      if prev_ok {
+        return true;
+      }
     }
     i += 1;
   }

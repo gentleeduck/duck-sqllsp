@@ -26,7 +26,9 @@ impl LintRule for Rule {
     for col in &ct.columns {
       let ty = col.type_name.to_ascii_uppercase();
       let is_serial = matches!(ty.as_str(), "SERIAL" | "BIGSERIAL" | "SMALLSERIAL" | "SERIAL2" | "SERIAL4" | "SERIAL8");
-      if !is_serial { continue }
+      if !is_serial {
+        continue;
+      }
       let abs_s = u32::from(col.range.start()) as usize + start;
       let abs_e = u32::from(col.range.end()) as usize + start;
       out.push(Diagnostic {

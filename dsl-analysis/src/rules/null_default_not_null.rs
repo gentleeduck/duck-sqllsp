@@ -29,13 +29,18 @@ impl LintRule for Rule {
     // Walk each `(` paren-list entry. Look for both `NOT NULL` and
     // `DEFAULT NULL` on the same entry.
     let bytes = upper.as_bytes();
-    let n = bytes.len();
+    let _n = bytes.len();
     let Some(open) = upper.find('(') else { return };
     let Some(close) = match_paren(bytes, open) else { return };
     let body_text = &upper[open + 1..close];
     for (entry_off, entry) in split_top_level_commas_with_pos(body_text) {
       let has_not_null = contains_word(entry, "NOT NULL");
-      let has_default_null = contains_word(entry, "DEFAULT NULL");
+      // Also catch `DEFAULT CAST(NULL AS ...)` and `DEFAULT (NULL)`
+      // -- both behave the same as `DEFAULT NULL`.
+      let has_default_null = contains_word(entry, "DEFAULT NULL")
+        || contains_substring_ci(entry, "DEFAULT CAST(NULL")
+        || contains_substring_ci(entry, "DEFAULT (NULL)")
+        || contains_substring_ci(entry, "DEFAULT (NULL ");
       if has_not_null && has_default_null {
         // Narrow the diagnostic to just the offending column
         // declaration -- skip leading/trailing whitespace.
@@ -110,35 +115,6 @@ fn match_paren(bytes: &[u8], open: usize) -> Option<usize> {
   None
 }
 
-fn split_top_level_commas(s: &str) -> Vec<String> {
-  let bytes = s.as_bytes();
-  let n = bytes.len();
-  let mut out = Vec::new();
-  let mut start = 0;
-  let mut depth = 0i32;
-  let mut i = 0;
-  while i < n {
-    match bytes[i] {
-      b'(' => depth += 1,
-      b')' => depth -= 1,
-      b'\'' => {
-        i += 1;
-        while i < n && bytes[i] != b'\'' {
-          i += 1;
-        }
-      },
-      b',' if depth == 0 => {
-        out.push(s[start..i].to_string());
-        start = i + 1;
-      },
-      _ => {},
-    }
-    i += 1;
-  }
-  out.push(s[start..].to_string());
-  out
-}
-
 fn contains_word(haystack: &str, needle: &str) -> bool {
   let h = haystack.as_bytes();
   let n = needle.as_bytes();
@@ -158,4 +134,22 @@ fn contains_word(haystack: &str, needle: &str) -> bool {
 
 fn is_word(c: char) -> bool {
   c.is_alphanumeric() || c == '_'
+}
+
+/// Case-insensitive substring search (no word-boundary requirement,
+/// since the haystack is already uppercased by the caller).
+fn contains_substring_ci(haystack: &str, needle: &str) -> bool {
+  let h = haystack.as_bytes();
+  let n = needle.as_bytes();
+  if n.is_empty() || n.len() > h.len() {
+    return false;
+  }
+  let mut i = 0usize;
+  while i + n.len() <= h.len() {
+    if h[i..i + n.len()].eq_ignore_ascii_case(n) {
+      return true;
+    }
+    i += 1;
+  }
+  false
 }

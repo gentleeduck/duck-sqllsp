@@ -25,7 +25,9 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
-    if !upper.contains("FOR UPDATE") && !upper.contains("FOR SHARE") { return }
+    if !upper.contains("FOR UPDATE") && !upper.contains("FOR SHARE") {
+      return;
+    }
     // Look for subqueries that contain LIMIT.
     let bytes = body.as_bytes();
     let mut i = 0usize;
@@ -61,12 +63,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

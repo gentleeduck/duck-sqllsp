@@ -28,13 +28,21 @@ impl LintRule for Rule {
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
     for kw in [
-      "CREATE TABLE ", "CREATE TABLE IF NOT EXISTS ",
-      "CREATE INDEX ", "CREATE UNIQUE INDEX ",
-      "CREATE FUNCTION ", "CREATE OR REPLACE FUNCTION ",
-      "CREATE TYPE ", "CREATE DOMAIN ", "CREATE SEQUENCE ",
-      "CREATE TRIGGER ", "CREATE OR REPLACE TRIGGER ",
-      "CREATE VIEW ", "CREATE OR REPLACE VIEW ",
-      "CREATE MATERIALIZED VIEW ", "CREATE OR REPLACE MATERIALIZED VIEW ",
+      "CREATE TABLE ",
+      "CREATE TABLE IF NOT EXISTS ",
+      "CREATE INDEX ",
+      "CREATE UNIQUE INDEX ",
+      "CREATE FUNCTION ",
+      "CREATE OR REPLACE FUNCTION ",
+      "CREATE TYPE ",
+      "CREATE DOMAIN ",
+      "CREATE SEQUENCE ",
+      "CREATE TRIGGER ",
+      "CREATE OR REPLACE TRIGGER ",
+      "CREATE VIEW ",
+      "CREATE OR REPLACE VIEW ",
+      "CREATE MATERIALIZED VIEW ",
+      "CREATE OR REPLACE MATERIALIZED VIEW ",
       "CONSTRAINT ",
     ] {
       let Some(at) = upper.find(kw) else { continue };
@@ -45,7 +53,9 @@ impl LintRule for Rule {
       // Skip CONCURRENTLY / IF NOT EXISTS / leading modifiers for INDEX.
       let id_end = raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '"').unwrap_or(raw.len());
       let name = raw[..id_end].trim_matches('"');
-      if name.len() <= LIMIT { continue }
+      if name.len() <= LIMIT {
+        continue;
+      }
       let abs_s = start + after + lead;
       let abs_e = abs_s + id_end;
       out.push(Diagnostic {

@@ -27,19 +27,28 @@ impl LintRule for Rule {
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
     let trim = upper.trim_start();
-    if !(trim.starts_with("UPDATE") || trim.starts_with("DELETE") || trim.starts_with("INSERT")) { return }
+    if !(trim.starts_with("UPDATE") || trim.starts_with("DELETE") || trim.starts_with("INSERT")) {
+      return;
+    }
     // Target table heuristic: first identifier after UPDATE / DELETE FROM / INSERT INTO.
-    let needle = if trim.starts_with("UPDATE") { "UPDATE " }
-      else if trim.starts_with("DELETE") { "DELETE FROM " }
-      else { "INSERT INTO " };
+    let needle = if trim.starts_with("UPDATE") {
+      "UPDATE "
+    } else if trim.starts_with("DELETE") {
+      "DELETE FROM "
+    } else {
+      "INSERT INTO "
+    };
     let Some(at) = upper.find(needle) else { return };
     let after = at + needle.len();
     let rest = body[after..].trim_start();
-    let id_end = rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(rest.len());
+    let id_end =
+      rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(rest.len());
     let tgt_raw = rest[..id_end].trim_matches('"').to_ascii_lowercase();
-    let is_sys = tgt_raw.starts_with("pg_") || tgt_raw.starts_with("pg_catalog.")
-      || tgt_raw.starts_with("information_schema.");
-    if !is_sys { return }
+    let is_sys =
+      tgt_raw.starts_with("pg_") || tgt_raw.starts_with("pg_catalog.") || tgt_raw.starts_with("information_schema.");
+    if !is_sys {
+      return;
+    }
     let abs_s = start + after + (body[after..].len() - rest.len());
     let abs_e = abs_s + id_end;
     out.push(Diagnostic {

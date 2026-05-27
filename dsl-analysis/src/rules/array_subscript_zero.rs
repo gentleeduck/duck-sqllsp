@@ -58,10 +58,7 @@ impl LintRule for Rule {
           continue;
         }
         let lit = &body[lit_start..j];
-        let bad = match lit.parse::<i64>() {
-          Ok(v) if v <= 0 => true,
-          _ => false,
-        };
+        let bad = matches!(lit.parse::<i64>(), Ok(v) if v <= 0);
         if bad {
           let abs_start = start + i;
           let abs_end = start + k + 1;

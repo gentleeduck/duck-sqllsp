@@ -29,7 +29,7 @@ impl LintRule for Rule {
     // / CTE alias) -- those bind via outer-side correlation (LATERAL)
     // or via subquery scope; the rule's "join must have qualifier on
     // each table" heuristic doesn't fit.
-    if s.from.iter().any(|t| t.schema.as_deref().map_or(false, |sc| sc.starts_with('<'))) {
+    if s.from.iter().any(|t| t.schema.as_deref().is_some_and(|sc| sc.starts_with('<'))) {
       return;
     }
     // Skip LATERAL forms explicitly -- they're correlated joins, not
@@ -109,6 +109,11 @@ fn collect_qualifiers(e: &Expr, out: &mut Vec<String>) {
     Expr::Call { args, .. } => {
       for a in args {
         collect_qualifiers(a, out);
+      }
+    },
+    Expr::List(items) => {
+      for it in items {
+        collect_qualifiers(it, out);
       }
     },
     _ => {},

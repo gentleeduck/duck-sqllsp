@@ -70,18 +70,18 @@ impl LintRule for Rule {
             j += 1;
           }
           let raw_val = body_text[val_start..j.min(body_text.len())].trim();
-          if let Some(kind) = classify_literal(raw_val) {
-            if !compatible(kind, declared.as_str()) {
-              let base = source.find(body_text).unwrap_or(start);
-              let abs_start = base + i;
-              let abs_end = base + j;
-              out.push(Diagnostic {
-                code: "sql031",
-                severity: Severity::Error,
-                message: format!("RETURN value type {} doesn't match declared RETURNS {}", kind_name(kind), declared),
-                range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
-              });
-            }
+          if let Some(kind) = classify_literal(raw_val)
+            && !compatible(kind, declared.as_str())
+          {
+            let base = source.find(body_text).unwrap_or(start);
+            let abs_start = base + i;
+            let abs_end = base + j;
+            out.push(Diagnostic {
+              code: "sql031",
+              severity: Severity::Error,
+              message: format!("RETURN value type {} doesn't match declared RETURNS {}", kind_name(kind), declared),
+              range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+            });
           }
         }
         i += 6;
@@ -143,9 +143,9 @@ fn compatible(kind: LitKind, declared_upper: &str) -> bool {
   let bool_types = ["BOOLEAN", "BOOL"];
   match kind {
     LitKind::Str => str_types.iter().any(|t| d.starts_with(t)),
-    LitKind::Int => int_types.iter().any(|t| d == *t) || num_types.iter().any(|t| d.starts_with(t)),
+    LitKind::Int => int_types.contains(&d) || num_types.iter().any(|t| d.starts_with(t)),
     LitKind::Float => num_types.iter().any(|t| d.starts_with(t)),
-    LitKind::Bool => bool_types.iter().any(|t| d == *t),
+    LitKind::Bool => bool_types.contains(&d),
     _ => true,
   }
 }

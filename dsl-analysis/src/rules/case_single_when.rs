@@ -32,29 +32,28 @@ impl LintRule for Rule {
       if &upper[i..i + 4] == "CASE"
         && (i == 0 || !is_word(bytes[i - 1] as char))
         && (i + 4 == n || !is_word(bytes[i + 4] as char))
+        && let Some(end_pos) = find_matching_end(&upper, i + 4)
       {
-        if let Some(end_pos) = find_matching_end(&upper, i + 4) {
-          let block = &upper[i + 4..end_pos];
-          let count = count_whens(block);
-          // Only fire on single-WHEN with NO ELSE -- the truly trivial
-          // form that silently NULL-fills unmatched rows. CASE WHEN x
-          // THEN a ELSE b END is the canonical if-else expression
-          // and is fine.
-          let has_else = block_has_else(block);
-          if count == 1 && !has_else {
-            let abs_start = start + i;
-            let abs_end = start + i + 4;
-            out.push(Diagnostic {
-              code: "sql058",
-              severity: Severity::Hint,
-              message: "CASE with a single WHEN -- consider `coalesce`/`nullif` or an IF block for readability".into(),
-              range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
-            });
-            return;
-          }
-          i = end_pos;
-          continue;
+        let block = &upper[i + 4..end_pos];
+        let count = count_whens(block);
+        // Only fire on single-WHEN with NO ELSE -- the truly trivial
+        // form that silently NULL-fills unmatched rows. CASE WHEN x
+        // THEN a ELSE b END is the canonical if-else expression
+        // and is fine.
+        let has_else = block_has_else(block);
+        if count == 1 && !has_else {
+          let abs_start = start + i;
+          let abs_end = start + i + 4;
+          out.push(Diagnostic {
+            code: "sql058",
+            severity: Severity::Hint,
+            message: "CASE with a single WHEN -- consider `coalesce`/`nullif` or an IF block for readability".into(),
+            range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+          });
+          return;
         }
+        i = end_pos;
+        continue;
       }
       i += 1;
     }
@@ -98,7 +97,10 @@ fn block_has_else(block: &str) -> bool {
   let n = bytes.len();
   let mut i = 0;
   while i + 4 <= n {
-    if &block[i..i + 4] == "ELSE" && (i == 0 || !is_word(bytes[i - 1] as char)) && (i + 4 == n || !is_word(bytes[i + 4] as char)) {
+    if &block[i..i + 4] == "ELSE"
+      && (i == 0 || !is_word(bytes[i - 1] as char))
+      && (i + 4 == n || !is_word(bytes[i + 4] as char))
+    {
       return true;
     }
     i += 1;

@@ -33,13 +33,17 @@ impl LintRule for Rule {
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
     // Only inspect CREATE FUNCTION ... AS $$ ... $$ bodies.
-    if !upper.contains("CREATE") || !upper.contains("FUNCTION") { return }
+    if !upper.contains("CREATE") || !upper.contains("FUNCTION") {
+      return;
+    }
     let Some(name) = function_name(body) else { return };
     // Scan the entire file for CREATE TRIGGER ... EXECUTE [FUNCTION|PROCEDURE]
     // <name> to collect this fn's events.
     let mut events: HashSet<&'static str> = HashSet::new();
     collect_trigger_events(source, &name, &mut events);
-    if events.is_empty() { return }
+    if events.is_empty() {
+      return;
+    }
     let Some(body_start) = body.find("$$").map(|p| p + 2) else { return };
     let body_end = body[body_start..].find("$$").map(|p| body_start + p).unwrap_or(body.len());
     let fbody = &body[body_start..body_end];
@@ -48,29 +52,25 @@ impl LintRule for Rule {
     let forbid_old = events.contains("INSERT") && !events.contains("UPDATE") && !events.contains("DELETE");
     let forbid_new = events.contains("DELETE") && !events.contains("INSERT") && !events.contains("UPDATE");
 
-    if forbid_old {
-      if let Some(at) = first_token(&fbody_upper, "OLD.") {
-        let abs_s = start + body_start + at;
-        let abs_e = abs_s + 4;
-        out.push(Diagnostic {
-          code: "sql202",
-          severity: Severity::Error,
-          message: "INSERT-only trigger references `OLD` -- OLD undefined on INSERT".into(),
-          range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
-        });
-      }
+    if forbid_old && let Some(at) = first_token(&fbody_upper, "OLD.") {
+      let abs_s = start + body_start + at;
+      let abs_e = abs_s + 4;
+      out.push(Diagnostic {
+        code: "sql202",
+        severity: Severity::Error,
+        message: "INSERT-only trigger references `OLD` -- OLD undefined on INSERT".into(),
+        range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+      });
     }
-    if forbid_new {
-      if let Some(at) = first_token(&fbody_upper, "NEW.") {
-        let abs_s = start + body_start + at;
-        let abs_e = abs_s + 4;
-        out.push(Diagnostic {
-          code: "sql202",
-          severity: Severity::Error,
-          message: "DELETE-only trigger references `NEW` -- NEW undefined on DELETE".into(),
-          range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
-        });
-      }
+    if forbid_new && let Some(at) = first_token(&fbody_upper, "NEW.") {
+      let abs_s = start + body_start + at;
+      let abs_e = abs_s + 4;
+      out.push(Diagnostic {
+        code: "sql202",
+        severity: Severity::Error,
+        message: "DELETE-only trigger references `NEW` -- NEW undefined on DELETE".into(),
+        range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+      });
     }
     let _ = HashMap::<(), ()>::new();
   }
@@ -87,7 +87,9 @@ fn function_name(body: &str) -> Option<String> {
   let off = after_fn + (body[after_fn..].len() - tail.len());
   let bytes = body.as_bytes();
   let mut j = off;
-  while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_' || bytes[j] == b'.' || bytes[j] == b'"') {
+  while j < bytes.len()
+    && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_' || bytes[j] == b'.' || bytes[j] == b'"')
+  {
     j += 1;
   }
   let name = body[off..j].rsplit('.').next().unwrap_or(&body[off..j]).trim_matches('"').to_string();
@@ -110,10 +112,18 @@ fn collect_trigger_events(source: &str, fn_name: &str, out: &mut HashSet<&'stati
     let trig_at = lower_src[..abs].rfind("create trigger");
     let Some(trig_at) = trig_at else { break };
     let window = &lower_src[trig_at..abs];
-    if window.contains("insert") { out.insert("INSERT"); }
-    if window.contains("update") { out.insert("UPDATE"); }
-    if window.contains("delete") { out.insert("DELETE"); }
-    if window.contains("truncate") { out.insert("TRUNCATE"); }
+    if window.contains("insert") {
+      out.insert("INSERT");
+    }
+    if window.contains("update") {
+      out.insert("UPDATE");
+    }
+    if window.contains("delete") {
+      out.insert("DELETE");
+    }
+    if window.contains("truncate") {
+      out.insert("TRUNCATE");
+    }
     from = abs + 1;
   }
 }
@@ -125,7 +135,10 @@ fn first_token(haystack_upper: &str, needle: &str) -> Option<usize> {
     let at = from + rel;
     if at > 0 {
       let prev = bytes[at - 1] as char;
-      if prev.is_ascii_alphanumeric() || prev == '_' { from = at + needle.len(); continue }
+      if prev.is_ascii_alphanumeric() || prev == '_' {
+        from = at + needle.len();
+        continue;
+      }
     }
     return Some(at);
   }

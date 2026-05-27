@@ -24,8 +24,12 @@ impl LintRule for Rule {
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
     let trim = upper.trim_start();
-    if !(trim.starts_with("DROP SCHEMA") || trim.starts_with("DROP DATABASE")) { return }
-    if upper.contains("CASCADE") || upper.contains("RESTRICT") { return }
+    if !(trim.starts_with("DROP SCHEMA") || trim.starts_with("DROP DATABASE")) {
+      return;
+    }
+    if upper.contains("CASCADE") || upper.contains("RESTRICT") {
+      return;
+    }
     let abs_s = start;
     let abs_e = start + body.find(';').unwrap_or(body.len());
     out.push(Diagnostic {

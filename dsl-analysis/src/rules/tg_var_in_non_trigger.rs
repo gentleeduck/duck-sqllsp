@@ -10,10 +10,8 @@ use dsl_resolve::Scope;
 
 pub struct Rule;
 
-const TG_VARS: &[&str] = &[
-  "TG_OP", "TG_TABLE_NAME", "TG_TABLE_SCHEMA", "TG_RELID",
-  "TG_NAME", "TG_WHEN", "TG_LEVEL", "TG_NARGS", "TG_ARGV",
-];
+const TG_VARS: &[&str] =
+  &["TG_OP", "TG_TABLE_NAME", "TG_TABLE_SCHEMA", "TG_RELID", "TG_NAME", "TG_WHEN", "TG_LEVEL", "TG_NARGS", "TG_ARGV"];
 
 impl LintRule for Rule {
   fn code(&self) -> &'static str {
@@ -28,8 +26,12 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
-    if !upper.contains("CREATE") || !upper.contains("FUNCTION") { return }
-    if upper.contains("RETURNS TRIGGER") || upper.contains("RETURNS EVENT_TRIGGER") { return }
+    if !upper.contains("CREATE") || !upper.contains("FUNCTION") {
+      return;
+    }
+    if upper.contains("RETURNS TRIGGER") || upper.contains("RETURNS EVENT_TRIGGER") {
+      return;
+    }
     let Some(body_start) = body.find("$$").map(|p| p + 2) else { return };
     let body_end = body[body_start..].find("$$").map(|p| body_start + p).unwrap_or(body.len());
     let fbody = &body[body_start..body_end];
@@ -40,12 +42,18 @@ impl LintRule for Rule {
         let at = from + rel;
         if at > 0 {
           let prev = fupper.as_bytes()[at - 1] as char;
-          if prev.is_ascii_alphanumeric() || prev == '_' { from = at + var.len(); continue }
+          if prev.is_ascii_alphanumeric() || prev == '_' {
+            from = at + var.len();
+            continue;
+          }
         }
         let after = at + var.len();
         if after < fupper.len() {
           let next = fupper.as_bytes()[after] as char;
-          if next.is_ascii_alphanumeric() || next == '_' { from = after; continue }
+          if next.is_ascii_alphanumeric() || next == '_' {
+            from = after;
+            continue;
+          }
         }
         let abs_s = start + body_start + at;
         let abs_e = abs_s + var.len();

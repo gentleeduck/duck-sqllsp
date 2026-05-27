@@ -24,7 +24,9 @@ impl LintRule for Rule {
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
     let trim = upper.trim_start();
-    if !(trim.starts_with("UPDATE") || trim.starts_with("DELETE")) { return }
+    if !(trim.starts_with("UPDATE") || trim.starts_with("DELETE")) {
+      return;
+    }
     // Need to find LIMIT at the top level (not inside a subquery).
     let bytes = body.as_bytes();
     let mut depth = 0i32;
@@ -35,11 +37,17 @@ impl LintRule for Rule {
         b')' => depth -= 1,
         b'\'' => {
           i += 1;
-          while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-        }
+          while i < bytes.len() && bytes[i] != b'\'' {
+            i += 1
+          }
+        },
         _ => {
           if depth == 0 && i + 6 <= bytes.len() && upper[i..].starts_with("LIMIT ") {
-            let prev_ok = i == 0 || !{ let p = bytes[i - 1] as char; p.is_ascii_alphanumeric() || p == '_' };
+            let prev_ok = i == 0
+              || !{
+                let p = bytes[i - 1] as char;
+                p.is_ascii_alphanumeric() || p == '_'
+              };
             if prev_ok {
               let abs_s = start + i;
               let abs_e = abs_s + "LIMIT".len();
@@ -55,7 +63,7 @@ impl LintRule for Rule {
               return;
             }
           }
-        }
+        },
       }
       i += 1;
     }

@@ -31,18 +31,27 @@ impl LintRule for Rule {
     // setting a value, not comparing.
     let upper_slice = slice.to_ascii_uppercase();
     let in_set_assignment = upper_slice.contains("UPDATE ") && upper_slice.contains(" SET ");
-    for pat in ["= NULL", "=NULL", "<> NULL", "<>NULL", "!= NULL", "!=NULL"] {
+    // Patterns sorted longest-op-first so `!= NULL` matches as
+    // `!= NULL`, not as the trailing `= NULL` substring -- otherwise
+    // the message misreports the operator. Left-NULL patterns
+    // (`NULL = ...`) require a word boundary before NULL.
+    let right_patterns: &[&str] = &[
+      "!= NULL", "!=NULL", "<> NULL", "<>NULL", "= NULL", "=NULL",
+      // Long-form `<op> CAST(NULL AS ...)` -- same semantics.
+      "!= CAST(NULL", "!=CAST(NULL", "<> CAST(NULL", "<>CAST(NULL", "= CAST(NULL", "=CAST(NULL",
+    ];
+    let left_patterns: &[&str] = &[
+      "NULL !=", "NULL!=", "NULL <>", "NULL<>", "NULL =", "NULL=",
+    ];
+    for pat in right_patterns {
       if in_set_assignment && pat.starts_with("=") {
-        // Only fire if there's a `= NULL` occurrence outside the SET
-        // clause -- i.e. somewhere in WHERE / ON / HAVING.
         let Some(set_at) = upper_slice.find(" SET ") else { continue };
         let where_at = upper_slice[set_at..].find(" WHERE ").map(|p| set_at + p);
-        let in_predicate = if let Some(wh) = where_at {
-          find_outside_strings(&slice[wh..], pat).is_some()
-        } else {
-          false
-        };
-        if !in_predicate { continue }
+        let in_predicate =
+          if let Some(wh) = where_at { find_outside_strings(&slice[wh..], pat).is_some() } else { false };
+        if !in_predicate {
+          continue;
+        }
       }
       if find_outside_strings(slice, pat).is_some() {
         out.push(Diagnostic {
@@ -51,10 +60,31 @@ impl LintRule for Rule {
           message: format!("comparison `{pat}` always yields NULL; use `IS NULL` or `IS NOT NULL`"),
           range,
         });
-        break; // one report per statement is enough
+        return;
+      }
+    }
+    for pat in left_patterns {
+      if let Some(at) = find_outside_strings(slice, pat)
+        && !preceded_by_word_char(slice.as_bytes(), at)
+      {
+        out.push(Diagnostic {
+          code: "sql015",
+          severity: Severity::Warning,
+          message: format!("comparison `{pat}` always yields NULL; use `IS NULL` or `IS NOT NULL`"),
+          range,
+        });
+        return;
       }
     }
   }
+}
+
+fn preceded_by_word_char(bytes: &[u8], at: usize) -> bool {
+  if at == 0 {
+    return false;
+  }
+  let b = bytes[at - 1];
+  b.is_ascii_alphanumeric() || b == b'_'
 }
 
 fn find_outside_strings(s: &str, needle: &str) -> Option<usize> {
@@ -75,9 +105,14 @@ fn find_outside_strings(s: &str, needle: &str) -> Option<usize> {
       let mut matches = true;
       for k in 0..needle_bytes.len() {
         let cand = bytes[i + k].to_ascii_uppercase();
-        if cand != needle_bytes[k] { matches = false; break }
+        if cand != needle_bytes[k] {
+          matches = false;
+          break;
+        }
       }
-      if matches { return Some(i) }
+      if matches {
+        return Some(i);
+      }
     }
     i += 1;
   }

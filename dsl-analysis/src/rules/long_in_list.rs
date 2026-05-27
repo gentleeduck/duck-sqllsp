@@ -36,19 +36,21 @@ impl LintRule for Rule {
         while j < n && bytes[j].is_ascii_whitespace() {
           j += 1;
         }
-        if j < n && bytes[j] == b'(' {
-          if let Some(close) = match_paren(bytes, j) {
-            let inner = &body[j + 1..close];
-            // Skip subqueries (start with SELECT).
-            if inner.trim_start().to_ascii_uppercase().starts_with("SELECT") {
-              i += 1;
-              continue;
-            }
-            let count = top_level_commas(inner) + 1;
-            if count > THRESHOLD {
-              let abs_start = start + j;
-              let abs_end = start + close + 1;
-              out.push(Diagnostic {
+        if j < n
+          && bytes[j] == b'('
+          && let Some(close) = match_paren(bytes, j)
+        {
+          let inner = &body[j + 1..close];
+          // Skip subqueries (start with SELECT).
+          if inner.trim_start().to_ascii_uppercase().starts_with("SELECT") {
+            i += 1;
+            continue;
+          }
+          let count = top_level_commas(inner) + 1;
+          if count > THRESHOLD {
+            let abs_start = start + j;
+            let abs_end = start + close + 1;
+            out.push(Diagnostic {
                                 code: "sql074",
                                 severity: Severity::Hint,
                                 message: format!(
@@ -59,8 +61,7 @@ impl LintRule for Rule {
                                     (abs_end as u32).into(),
                                 ),
                             });
-              return;
-            }
+            return;
           }
         }
       }

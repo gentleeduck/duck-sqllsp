@@ -29,13 +29,19 @@ impl LintRule for Rule {
       let at = from + rel;
       if at > 0 {
         let prev = body.as_bytes()[at - 1] as char;
-        if prev.is_ascii_alphanumeric() || prev == '_' { from = at + 5; continue }
+        if prev.is_ascii_alphanumeric() || prev == '_' {
+          from = at + 5;
+          continue;
+        }
       }
       let after = at + "CHECK".len();
       let post = body[after..].trim_start();
-      if !post.starts_with('(') { from = after; continue }
+      if !post.starts_with('(') {
+        from = after;
+        continue;
+      }
       let open = after + (body[after..].len() - post.len());
-      let Some(close) = find_matching_paren(body, open) else { from = open; break };
+      let Some(close) = find_matching_paren(body, open) else { break };
       let inner = body[open + 1..close].trim();
       let inner_upper = inner.to_ascii_uppercase().replace(' ', "");
       let trivial = matches!(inner_upper.as_str(), "TRUE" | "1=1" | "(TRUE)" | "(1=1)" | "1" | "TRUE=TRUE");
@@ -59,12 +65,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

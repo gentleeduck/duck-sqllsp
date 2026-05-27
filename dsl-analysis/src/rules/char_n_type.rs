@@ -51,6 +51,13 @@ impl LintRule for Rule {
           continue;
         }
         matched = Some(i + 9);
+      } else if i + 6 <= n
+        && &upper[i..i + 6] == "BPCHAR"
+        && (i == 0 || !is_word(bytes[i - 1] as char))
+        && (i + 6 == n || !is_word(bytes[i + 6] as char))
+      {
+        // bpchar is the internal PG name for blank-padded char.
+        matched = Some(i + 6);
       } else if i + 4 <= n
         && &upper[i..i + 4] == "CHAR"
         && (i == 0 || !is_word(bytes[i - 1] as char))

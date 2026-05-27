@@ -20,8 +20,12 @@ impl LintRule for Rule {
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     // Skip plpgsql bodies entirely.
-    if inside_dollar_block(source, stmt) { return }
-    if !matches!(&stmt.kind, StatementKind::Select(_) | StatementKind::Unknown { .. }) { return }
+    if inside_dollar_block(source, stmt) {
+      return;
+    }
+    if !matches!(&stmt.kind, StatementKind::Select(_) | StatementKind::Unknown { .. }) {
+      return;
+    }
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
@@ -37,23 +41,33 @@ impl LintRule for Rule {
     let last_merge = prefix_upper.rfind("MERGE");
     let select_owns = match last_select {
       None => false,
-      Some(s) => last_insert.map_or(true, |i| s > i) && last_merge.map_or(true, |m| s > m),
+      Some(s) => last_insert.is_none_or(|i| s > i) && last_merge.is_none_or(|m| s > m),
     };
-    if !select_owns { return }
+    if !select_owns {
+      return;
+    }
     let after = into_at + " INTO ".len();
     let rest = body[after..].trim_start();
     let upper_rest = rest.to_ascii_uppercase();
-    if upper_rest.starts_with("STRICT") { return }
+    if upper_rest.starts_with("STRICT") {
+      return;
+    }
     let mut effective_rest = rest;
     if upper_rest.starts_with("TEMP ") || upper_rest.starts_with("TEMPORARY ") || upper_rest.starts_with("UNLOGGED ") {
       // Temp tables are session-scoped; never clash with catalog -> skip.
-      return
+      return;
     }
-    let id_end = effective_rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(effective_rest.len());
+    let id_end = effective_rest
+      .find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"')
+      .unwrap_or(effective_rest.len());
     let name = effective_rest[..id_end].trim_matches('"');
-    if name.is_empty() { return }
+    if name.is_empty() {
+      return;
+    }
     let bare = name.rsplit('.').next().unwrap_or(name);
-    if catalog.find_table(None, bare).is_none() { return }
+    if catalog.find_table(None, bare).is_none() {
+      return;
+    }
     effective_rest = &effective_rest[..id_end];
     let _ = effective_rest;
     let abs_s = start + after + (rest.len() - rest.trim_start().len());

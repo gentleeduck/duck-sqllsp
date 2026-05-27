@@ -30,7 +30,9 @@ impl LintRule for Rule {
     let rest_upper = &upper[after..];
     let Some(is_at) = rest_upper.find(" IS ") else { return };
     let between = &rest_upper[..is_at];
-    if between.contains(" ON ") { return }
+    if between.contains(" ON ") {
+      return;
+    }
     let abs_s = start + at;
     let abs_e = abs_s + ("COMMENT ON CONSTRAINT ".len() + is_at);
     out.push(Diagnostic {

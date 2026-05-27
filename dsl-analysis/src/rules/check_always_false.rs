@@ -26,16 +26,23 @@ impl LintRule for Rule {
       let at = from + rel;
       if at > 0 {
         let prev = body.as_bytes()[at - 1] as char;
-        if prev.is_ascii_alphanumeric() || prev == '_' { from = at + 5; continue }
+        if prev.is_ascii_alphanumeric() || prev == '_' {
+          from = at + 5;
+          continue;
+        }
       }
       let after = at + "CHECK".len();
       let post = body[after..].trim_start();
-      if !post.starts_with('(') { from = after; continue }
+      if !post.starts_with('(') {
+        from = after;
+        continue;
+      }
       let open = after + (body[after..].len() - post.len());
-      let Some(close) = find_matching_paren(body, open) else { from = open; break };
+      let Some(close) = find_matching_paren(body, open) else { break };
       let inner = body[open + 1..close].trim();
       let canon = inner.to_ascii_uppercase().replace(' ', "");
-      let always_false = matches!(canon.as_str(),
+      let always_false = matches!(
+        canon.as_str(),
         "FALSE" | "0" | "1=0" | "0=1" | "(FALSE)" | "(0)" | "(1=0)" | "FALSE=TRUE" | "TRUE=FALSE"
       );
       if always_false {
@@ -58,12 +65,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

@@ -32,15 +32,27 @@ impl LintRule for Rule {
       let at = from + rel;
       if at > 0 {
         let prev = bytes[at - 1] as char;
-        if prev.is_ascii_alphanumeric() || prev == '_' { from = at + 5; continue }
+        if prev.is_ascii_alphanumeric() || prev == '_' {
+          from = at + 5;
+          continue;
+        }
       }
       let after = at + "RAISE".len();
-      if after >= bytes.len() { break }
+      if after >= bytes.len() {
+        break;
+      }
       let next = bytes[after] as char;
-      if !next.is_ascii_whitespace() { from = after; continue }
+      if !next.is_ascii_whitespace() {
+        from = after;
+        continue;
+      }
       let mut k = after;
-      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
-      if k >= bytes.len() { break }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1
+      }
+      if k >= bytes.len() {
+        break;
+      }
       if bytes[k] == b'\'' {
         // RAISE 'literal' -- missing level keyword.
         out.push(Diagnostic {

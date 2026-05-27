@@ -119,12 +119,14 @@ fn match_paren(bytes: &[u8], open: usize) -> Option<usize> {
         if depth == 0 {
           return Some(i);
         }
-      }
+      },
       b'\'' => {
         i += 1;
-        while i < n && bytes[i] != b'\'' { i += 1; }
-      }
-      _ => {}
+        while i < n && bytes[i] != b'\'' {
+          i += 1;
+        }
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -142,15 +144,17 @@ fn split_top_commas(s: &str) -> Vec<&str> {
     match bytes[i] {
       b'\'' => {
         i += 1;
-        while i < n && bytes[i] != b'\'' { i += 1; }
-      }
+        while i < n && bytes[i] != b'\'' {
+          i += 1;
+        }
+      },
       b'(' => depth += 1,
       b')' => depth -= 1,
       b',' if depth == 0 => {
         out.push(&s[start..i]);
         start = i + 1;
-      }
-      _ => {}
+      },
+      _ => {},
     }
     i += 1;
   }

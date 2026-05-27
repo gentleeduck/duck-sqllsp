@@ -27,7 +27,9 @@ impl LintRule for Rule {
     let Some(at) = upper.find("TABLESPACE ") else { return };
     // Skip the SET default_tablespace = '...' form (no privilege issue).
     let prev_upper = &upper[..at];
-    if prev_upper.ends_with("DEFAULT_") { return }
+    if prev_upper.ends_with("DEFAULT_") {
+      return;
+    }
     let abs_s = start + at;
     let abs_e = abs_s + "TABLESPACE".len();
     out.push(Diagnostic {

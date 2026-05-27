@@ -11,11 +11,30 @@ use dsl_resolve::Scope;
 pub struct Rule;
 
 const FIELDS: &[&str] = &[
-  "century", "day", "decade", "dow", "doy", "epoch", "hour", "isodow",
-  "isoyear", "julian", "microsecond", "microseconds", "millennium",
-  "millisecond", "milliseconds",
-  "minute", "month", "quarter", "second", "timezone", "timezone_hour",
-  "timezone_minute", "week", "year",
+  "century",
+  "day",
+  "decade",
+  "dow",
+  "doy",
+  "epoch",
+  "hour",
+  "isodow",
+  "isoyear",
+  "julian",
+  "microsecond",
+  "microseconds",
+  "millennium",
+  "millisecond",
+  "milliseconds",
+  "minute",
+  "month",
+  "quarter",
+  "second",
+  "timezone",
+  "timezone_hour",
+  "timezone_minute",
+  "week",
+  "year",
 ];
 
 impl LintRule for Rule {
@@ -36,15 +55,27 @@ impl LintRule for Rule {
       let at = from + rel;
       if at > 0 {
         let prev = body.as_bytes()[at - 1] as char;
-        if prev.is_ascii_alphanumeric() || prev == '_' { from = at + 8; continue }
+        if prev.is_ascii_alphanumeric() || prev == '_' {
+          from = at + 8;
+          continue;
+        }
       }
       let open = at + "extract(".len();
-      let Some(from_at) = lower[open..].find(" from ") else { from = open; continue };
+      let Some(from_at) = lower[open..].find(" from ") else {
+        from = open;
+        continue;
+      };
       let abs_from = open + from_at;
       let field_raw = body[open..abs_from].trim();
       let field = field_raw.trim_matches('"').trim_matches('\'').to_ascii_lowercase();
-      if field.is_empty() { from = abs_from; continue }
-      if FIELDS.contains(&field.as_str()) { from = abs_from; continue }
+      if field.is_empty() {
+        from = abs_from;
+        continue;
+      }
+      if FIELDS.contains(&field.as_str()) {
+        from = abs_from;
+        continue;
+      }
       let abs_s = start + open;
       let abs_e = start + abs_from;
       out.push(Diagnostic {

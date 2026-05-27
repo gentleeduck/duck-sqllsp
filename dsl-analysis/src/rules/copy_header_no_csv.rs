@@ -23,10 +23,16 @@ impl LintRule for Rule {
     let body_owned = crate::textutil::strip_noise_full(raw);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
-    if !upper.trim_start().starts_with("COPY") { return }
-    if !upper.contains("HEADER") { return }
+    if !upper.trim_start().starts_with("COPY") {
+      return;
+    }
+    if !upper.contains("HEADER") {
+      return;
+    }
     let csv = upper.contains("CSV") || upper.contains("FORMAT CSV") || upper.contains("FORMAT 'CSV'");
-    if csv { return }
+    if csv {
+      return;
+    }
     let Some(at) = upper.find("HEADER") else { return };
     let abs_s = start + at;
     let abs_e = abs_s + "HEADER".len();

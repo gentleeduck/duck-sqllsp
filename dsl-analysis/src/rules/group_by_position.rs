@@ -138,29 +138,6 @@ fn find_clause_end(s: &str, from: usize) -> usize {
   n
 }
 
-fn split_top_level(s: &str) -> Vec<String> {
-  let bytes = s.as_bytes();
-  let n = bytes.len();
-  let mut out = Vec::new();
-  let mut start = 0;
-  let mut depth = 0i32;
-  let mut i = 0;
-  while i < n {
-    match bytes[i] {
-      b'(' => depth += 1,
-      b')' => depth -= 1,
-      b',' if depth == 0 => {
-        out.push(s[start..i].to_string());
-        start = i + 1;
-      },
-      _ => {},
-    }
-    i += 1;
-  }
-  out.push(s[start..].to_string());
-  out
-}
-
 /// Space-preserving: keeps output indices 1:1 with input.
 fn strip_quoted_and_comments(s: &str) -> String {
   let mut out = String::with_capacity(s.len());

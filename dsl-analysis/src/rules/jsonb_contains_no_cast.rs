@@ -29,11 +29,17 @@ impl LintRule for Rule {
         let after = at + op.len();
         let rest = body[after..].trim_start();
         // Only fire when RHS is a bare quoted literal without ::jsonb.
-        if !rest.starts_with('\'') { from = after; continue }
-        let Some(close_rel) = rest[1..].find('\'') else { from = after; break };
+        if !rest.starts_with('\'') {
+          from = after;
+          continue;
+        }
+        let Some(close_rel) = rest[1..].find('\'') else { break };
         let after_lit = 1 + close_rel + 1;
         let post = rest[after_lit..].trim_start();
-        if post.starts_with("::") { from = after; continue }
+        if post.starts_with("::") {
+          from = after;
+          continue;
+        }
         let lit_abs_s = start + after + (body[after..].len() - rest.len());
         let lit_abs_e = lit_abs_s + after_lit;
         out.push(Diagnostic {

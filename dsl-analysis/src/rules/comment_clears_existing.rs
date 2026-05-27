@@ -26,31 +26,34 @@ impl LintRule for Rule {
     let body_owned = crate::textutil::strip_noise_full(raw);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
-    if !upper.trim_start().starts_with("COMMENT ON") { return }
+    if !upper.trim_start().starts_with("COMMENT ON") {
+      return;
+    }
     let Some(is_at) = upper.find(" IS ") else { return };
     let after = is_at + " IS ".len();
     let val = body[after..].trim_start();
     let is_null = val.to_ascii_uppercase().starts_with("NULL");
     let is_empty = val.starts_with("''") || val.starts_with("\"\"");
-    if !is_null && !is_empty { return }
+    if !is_null && !is_empty {
+      return;
+    }
     // What target?
-    let kinds: &[(&str, &str)] = &[
-      ("COMMENT ON TABLE ", "table"),
-      ("COMMENT ON COLUMN ", "column"),
-      ("COMMENT ON FUNCTION ", "function"),
-    ];
+    let kinds: &[(&str, &str)] =
+      &[("COMMENT ON TABLE ", "table"), ("COMMENT ON COLUMN ", "column"), ("COMMENT ON FUNCTION ", "function")];
     let Some((needle, kind)) = kinds.iter().find(|(n, _)| upper.contains(n)) else { return };
     let after_kind = upper.find(needle).unwrap() + needle.len();
     let rest = body[after_kind..].trim_start();
-    let id_end = rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(rest.len());
+    let id_end =
+      rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(rest.len());
     let id = rest[..id_end].to_string();
     let bare = id.rsplit('.').next().unwrap_or(&id).trim_matches('"').to_string();
     let parts: Vec<&str> = id.split('.').collect();
     let existing = match *kind {
       "table" => catalog.find_table(None, &bare).and_then(|t| t.comment.clone()),
       "column" => {
-        if parts.len() < 2 { None }
-        else {
+        if parts.len() < 2 {
+          None
+        } else {
           let tbl = parts[parts.len() - 2].trim_matches('"');
           let col = parts[parts.len() - 1].trim_matches('"');
           catalog
@@ -58,12 +61,16 @@ impl LintRule for Rule {
             .and_then(|t| t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(col)).cloned())
             .and_then(|c| c.comment)
         }
-      }
-      "function" => catalog.functions.iter().find(|f| f.name.eq_ignore_ascii_case(&bare)).and_then(|f| f.comment.clone()),
+      },
+      "function" => {
+        catalog.functions.iter().find(|f| f.name.eq_ignore_ascii_case(&bare)).and_then(|f| f.comment.clone())
+      },
       _ => None,
     };
     let Some(existing) = existing else { return };
-    if existing.trim().is_empty() { return }
+    if existing.trim().is_empty() {
+      return;
+    }
     let abs_s = start;
     let abs_e = start + body.find(';').unwrap_or(body.len());
     out.push(Diagnostic {

@@ -48,10 +48,7 @@ impl LintRule for Rule {
     out.push(Diagnostic {
       code: "sql175",
       severity: Severity::Error,
-      message: format!(
-        "`{}` cannot be applied to view `{}.{}` -- views aren't lockable",
-        kw, view.schema, view.name
-      ),
+      message: format!("`{}` cannot be applied to view `{}.{}` -- views aren't lockable", kw, view.schema, view.name),
       range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
     });
   }

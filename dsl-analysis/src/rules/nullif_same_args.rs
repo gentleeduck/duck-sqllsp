@@ -31,21 +31,22 @@ impl LintRule for Rule {
           while j < n && bytes[j].is_ascii_whitespace() {
             j += 1;
           }
-          if j < n && bytes[j] == b'(' {
-            if let Some(close) = match_paren(bytes, j) {
-              let inner = &body[j + 1..close];
-              let parts = split_top_level_commas(inner);
-              if parts.len() == 2 && parts[0].trim() == parts[1].trim() {
-                let abs_start = start + i;
-                let abs_end = start + close + 1;
-                out.push(Diagnostic {
-                  code: "sql085",
-                  severity: Severity::Error,
-                  message: format!("NULLIF({}, {}) always returns NULL", parts[0].trim(), parts[1].trim()),
-                  range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
-                });
-                return;
-              }
+          if j < n
+            && bytes[j] == b'('
+            && let Some(close) = match_paren(bytes, j)
+          {
+            let inner = &body[j + 1..close];
+            let parts = split_top_level_commas(inner);
+            if parts.len() == 2 && parts[0].trim() == parts[1].trim() {
+              let abs_start = start + i;
+              let abs_end = start + close + 1;
+              out.push(Diagnostic {
+                code: "sql085",
+                severity: Severity::Error,
+                message: format!("NULLIF({}, {}) always returns NULL", parts[0].trim(), parts[1].trim()),
+                range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+              });
+              return;
             }
           }
         }

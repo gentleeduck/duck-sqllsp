@@ -22,7 +22,9 @@ impl LintRule for Rule {
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
     let trim = upper.trim_start();
-    if !trim.starts_with("SELECT TOP ") && !trim.starts_with("SELECT TOP(") { return }
+    if !trim.starts_with("SELECT TOP ") && !trim.starts_with("SELECT TOP(") {
+      return;
+    }
     let lead = body.len() - body.trim_start().len();
     let abs_s = start + lead + "SELECT ".len();
     let abs_e = abs_s + "TOP".len();

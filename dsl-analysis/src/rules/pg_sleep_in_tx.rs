@@ -29,12 +29,16 @@ impl LintRule for Rule {
       let Some(rel) = lower.find(fname) else { continue };
       if rel > 0 {
         let prev = body.as_bytes()[rel - 1] as char;
-        if prev.is_ascii_alphanumeric() || prev == '_' { continue }
+        if prev.is_ascii_alphanumeric() || prev == '_' {
+          continue;
+        }
       }
       let prelude = source[..start].to_ascii_uppercase();
       let begins = count_kw(&prelude, "BEGIN") + count_phrase(&prelude, "START TRANSACTION");
       let closes = count_kw(&prelude, "COMMIT") + count_kw(&prelude, "ROLLBACK");
-      if begins <= closes { continue }
+      if begins <= closes {
+        continue;
+      }
       let abs_s = start + rel;
       let abs_e = abs_s + fname.len() - 1;
       out.push(Diagnostic {
@@ -57,13 +61,25 @@ fn count_kw(s: &str, needle: &str) -> usize {
   let mut n = 0usize;
   while let Some(rel) = s[from..].find(needle) {
     let at = from + rel;
-    let before_ok = at == 0 || !{ let p = bytes[at - 1] as char; p.is_ascii_alphanumeric() || p == '_' };
+    let before_ok = at == 0
+      || !{
+        let p = bytes[at - 1] as char;
+        p.is_ascii_alphanumeric() || p == '_'
+      };
     let after = at + needle.len();
-    let after_ok = after >= bytes.len() || !{ let p = bytes[after] as char; p.is_ascii_alphanumeric() || p == '_' };
-    if before_ok && after_ok { n += 1 }
+    let after_ok = after >= bytes.len()
+      || !{
+        let p = bytes[after] as char;
+        p.is_ascii_alphanumeric() || p == '_'
+      };
+    if before_ok && after_ok {
+      n += 1
+    }
     from = at + needle.len();
   }
   n
 }
 
-fn count_phrase(s: &str, needle: &str) -> usize { s.matches(needle).count() }
+fn count_phrase(s: &str, needle: &str) -> usize {
+  s.matches(needle).count()
+}

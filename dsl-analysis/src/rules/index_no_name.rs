@@ -26,7 +26,9 @@ impl LintRule for Rule {
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
     let trim = upper.trim_start();
-    if !(trim.starts_with("CREATE INDEX") || trim.starts_with("CREATE UNIQUE INDEX")) { return }
+    if !(trim.starts_with("CREATE INDEX") || trim.starts_with("CREATE UNIQUE INDEX")) {
+      return;
+    }
     // Skip CONCURRENTLY for the keyword scan.
     let needle = if trim.starts_with("CREATE UNIQUE INDEX") { "CREATE UNIQUE INDEX" } else { "CREATE INDEX" };
     let after = upper.find(needle).unwrap() + needle.len();
@@ -35,8 +37,14 @@ impl LintRule for Rule {
     // optional CONCURRENTLY / IF NOT EXISTS modifiers
     let mut head = rest_upper.as_str();
     let mut off = 0usize;
-    if head.starts_with("CONCURRENTLY ") { off += "CONCURRENTLY ".len(); head = &head[off..]; }
-    if head.starts_with("IF NOT EXISTS ") { off += "IF NOT EXISTS ".len(); head = &head[off..]; }
+    if head.starts_with("CONCURRENTLY ") {
+      off += "CONCURRENTLY ".len();
+      head = &head[off..];
+    }
+    if head.starts_with("IF NOT EXISTS ") {
+      off += "IF NOT EXISTS ".len();
+      head = &head[off..];
+    }
     // Now: either ON ... (auto-named) or <name> ON ...
     if head.starts_with("ON ") {
       let lead = body.len() - body.trim_start().len();

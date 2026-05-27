@@ -26,13 +26,19 @@ impl LintRule for Rule {
     let body_owned = crate::textutil::strip_noise_full(raw);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
-    if !upper.contains("CREATE") || !upper.contains("FUNCTION") { return }
-    if !upper.contains("SECURITY DEFINER") { return }
+    if !upper.contains("CREATE") || !upper.contains("FUNCTION") {
+      return;
+    }
+    if !upper.contains("SECURITY DEFINER") {
+      return;
+    }
     // If author already pinned search_path, accept either at function-level
     // SET search_path = ... or via `ALTER FUNCTION ... SET search_path` (which
     // can't appear inside CREATE so we only check the CREATE body here).
     let has_set = upper.contains("SET SEARCH_PATH");
-    if has_set { return }
+    if has_set {
+      return;
+    }
     let Some(at) = upper.find("SECURITY DEFINER") else { return };
     let abs_s = start + at;
     let abs_e = abs_s + "SECURITY DEFINER".len();

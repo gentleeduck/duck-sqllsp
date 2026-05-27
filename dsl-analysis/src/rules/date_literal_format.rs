@@ -57,10 +57,15 @@ impl LintRule for Rule {
       let Some(col) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(col_name)) else { continue };
       let ty = col.data_type.to_ascii_uppercase();
       let ty = ty.rsplit('.').next().unwrap_or(&ty).trim();
-      let expected = if ty.starts_with("DATE") { Some(TemporalKind::Date) }
-        else if ty.starts_with("TIMESTAMP") { Some(TemporalKind::Timestamp) }
-        else if ty.starts_with("TIME") { Some(TemporalKind::Time) }
-        else { None };
+      let expected = if ty.starts_with("DATE") {
+        Some(TemporalKind::Date)
+      } else if ty.starts_with("TIMESTAMP") {
+        Some(TemporalKind::Timestamp)
+      } else if ty.starts_with("TIME") {
+        Some(TemporalKind::Time)
+      } else {
+        None
+      };
       let Some(kind) = expected else { continue };
       if validates(lit, kind) {
         continue;
@@ -102,7 +107,9 @@ impl TemporalKind {
 
 fn validates(lit: &str, kind: TemporalKind) -> bool {
   let s = lit.trim();
-  if s.is_empty() { return false; }
+  if s.is_empty() {
+    return false;
+  }
   // PG accepts many forms; allow these high-confidence shapes:
   //   DATE          -- YYYY-MM-DD
   //   TIME          -- HH:MM[:SS[.fraction]]
@@ -115,14 +122,15 @@ fn validates(lit: &str, kind: TemporalKind) -> bool {
   match kind {
     TemporalKind::Date => looks_like_date(s),
     TemporalKind::Time => looks_like_time(s),
-    TemporalKind::Timestamp => looks_like_date(s.split_whitespace().next().unwrap_or(""))
-      || looks_like_iso_ts(s),
+    TemporalKind::Timestamp => looks_like_date(s.split_whitespace().next().unwrap_or("")) || looks_like_iso_ts(s),
   }
 }
 
 fn looks_like_date(s: &str) -> bool {
   let parts: Vec<&str> = s.split('-').collect();
-  if parts.len() != 3 { return false; }
+  if parts.len() != 3 {
+    return false;
+  }
   parts.iter().enumerate().all(|(i, p)| {
     let want = if i == 0 { 4 } else { 2 };
     p.len() == want && p.chars().all(|c| c.is_ascii_digit())
@@ -131,7 +139,9 @@ fn looks_like_date(s: &str) -> bool {
 
 fn looks_like_time(s: &str) -> bool {
   let parts: Vec<&str> = s.split(':').collect();
-  if parts.len() < 2 || parts.len() > 3 { return false; }
+  if parts.len() < 2 || parts.len() > 3 {
+    return false;
+  }
   parts.iter().enumerate().all(|(i, p)| {
     let bare = p.split('.').next().unwrap_or(p);
     bare.chars().all(|c| c.is_ascii_digit()) && (bare.len() == 2 || (i == 2 && bare.len() <= 2))
@@ -143,14 +153,17 @@ fn looks_like_iso_ts(s: &str) -> bool {
   let mid = s.find('T').or_else(|| s.find(' '));
   let Some(mid) = mid else { return false };
   let (date_part, rest) = s.split_at(mid);
-  if !looks_like_date(date_part) { return false; }
-  let time_part = rest.trim_start_matches(|c| c == 'T' || c == ' ');
+  if !looks_like_date(date_part) {
+    return false;
+  }
+  let time_part = rest.trim_start_matches(['T', ' ']);
   // Trim trailing timezone marker (+HH / -HH / Z / +HH:MM).
-  let time_only = time_part
-    .trim_end_matches(|c: char| c.is_ascii_digit() || c == ':' || c == '+' || c == '-' || c == 'Z' || c == ' ' || c == '.');
+  let time_only = time_part.trim_end_matches(|c: char| {
+    c.is_ascii_digit() || c == ':' || c == '+' || c == '-' || c == 'Z' || c == ' ' || c == '.'
+  });
   let _ = time_only;
   let trimmed = time_part.trim_end_matches(['Z', ' ']);
-  let parts: Vec<&str> = trimmed.splitn(2, |c| c == '+' || c == '-').collect();
+  let parts: Vec<&str> = trimmed.splitn(2, ['+', '-']).collect();
   looks_like_time(parts[0])
 }
 
@@ -166,12 +179,14 @@ fn match_paren(bytes: &[u8], open: usize) -> Option<usize> {
         if depth == 0 {
           return Some(i);
         }
-      }
+      },
       b'\'' => {
         i += 1;
-        while i < n && bytes[i] != b'\'' { i += 1; }
-      }
-      _ => {}
+        while i < n && bytes[i] != b'\'' {
+          i += 1;
+        }
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -189,15 +204,17 @@ fn split_top_commas(s: &str) -> Vec<&str> {
     match bytes[i] {
       b'\'' => {
         i += 1;
-        while i < n && bytes[i] != b'\'' { i += 1; }
-      }
+        while i < n && bytes[i] != b'\'' {
+          i += 1;
+        }
+      },
       b'(' => depth += 1,
       b')' => depth -= 1,
       b',' if depth == 0 => {
         out.push(&s[start..i]);
         start = i + 1;
-      }
-      _ => {}
+      },
+      _ => {},
     }
     i += 1;
   }

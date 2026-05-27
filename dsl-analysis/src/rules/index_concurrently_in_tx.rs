@@ -25,13 +25,21 @@ impl LintRule for Rule {
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
     let trim = upper.trim_start();
-    let is_target = (trim.starts_with("CREATE INDEX") || trim.starts_with("CREATE UNIQUE INDEX") || trim.starts_with("DROP INDEX") || trim.starts_with("REINDEX INDEX") || trim.starts_with("REINDEX TABLE"))
+    let is_target = (trim.starts_with("CREATE INDEX")
+      || trim.starts_with("CREATE UNIQUE INDEX")
+      || trim.starts_with("DROP INDEX")
+      || trim.starts_with("REINDEX INDEX")
+      || trim.starts_with("REINDEX TABLE"))
       && upper.contains("CONCURRENTLY");
-    if !is_target { return }
+    if !is_target {
+      return;
+    }
     let prelude = &source[..start].to_ascii_uppercase();
-    let begins = count_kw(&prelude, "BEGIN") + count_phrase(&prelude, "START TRANSACTION");
-    let closes = count_kw(&prelude, "COMMIT") + count_kw(&prelude, "ROLLBACK") + count_phrase(&prelude, "END TRANSACTION");
-    if begins <= closes { return }
+    let begins = count_kw(prelude, "BEGIN") + count_phrase(prelude, "START TRANSACTION");
+    let closes = count_kw(prelude, "COMMIT") + count_kw(prelude, "ROLLBACK") + count_phrase(prelude, "END TRANSACTION");
+    if begins <= closes {
+      return;
+    }
     let lead = upper.len() - trim.len();
     let abs_s = start + lead;
     let abs_e = abs_s + (trim.find(';').unwrap_or(trim.len()));
@@ -50,10 +58,20 @@ fn count_kw(s: &str, needle: &str) -> usize {
   let mut n = 0usize;
   while let Some(rel) = s[from..].find(needle) {
     let at = from + rel;
-    let before_ok = at == 0 || !{ let p = bytes[at - 1] as char; p.is_ascii_alphanumeric() || p == '_' };
+    let before_ok = at == 0
+      || !{
+        let p = bytes[at - 1] as char;
+        p.is_ascii_alphanumeric() || p == '_'
+      };
     let after = at + needle.len();
-    let after_ok = after >= bytes.len() || !{ let p = bytes[after] as char; p.is_ascii_alphanumeric() || p == '_' };
-    if before_ok && after_ok { n += 1 }
+    let after_ok = after >= bytes.len()
+      || !{
+        let p = bytes[after] as char;
+        p.is_ascii_alphanumeric() || p == '_'
+      };
+    if before_ok && after_ok {
+      n += 1
+    }
     from = at + needle.len();
   }
   n

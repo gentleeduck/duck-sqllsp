@@ -27,18 +27,29 @@ impl LintRule for Rule {
       let at = from + rel;
       if at > 0 {
         let prev = body.as_bytes()[at - 1] as char;
-        if prev.is_ascii_alphanumeric() || prev == '_' { from = at + 6; continue }
+        if prev.is_ascii_alphanumeric() || prev == '_' {
+          from = at + 6;
+          continue;
+        }
       }
       let open = at + "ARRAY[".len() - 1;
-      let Some(close) = find_matching_bracket(body, open) else { from = open; break };
+      let Some(close) = find_matching_bracket(body, open) else { break };
       let inner = body[open + 1..close].trim();
-      if !inner.is_empty() { from = close + 1; continue }
+      if !inner.is_empty() {
+        from = close + 1;
+        continue;
+      }
       let after = body[close + 1..].trim_start();
-      if after.starts_with("::") { from = close + 1; continue }
+      if after.starts_with("::") {
+        from = close + 1;
+        continue;
+      }
       out.push(Diagnostic {
         code: "sql303",
         severity: Severity::Error,
-        message: "Empty ARRAY[] without `::type[]` cast -- PG 42P18 cannot determine type; write `ARRAY[]::int[]` or similar".into(),
+        message:
+          "Empty ARRAY[] without `::type[]` cast -- PG 42P18 cannot determine type; write `ARRAY[]::int[]` or similar"
+            .into(),
         range: text_size::TextRange::new(((start + at) as u32).into(), ((start + close + 1) as u32).into()),
       });
       from = close + 1;
@@ -53,12 +64,19 @@ fn find_matching_bracket(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'[' => depth += 1,
-      b']' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b']' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

@@ -29,11 +29,18 @@ impl LintRule for Rule {
     let rest = &body[after..];
     let lead = rest.len() - rest.trim_start().len();
     let raw = &rest[lead..];
-    let id_end = raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(raw.len());
+    let id_end =
+      raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(raw.len());
     let table = raw[..id_end].rsplit('.').next().unwrap_or(&raw[..id_end]).trim_matches('"').to_string();
-    if table.is_empty() { return; }
-    if !upper.contains("DROP COLUMN") { return; }
-    if upper.contains("CASCADE") { return; }
+    if table.is_empty() {
+      return;
+    }
+    if !upper.contains("DROP COLUMN") {
+      return;
+    }
+    if upper.contains("CASCADE") {
+      return;
+    }
     // Extract dropped column name.
     let drop_at = upper.find("DROP COLUMN").unwrap();
     let dc_after = drop_at + "DROP COLUMN".len();
@@ -42,20 +49,28 @@ impl LintRule for Rule {
     let dc_raw = &dc_rest[dc_lead..];
     let dc_end = dc_raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '"').unwrap_or(dc_raw.len());
     let col = dc_raw[..dc_end].trim_matches('"').to_string();
-    if col.is_empty() { return; }
+    if col.is_empty() {
+      return;
+    }
     // Find inbound FKs.
     let mut sources: Vec<String> = Vec::new();
     for other in catalog.tables() {
       for con in &other.constraints {
-        if !matches!(con.kind, ConstraintKind::ForeignKey) { continue; }
+        if !matches!(con.kind, ConstraintKind::ForeignKey) {
+          continue;
+        }
         let Some(refs) = &con.references else { continue };
-        if !refs.table.eq_ignore_ascii_case(&table) { continue; }
+        if !refs.table.eq_ignore_ascii_case(&table) {
+          continue;
+        }
         if refs.columns.iter().any(|c| c.eq_ignore_ascii_case(&col)) {
           sources.push(format!("{}.{}({})", other.schema, other.name, con.columns.join(", ")));
         }
       }
     }
-    if sources.is_empty() { return; }
+    if sources.is_empty() {
+      return;
+    }
     let abs_s = start + drop_at;
     let abs_e = start + dc_after + dc_lead + dc_end;
     out.push(Diagnostic {

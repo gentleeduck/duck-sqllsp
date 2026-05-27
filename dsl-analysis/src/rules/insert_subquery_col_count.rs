@@ -44,7 +44,9 @@ impl LintRule for Rule {
       ins.columns.len()
     } else if let Some(t) = catalog.find_table(ins.table.schema.as_deref(), &ins.table.name) {
       t.columns.len()
-    } else { return };
+    } else {
+      return;
+    };
     // Locate the SELECT keyword that starts the source rowset.
     // CTEs (`WITH x AS (SELECT ...), y AS (SELECT ...) SELECT ...`) put
     // one or more SELECTs *inside* parens before the actual source
@@ -64,22 +66,23 @@ impl LintRule for Rule {
       .iter()
       .filter_map(|kw| find_word_kw(tail, kw))
       .min();
-    let stop = [stop_from, stop_close.map(|p| p - after_sel), stop_semi, stop_union]
-      .iter().flatten().copied().min();
+    let stop = [stop_from, stop_close.map(|p| p - after_sel), stop_semi, stop_union].iter().flatten().copied().min();
     let proj_end = after_sel + stop.unwrap_or(tail.len());
     let proj = &body[after_sel..proj_end];
     let count = count_top_level_commas(proj) + 1;
     // Star can mean anything; skip.
-    if proj.trim().contains('*') { return }
-    if count == expected { return }
+    if proj.trim().contains('*') {
+      return;
+    }
+    if count == expected {
+      return;
+    }
     let abs_s = start + sel_at;
     let abs_e = start + proj_end;
     out.push(Diagnostic {
       code: "sql206",
       severity: Severity::Error,
-      message: format!(
-        "INSERT source SELECT returns {count} columns -- target expects {expected}"
-      ),
+      message: format!("INSERT source SELECT returns {count} columns -- target expects {expected}"),
       range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
     });
   }
@@ -89,25 +92,41 @@ fn find_word_kw(haystack: &str, kw: &str) -> Option<usize> {
   let h = haystack.as_bytes();
   let n = kw.len();
   let len = h.len();
-  if n == 0 { return None; }
+  if n == 0 {
+    return None;
+  }
   let mut depth = 0i32;
   let mut i = 0usize;
   while i + n <= len {
     match h[i] {
-      b'(' => { depth += 1; i += 1; continue; }
-      b')' => { depth -= 1; i += 1; continue; }
+      b'(' => {
+        depth += 1;
+        i += 1;
+        continue;
+      },
+      b')' => {
+        depth -= 1;
+        i += 1;
+        continue;
+      },
       b'\'' => {
         i += 1;
-        while i < len && h[i] != b'\'' { i += 1 }
-        if i < len { i += 1 }
+        while i < len && h[i] != b'\'' {
+          i += 1
+        }
+        if i < len {
+          i += 1
+        }
         continue;
-      }
-      _ => {}
+      },
+      _ => {},
     }
     if depth == 0 && haystack[i..i + n].eq_ignore_ascii_case(kw) {
       let prev_ok = i == 0 || !(h[i - 1].is_ascii_alphanumeric() || h[i - 1] == b'_');
       let next_ok = i + n == len || !(h[i + n].is_ascii_alphanumeric() || h[i + n] == b'_');
-      if prev_ok && next_ok { return Some(i); }
+      if prev_ok && next_ok {
+        return Some(i);
+      }
     }
     i += 1;
   }
@@ -124,22 +143,36 @@ fn first_top_level_select(body: &str) -> Option<usize> {
   let mut i = 0usize;
   while i < n {
     match bytes[i] {
-      b'(' => { depth += 1; i += 1; continue; }
-      b')' => { depth -= 1; i += 1; continue; }
+      b'(' => {
+        depth += 1;
+        i += 1;
+        continue;
+      },
+      b')' => {
+        depth -= 1;
+        i += 1;
+        continue;
+      },
       b'\'' => {
         i += 1;
-        while i < n && bytes[i] != b'\'' { i += 1 }
-        if i < n { i += 1 }
+        while i < n && bytes[i] != b'\'' {
+          i += 1
+        }
+        if i < n {
+          i += 1
+        }
         continue;
-      }
-      _ => {}
+      },
+      _ => {},
     }
     if depth == 0 && i + 6 <= n {
       let upper6 = body[i..i + 6].to_ascii_uppercase();
       if upper6 == "SELECT" {
         let prev_ok = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
         let next_ok = i + 6 == n || !(bytes[i + 6].is_ascii_alphanumeric() || bytes[i + 6] == b'_');
-        if prev_ok && next_ok { return Some(i); }
+        if prev_ok && next_ok {
+          return Some(i);
+        }
       }
     }
     i += 1;
@@ -162,9 +195,11 @@ fn count_top_level_commas(text: &str) -> usize {
       b',' if depth == 0 => commas += 1,
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -188,18 +223,21 @@ fn strip_noise(s: &str) -> String {
     }
     if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
       let mut depth: u32 = 1;
-      out[i] = b' '; out[i + 1] = b' ';
+      out[i] = b' ';
+      out[i + 1] = b' ';
       i += 2;
       while i + 1 < n && depth > 0 {
         if out[i] == b'/' && out[i + 1] == b'*' {
           depth += 1;
-          out[i] = b' '; out[i + 1] = b' ';
+          out[i] = b' ';
+          out[i + 1] = b' ';
           i += 2;
           continue;
         }
         if out[i] == b'*' && out[i + 1] == b'/' {
           depth -= 1;
-          out[i] = b' '; out[i + 1] = b' ';
+          out[i] = b' ';
+          out[i + 1] = b' ';
           i += 2;
           continue;
         }
@@ -211,9 +249,13 @@ fn strip_noise(s: &str) -> String {
     if out[i] == b'\'' {
       let q = i;
       i += 1;
-      while i < n && out[i] != b'\'' { i += 1 }
-      for k in q + 1..i.min(n) { out[k] = b' ' }
-      if i < n { i += 1; }
+      while i < n && out[i] != b'\'' {
+        i += 1
+      }
+      out[q + 1..i.min(n)].fill(b' ');
+      if i < n {
+        i += 1;
+      }
       continue;
     }
     i += 1;
@@ -229,14 +271,18 @@ fn paren_close_at_depth_zero(text: &str, from: usize) -> Option<usize> {
     match bytes[i] {
       b'(' => depth += 1,
       b')' => {
-        if depth == 0 { return Some(i); }
+        if depth == 0 {
+          return Some(i);
+        }
         depth -= 1;
-      }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

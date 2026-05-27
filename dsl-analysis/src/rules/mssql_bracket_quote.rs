@@ -29,32 +29,48 @@ impl LintRule for Rule {
     while i < bytes.len() {
       if bytes[i] == b'\'' {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-        if i < bytes.len() { i += 1 }
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+        if i < bytes.len() {
+          i += 1
+        }
         continue;
       }
-      if bytes[i] != b'[' { i += 1; continue }
+      if bytes[i] != b'[' {
+        i += 1;
+        continue;
+      }
       let open = i;
       let mut k = open + 1;
-      while k < bytes.len() && bytes[k] != b']' && bytes[k] != b'\n' { k += 1 }
-      if k >= bytes.len() || bytes[k] != b']' { i = open + 1; continue }
+      while k < bytes.len() && bytes[k] != b']' && bytes[k] != b'\n' {
+        k += 1
+      }
+      if k >= bytes.len() || bytes[k] != b']' {
+        i = open + 1;
+        continue;
+      }
       let inside = &body[open + 1..k];
       let identlike = !inside.is_empty()
         && inside.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == ' ' || c == '.')
         && inside.chars().any(|c| c.is_ascii_alphabetic())
         && !inside.contains(':');
-      if !identlike { i = k + 1; continue }
+      if !identlike {
+        i = k + 1;
+        continue;
+      }
       // Ignore array index patterns like `col[0]` -- preceded by identifier char.
       if open > 0 {
         let prev = bytes[open - 1] as char;
-        if prev.is_ascii_alphanumeric() || prev == '_' || prev == ')' || prev == ']' || prev == '"' { i = k + 1; continue }
+        if prev.is_ascii_alphanumeric() || prev == '_' || prev == ')' || prev == ']' || prev == '"' {
+          i = k + 1;
+          continue;
+        }
       }
       out.push(Diagnostic {
         code: "sql317",
         severity: Severity::Error,
-        message: format!(
-          "`[{inside}]` is MSSQL/T-SQL identifier quoting -- PG uses `\"{inside}\"`"
-        ),
+        message: format!("`[{inside}]` is MSSQL/T-SQL identifier quoting -- PG uses `\"{inside}\"`"),
         range: text_size::TextRange::new(((start + open) as u32).into(), ((start + k + 1) as u32).into()),
       });
       i = k + 1;
@@ -68,16 +84,32 @@ fn strip_comments(s: &str) -> String {
   let mut i = 0usize;
   while i < n {
     if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
-      while i < n && out[i] != b'\n' { out[i] = b' '; i += 1 }
+      while i < n && out[i] != b'\n' {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
       let mut depth = 1u32;
-      out[i] = b' '; out[i + 1] = b' '; i += 2;
+      out[i] = b' ';
+      out[i + 1] = b' ';
+      i += 2;
       while i + 1 < n && depth > 0 {
-        if out[i] == b'/' && out[i + 1] == b'*' { depth += 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else if out[i] == b'*' && out[i + 1] == b'/' { depth -= 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else { out[i] = b' '; i += 1; }
+        if out[i] == b'/' && out[i + 1] == b'*' {
+          depth += 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else if out[i] == b'*' && out[i + 1] == b'/' {
+          depth -= 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else {
+          out[i] = b' ';
+          i += 1;
+        }
       }
       continue;
     }

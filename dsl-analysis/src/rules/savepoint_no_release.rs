@@ -43,7 +43,6 @@ impl LintRule for Rule {
       let bytes = body.as_bytes();
       let n = bytes.len();
       let upper_bytes = upper.as_bytes();
-      let mut sp_pos = 0usize;
       let mut i = 0;
       while i + 9 <= n {
         if upper_bytes[i..i + 9].eq_ignore_ascii_case(b"SAVEPOINT")
@@ -59,7 +58,6 @@ impl LintRule for Rule {
             j += 1;
           }
           if body[s..j].eq_ignore_ascii_case(&name) {
-            sp_pos = s;
             let abs_start = start + s;
             let abs_end = start + j;
             out.push(Diagnostic {
@@ -73,7 +71,6 @@ impl LintRule for Rule {
         }
         i += 1;
       }
-      let _ = sp_pos;
     }
   }
 }
@@ -137,7 +134,10 @@ fn strip_line_comments_keep_offsets(s: &str) -> String {
   let mut i = 0usize;
   while i < n {
     if i + 1 < n && bytes[i] == b'-' && bytes[i + 1] == b'-' {
-      while i < n && bytes[i] != b'\n' { out.push(' '); i += 1 }
+      while i < n && bytes[i] != b'\n' {
+        out.push(' ');
+        i += 1
+      }
     } else if bytes[i].is_ascii() {
       out.push(bytes[i] as char);
       i += 1;

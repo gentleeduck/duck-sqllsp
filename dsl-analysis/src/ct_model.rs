@@ -3,8 +3,8 @@
 //! Many rules want to ask "is this column nullable / is it the primary
 //! key / what's its effective default" -- but the answer depends on a
 //! mix of column-level syntax AND table-level constraints AND implicit
-//! Postgres semantics (PK → NOT NULL, SERIAL → NOT NULL + default,
-//! IDENTITY → NOT NULL, etc).
+//! Postgres semantics (PK -> NOT NULL, SERIAL -> NOT NULL + default,
+//! IDENTITY -> NOT NULL, etc).
 //!
 //! This module folds all of that into one pass so rules can read
 //! `effective_columns(body)` and forget about the lexical surface.
@@ -22,8 +22,8 @@ pub struct EffectiveCol {
 }
 
 /// Parse the column list of a CREATE TABLE statement and apply
-/// Postgres' implicit semantics: PK ⇒ NOT NULL, SERIAL ⇒ NOT NULL +
-/// has_default, IDENTITY ⇒ NOT NULL, table-level PRIMARY KEY (cols)
+/// Postgres' implicit semantics: PK => NOT NULL, SERIAL => NOT NULL +
+/// has_default, IDENTITY => NOT NULL, table-level PRIMARY KEY (cols)
 /// marks each referenced column as PK + NOT NULL.
 pub fn effective_columns(body: &str) -> Vec<EffectiveCol> {
   let upper = body.to_ascii_uppercase();
@@ -124,23 +124,23 @@ fn classify_entry(
   let trimmed = chunk.trim_start();
   // Table-level PRIMARY KEY ( cols )
   if trimmed_up.starts_with("PRIMARY KEY") {
-    if let Some(open) = trimmed.find('(') {
-      if let Some(close) = trimmed[open + 1..].find(')') {
-        let list = &trimmed[open + 1..open + 1 + close];
-        for c in list.split(',') {
-          tbl_pk_cols.push(c.trim().trim_matches('"').to_string());
-        }
+    if let Some(open) = trimmed.find('(')
+      && let Some(close) = trimmed[open + 1..].find(')')
+    {
+      let list = &trimmed[open + 1..open + 1 + close];
+      for c in list.split(',') {
+        tbl_pk_cols.push(c.trim().trim_matches('"').to_string());
       }
     }
     return;
   }
   if trimmed_up.starts_with("UNIQUE") {
-    if let Some(open) = trimmed.find('(') {
-      if let Some(close) = trimmed[open + 1..].find(')') {
-        let list = &trimmed[open + 1..open + 1 + close];
-        for c in list.split(',') {
-          tbl_unique_cols.push(c.trim().trim_matches('"').to_string());
-        }
+    if let Some(open) = trimmed.find('(')
+      && let Some(close) = trimmed[open + 1..].find(')')
+    {
+      let list = &trimmed[open + 1..open + 1 + close];
+      for c in list.split(',') {
+        tbl_unique_cols.push(c.trim().trim_matches('"').to_string());
       }
     }
     return;

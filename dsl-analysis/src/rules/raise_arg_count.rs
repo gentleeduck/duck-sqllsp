@@ -45,21 +45,21 @@ impl LintRule for Rule {
       if &upper_body[i..i + 5] == "RAISE" {
         let prev_ok = i == 0 || !is_word(bytes[i - 1] as char);
         let next_ok = i + 5 == n || !is_word(bytes[i + 5] as char);
-        if prev_ok && next_ok {
-          if let Some((placeholders, args, fmt_start, fmt_end)) = parse_raise(raw, i) {
-            if placeholders != args {
-              // Map to absolute offset in source.
-              let base = source.find(body_text).unwrap_or(start);
-              let abs_start = base + fmt_start;
-              let abs_end = base + fmt_end;
-              out.push(Diagnostic {
-                code: "sql036",
-                severity: Severity::Warning,
-                message: format!("RAISE format has {placeholders} `%` placeholder(s) but {args} argument(s)"),
-                range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
-              });
-            }
-          }
+        if prev_ok
+          && next_ok
+          && let Some((placeholders, args, fmt_start, fmt_end)) = parse_raise(raw, i)
+          && placeholders != args
+        {
+          // Map to absolute offset in source.
+          let base = source.find(body_text).unwrap_or(start);
+          let abs_start = base + fmt_start;
+          let abs_end = base + fmt_end;
+          out.push(Diagnostic {
+            code: "sql036",
+            severity: Severity::Warning,
+            message: format!("RAISE format has {placeholders} `%` placeholder(s) but {args} argument(s)"),
+            range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+          });
         }
       }
       i += 1;
@@ -147,17 +147,15 @@ fn parse_raise(bytes: &[u8], raise_at: usize) -> Option<(usize, usize, usize, us
     if c == b',' && depth == 0 {
       args += 1;
       started = true;
-    } else if !c.is_ascii_whitespace() && c != b',' {
-      if !started && c != b';' {
-        started = true;
-      }
+    } else if !c.is_ascii_whitespace() && c != b',' && !started && c != b';' {
+      started = true;
     }
     i += 1;
   }
   // After fmt:
-  //   no commas, no content → 0 args
-  //   no commas, content    → 1 arg
-  //   N commas              → N args (N commas separate N args from fmt)
+  //   no commas, no content -> 0 args
+  //   no commas, content    -> 1 arg
+  //   N commas              -> N args (N commas separate N args from fmt)
   if started && args == 0 {
     args = 1;
   }

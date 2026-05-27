@@ -25,16 +25,18 @@ impl LintRule for Rule {
     while let Some(rel) = upper[from..].find(" IN (") {
       let at = from + rel + " IN ".len();
       let open = at;
-      let Some(close) = find_matching_paren(body, open) else { from = open; break };
+      let Some(close) = find_matching_paren(body, open) else { break };
       let inner = &body[open + 1..close];
       let inner_upper = inner.to_ascii_uppercase();
-      if inner_upper.trim_start().starts_with("SELECT") { from = close + 1; continue }
-      let items: Vec<String> = inner
-        .split(',')
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
-      if items.len() < 3 { from = close + 1; continue }
+      if inner_upper.trim_start().starts_with("SELECT") {
+        from = close + 1;
+        continue;
+      }
+      let items: Vec<String> = inner.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+      if items.len() < 3 {
+        from = close + 1;
+        continue;
+      }
       let mut sorted = items.clone();
       sorted.sort();
       let mut dedup = sorted.clone();
@@ -59,12 +61,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

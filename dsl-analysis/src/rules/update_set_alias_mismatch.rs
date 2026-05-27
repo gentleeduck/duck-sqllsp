@@ -40,24 +40,32 @@ impl LintRule for Rule {
     let mut allowed = allowed;
     if tokens.len() >= 2 {
       let second = tokens[1].trim_end_matches(',').trim_matches('"');
-      if !second.eq_ignore_ascii_case("SET") { allowed.push(second.to_string()); }
+      if !second.eq_ignore_ascii_case("SET") {
+        allowed.push(second.to_string());
+      }
     }
-    if tokens.len() >= 3 && tokens[1].to_ascii_uppercase() == "AS" {
+    if tokens.len() >= 3 && tokens[1].eq_ignore_ascii_case("AS") {
       allowed.push(tokens[2].trim_end_matches(',').trim_matches('"').to_string());
     }
     for raw in split_top_level(set_text) {
       let frag = set_text[raw.start..raw.end].trim_start();
       let Some(eq_at) = frag.find('=') else { continue };
       let lhs = frag[..eq_at].trim();
-      if !lhs.contains('.') { continue }
+      if !lhs.contains('.') {
+        continue;
+      }
       let Some((qual, _col)) = lhs.split_once('.') else { continue };
       let qual = qual.trim().trim_matches('"');
-      if allowed.iter().any(|a| a.eq_ignore_ascii_case(qual)) { continue }
+      if allowed.iter().any(|a| a.eq_ignore_ascii_case(qual)) {
+        continue;
+      }
       // Composite-column field assignment: `SET col.field = ...` where
       // `col` is a composite-typed column of the target table. PG
       // accepts this and updates the named field of the composite.
-      if let Some(t) = catalog.find_table(u.table.schema.as_deref(), &u.table.name) {
-        if t.columns.iter().any(|c| c.name.eq_ignore_ascii_case(qual)) { continue }
+      if let Some(t) = catalog.find_table(u.table.schema.as_deref(), &u.table.name)
+        && t.columns.iter().any(|c| c.name.eq_ignore_ascii_case(qual))
+      {
+        continue;
       }
       let off = set_text.find(lhs).unwrap_or(0);
       let abs_s = start + after_set + off;
@@ -75,7 +83,10 @@ impl LintRule for Rule {
   }
 }
 
-struct Span { start: usize, end: usize }
+struct Span {
+  start: usize,
+  end: usize,
+}
 
 fn split_top_level(text: &str) -> Vec<Span> {
   let mut out = Vec::new();
@@ -87,12 +98,17 @@ fn split_top_level(text: &str) -> Vec<Span> {
     match bytes[i] {
       b'(' => depth += 1,
       b')' => depth -= 1,
-      b',' if depth == 0 => { out.push(Span { start, end: i }); start = i + 1 }
+      b',' if depth == 0 => {
+        out.push(Span { start, end: i });
+        start = i + 1
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

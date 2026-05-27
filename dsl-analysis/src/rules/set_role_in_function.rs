@@ -24,8 +24,12 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
-    if !upper.contains("CREATE") { return }
-    if !upper.contains("FUNCTION") && !upper.contains("PROCEDURE") { return }
+    if !upper.contains("CREATE") {
+      return;
+    }
+    if !upper.contains("FUNCTION") && !upper.contains("PROCEDURE") {
+      return;
+    }
     let Some(body_start) = body.find("$$").map(|p| p + 2) else { return };
     let body_end = body[body_start..].find("$$").map(|p| body_start + p).unwrap_or(body.len());
     let fbody = &body[body_start..body_end];
@@ -36,17 +40,25 @@ impl LintRule for Rule {
       let at = from + rel;
       if at > 0 {
         let prev = bytes[at - 1] as char;
-        if prev.is_ascii_alphanumeric() || prev == '_' { from = at + 8; continue }
+        if prev.is_ascii_alphanumeric() || prev == '_' {
+          from = at + 8;
+          continue;
+        }
       }
       // Skip SET LOCAL ROLE (intentional, tx-scoped).
       let head: String = fupper[..at].chars().rev().take(10).collect::<String>().chars().rev().collect();
-      if head.contains("LOCAL ") { from = at + 8; continue }
+      if head.contains("LOCAL ") {
+        from = at + 8;
+        continue;
+      }
       let abs_s = start + body_start + at;
       let abs_e = abs_s + "SET ROLE".len();
       out.push(Diagnostic {
         code: "sql259",
         severity: Severity::Warning,
-        message: "SET ROLE in function body persists past the call (session-scoped) -- use SET LOCAL ROLE or SECURITY DEFINER".into(),
+        message:
+          "SET ROLE in function body persists past the call (session-scoped) -- use SET LOCAL ROLE or SECURITY DEFINER"
+            .into(),
         range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
       });
       from = at + 8;

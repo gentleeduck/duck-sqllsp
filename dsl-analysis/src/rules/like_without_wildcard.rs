@@ -30,41 +30,61 @@ impl LintRule for Rule {
     let upper_bytes = upper.as_bytes();
     let n = bytes.len();
 
-    // Walk for ` LIKE '...'` patterns. Once found, check the string
-    // contents for any wildcard (`%` or `_`).
+    // Walk for ` LIKE '...'` / ` ILIKE '...'` patterns. Once found,
+    // check the string contents for any wildcard (`%` or `_`).
     let mut i = 0;
-    while i + 5 <= n {
-      if &upper[i..i + 4] == "LIKE"
+    while i < n {
+      let kw_len = if i + 4 <= n
+        && &upper[i..i + 4] == "LIKE"
         && (i == 0 || !is_word(upper_bytes[i - 1] as char))
         && (i + 4 == n || !is_word(upper_bytes[i + 4] as char))
       {
-        let mut j = i + 4;
-        while j < n && bytes[j].is_ascii_whitespace() {
-          j += 1;
+        4
+      } else if i + 5 <= n
+        && &upper[i..i + 5] == "ILIKE"
+        && (i == 0 || !is_word(upper_bytes[i - 1] as char))
+        && (i + 5 == n || !is_word(upper_bytes[i + 5] as char))
+      {
+        5
+      } else {
+        i += 1;
+        continue;
+      };
+      let kw = &upper[i..i + kw_len];
+      let mut j = i + kw_len;
+      while j < n && bytes[j].is_ascii_whitespace() {
+        j += 1;
+      }
+      if j < n && bytes[j] == b'\'' {
+        let str_start = j + 1;
+        let mut k = str_start;
+        while k < n && bytes[k] != b'\'' {
+          k += 1;
         }
-        if j < n && bytes[j] == b'\'' {
-          let str_start = j + 1;
-          let mut k = str_start;
-          while k < n && bytes[k] != b'\'' {
-            k += 1;
-          }
-          if k < n {
-            let pat = &body[str_start..k];
-            if !pat.contains('%') && !pat.contains('_') {
-              let abs_start = start + i;
-              let abs_end = start + k + 1;
-              out.push(Diagnostic {
-                code: "sql052",
-                severity: Severity::Hint,
-                message: format!("`LIKE '{pat}'` has no wildcards -- use `=` for a literal match"),
-                range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
-              });
-              return;
-            }
+        if k < n {
+          let pat = &body[str_start..k];
+          if !pat.contains('%') && !pat.contains('_') {
+            let abs_start = start + i;
+            let abs_end = start + k + 1;
+            // ILIKE without wildcards is equivalent to case-insensitive
+            // equality -- `lower(col) = lower('...')` is the explicit
+            // form (or just `=` when both sides are already lowercase).
+            let rewrite = if kw_len == 5 {
+              "case-insensitive equality (e.g. `lower(col) = lower('...')`) -- LIKE adds no value"
+            } else {
+              "use `=` for a literal match"
+            };
+            out.push(Diagnostic {
+              code: "sql052",
+              severity: Severity::Hint,
+              message: format!("`{kw} '{pat}'` has no wildcards -- {rewrite}"),
+              range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+            });
+            return;
           }
         }
       }
-      i += 1;
+      i += kw_len;
     }
   }
 }

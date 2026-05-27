@@ -28,17 +28,27 @@ impl LintRule for Rule {
       let at = from + rel;
       if at > 0 {
         let prev = body.as_bytes()[at - 1] as char;
-        if prev.is_ascii_alphanumeric() || prev == '_' { from = at + 6; continue }
+        if prev.is_ascii_alphanumeric() || prev == '_' {
+          from = at + 6;
+          continue;
+        }
       }
       let open = at + "ARRAY[".len() - 1;
-      let Some(close) = find_matching_bracket(body, open) else { from = open; continue };
+      let Some(close) = find_matching_bracket(body, open) else {
+        from = open;
+        continue;
+      };
       let inner = &body[open + 1..close];
       let mut families: Vec<&'static str> = Vec::new();
       for raw in split_top_level(inner) {
         let lit = raw.trim();
-        if lit.is_empty() { continue }
-        if let Some(f) = literal_family(lit) {
-          if !families.contains(&f) { families.push(f); }
+        if lit.is_empty() {
+          continue;
+        }
+        if let Some(f) = literal_family(lit)
+          && !families.contains(&f)
+        {
+          families.push(f);
         }
       }
       if families.len() >= 2 {
@@ -67,12 +77,17 @@ fn split_top_level(text: &str) -> Vec<String> {
     match bytes[i] {
       b'(' | b'[' => depth += 1,
       b')' | b']' => depth -= 1,
-      b',' if depth == 0 => { out.push(text[start..i].to_string()); start = i + 1 }
+      b',' if depth == 0 => {
+        out.push(text[start..i].to_string());
+        start = i + 1
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -87,12 +102,19 @@ fn find_matching_bracket(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'[' => depth += 1,
-      b']' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b']' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -101,12 +123,22 @@ fn find_matching_bracket(s: &str, open: usize) -> Option<usize> {
 
 fn literal_family(s: &str) -> Option<&'static str> {
   let t = s.trim();
-  if t.eq_ignore_ascii_case("NULL") { return None }
-  if t.eq_ignore_ascii_case("TRUE") || t.eq_ignore_ascii_case("FALSE") { return Some("boolean") }
-  if let Some(stripped) = t.strip_prefix('\'') {
-    if stripped.ends_with('\'') { return Some("text") }
+  if t.eq_ignore_ascii_case("NULL") {
+    return None;
   }
-  if t.parse::<i64>().is_ok() { return Some("integer") }
-  if t.parse::<f64>().is_ok() { return Some("numeric") }
+  if t.eq_ignore_ascii_case("TRUE") || t.eq_ignore_ascii_case("FALSE") {
+    return Some("boolean");
+  }
+  if let Some(stripped) = t.strip_prefix('\'')
+    && stripped.ends_with('\'')
+  {
+    return Some("text");
+  }
+  if t.parse::<i64>().is_ok() {
+    return Some("integer");
+  }
+  if t.parse::<f64>().is_ok() {
+    return Some("numeric");
+  }
   None
 }

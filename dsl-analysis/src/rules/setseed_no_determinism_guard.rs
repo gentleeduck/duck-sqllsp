@@ -30,7 +30,9 @@ impl LintRule for Rule {
     let upper = body.to_ascii_uppercase();
     let Some(at) = upper.find("SETSEED(") else { return };
     let prefix_upper = source[..start].to_ascii_uppercase();
-    if prefix_upper.contains("BEGIN") || prefix_upper.contains("SET LOCAL") { return }
+    if prefix_upper.contains("BEGIN") || prefix_upper.contains("SET LOCAL") {
+      return;
+    }
     let abs_s = start + at;
     let abs_e = abs_s + "SETSEED".len();
     out.push(Diagnostic {

@@ -5,6 +5,7 @@
 //! list. Rules are tagged with stable codes (sql000..sql099) so users can
 //! disable individual rules through configuration.
 
+pub mod clause_scan;
 pub mod ct_model;
 pub mod diagnostic;
 pub mod rules;
@@ -49,7 +50,7 @@ fn skip_for_dialect(dialect: Dialect, code: &str) -> bool {
         || MSSQL_PORT_CODES.contains(&code)
         || ORACLE_PORT_CODES.contains(&code)
         || CROSS_DIALECT_CODES.contains(&code)
-    }
+    },
   }
 }
 
@@ -110,7 +111,9 @@ pub fn run_with_dialect(
   for (stmt, scope) in file.statements.iter().zip(scopes.iter()) {
     let trimmed = trim_stmt_range(stmt, source);
     for rule in &registered {
-      if skip_for_dialect(dialect, rule.code()) { continue }
+      if skip_for_dialect(dialect, rule.code()) {
+        continue;
+      }
       // Defensive: a rule that panics (e.g. byte-indexing a multi-byte
       // codepoint) shouldn't kill diagnostics for the whole buffer.
       // catch_unwind isolates the failure; the offending rule simply
@@ -140,15 +143,9 @@ pub fn run_with_dialect(
   // Drop exact duplicates (same code + same range + same message).
   // Rules occasionally emit identical hits when, e.g., a multi-stmt
   // chunk has overlapping scans -- pruning here keeps the UI clean.
-  let mut seen: std::collections::HashSet<(String, u32, u32, String)> =
-    std::collections::HashSet::new();
+  let mut seen: std::collections::HashSet<(String, u32, u32, String)> = std::collections::HashSet::new();
   out.retain(|d| {
-    seen.insert((
-      d.code.to_string(),
-      u32::from(d.range.start()),
-      u32::from(d.range.end()),
-      d.message.clone(),
-    ))
+    seen.insert((d.code.to_string(), u32::from(d.range.start()), u32::from(d.range.end()), d.message.clone()))
   });
   out
 }
@@ -157,9 +154,7 @@ fn apply_suppressions(source: &str, diags: &mut Vec<Diagnostic>) {
   let suppressions = collect_suppressions(source);
   diags.retain(|d| {
     let line = line_of(source, u32::from(d.range.start()) as usize);
-    !suppressions.iter().any(|(suppr_line, codes)| {
-      *suppr_line == line && (codes.is_empty() || codes.iter().any(|c| *c == d.code))
-    })
+    !suppressions.iter().any(|(suppr_line, codes)| *suppr_line == line && (codes.is_empty() || codes.contains(&d.code)))
   });
 }
 

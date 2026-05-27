@@ -25,12 +25,20 @@ impl LintRule for Rule {
     let body_owned = strip_noise(raw);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
-    if !upper.trim_start().starts_with("ALTER TABLE") { return }
-    let needle = if let Some(at) = upper.find("DISABLE TRIGGER") { (at, "DISABLE TRIGGER") }
-      else if let Some(at) = upper.find("ENABLE TRIGGER") { (at, "ENABLE TRIGGER") }
-      else if let Some(at) = upper.find("ENABLE ALWAYS TRIGGER") { (at, "ENABLE ALWAYS TRIGGER") }
-      else if let Some(at) = upper.find("ENABLE REPLICA TRIGGER") { (at, "ENABLE REPLICA TRIGGER") }
-      else { return };
+    if !upper.trim_start().starts_with("ALTER TABLE") {
+      return;
+    }
+    let needle = if let Some(at) = upper.find("DISABLE TRIGGER") {
+      (at, "DISABLE TRIGGER")
+    } else if let Some(at) = upper.find("ENABLE TRIGGER") {
+      (at, "ENABLE TRIGGER")
+    } else if let Some(at) = upper.find("ENABLE ALWAYS TRIGGER") {
+      (at, "ENABLE ALWAYS TRIGGER")
+    } else if let Some(at) = upper.find("ENABLE REPLICA TRIGGER") {
+      (at, "ENABLE REPLICA TRIGGER")
+    } else {
+      return;
+    };
     let abs_s = start + needle.0;
     let abs_e = abs_s + needle.1.len();
     out.push(Diagnostic {
@@ -51,23 +59,46 @@ fn strip_noise(s: &str) -> String {
   let mut i = 0usize;
   while i < n {
     if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
-      while i < n && out[i] != b'\n' { out[i] = b' '; i += 1 }
+      while i < n && out[i] != b'\n' {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
       let mut depth = 1u32;
-      out[i] = b' '; out[i + 1] = b' '; i += 2;
+      out[i] = b' ';
+      out[i + 1] = b' ';
+      i += 2;
       while i + 1 < n && depth > 0 {
-        if out[i] == b'/' && out[i + 1] == b'*' { depth += 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else if out[i] == b'*' && out[i + 1] == b'/' { depth -= 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else { out[i] = b' '; i += 1; }
+        if out[i] == b'/' && out[i + 1] == b'*' {
+          depth += 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else if out[i] == b'*' && out[i + 1] == b'/' {
+          depth -= 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else {
+          out[i] = b' ';
+          i += 1;
+        }
       }
       continue;
     }
     if out[i] == b'\'' {
-      out[i] = b' '; i += 1;
-      while i < n && out[i] != b'\'' { out[i] = b' '; i += 1 }
-      if i < n { out[i] = b' '; i += 1 }
+      out[i] = b' ';
+      i += 1;
+      while i < n && out[i] != b'\'' {
+        out[i] = b' ';
+        i += 1
+      }
+      if i < n {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     i += 1;

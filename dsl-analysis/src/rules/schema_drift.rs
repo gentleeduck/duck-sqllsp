@@ -29,13 +29,14 @@ impl LintRule for Rule {
     // PARTITION OF / LIKE-only / inheritance forms have no explicit
     // column list -- comparing zero buffer cols against the inherited
     // live cols would always report drift. Skip.
-    if ct.columns.is_empty() { return }
+    if ct.columns.is_empty() {
+      return;
+    }
     // Heuristic for "live catalog present": at least one table has a
     // non-empty constraint or index list. The source-derived offline
     // catalog has none of those.
-    let live_present = catalog
-      .tables()
-      .any(|t| !t.constraints.is_empty() || !t.indexes.is_empty() || !t.triggers.is_empty());
+    let live_present =
+      catalog.tables().any(|t| !t.constraints.is_empty() || !t.indexes.is_empty() || !t.triggers.is_empty());
     if !live_present {
       return;
     }
@@ -66,7 +67,7 @@ impl LintRule for Rule {
 }
 
 fn joined_sorted(items: &[&String]) -> String {
-  let mut v: Vec<&String> = items.iter().copied().collect();
+  let mut v: Vec<&String> = items.to_vec();
   v.sort();
   v.into_iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
 }

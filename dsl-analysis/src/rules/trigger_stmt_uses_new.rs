@@ -46,19 +46,27 @@ impl LintRule for Rule {
           // are statement-level transition-table aliases (PG10+) and
           // are completely legal.
           let mut k = i + 3;
-          while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+          while k < n && bytes[k].is_ascii_whitespace() {
+            k += 1
+          }
           let followed_by_dot = k < n && bytes[k] == b'.';
           // What word came right before NEW/OLD?
           let mut p = i;
-          while p > 0 && bytes[p - 1].is_ascii_whitespace() { p -= 1 }
+          while p > 0 && bytes[p - 1].is_ascii_whitespace() {
+            p -= 1
+          }
           let word_end = p;
-          while p > 0 && (bytes[p - 1].is_ascii_alphanumeric() || bytes[p - 1] == b'_') { p -= 1 }
+          while p > 0 && (bytes[p - 1].is_ascii_alphanumeric() || bytes[p - 1] == b'_') {
+            p -= 1
+          }
           let prev_word = &upper[p..word_end];
           let is_referencing_kind = matches!(prev_word, "REFERENCING");
           // What word follows NEW/OLD ignoring whitespace?
           let next_word_start = k;
           let mut q = next_word_start;
-          while q < n && (bytes[q].is_ascii_alphanumeric() || bytes[q] == b'_') { q += 1 }
+          while q < n && (bytes[q].is_ascii_alphanumeric() || bytes[q] == b'_') {
+            q += 1
+          }
           let next_word = &upper[next_word_start..q];
           let is_followed_by_table_or_row = matches!(next_word, "TABLE" | "ROW");
           if is_referencing_kind || is_followed_by_table_or_row || !followed_by_dot {

@@ -24,12 +24,16 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
-    if !upper.contains("CASCADE") { return }
+    if !upper.contains("CASCADE") {
+      return;
+    }
     for tref in &dt.tables {
       let mut deps: Vec<String> = Vec::new();
       for other in catalog.tables() {
         for con in &other.constraints {
-          if !matches!(con.kind, ConstraintKind::ForeignKey) { continue }
+          if !matches!(con.kind, ConstraintKind::ForeignKey) {
+            continue;
+          }
           let Some(r) = &con.references else { continue };
           if r.table.eq_ignore_ascii_case(&tref.name) {
             deps.push(format!("FK from {}.{}", other.schema, other.name));
@@ -42,7 +46,9 @@ impl LintRule for Rule {
         }
       }
       let count = deps.len();
-      if count < 3 { continue }
+      if count < 3 {
+        continue;
+      }
       let preview: Vec<&String> = deps.iter().take(3).collect();
       let extra = if count > 3 { format!(" (+{} more)", count - 3) } else { String::new() };
       let abs_s = start;

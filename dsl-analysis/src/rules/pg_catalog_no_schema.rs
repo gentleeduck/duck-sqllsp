@@ -12,10 +12,20 @@ use dsl_resolve::Scope;
 pub struct Rule;
 
 const SYS_REL: &[&str] = &[
-  "pg_class", "pg_attribute", "pg_index", "pg_proc", "pg_type",
-  "pg_namespace", "pg_constraint", "pg_database", "pg_roles",
-  "pg_stat_activity", "pg_stat_user_tables", "pg_stat_user_indexes",
-  "pg_stat_replication", "pg_settings",
+  "pg_class",
+  "pg_attribute",
+  "pg_index",
+  "pg_proc",
+  "pg_type",
+  "pg_namespace",
+  "pg_constraint",
+  "pg_database",
+  "pg_roles",
+  "pg_stat_activity",
+  "pg_stat_user_tables",
+  "pg_stat_user_indexes",
+  "pg_stat_replication",
+  "pg_settings",
 ];
 
 impl LintRule for Rule {
@@ -37,18 +47,34 @@ impl LintRule for Rule {
       while let Some(found) = lower[from..].find(rel) {
         let at = from + found;
         // word boundary
-        let prev_ok = at == 0 || !{ let p = bytes[at - 1] as char; p.is_ascii_alphanumeric() || p == '_' || p == '.' };
+        let prev_ok = at == 0
+          || !{
+            let p = bytes[at - 1] as char;
+            p.is_ascii_alphanumeric() || p == '_' || p == '.'
+          };
         let after = at + rel.len();
-        let after_ok = after >= bytes.len() || !{ let p = bytes[after] as char; p.is_ascii_alphanumeric() || p == '_' };
-        if !prev_ok || !after_ok { from = at + rel.len(); continue }
+        let after_ok = after >= bytes.len()
+          || !{
+            let p = bytes[after] as char;
+            p.is_ascii_alphanumeric() || p == '_'
+          };
+        if !prev_ok || !after_ok {
+          from = at + rel.len();
+          continue;
+        }
         // Already pg_catalog. prefix?
-        if at >= 11 && &lower[at - 11..at] == "pg_catalog." { from = at + rel.len(); continue }
+        if at >= 11 && &lower[at - 11..at] == "pg_catalog." {
+          from = at + rel.len();
+          continue;
+        }
         let abs_s = start + at;
         let abs_e = abs_s + rel.len();
         out.push(Diagnostic {
           code: "sql245",
           severity: Severity::Hint,
-          message: format!("`{rel}` referenced without `pg_catalog.` prefix -- search_path can shadow system catalogs (CVE-2018-1058)"),
+          message: format!(
+            "`{rel}` referenced without `pg_catalog.` prefix -- search_path can shadow system catalogs (CVE-2018-1058)"
+          ),
           range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
         });
         from = after;

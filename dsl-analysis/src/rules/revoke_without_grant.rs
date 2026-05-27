@@ -25,9 +25,13 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = source[start..end].trim_start();
     let upper = body.to_ascii_uppercase();
-    if !upper.starts_with("REVOKE") { return }
+    if !upper.starts_with("REVOKE") {
+      return;
+    }
     // Bail if the full buffer also has a GRANT.
-    if source.to_ascii_uppercase().contains("GRANT ") { return }
+    if source.to_ascii_uppercase().contains("GRANT ") {
+      return;
+    }
     let abs_s = start + (body.len() - body.trim_start().len());
     let abs_e = abs_s + 6;
     out.push(Diagnostic {

@@ -11,8 +11,18 @@ use dsl_resolve::Scope;
 pub struct Rule;
 
 const AGG: &[&str] = &[
-  "count(", "sum(", "avg(", "min(", "max(", "string_agg(", "array_agg(",
-  "json_agg(", "jsonb_agg(", "bool_and(", "bool_or(", "every(",
+  "count(",
+  "sum(",
+  "avg(",
+  "min(",
+  "max(",
+  "string_agg(",
+  "array_agg(",
+  "json_agg(",
+  "jsonb_agg(",
+  "bool_and(",
+  "bool_or(",
+  "every(",
 ];
 
 impl LintRule for Rule {
@@ -31,24 +41,35 @@ impl LintRule for Rule {
     let body_owned = crate::textutil::strip_noise_full(raw);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
-    if !upper.contains("FOR UPDATE") && !upper.contains("FOR SHARE")
-      && !upper.contains("FOR NO KEY UPDATE") && !upper.contains("FOR KEY SHARE")
-    { return }
+    if !upper.contains("FOR UPDATE")
+      && !upper.contains("FOR SHARE")
+      && !upper.contains("FOR NO KEY UPDATE")
+      && !upper.contains("FOR KEY SHARE")
+    {
+      return;
+    }
     let lower = body.to_ascii_lowercase();
     let has_agg = AGG.iter().any(|agg| lower.contains(agg));
     let has_group_by = upper.contains("GROUP BY") || upper.contains("HAVING");
-    if !has_agg && !has_group_by { return }
-    let Some(at) = upper.find("FOR UPDATE")
+    if !has_agg && !has_group_by {
+      return;
+    }
+    let Some(at) = upper
+      .find("FOR UPDATE")
       .or_else(|| upper.find("FOR SHARE"))
       .or_else(|| upper.find("FOR NO KEY UPDATE"))
       .or_else(|| upper.find("FOR KEY SHARE"))
-    else { return };
+    else {
+      return;
+    };
     let abs_s = start + at;
-    let abs_e = abs_s + upper[at..].find(|c: char| c == ';' || c == '\n').unwrap_or(upper.len() - at);
+    let abs_e = abs_s + upper[at..].find([';', '\n']).unwrap_or(upper.len() - at);
     out.push(Diagnostic {
       code: "sql250",
       severity: Severity::Error,
-      message: "FOR UPDATE/SHARE on aggregate or GROUP BY query -- PG raises 0A000; locking targets must be plain row sources".into(),
+      message:
+        "FOR UPDATE/SHARE on aggregate or GROUP BY query -- PG raises 0A000; locking targets must be plain row sources"
+          .into(),
       range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
     });
   }

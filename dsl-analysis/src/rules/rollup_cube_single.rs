@@ -30,10 +30,16 @@ impl LintRule for Rule {
         let at = from + rel;
         if at > 0 {
           let prev = body.as_bytes()[at - 1] as char;
-          if prev.is_ascii_alphanumeric() || prev == '_' { from = at + needle.len(); continue }
+          if prev.is_ascii_alphanumeric() || prev == '_' {
+            from = at + needle.len();
+            continue;
+          }
         }
         let open = at + needle.len();
-        let Some(close) = find_matching_paren(body, open - 1) else { from = open; continue };
+        let Some(close) = find_matching_paren(body, open - 1) else {
+          from = open;
+          continue;
+        };
         let inner = &body[open..close];
         if count_top_level_commas(inner) == 0 {
           out.push(Diagnostic {
@@ -61,9 +67,11 @@ fn count_top_level_commas(text: &str) -> usize {
       b',' if depth == 0 => commas += 1,
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -77,12 +85,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

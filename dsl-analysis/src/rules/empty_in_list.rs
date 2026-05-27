@@ -27,15 +27,19 @@ impl LintRule for Rule {
     while let Some(rel) = upper[from..].find(" IN ") {
       let at = from + rel + " IN ".len();
       let rest = body[at..].trim_start();
-      if !rest.starts_with('(') { from = at; continue }
+      if !rest.starts_with('(') {
+        from = at;
+        continue;
+      }
       let open = at + (body[at..].len() - rest.len());
-      let Some(close) = find_matching_paren(body, open) else { from = open; break };
+      let Some(close) = find_matching_paren(body, open) else { break };
       let inner = body[open + 1..close].trim();
       if inner.is_empty() {
         out.push(Diagnostic {
           code: "sql234",
           severity: Severity::Error,
-          message: "Empty `IN ()` list -- PG 42601 at parse; guard for empty arrays or use `IN (NULL)` placeholder".into(),
+          message: "Empty `IN ()` list -- PG 42601 at parse; guard for empty arrays or use `IN (NULL)` placeholder"
+            .into(),
           range: text_size::TextRange::new(((start + open) as u32).into(), ((start + close + 1) as u32).into()),
         });
       }
@@ -52,12 +56,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

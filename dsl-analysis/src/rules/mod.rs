@@ -6,73 +6,217 @@ pub mod add_column_notnull_no_default;
 pub mod advisory_lock_literal_key;
 pub mod advisory_lock_no_unlock;
 pub mod after_trigger_return_row;
+pub mod alter_add_check_no_not_valid;
+pub mod alter_column_type;
+pub mod alter_drop_just_created;
+pub mod alter_set_not_null_scan;
+pub mod alter_set_tablespace;
 pub mod alter_table_no_owner;
 pub mod alter_trigger_lock;
 pub mod alter_type_add_value_in_tx;
+pub mod alter_type_label_unknown;
 pub mod ambiguous_column;
+pub mod duplicate_alias;
+pub mod order_by_unknown_column;
+pub mod group_by_unknown_column;
+pub mod having_unknown_column;
+pub mod duplicate_dml_column;
+pub mod where_always_false;
+pub mod where_column_self_compare;
+pub mod between_self_bound;
+pub mod duplicate_select_projection;
+pub mod limit_one_offset_no_order;
+pub mod duplicate_order_or_group_item;
+pub mod concat_with_null_literal;
+pub mod in_list_self_member;
+pub mod cast_same_type;
+pub mod case_all_branches_same;
+pub mod coalesce_dead_arg;
+pub mod distinct_on_unique;
+pub mod nullif_with_null_literal;
+pub mod any_array_self_member;
+pub mod duplicate_where_predicate;
+pub mod where_pred_and_negation;
+pub mod regex_prefix_could_be_like;
+pub mod aggregate_in_where;
+pub mod window_in_where;
+pub mod distinct_order_by_must_be_in_projection;
+pub mod wrap_blocks_index;
+pub mod aggregate_star_only_count;
+pub mod invalid_equality_operator;
+pub mod select_star_with_named_columns;
+pub mod for_update_in_setop;
+pub mod case_duplicate_when;
+pub mod order_by_constant;
+pub mod redundant_is_not_null;
+pub mod where_is_null_contradiction;
+pub mod window_in_aggregate;
+pub mod null_in_list;
+pub mod generated_identity_with_default;
+pub mod invalid_date_literal;
+pub mod invalid_interval_unit;
+pub mod uncorrelated_exists;
+pub mod regexp_replace_no_global;
+pub mod substring_negative_length;
+pub mod generate_series_bad_step;
+pub mod array_position_null;
+pub mod position_empty_substring;
+pub mod power_trivial_exponent;
+pub mod lpad_rpad_negative;
+pub mod jsonb_build_object_duplicate_key;
+pub mod numeric_scale_exceeds_precision;
+pub mod varchar_char_zero_length;
+pub mod repeat_trivial_count;
+pub mod array_length_missing_dim;
+pub mod to_timestamp_hh_mm_confusion;
+pub mod where_pred_or_negation;
+pub mod int_literal_out_of_range;
+pub mod positional_out_of_range;
+pub mod sum_avg_of_boolean;
+pub mod count_notnull_column;
+pub mod having_without_aggregate;
+pub mod array_func_null_array;
+pub mod null_arithmetic;
+pub mod tg_op_invalid_literal;
+pub mod is_distinct_self;
+pub mod concat_ws_empty_sep;
+pub mod offset_zero;
+pub mod empty_needle_string_fn;
+pub mod greatest_least_all_null;
+pub mod not_is_null;
+pub mod not_paren_predicate;
+pub mod distinct_inside_in_subquery;
+pub mod extract_invalid_interval_field;
+pub mod any_all_empty_array;
+pub mod where_literal_literal;
+pub mod insert_self_select;
+pub mod case_when_null;
+pub mod contains_empty_container;
+pub mod contained_by_empty;
+pub mod substring_zero_start;
+pub mod group_by_constant;
+pub mod position_empty_haystack;
+pub mod having_constant;
+pub mod split_part_zero_field;
+pub mod partition_by_constant;
+pub mod regexp_empty_pattern;
+pub mod distinct_star;
+pub mod array_dim_zero;
+pub mod jsonpath_missing_anchor;
+pub mod where_arith_identity;
+pub mod concat_empty_string;
+pub mod having_literal_literal;
+pub mod not_in_null_list;
+pub mod coalesce_not_null;
+pub mod jsonb_set_empty_path;
+pub mod eq_all_array;
+pub mod set_default_no_default;
+pub mod agg_distinct_order_mismatch;
+pub mod similar_to_deprecated;
+pub mod tsvector_text_literal;
+pub mod date_minus_date;
+pub mod order_nulls_on_not_null;
+pub mod timestamp_lit_on_tstz_col;
+pub mod jsonb_question_on_non_jsonb;
+pub mod integer_division_truncation;
+pub mod json_extract_on_text;
+pub mod array_all_null;
+pub mod execute_string_concat;
+pub mod self_like;
+pub mod pg_temp_explicit;
+pub mod self_similar;
+pub mod self_containment;
+pub mod analyze_in_tx;
 pub mod any_all_multicol;
 pub mod array_elem_vs_col;
+pub mod array_eq_with_null;
+pub mod array_fn_on_scalar;
+pub mod array_mixed_types;
 pub mod array_subscript_zero;
 pub mod backslash_in_string;
 pub mod bare_return_typed;
 pub mod begin_no_lock_mode;
 pub mod between_reversed;
+pub mod bool_agg_nullable;
 pub mod bool_compare_equals;
 pub mod boolean_in_text_column;
-pub mod bool_agg_nullable;
 pub mod brin_small_table;
+pub mod bytea_literal_no_escape;
 pub mod case_branch_types;
 pub mod case_no_else;
 pub mod case_single_when;
+pub mod cast_literal_invalid;
 pub mod cast_text_in_distinct;
 pub mod cast_text_to_int_in_where;
+pub mod chained_comparison;
 pub mod char_length_vs_length;
+pub mod char_n_type;
+pub mod character_varying_no_limit;
 pub mod check_always_false;
 pub mod check_always_true;
-pub mod chained_comparison;
-pub mod char_n_type;
 pub mod coalesce_single_arg;
-pub mod character_varying_no_limit;
 pub mod column_default_volatile;
+pub mod comment_clears_existing;
+pub mod comment_constraint_no_on;
+pub mod comment_fn_no_args;
+pub mod comment_on_unknown;
 pub mod commit_in_function;
 pub mod copy_file_path;
 pub mod copy_header_no_csv;
 pub mod copy_no_format;
 pub mod copy_program_exec;
+pub mod count_nullable;
 pub mod count_one_vs_star;
-pub mod bytea_literal_no_escape;
-pub mod create_table_no_schema;
-pub mod drop_index_concurrently_in_tx;
 pub mod count_star_returns_one;
+pub mod create_table_no_schema;
 pub mod cte_dml_no_returning;
 pub mod cte_missing_recursive;
 pub mod current_setting_no_missing_ok;
 pub mod cursor_with_hold_no_tx;
+pub mod date_literal_format;
 pub mod ddl_in_immutable;
 pub mod deep_case_nesting;
+pub mod default_references_column;
+pub mod default_values_no_default_col;
 pub mod delete_no_where_in_fn;
-pub mod dml_where_unknown_column;
 pub mod deprecated_function;
 pub mod distinct_after_group_by;
 pub mod distinct_on_no_order;
 pub mod distinct_on_subq_no_order;
 pub mod distinct_with_aggregate;
+pub mod dml_where_unknown_column;
 pub mod do_block_bare_select;
+pub mod drop_cascade_chain;
+pub mod drop_column_fk;
+pub mod drop_function_no_args;
+pub mod drop_index_concurrently_in_tx;
+pub mod drop_role_no_reassign;
+pub mod drop_schema_no_cascade;
+pub mod drop_table_no_if_exists;
 pub mod empty_array_no_cast;
 pub mod empty_comment;
 pub mod empty_in_list;
-pub mod exit_outside_loop;
 pub mod exists_select_star;
+pub mod exit_outside_loop;
 pub mod explain_analyze_in_dml;
 pub mod extension_no_if_not_exists;
 pub mod extract_on_indexable;
 pub mod extract_unknown_field;
+pub mod fk_target_not_unique;
+pub mod fk_unknown_column;
+pub mod for_update_aggregate;
+pub mod for_update_left_join;
+pub mod for_update_of_unknown;
+pub mod for_update_on_view;
+pub mod format_no_placeholders;
 pub mod generate_series_no_alias;
+pub mod generated_uses_volatile;
 pub mod gin_on_scalar;
 pub mod gist_on_scalar;
 pub mod grant_all_too_broad;
 pub mod grant_to_public;
 pub mod grant_with_grant_option;
+pub mod group_by_alias;
 pub mod group_by_all;
 pub mod group_by_position;
 pub mod group_by_required;
@@ -81,26 +225,32 @@ pub mod immutable_calls_volatile;
 pub mod implicit_cross_join;
 pub mod in_list_duplicates;
 pub mod index_concurrently_in_tx;
-pub mod information_schema_perf;
 pub mod index_expr_volatile;
 pub mod index_no_name;
+pub mod information_schema_perf;
+pub mod inline_check_other_col;
 pub mod insert_col_value_count;
-pub mod insert_unknown_column;
+pub mod insert_into_generated;
 pub mod insert_no_columns;
 pub mod insert_no_on_conflict;
 pub mod insert_subquery_col_count;
 pub mod insert_type_literal;
+pub mod insert_unknown_column;
+pub mod int_range;
 pub mod is_distinct_null;
+pub mod is_null_on_not_null;
 pub mod join_no_on;
 pub mod jsonb_build_odd_args;
 pub mod jsonb_contains_no_cast;
 pub mod jsonb_no_cast;
 pub mod jsonb_set_no_create;
 pub mod jsonb_set_path_format;
+pub mod lateral_no_ref;
+pub mod like_include_indexes_partition;
 pub mod like_leading_wildcard;
 pub mod like_with_no_collation;
-pub mod limit_for_update_subq;
 pub mod like_without_wildcard;
+pub mod limit_for_update_subq;
 pub mod limit_without_order;
 pub mod limit_zero;
 pub mod listen_unbounded;
@@ -111,110 +261,115 @@ pub mod merge_missing_when;
 pub mod missing_lateral;
 pub mod missing_primary_key;
 pub mod missing_trigger_return;
-pub mod multi_raise_exception;
-pub mod multi_where;
-pub mod multiple_truncate_in_tx;
 pub mod mssql_begin_tran;
 pub mod mssql_bracket_quote;
 pub mod mssql_go;
 pub mod mssql_top;
+pub mod multi_raise_exception;
+pub mod multi_where;
+pub mod multiple_truncate_in_tx;
+pub mod mutating_without_where;
 pub mod mv_no_data_query;
 pub mod mysql_auto_increment;
 pub mod mysql_engine;
 pub mod mysql_interval_syntax;
 pub mod mysql_table_comment;
 pub mod mysql_types;
-pub mod mutating_without_where;
 pub mod negative_limit_offset;
 pub mod nested_begin;
+pub mod new_assign_pk_in_before_insert;
 pub mod non_pg_date_fns;
 pub mod non_pg_null_fns;
-pub mod notify_payload_too_large;
-pub mod notify_unlistened;
 pub mod not_in_nullable;
 pub mod not_in_subquery;
-pub mod new_assign_pk_in_before_insert;
+pub mod notify_payload_too_large;
+pub mod notify_unlistened;
+pub mod now_default_on_timestamp;
 pub mod null_comparison;
 pub mod null_default_not_null;
 pub mod null_in_values;
-pub mod nulls_first_last_no_order;
-pub mod now_default_on_timestamp;
+pub mod null_into_not_null;
 pub mod nullif_same_args;
 pub mod nullif_type_mismatch;
-pub mod group_by_alias;
-pub mod like_include_indexes_partition;
+pub mod nulls_first_last_no_order;
 pub mod numeric_no_precision;
+pub mod on_conflict_do_nothing;
+pub mod on_conflict_no_unique;
 pub mod on_update_cascade_pk;
-pub mod order_by_in_subquery;
-pub mod order_by_position;
-pub mod order_by_using_noncomparable;
-pub mod order_by_random;
 pub mod oracle_connect_by;
 pub mod oracle_dual;
 pub mod oracle_outer_join;
 pub mod oracle_rownum;
+pub mod order_by_in_subquery;
+pub mod order_by_position;
+pub mod order_by_random;
+pub mod order_by_using_noncomparable;
 pub mod owner_to_unknown_role;
 pub mod percentile_no_within;
 pub mod percentile_non_numeric_order;
-pub mod plpgsql_assign_type;
 pub mod perform_for_pure_select;
 pub mod pg_catalog_no_schema;
 pub mod pg_sleep_in_tx;
 pub mod pg_terminate_backend;
 pub mod pk_duplicate_col;
+pub mod plpgsql_assign_type;
 pub mod prefer_alias;
 pub mod psql_backslash;
 pub mod raise_arg_count;
-pub mod raise_no_level;
-pub mod recursive_cte_no_union;
 pub mod raise_message_no_args;
+pub mod raise_no_level;
 pub mod raise_using_errcode;
+pub mod recursive_cte_no_union;
 pub mod redundant_index_on_pk;
 pub mod redundant_parens;
 pub mod redundant_unique_index;
-pub mod rename_column_breaks_view;
 pub mod reindex_in_tx;
 pub mod reindex_system;
+pub mod rename_column_breaks_view;
 pub mod reserved_word_identifier;
 pub mod return_type_literal;
-pub mod rollback_outside_tx;
-pub mod rollup_cube_single;
 pub mod returning_no_assign;
 pub mod returning_unknown_column;
 pub mod returning_with_truncate;
 pub mod revoke_cascade;
 pub mod revoke_missing_from;
 pub mod revoke_without_grant;
+pub mod rollback_outside_tx;
+pub mod rollup_cube_single;
 pub mod row_constructor_single;
 pub mod row_count_after_dml;
 pub mod savepoint_name_reuse;
 pub mod savepoint_no_release;
+pub mod savepoint_outside_tx;
+pub mod schema_drift;
+pub mod secdef_no_search_path;
 pub mod select_for_update_in_recursive_cte;
 pub mod select_for_update_no_where;
 pub mod select_into_existing;
 pub mod select_into_outside_plpgsql;
-pub mod select_into_temp_shadows;
 pub mod select_into_shape;
 pub mod select_into_strict_no_exception;
+pub mod select_into_temp_shadows;
 pub mod select_no_from_no_agg;
 pub mod select_star_insert;
 pub mod select_trailing_comma;
+pub mod self_fk_no_deferrable;
+pub mod serial_vs_identity;
 pub mod set_constraints_outside_tx;
-pub mod setseed_no_determinism_guard;
 pub mod set_local_outside_tx;
 pub mod set_role_in_function;
 pub mod set_role_no_reset;
 pub mod set_transaction_in_function;
+pub mod setseed_no_determinism_guard;
 pub mod shell_command_in_sql;
 pub mod single_stmt_transaction;
+pub mod sql_lang_uses_new_old;
 pub mod star_with_order_by_position;
 pub mod string_agg_no_order;
 pub mod substring_from_no_for;
-pub mod sql_lang_uses_new_old;
 pub mod system_catalog_dml;
 pub mod table_inherits;
 pub mod tablespace_specified;
-pub mod unknown_function;
 pub mod text_int_arithmetic;
 pub mod tg_var_in_non_trigger;
 pub mod time_with_timezone;
@@ -222,85 +377,40 @@ pub mod timestamp_int_arithmetic;
 pub mod timestamp_precision_over;
 pub mod timestamp_without_tz;
 pub mod trailing_comma_values;
-pub mod truncate_in_plpgsql_exception;
 pub mod transaction_isolation_no_set;
 pub mod trigger_stmt_uses_new;
 pub mod trigger_when_uses_new_in_delete;
 pub mod trigger_when_uses_old_in_insert;
+pub mod trigger_wrong_row_alias;
+pub mod truncate_in_plpgsql_exception;
+pub mod truncate_in_trigger;
 pub mod truncate_no_cascade;
+pub mod truncate_with_fk;
 pub mod union_column_count;
 pub mod union_inner_order_by;
 pub mod union_vs_all;
 pub mod unique_on_nullable;
 pub mod unknown_column;
+pub mod unknown_function;
 pub mod unreachable_after_return;
 pub mod unresolved_table;
 pub mod update_delete_limit;
 pub mod update_from_no_pk_filter;
-pub mod update_set_no_change;
 pub mod update_set_alias_mismatch;
+pub mod update_set_no_change;
 pub mod update_set_type_literal;
 pub mod update_set_unknown_col;
-pub mod count_nullable;
-pub mod for_update_on_view;
-pub mod is_null_on_not_null;
-pub mod insert_into_generated;
-pub mod savepoint_outside_tx;
-pub mod secdef_no_search_path;
-pub mod self_fk_no_deferrable;
-pub mod serial_vs_identity;
-pub mod trigger_wrong_row_alias;
-pub mod truncate_in_trigger;
-pub mod varchar_length;
-pub mod date_literal_format;
-pub mod alter_add_check_no_not_valid;
-pub mod alter_column_type;
-pub mod alter_set_not_null_scan;
-pub mod alter_set_tablespace;
-pub mod alter_drop_just_created;
-pub mod alter_type_label_unknown;
-pub mod analyze_in_tx;
-pub mod array_eq_with_null;
-pub mod array_fn_on_scalar;
-pub mod array_mixed_types;
-pub mod cast_literal_invalid;
-pub mod comment_clears_existing;
-pub mod comment_constraint_no_on;
-pub mod comment_fn_no_args;
-pub mod comment_on_unknown;
-pub mod default_references_column;
-pub mod default_values_no_default_col;
-pub mod fk_target_not_unique;
-pub mod for_update_aggregate;
-pub mod format_no_placeholders;
-pub mod for_update_left_join;
-pub mod for_update_of_unknown;
-pub mod inline_check_other_col;
-pub mod lateral_no_ref;
-pub mod generated_uses_volatile;
-pub mod on_conflict_do_nothing;
-pub mod on_conflict_no_unique;
-pub mod truncate_with_fk;
-pub mod window_frame_reversed;
-pub mod window_no_order;
-pub mod drop_cascade_chain;
-pub mod drop_column_fk;
-pub mod drop_function_no_args;
-pub mod drop_role_no_reassign;
-pub mod drop_schema_no_cascade;
-pub mod drop_table_no_if_exists;
-pub mod fk_unknown_column;
-pub mod int_range;
 pub mod using_clause_columns;
 pub mod uuid_literal_format;
-pub mod null_into_not_null;
-pub mod schema_drift;
 pub mod vacuum_in_transaction;
 pub mod values_row_width;
 pub mod values_subq_no_alias;
+pub mod varchar_length;
 pub mod view_select_star;
 pub mod where_true_placeholder;
 pub mod where_type_literal;
+pub mod window_frame_reversed;
+pub mod window_no_order;
 
 use crate::LintRule;
 
@@ -309,6 +419,116 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(unresolved_table::Rule),
     Box::new(unknown_column::Rule),
     Box::new(ambiguous_column::Rule),
+    Box::new(duplicate_alias::Rule),
+    Box::new(order_by_unknown_column::Rule),
+    Box::new(group_by_unknown_column::Rule),
+    Box::new(having_unknown_column::Rule),
+    Box::new(duplicate_dml_column::Rule),
+    Box::new(where_always_false::Rule),
+    Box::new(where_column_self_compare::Rule),
+    Box::new(between_self_bound::Rule),
+    Box::new(duplicate_select_projection::Rule),
+    Box::new(limit_one_offset_no_order::Rule),
+    Box::new(duplicate_order_or_group_item::Rule),
+    Box::new(concat_with_null_literal::Rule),
+    Box::new(in_list_self_member::Rule),
+    Box::new(cast_same_type::Rule),
+    Box::new(case_all_branches_same::Rule),
+    Box::new(coalesce_dead_arg::Rule),
+    Box::new(distinct_on_unique::Rule),
+    Box::new(nullif_with_null_literal::Rule),
+    Box::new(any_array_self_member::Rule),
+    Box::new(duplicate_where_predicate::Rule),
+    Box::new(where_pred_and_negation::Rule),
+    Box::new(regex_prefix_could_be_like::Rule),
+    Box::new(aggregate_in_where::Rule),
+    Box::new(window_in_where::Rule),
+    Box::new(distinct_order_by_must_be_in_projection::Rule),
+    Box::new(wrap_blocks_index::Rule),
+    Box::new(aggregate_star_only_count::Rule),
+    Box::new(invalid_equality_operator::Rule),
+    Box::new(select_star_with_named_columns::Rule),
+    Box::new(for_update_in_setop::Rule),
+    Box::new(case_duplicate_when::Rule),
+    Box::new(order_by_constant::Rule),
+    Box::new(redundant_is_not_null::Rule),
+    Box::new(where_is_null_contradiction::Rule),
+    Box::new(window_in_aggregate::Rule),
+    Box::new(null_in_list::Rule),
+    Box::new(generated_identity_with_default::Rule),
+    Box::new(invalid_date_literal::Rule),
+    Box::new(invalid_interval_unit::Rule),
+    Box::new(uncorrelated_exists::Rule),
+    Box::new(regexp_replace_no_global::Rule),
+    Box::new(substring_negative_length::Rule),
+    Box::new(generate_series_bad_step::Rule),
+    Box::new(array_position_null::Rule),
+    Box::new(position_empty_substring::Rule),
+    Box::new(power_trivial_exponent::Rule),
+    Box::new(lpad_rpad_negative::Rule),
+    Box::new(jsonb_build_object_duplicate_key::Rule),
+    Box::new(numeric_scale_exceeds_precision::Rule),
+    Box::new(varchar_char_zero_length::Rule),
+    Box::new(repeat_trivial_count::Rule),
+    Box::new(array_length_missing_dim::Rule),
+    Box::new(to_timestamp_hh_mm_confusion::Rule),
+    Box::new(where_pred_or_negation::Rule),
+    Box::new(int_literal_out_of_range::Rule),
+    Box::new(positional_out_of_range::Rule),
+    Box::new(sum_avg_of_boolean::Rule),
+    Box::new(count_notnull_column::Rule),
+    Box::new(having_without_aggregate::Rule),
+    Box::new(array_func_null_array::Rule),
+    Box::new(null_arithmetic::Rule),
+    Box::new(tg_op_invalid_literal::Rule),
+    Box::new(is_distinct_self::Rule),
+    Box::new(concat_ws_empty_sep::Rule),
+    Box::new(offset_zero::Rule),
+    Box::new(empty_needle_string_fn::Rule),
+    Box::new(greatest_least_all_null::Rule),
+    Box::new(not_is_null::Rule),
+    Box::new(not_paren_predicate::Rule),
+    Box::new(distinct_inside_in_subquery::Rule),
+    Box::new(extract_invalid_interval_field::Rule),
+    Box::new(any_all_empty_array::Rule),
+    Box::new(where_literal_literal::Rule),
+    Box::new(insert_self_select::Rule),
+    Box::new(case_when_null::Rule),
+    Box::new(contains_empty_container::Rule),
+    Box::new(contained_by_empty::Rule),
+    Box::new(substring_zero_start::Rule),
+    Box::new(group_by_constant::Rule),
+    Box::new(position_empty_haystack::Rule),
+    Box::new(having_constant::Rule),
+    Box::new(split_part_zero_field::Rule),
+    Box::new(partition_by_constant::Rule),
+    Box::new(regexp_empty_pattern::Rule),
+    Box::new(distinct_star::Rule),
+    Box::new(array_dim_zero::Rule),
+    Box::new(jsonpath_missing_anchor::Rule),
+    Box::new(where_arith_identity::Rule),
+    Box::new(concat_empty_string::Rule),
+    Box::new(having_literal_literal::Rule),
+    Box::new(not_in_null_list::Rule),
+    Box::new(coalesce_not_null::Rule),
+    Box::new(jsonb_set_empty_path::Rule),
+    Box::new(eq_all_array::Rule),
+    Box::new(set_default_no_default::Rule),
+    Box::new(agg_distinct_order_mismatch::Rule),
+    Box::new(similar_to_deprecated::Rule),
+    Box::new(tsvector_text_literal::Rule),
+    Box::new(date_minus_date::Rule),
+    Box::new(order_nulls_on_not_null::Rule),
+    Box::new(timestamp_lit_on_tstz_col::Rule),
+    Box::new(jsonb_question_on_non_jsonb::Rule),
+    Box::new(integer_division_truncation::Rule),
+    Box::new(json_extract_on_text::Rule),
+    Box::new(array_all_null::Rule),
+    Box::new(execute_string_concat::Rule),
+    Box::new(self_like::Rule),
+    Box::new(pg_temp_explicit::Rule),
+    Box::new(self_similar::Rule),
+    Box::new(self_containment::Rule),
     Box::new(mutating_without_where::Rule),
     Box::new(null_comparison::Rule),
     Box::new(implicit_cross_join::Rule),

@@ -77,7 +77,10 @@ fn strip_line_comments(s: &str) -> String {
   let mut i = 0usize;
   while i < n {
     if i + 1 < n && bytes[i] == b'-' && bytes[i + 1] == b'-' {
-      while i < n && bytes[i] != b'\n' { out.push(' '); i += 1 }
+      while i < n && bytes[i] != b'\n' {
+        out.push(' ');
+        i += 1
+      }
     } else if bytes[i].is_ascii() {
       out.push(bytes[i] as char);
       i += 1;

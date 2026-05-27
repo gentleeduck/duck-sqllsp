@@ -28,10 +28,13 @@ impl LintRule for Rule {
       let at = from + rel;
       if at > 0 {
         let prev = body.as_bytes()[at - 1] as char;
-        if prev.is_ascii_alphanumeric() || prev == '_' { from = at + 16; continue }
+        if prev.is_ascii_alphanumeric() || prev == '_' {
+          from = at + 16;
+          continue;
+        }
       }
       let open = at + "current_setting(".len() - 1;
-      let Some(close) = find_matching_paren(body, open) else { from = open; break };
+      let Some(close) = find_matching_paren(body, open) else { break };
       let args = body[open + 1..close].trim();
       if !args.contains(',') {
         out.push(Diagnostic {
@@ -56,12 +59,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

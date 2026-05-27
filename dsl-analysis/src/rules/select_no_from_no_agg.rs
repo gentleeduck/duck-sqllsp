@@ -95,12 +95,12 @@ impl LintRule for Rule {
       return;
     }
     // Skip pure literal SELECTs (`SELECT 1`, `SELECT 'x'`, ...).
-    let after_select = upper.trim_start_matches(|c: char| c == ' ' || c == '\n' || c == '\t');
+    let after_select = upper.trim_start_matches([' ', '\n', '\t']);
     if !after_select.starts_with("SELECT") {
       return;
     }
     let proj = after_select[6..].trim_start();
-    if proj.starts_with('\'') || proj.chars().next().map_or(false, |c| c.is_ascii_digit() || c == '-') {
+    if proj.starts_with('\'') || proj.chars().next().is_some_and(|c| c.is_ascii_digit() || c == '-') {
       return;
     }
     // Skip when the projection is plain `*` (no FROM => syntax error
@@ -162,17 +162,23 @@ impl LintRule for Rule {
 fn has_word(upper: &str, needle: &str) -> bool {
   let h = upper.as_bytes();
   let n = needle.as_bytes();
-  if n.is_empty() { return false }
+  if n.is_empty() {
+    return false;
+  }
   let mut i = 0usize;
   while i + n.len() <= h.len() {
     if h[i..i + n.len()] == *n {
       let prev_ok = i == 0 || !is_id(h[i - 1] as char);
       let next_ok = i + n.len() == h.len() || !is_id(h[i + n.len()] as char);
-      if prev_ok && next_ok { return true }
+      if prev_ok && next_ok {
+        return true;
+      }
     }
     i += 1;
   }
   false
 }
 
-fn is_id(c: char) -> bool { c.is_alphanumeric() || c == '_' }
+fn is_id(c: char) -> bool {
+  c.is_alphanumeric() || c == '_'
+}

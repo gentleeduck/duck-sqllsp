@@ -103,23 +103,3 @@ fn strip_comments(s: &str) -> String {
   }
   out
 }
-
-fn tokenize(s: &str) -> Vec<String> {
-  let mut out = Vec::new();
-  let bytes = s.as_bytes();
-  let n = bytes.len();
-  let mut i = 0;
-  while i < n {
-    let c = bytes[i] as char;
-    if c.is_alphabetic() || c == '_' {
-      let start = i;
-      while i < n && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
-        i += 1;
-      }
-      out.push(s[start..i].to_string());
-    } else {
-      i += 1;
-    }
-  }
-  out
-}

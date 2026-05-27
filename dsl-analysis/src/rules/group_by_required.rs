@@ -194,16 +194,32 @@ fn strip_noise(s: &str) -> String {
   let mut i = 0usize;
   while i < n {
     if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
-      while i < n && out[i] != b'\n' { out[i] = b' '; i += 1 }
+      while i < n && out[i] != b'\n' {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
       let mut depth = 1u32;
-      out[i] = b' '; out[i + 1] = b' '; i += 2;
+      out[i] = b' ';
+      out[i + 1] = b' ';
+      i += 2;
       while i + 1 < n && depth > 0 {
-        if out[i] == b'/' && out[i + 1] == b'*' { depth += 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else if out[i] == b'*' && out[i + 1] == b'/' { depth -= 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else { out[i] = b' '; i += 1; }
+        if out[i] == b'/' && out[i + 1] == b'*' {
+          depth += 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else if out[i] == b'*' && out[i + 1] == b'/' {
+          depth -= 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else {
+          out[i] = b' ';
+          i += 1;
+        }
       }
       continue;
     }
@@ -256,8 +272,11 @@ fn scan_projection(proj: &str) -> (usize, Vec<String>) {
           // Peek for OVER -- window-function form (COUNT(*) OVER ...)
           // partitions per-row and does NOT require GROUP BY.
           let mut p = after_close;
-          while p < n && (bytes[p] as char).is_whitespace() { p += 1 }
-          let is_window = p + 4 <= n && bytes[p..p + 4].eq_ignore_ascii_case(b"OVER")
+          while p < n && (bytes[p] as char).is_whitespace() {
+            p += 1
+          }
+          let is_window = p + 4 <= n
+            && bytes[p..p + 4].eq_ignore_ascii_case(b"OVER")
             && (p + 4 == n || !is_word(bytes[p + 4] as char));
           if !is_window {
             aggregates += 1;
@@ -284,7 +303,9 @@ fn scan_projection(proj: &str) -> (usize, Vec<String>) {
       // itself is wrong because the user likely aliases the expression
       // and GROUPs by the alias.
       let mut p2 = i;
-      while p2 < n && (bytes[p2] as char).is_whitespace() { p2 += 1 }
+      while p2 < n && (bytes[p2] as char).is_whitespace() {
+        p2 += 1
+      }
       if p2 < n {
         let next = bytes[p2];
         if next == b'-' || next == b'#' || next == b'[' {

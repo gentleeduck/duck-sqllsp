@@ -91,23 +91,46 @@ fn strip_noise(s: &str) -> String {
   let mut i = 0usize;
   while i < n {
     if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
-      while i < n && out[i] != b'\n' { out[i] = b' '; i += 1 }
+      while i < n && out[i] != b'\n' {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
       let mut depth = 1u32;
-      out[i] = b' '; out[i + 1] = b' '; i += 2;
+      out[i] = b' ';
+      out[i + 1] = b' ';
+      i += 2;
       while i + 1 < n && depth > 0 {
-        if out[i] == b'/' && out[i + 1] == b'*' { depth += 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else if out[i] == b'*' && out[i + 1] == b'/' { depth -= 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else { out[i] = b' '; i += 1; }
+        if out[i] == b'/' && out[i + 1] == b'*' {
+          depth += 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else if out[i] == b'*' && out[i + 1] == b'/' {
+          depth -= 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else {
+          out[i] = b' ';
+          i += 1;
+        }
       }
       continue;
     }
     if out[i] == b'\'' {
-      out[i] = b' '; i += 1;
-      while i < n && out[i] != b'\'' { out[i] = b' '; i += 1 }
-      if i < n { out[i] = b' '; i += 1 }
+      out[i] = b' ';
+      i += 1;
+      while i < n && out[i] != b'\'' {
+        out[i] = b' ';
+        i += 1
+      }
+      if i < n {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     i += 1;

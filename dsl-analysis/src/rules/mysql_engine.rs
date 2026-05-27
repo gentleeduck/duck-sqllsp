@@ -37,7 +37,9 @@ impl LintRule for Rule {
     };
     if at > 0 {
       let prev = body.as_bytes()[at - 1] as char;
-      if prev.is_ascii_alphanumeric() || prev == '_' { return }
+      if prev.is_ascii_alphanumeric() || prev == '_' {
+        return;
+      }
     }
     let abs_s = start + at;
     let abs_e = abs_s + "ENGINE=".len();

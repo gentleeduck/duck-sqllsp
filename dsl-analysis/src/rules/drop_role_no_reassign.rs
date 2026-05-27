@@ -24,9 +24,13 @@ impl LintRule for Rule {
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
     let trim = upper.trim_start();
-    if !(trim.starts_with("DROP ROLE") || trim.starts_with("DROP USER") || trim.starts_with("DROP GROUP")) { return }
+    if !(trim.starts_with("DROP ROLE") || trim.starts_with("DROP USER") || trim.starts_with("DROP GROUP")) {
+      return;
+    }
     let prelude_upper = source[..start].to_ascii_uppercase();
-    if prelude_upper.contains("REASSIGN OWNED") && prelude_upper.contains("DROP OWNED") { return }
+    if prelude_upper.contains("REASSIGN OWNED") && prelude_upper.contains("DROP OWNED") {
+      return;
+    }
     let lead = body.len() - body.trim_start().len();
     let abs_s = start + lead;
     let abs_e = start + body.find(';').unwrap_or(body.len());

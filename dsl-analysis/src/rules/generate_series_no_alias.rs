@@ -53,9 +53,13 @@ impl LintRule for Rule {
         // and in ARRAY(SELECT generate_series(...)) constructors, the
         // function is a value expression -- no alias needed.
         let mut p = i;
-        while p > 0 && bytes[p - 1].is_ascii_whitespace() { p -= 1 }
+        while p > 0 && bytes[p - 1].is_ascii_whitespace() {
+          p -= 1
+        }
         let word_end = p;
-        while p > 0 && (bytes[p - 1].is_ascii_alphanumeric() || bytes[p - 1] == b'_') { p -= 1 }
+        while p > 0 && (bytes[p - 1].is_ascii_alphanumeric() || bytes[p - 1] == b'_') {
+          p -= 1
+        }
         let prev_word = &upper[p..word_end];
         let comma_before = word_end > 0 && bytes[word_end - 1] == b',';
         let is_from_source = matches!(prev_word, "FROM" | "JOIN" | "LATERAL") || comma_before;
@@ -161,41 +165,69 @@ fn strip_dollar_and_noise(s: &str) -> String {
   let mut i = 0usize;
   while i < n {
     if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
-      while i < n && out[i] != b'\n' { out[i] = b' '; i += 1 }
+      while i < n && out[i] != b'\n' {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
       let mut depth = 1u32;
-      out[i] = b' '; out[i + 1] = b' '; i += 2;
+      out[i] = b' ';
+      out[i + 1] = b' ';
+      i += 2;
       while i + 1 < n && depth > 0 {
-        if out[i] == b'/' && out[i + 1] == b'*' { depth += 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else if out[i] == b'*' && out[i + 1] == b'/' { depth -= 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else { out[i] = b' '; i += 1; }
+        if out[i] == b'/' && out[i + 1] == b'*' {
+          depth += 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else if out[i] == b'*' && out[i + 1] == b'/' {
+          depth -= 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else {
+          out[i] = b' ';
+          i += 1;
+        }
       }
       continue;
     }
     if out[i] == b'\'' {
-      out[i] = b' '; i += 1;
-      while i < n && out[i] != b'\'' { out[i] = b' '; i += 1 }
-      if i < n { out[i] = b' '; i += 1 }
+      out[i] = b' ';
+      i += 1;
+      while i < n && out[i] != b'\'' {
+        out[i] = b' ';
+        i += 1
+      }
+      if i < n {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     if out[i] == b'$' {
       let mut k = i + 1;
-      while k < n && (out[k].is_ascii_alphanumeric() || out[k] == b'_') { k += 1 }
+      while k < n && (out[k].is_ascii_alphanumeric() || out[k] == b'_') {
+        k += 1
+      }
       if k < n && out[k] == b'$' {
         let tag_bytes = &out[i + 1..k];
-        let closer: Vec<u8> = std::iter::once(b'$').chain(tag_bytes.iter().copied()).chain(std::iter::once(b'$')).collect();
+        let closer: Vec<u8> =
+          std::iter::once(b'$').chain(tag_bytes.iter().copied()).chain(std::iter::once(b'$')).collect();
         let closer_len = closer.len();
-        for j in i..k + 1 { out[j] = b' '; }
+        out[i..k + 1].fill(b' ');
         i = k + 1;
         while i + closer_len <= n {
-          if out[i..i + closer_len] == *closer { break }
+          if out[i..i + closer_len] == *closer {
+            break;
+          }
           out[i] = b' ';
           i += 1;
         }
         if i + closer_len <= n {
-          for j in i..i + closer_len { out[j] = b' '; }
+          out[i..i + closer_len].fill(b' ');
           i += closer_len;
         }
         continue;

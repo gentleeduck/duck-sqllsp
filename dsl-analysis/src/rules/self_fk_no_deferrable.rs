@@ -29,7 +29,9 @@ impl LintRule for Rule {
     let mut from = 0usize;
     while let Some(rel) = upper[from..].find(&needle).or_else(|| upper[from..].find(&alt.to_ascii_uppercase())) {
       let at = from + rel;
-      if upper[at..].contains("DEFERRABLE") { return }
+      if upper[at..].contains("DEFERRABLE") {
+        return;
+      }
       let abs_s = start + at;
       let abs_e = abs_s + needle.len().min(body.len() - at);
       out.push(Diagnostic {

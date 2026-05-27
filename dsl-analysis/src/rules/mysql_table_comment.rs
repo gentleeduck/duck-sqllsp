@@ -22,13 +22,17 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
-    if !upper.contains("CREATE TABLE") { return }
+    if !upper.contains("CREATE TABLE") {
+      return;
+    }
     // Need: `) ... COMMENT '...'` or `) ... COMMENT='...'`.
     let Some(close_paren) = body.rfind(')') else { return };
     let after = body[close_paren + 1..].to_ascii_uppercase();
     let Some(c_at) = after.find("COMMENT") else { return };
     let post = after[c_at + "COMMENT".len()..].trim_start();
-    if !post.starts_with('\'') && !post.starts_with('=') { return }
+    if !post.starts_with('\'') && !post.starts_with('=') {
+      return;
+    }
     let abs_s = start + close_paren + 1 + c_at;
     let abs_e = abs_s + "COMMENT".len();
     out.push(Diagnostic {

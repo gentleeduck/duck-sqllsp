@@ -23,8 +23,12 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
-    if !upper.contains("CREATE MATERIALIZED VIEW") { return }
-    if !upper.contains("WITH NO DATA") { return }
+    if !upper.contains("CREATE MATERIALIZED VIEW") {
+      return;
+    }
+    if !upper.contains("WITH NO DATA") {
+      return;
+    }
     // Extract MV name.
     let needle = "CREATE MATERIALIZED VIEW";
     let after = upper.find(needle).unwrap() + needle.len();
@@ -34,14 +38,21 @@ impl LintRule for Rule {
     let mut name_start = 0usize;
     let after_if = if raw.to_ascii_uppercase().starts_with("IF NOT EXISTS") {
       name_start = "IF NOT EXISTS".len();
-      &raw[name_start..].trim_start()
-    } else { raw };
-    let id_end = after_if.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(after_if.len());
+      raw[name_start..].trim_start()
+    } else {
+      raw
+    };
+    let id_end =
+      after_if.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(after_if.len());
     let name = after_if[..id_end].rsplit('.').next().unwrap_or(&after_if[..id_end]).trim_matches('"').to_string();
-    if name.is_empty() { return }
+    if name.is_empty() {
+      return;
+    }
     let tail = &source[start + end - start..];
     let _ = name_start;
-    if tail.to_ascii_uppercase().contains(&format!("REFRESH MATERIALIZED VIEW {}", name.to_ascii_uppercase())) { return }
+    if tail.to_ascii_uppercase().contains(&format!("REFRESH MATERIALIZED VIEW {}", name.to_ascii_uppercase())) {
+      return;
+    }
     if tail.to_ascii_uppercase().contains(&format!("FROM {}", name.to_ascii_uppercase())) {
       let abs_s = start;
       let abs_e = start + body.find(';').unwrap_or(body.len());

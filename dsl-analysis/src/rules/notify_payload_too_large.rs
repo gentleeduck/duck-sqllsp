@@ -25,13 +25,19 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
-    if !upper.trim_start().starts_with("NOTIFY") { return }
+    if !upper.trim_start().starts_with("NOTIFY") {
+      return;
+    }
     let Some(comma_at) = body.find(',') else { return };
     let rest = body[comma_at + 1..].trim_start();
-    if !rest.starts_with('\'') { return }
+    if !rest.starts_with('\'') {
+      return;
+    }
     let Some(close_rel) = rest[1..].find('\'') else { return };
     let lit = &rest[1..1 + close_rel];
-    if lit.len() <= LIMIT { return }
+    if lit.len() <= LIMIT {
+      return;
+    }
     let abs_s = start + comma_at + 1 + (body[comma_at + 1..].len() - rest.len());
     let abs_e = abs_s + close_rel + 2;
     out.push(Diagnostic {

@@ -33,9 +33,12 @@ impl LintRule for Rule {
     let rest = &body[after_alter..];
     let lead = rest.len() - rest.trim_start().len();
     let raw = &rest[lead..];
-    let id_end = raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(raw.len());
+    let id_end =
+      raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(raw.len());
     let table = raw[..id_end].rsplit('.').next().unwrap_or(&raw[..id_end]).trim_matches('"').to_string();
-    if table.is_empty() { return; }
+    if table.is_empty() {
+      return;
+    }
     let Some(t) = catalog.find_table(None, &table) else { return };
 
     let Some(ac_at) = upper.find("ALTER COLUMN ") else { return };
@@ -54,17 +57,21 @@ impl LintRule for Rule {
       type_at + " TYPE ".len()
     };
     let type_rest = &body[after_type..];
-    let new_type_end = type_rest
-      .find(|c: char| c == ';' || c == ',' || c == '\n' || c == ' ')
-      .unwrap_or(type_rest.len());
+    let new_type_end = type_rest.find([';', ',', '\n', ' ']).unwrap_or(type_rest.len());
     let new_type = type_rest[..new_type_end].trim().to_ascii_uppercase();
-    if new_type.is_empty() { return; }
-    if upper.contains("USING ") { return; }
+    if new_type.is_empty() {
+      return;
+    }
+    if upper.contains("USING ") {
+      return;
+    }
 
     let old = col.data_type.to_ascii_uppercase();
     let old_bare = old.rsplit('.').next().unwrap_or(&old).trim();
     let new_bare = new_type.rsplit('.').next().unwrap_or(&new_type).trim();
-    if compatible(old_bare, new_bare) { return; }
+    if compatible(old_bare, new_bare) {
+      return;
+    }
     let abs_s = start + ac_at;
     let abs_e = start + after_type + new_type_end;
     out.push(Diagnostic {
@@ -83,7 +90,8 @@ fn compatible(old: &str, new: &str) -> bool {
   if old.starts_with(new) || new.starts_with(old) {
     return true;
   }
-  let numeric = ["INT", "INTEGER", "BIGINT", "SMALLINT", "INT4", "INT8", "INT2", "NUMERIC", "DECIMAL", "REAL", "DOUBLE", "FLOAT"];
+  let numeric =
+    ["INT", "INTEGER", "BIGINT", "SMALLINT", "INT4", "INT8", "INT2", "NUMERIC", "DECIMAL", "REAL", "DOUBLE", "FLOAT"];
   let strings = ["TEXT", "VARCHAR", "CHAR", "CHARACTER", "CITEXT", "NAME"];
   let in_numeric = numeric.iter().any(|t| old.starts_with(t)) && numeric.iter().any(|t| new.starts_with(t));
   let in_string = strings.iter().any(|t| old.starts_with(t)) && strings.iter().any(|t| new.starts_with(t));

@@ -60,7 +60,7 @@ impl LintRule for Rule {
       if bare_lc.starts_with("pg_") || bare_lc.starts_with("information_schema") {
         continue;
       }
-      if r.schema.as_deref().map_or(false, |s| {
+      if r.schema.as_deref().is_some_and(|s| {
         let s_lc = s.to_ascii_lowercase();
         s_lc == "pg_catalog" || s_lc == "information_schema"
       }) {
@@ -184,10 +184,14 @@ fn collect_view_names(source: &str) -> Vec<String> {
   let upper = cleaned.to_ascii_uppercase();
   let mut out: Vec<String> = Vec::new();
   for pat in [
-    "CREATE VIEW", "CREATE OR REPLACE VIEW",
-    "CREATE TEMP VIEW", "CREATE TEMPORARY VIEW",
-    "CREATE RECURSIVE VIEW", "CREATE OR REPLACE RECURSIVE VIEW",
-    "CREATE MATERIALIZED VIEW", "CREATE MATERIALIZED VIEW IF NOT EXISTS",
+    "CREATE VIEW",
+    "CREATE OR REPLACE VIEW",
+    "CREATE TEMP VIEW",
+    "CREATE TEMPORARY VIEW",
+    "CREATE RECURSIVE VIEW",
+    "CREATE OR REPLACE RECURSIVE VIEW",
+    "CREATE MATERIALIZED VIEW",
+    "CREATE MATERIALIZED VIEW IF NOT EXISTS",
   ] {
     let mut from = 0usize;
     while let Some(rel) = upper[from..].find(pat) {
@@ -195,14 +199,20 @@ fn collect_view_names(source: &str) -> Vec<String> {
       let after = at + pat.len();
       let bytes = cleaned.as_bytes();
       let mut k = after;
-      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1
+      }
       // Optional IF NOT EXISTS.
       if upper[k..].starts_with("IF NOT EXISTS") {
         k += "IF NOT EXISTS".len();
-        while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+        while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+          k += 1
+        }
       }
       let name_start = k;
-      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') {
+      while k < bytes.len()
+        && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"')
+      {
         k += 1;
       }
       if k > name_start {
@@ -227,23 +237,46 @@ fn strip_noise(s: &str) -> String {
   let mut i = 0usize;
   while i < n {
     if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
-      while i < n && out[i] != b'\n' { out[i] = b' '; i += 1 }
+      while i < n && out[i] != b'\n' {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
       let mut depth = 1u32;
-      out[i] = b' '; out[i + 1] = b' '; i += 2;
+      out[i] = b' ';
+      out[i + 1] = b' ';
+      i += 2;
       while i + 1 < n && depth > 0 {
-        if out[i] == b'/' && out[i + 1] == b'*' { depth += 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else if out[i] == b'*' && out[i + 1] == b'/' { depth -= 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else { out[i] = b' '; i += 1; }
+        if out[i] == b'/' && out[i + 1] == b'*' {
+          depth += 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else if out[i] == b'*' && out[i + 1] == b'/' {
+          depth -= 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else {
+          out[i] = b' ';
+          i += 1;
+        }
       }
       continue;
     }
     if out[i] == b'\'' {
-      out[i] = b' '; i += 1;
-      while i < n && out[i] != b'\'' { out[i] = b' '; i += 1 }
-      if i < n { out[i] = b' '; i += 1 }
+      out[i] = b' ';
+      i += 1;
+      while i < n && out[i] != b'\'' {
+        out[i] = b' ';
+        i += 1
+      }
+      if i < n {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     i += 1;
@@ -329,17 +362,27 @@ fn collect_tables(kind: &StatementKind) -> Vec<TableRef> {
   match kind {
     StatementKind::Select(s) => {
       for t in &s.from {
-        if is_synthetic(t) { continue }
+        if is_synthetic(t) {
+          continue;
+        }
         out.push(t.clone());
       }
       for j in &s.joins {
-        if is_synthetic(&j.table) { continue }
+        if is_synthetic(&j.table) {
+          continue;
+        }
         out.push(j.table.clone());
       }
     },
-    StatementKind::Update(u) => { if !is_synthetic(&u.table) { out.push(u.table.clone()); } },
-    StatementKind::Delete(d) => { if !is_synthetic(&d.table) { out.push(d.table.clone()); } },
-    StatementKind::Insert(i) => { if !is_synthetic(&i.table) { out.push(i.table.clone()); } },
+    StatementKind::Update(u) if !is_synthetic(&u.table) => {
+      out.push(u.table.clone());
+    },
+    StatementKind::Delete(d) if !is_synthetic(&d.table) => {
+      out.push(d.table.clone());
+    },
+    StatementKind::Insert(i) if !is_synthetic(&i.table) => {
+      out.push(i.table.clone());
+    },
     _ => {},
   }
   out
@@ -350,5 +393,5 @@ fn collect_tables(kind: &StatementKind) -> Vec<TableRef> {
 /// subquery alias (`<subq>`), and CTE refs. sql001 / sql002 / sql349 /
 /// etc. should skip catalog lookups for these.
 fn is_synthetic(t: &TableRef) -> bool {
-  t.schema.as_deref().map_or(false, |s| s.starts_with('<'))
+  t.schema.as_deref().is_some_and(|s| s.starts_with('<'))
 }

@@ -25,19 +25,26 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
-    if !upper.contains("CREATE INDEX") && !upper.contains("CREATE UNIQUE INDEX") { return }
+    if !upper.contains("CREATE INDEX") && !upper.contains("CREATE UNIQUE INDEX") {
+      return;
+    }
     let Some(using_at) = upper.find("USING BRIN") else { return };
     let Some(on_at) = upper.find(" ON ") else { return };
     let after_on = on_at + 4;
     let rest = &body[after_on..];
     let lead = rest.len() - rest.trim_start().len();
     let raw = &rest[lead..];
-    let tbl_end = raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(raw.len());
+    let tbl_end =
+      raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(raw.len());
     let table = raw[..tbl_end].rsplit('.').next().unwrap_or(&raw[..tbl_end]).trim_matches('"').to_string();
-    if table.is_empty() { return }
+    if table.is_empty() {
+      return;
+    }
     let Some(t) = catalog.find_table(None, &table) else { return };
     let Some(est) = t.row_estimate else { return };
-    if est >= SMALL_TABLE_THRESHOLD { return }
+    if est >= SMALL_TABLE_THRESHOLD {
+      return;
+    }
     let abs_s = start + using_at;
     let abs_e = abs_s + "USING BRIN".len();
     out.push(Diagnostic {

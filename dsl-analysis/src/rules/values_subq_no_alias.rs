@@ -27,9 +27,12 @@ impl LintRule for Rule {
       let at = from + rel;
       if at > 0 {
         let prev = body.as_bytes()[at - 1] as char;
-        if prev.is_ascii_alphanumeric() || prev == '_' { from = at + 7; continue }
+        if prev.is_ascii_alphanumeric() || prev == '_' {
+          from = at + 7;
+          continue;
+        }
       }
-      let Some(close) = find_matching_paren(body, at) else { from = at + 7; break };
+      let Some(close) = find_matching_paren(body, at) else { break };
       let post = body[close + 1..].trim_start();
       let post_upper = post.to_ascii_uppercase();
       let has_as = post_upper.starts_with("AS ");
@@ -57,12 +60,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

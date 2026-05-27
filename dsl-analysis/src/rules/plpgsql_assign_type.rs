@@ -74,9 +74,14 @@ impl LintRule for Rule {
             continue;
           }
           if !compatible(lit, decl_type) {
-            let abs_s = start + dollar_start + rhs_start + (rhs_start - block[rhs_start..].find(rhs.chars().next().unwrap_or(' ')).unwrap_or(0) - rhs_start);
+            let abs_s = start
+              + dollar_start
+              + rhs_start
+              + (rhs_start - block[rhs_start..].find(rhs.chars().next().unwrap_or(' ')).unwrap_or(0) - rhs_start);
             // simpler: point at rhs span
-            let abs_lit_s = start + dollar_start + rhs_start
+            let abs_lit_s = start
+              + dollar_start
+              + rhs_start
               + block[rhs_start..rhs_end].find(rhs.chars().next().unwrap_or(' ')).unwrap_or(0);
             let abs_lit_e = abs_lit_s + rhs.len();
             out.push(Diagnostic {
@@ -173,12 +178,12 @@ fn compatible(kind: LitKind, declared: &str) -> bool {
   match kind {
     LitKind::Str => {
       str_types.iter().any(|t| d.starts_with(t))
-        || uuid_types.iter().any(|t| d == *t)
+        || uuid_types.contains(&d)
         || time_types.iter().any(|t| d.starts_with(t))
-    }
-    LitKind::Int => int_types.iter().any(|t| d == *t) || num_types.iter().any(|t| d.starts_with(t)),
+    },
+    LitKind::Int => int_types.contains(&d) || num_types.iter().any(|t| d.starts_with(t)),
     LitKind::Float => num_types.iter().any(|t| d.starts_with(t)),
-    LitKind::Bool => bool_types.iter().any(|t| d == *t),
+    LitKind::Bool => bool_types.contains(&d),
     _ => true,
   }
 }

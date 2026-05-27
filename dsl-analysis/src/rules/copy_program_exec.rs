@@ -25,11 +25,15 @@ impl LintRule for Rule {
     let body_owned = crate::textutil::strip_noise_full(raw);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
-    if !upper.trim_start().starts_with("COPY") { return }
+    if !upper.trim_start().starts_with("COPY") {
+      return;
+    }
     let Some(at) = upper.find("PROGRAM") else { return };
     if at > 0 {
       let prev = body.as_bytes()[at - 1] as char;
-      if prev.is_ascii_alphanumeric() || prev == '_' { return }
+      if prev.is_ascii_alphanumeric() || prev == '_' {
+        return;
+      }
     }
     let abs_s = start + at;
     let abs_e = start + body.find(';').unwrap_or(body.len());

@@ -16,60 +16,272 @@ pub struct Rule;
 
 /// Tokens that look like function calls but are SQL syntax.
 const KEYWORDS: &[&str] = &[
-  "CAST", "COALESCE", "NULLIF", "GREATEST", "LEAST", "EXTRACT", "OVERLAY",
-  "POSITION", "SUBSTRING", "TRIM", "EXISTS", "ARRAY", "ROW", "VALUES",
-  "IF", "CASE", "WHEN", "ANY", "ALL", "SOME", "IN", "BETWEEN", "LIKE",
-  "ILIKE", "SIMILAR", "INTERVAL", "DATE", "TIME", "TIMESTAMP", "TIMESTAMPTZ",
-  "NUMERIC", "DECIMAL", "INTEGER", "BIGINT", "SMALLINT", "REAL", "FLOAT",
-  "BIT", "VARBIT", "MONEY", "CITEXT",
-  "TEXT", "VARCHAR", "CHAR", "BOOLEAN", "BOOL", "UUID", "JSON", "JSONB",
-  "FILTER", "OVER", "WITHIN", "USING", "RETURNING", "WITH", "RECURSIVE",
-  "SELECT", "ON", "AS", "AND", "OR", "NOT", "DISTINCT", "FROM", "WHERE", "GROUP",
-  "ORDER", "HAVING", "LIMIT", "OFFSET", "FETCH", "FOR", "INNER", "OUTER",
-  "LEFT", "RIGHT", "FULL", "CROSS", "LATERAL", "NATURAL", "JOIN", "UNION",
-  "INTERSECT", "EXCEPT", "PARTITION", "WINDOW", "RANGE", "ROWS", "GROUPS",
-  "PRECEDING", "FOLLOWING", "UNBOUNDED", "CURRENT", "FIRST", "LAST", "NULLS",
-  "FUNCTION", "PROCEDURE", "TRIGGER", "TABLE", "INDEX", "VIEW", "POLICY",
-  "INSERT", "UPDATE", "DELETE", "MERGE", "MATCHED", "EXCLUDED",
-  "COPY", "TRUNCATE", "ANALYZE", "VACUUM", "REINDEX", "CLUSTER",
-  "GRANT", "REVOKE", "LISTEN", "NOTIFY", "UNLISTEN", "LOCK",
-  "SAVEPOINT", "RELEASE", "ROLLBACK", "COMMIT", "BEGIN", "START",
-  "PREPARE", "EXPLAIN", "SHOW", "DISCARD", "RESET",
-  "GROUPING", "SETS", "CUBE", "ROLLUP",
-  "PARTITION", "RANGE", "LIST", "HASH", "INHERITS", "MODULUS", "REMAINDER",
-  "TABLESAMPLE", "BERNOULLI", "SYSTEM", "REPEATABLE",
-  "NOWAIT", "LOCKED", "SKIP", "OF", "SHARE",
-  "WITHIN", "GROUP", "OVER", "PARTITION", "FILTER",
-  "ORDINALITY", "REPLICA",
-  "GENERATED", "IDENTITY", "ALWAYS", "RESTART", "START", "INCREMENT",
-  "MINVALUE", "MAXVALUE", "CYCLE", "OWNED", "CURSOR", "FETCH", "MOVE",
-  "DECLARE", "OPEN", "CLOSE", "EXEC", "EXECUTE",
-  "TRUE", "FALSE", "NULL", "DEFAULT", "PRIMARY", "REFERENCES", "UNIQUE",
-  "CHECK", "FOREIGN", "KEY", "CONSTRAINT", "CASCADE", "RESTRICT", "RESTART",
-  "SET", "OF", "TO", "BY", "INTO", "RETURN", "BEGIN", "END", "RAISE",
-  "NOTICE", "EXCEPTION", "WARNING", "DEBUG", "INFO", "LOG", "PERFORM",
-  "DO", "LANGUAGE", "PLPGSQL", "SQL", "STABLE", "IMMUTABLE", "VOLATILE",
-  "SECURITY", "DEFINER", "INVOKER", "STRICT", "PARALLEL", "SAFE", "UNSAFE",
-  "RESTRICTED", "LEAKPROOF", "COST", "CALL",
+  "CAST",
+  "COALESCE",
+  "NULLIF",
+  "GREATEST",
+  "LEAST",
+  "EXTRACT",
+  "OVERLAY",
+  "POSITION",
+  "SUBSTRING",
+  "TRIM",
+  "EXISTS",
+  "ARRAY",
+  "ROW",
+  "VALUES",
+  "IF",
+  "CASE",
+  "WHEN",
+  "ANY",
+  "ALL",
+  "SOME",
+  "IN",
+  "BETWEEN",
+  "LIKE",
+  "ILIKE",
+  "SIMILAR",
+  "INTERVAL",
+  "DATE",
+  "TIME",
+  "TIMESTAMP",
+  "TIMESTAMPTZ",
+  "NUMERIC",
+  "DECIMAL",
+  "INTEGER",
+  "BIGINT",
+  "SMALLINT",
+  "REAL",
+  "FLOAT",
+  "BIT",
+  "VARBIT",
+  "MONEY",
+  "CITEXT",
+  "TEXT",
+  "VARCHAR",
+  "CHAR",
+  "CHARACTER",
+  "VARYING",
+  "BPCHAR",
+  "BOOLEAN",
+  "BOOL",
+  "UUID",
+  "JSON",
+  "JSONB",
+  "FILTER",
+  "OVER",
+  "WITHIN",
+  "USING",
+  "RETURNING",
+  "WITH",
+  "RECURSIVE",
+  "SELECT",
+  "ON",
+  "AS",
+  "AND",
+  "OR",
+  "NOT",
+  "DISTINCT",
+  "FROM",
+  "WHERE",
+  "GROUP",
+  "ORDER",
+  "HAVING",
+  "LIMIT",
+  "OFFSET",
+  "FETCH",
+  "FOR",
+  "INNER",
+  "OUTER",
+  "LEFT",
+  "RIGHT",
+  "FULL",
+  "CROSS",
+  "LATERAL",
+  "NATURAL",
+  "JOIN",
+  "UNION",
+  "INTERSECT",
+  "EXCEPT",
+  "PARTITION",
+  "WINDOW",
+  "RANGE",
+  "ROWS",
+  "GROUPS",
+  "PRECEDING",
+  "FOLLOWING",
+  "UNBOUNDED",
+  "CURRENT",
+  "FIRST",
+  "LAST",
+  "NULLS",
+  "FUNCTION",
+  "PROCEDURE",
+  "TRIGGER",
+  "TABLE",
+  "INDEX",
+  "VIEW",
+  "POLICY",
+  "INSERT",
+  "UPDATE",
+  "DELETE",
+  "MERGE",
+  "MATCHED",
+  "EXCLUDED",
+  "COPY",
+  "TRUNCATE",
+  "ANALYZE",
+  "VACUUM",
+  "REINDEX",
+  "CLUSTER",
+  "GRANT",
+  "REVOKE",
+  "LISTEN",
+  "NOTIFY",
+  "UNLISTEN",
+  "LOCK",
+  "SAVEPOINT",
+  "RELEASE",
+  "ROLLBACK",
+  "COMMIT",
+  "BEGIN",
+  "START",
+  "PREPARE",
+  "EXPLAIN",
+  "SHOW",
+  "DISCARD",
+  "RESET",
+  "GROUPING",
+  "SETS",
+  "CUBE",
+  "ROLLUP",
+  "PARTITION",
+  "RANGE",
+  "LIST",
+  "HASH",
+  "INHERITS",
+  "MODULUS",
+  "REMAINDER",
+  "TABLESAMPLE",
+  "BERNOULLI",
+  "SYSTEM",
+  "REPEATABLE",
+  "NOWAIT",
+  "LOCKED",
+  "SKIP",
+  "OF",
+  "SHARE",
+  "WITHIN",
+  "GROUP",
+  "OVER",
+  "PARTITION",
+  "FILTER",
+  "ORDINALITY",
+  "REPLICA",
+  "GENERATED",
+  "IDENTITY",
+  "ALWAYS",
+  "RESTART",
+  "START",
+  "INCREMENT",
+  "MINVALUE",
+  "MAXVALUE",
+  "CYCLE",
+  "OWNED",
+  "CURSOR",
+  "FETCH",
+  "MOVE",
+  "DECLARE",
+  "OPEN",
+  "CLOSE",
+  "EXEC",
+  "EXECUTE",
+  "TRUE",
+  "FALSE",
+  "NULL",
+  "DEFAULT",
+  "PRIMARY",
+  "REFERENCES",
+  "UNIQUE",
+  "CHECK",
+  "FOREIGN",
+  "KEY",
+  "CONSTRAINT",
+  "CASCADE",
+  "RESTRICT",
+  "RESTART",
+  "SET",
+  "OF",
+  "TO",
+  "BY",
+  "INTO",
+  "RETURN",
+  "BEGIN",
+  "END",
+  "RAISE",
+  "NOTICE",
+  "EXCEPTION",
+  "WARNING",
+  "DEBUG",
+  "INFO",
+  "LOG",
+  "PERFORM",
+  "DO",
+  "LANGUAGE",
+  "PLPGSQL",
+  "SQL",
+  "STABLE",
+  "IMMUTABLE",
+  "VOLATILE",
+  "SECURITY",
+  "DEFINER",
+  "INVOKER",
+  "STRICT",
+  "PARALLEL",
+  "SAFE",
+  "UNSAFE",
+  "RESTRICTED",
+  "LEAKPROOF",
+  "COST",
+  "CALL",
   // CASE / WHEN / THEN / ELSE / END can each show up right before a
   // parenthesised expression (`THEN (x->>'y')::int` etc) and look
   // like a call; they are control-flow keywords, not callables.
-  "CASE", "WHEN", "THEN", "ELSE", "END",
+  "CASE",
+  "WHEN",
+  "THEN",
+  "ELSE",
+  "END",
   // CHECK constraints in CREATE DOMAIN use the VALUE keyword;
   // INSERT ... OVERRIDING {SYSTEM|USER} VALUE uses VALUE too.
-  "VALUE", "OVERRIDING",
+  "VALUE",
+  "OVERRIDING",
   // COPY ... WITH (FORCE_NOT_NULL (cols), FORCE_NULL (cols)) options.
-  "FORCE_NOT_NULL", "FORCE_NULL", "FORCE_QUOTE",
+  "FORCE_NOT_NULL",
+  "FORCE_NULL",
+  "FORCE_QUOTE",
   // Foreign-data-wrapper DDL: `... OPTIONS (...)`, `WRAPPER (...)`.
-  "OPTIONS", "WRAPPER", "SERVER", "VALIDATOR", "HANDLER",
+  "OPTIONS",
+  "WRAPPER",
+  "SERVER",
+  "VALIDATOR",
+  "HANDLER",
   // CREATE INDEX ... INCLUDE (cols), ALTER TABLE ... USING INDEX (...).
   "INCLUDE",
   // Publication / Subscription / Replication.
-  "PUBLICATION", "SUBSCRIPTION", "REPLICATION", "SLOT",
+  "PUBLICATION",
+  "SUBSCRIPTION",
+  "REPLICATION",
+  "SLOT",
   // Aggregate / Operator / Collation / Statistics names + FDW IMPORT.
-  "AGGREGATE", "COLLATION", "STATISTICS", "MAPPING", "IMPORT",
+  "AGGREGATE",
+  "COLLATION",
+  "STATISTICS",
+  "MAPPING",
+  "IMPORT",
   // SAVEPOINT names, ROLE/USER MAPPING targets, etc.
-  "MAPPING", "VARIADIC",
+  "MAPPING",
+  "VARIADIC",
 ];
 
 impl LintRule for Rule {
@@ -96,44 +308,66 @@ impl LintRule for Rule {
       // Skip string literals.
       if bytes[i] == b'\'' {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-        if i < bytes.len() { i += 1 }
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+        if i < bytes.len() {
+          i += 1
+        }
         continue;
       }
       // Skip `--` line comments.
       if i + 1 < bytes.len() && bytes[i] == b'-' && bytes[i + 1] == b'-' {
-        while i < bytes.len() && bytes[i] != b'\n' { i += 1 }
+        while i < bytes.len() && bytes[i] != b'\n' {
+          i += 1
+        }
         continue;
       }
       // Skip dollar-quoted string bodies.
-      if bytes[i] == b'$' {
-        if let Some(end_tag) = find_dollar_close(body, i) {
-          i = end_tag;
-          continue;
-        }
+      if bytes[i] == b'$'
+        && let Some(end_tag) = find_dollar_close(body, i)
+      {
+        i = end_tag;
+        continue;
       }
       // Identifier start.
-      if !(bytes[i].is_ascii_alphabetic() || bytes[i] == b'_') { i += 1; continue }
+      if !(bytes[i].is_ascii_alphabetic() || bytes[i] == b'_') {
+        i += 1;
+        continue;
+      }
       let id_start = i;
-      while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') { i += 1 }
+      while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+        i += 1
+      }
       let id_end = i;
       // Allow optional schema.fn.
       let mut full_end = id_end;
       if i < bytes.len() && bytes[i] == b'.' {
         let after_dot = i + 1;
         let mut k = after_dot;
-        while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_') { k += 1 }
-        if k > after_dot { full_end = k; i = k; }
+        while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_') {
+          k += 1
+        }
+        if k > after_dot {
+          full_end = k;
+          i = k;
+        }
       }
       // Must be followed by `(`, possibly with whitespace between.
       let mut j = i;
-      while j < bytes.len() && bytes[j].is_ascii_whitespace() { j += 1 }
-      if j >= bytes.len() || bytes[j] != b'(' { continue }
+      while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+        j += 1
+      }
+      if j >= bytes.len() || bytes[j] != b'(' {
+        continue;
+      }
       // Pull the bare function name (after any schema qualifier).
       let full = &body[id_start..full_end];
       let bare = full.rsplit('.').next().unwrap_or(full);
       let upper = bare.to_ascii_uppercase();
-      if KEYWORDS.contains(&upper.as_str()) { continue }
+      if KEYWORDS.contains(&upper.as_str()) {
+        continue;
+      }
       // Skip when the preceding token is a DDL keyword that introduces
       // a name slot (CREATE TABLE foo, REFERENCES bar, INSERT INTO baz,
       // ALTER TABLE, etc). These syntactically match the function-call
@@ -157,7 +391,9 @@ impl LintRule for Rule {
       // Type-cast-style: `INT(x)` etc. -- already caught by KEYWORDS.
       // Method-style: name followed by `(*)` is COUNT-only; allow it.
       // Lookup.
-      if known.contains(&upper) { continue }
+      if known.contains(&upper) {
+        continue;
+      }
       let abs_s = start + id_start;
       let abs_e = start + full_end;
       out.push(Diagnostic {
@@ -173,7 +409,7 @@ impl LintRule for Rule {
 fn build_known_set(body: &str, catalog: &Catalog) -> HashSet<String> {
   let mut set: HashSet<String> = HashSet::new();
   // dsl-knowledge built-ins.
-  for (k, _) in dsl_knowledge::tables::functions() {
+  for k in dsl_knowledge::tables::functions().keys() {
     set.insert(k.to_ascii_uppercase());
   }
   // Catalog functions.
@@ -193,16 +429,24 @@ fn build_known_set(body: &str, catalog: &Catalog) -> HashSet<String> {
   let mut from = 0usize;
   while let Some(rel) = upper_body[from..].find("WITH") {
     let mut k = from + rel + 4;
-    while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+    while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+      k += 1
+    }
     if upper_body[k..].starts_with("RECURSIVE") {
       k += 9;
-      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1
+      }
     }
     // Loop reading "<name> [(...)] AS (..., )" then optional ", <name> ..."
     loop {
       let name_start = k;
-      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_') { k += 1 }
-      if k == name_start { break }
+      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_') {
+        k += 1
+      }
+      if k == name_start {
+        break;
+      }
       let name = &body[name_start..k];
       set.insert(name.to_ascii_uppercase());
       // Skip whitespace, optional `(col_list)`, AS, body paren, then look for `,` or `SELECT`.
@@ -213,42 +457,71 @@ fn build_known_set(body: &str, catalog: &Catalog) -> HashSet<String> {
         let mut depth = 1i32;
         k += 1;
         while k < bytes.len() && depth > 0 {
-          if bytes[k] == b'(' { depth += 1 } else if bytes[k] == b')' { depth -= 1 }
+          if bytes[k] == b'(' {
+            depth += 1
+          } else if bytes[k] == b')' {
+            depth -= 1
+          }
           k += 1;
         }
-        while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+        while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+          k += 1
+        }
       }
       // Expect AS.
-      if !upper_body[k..].starts_with("AS") { break }
+      if !upper_body[k..].starts_with("AS") {
+        break;
+      }
       k += 2;
-      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1
+      }
       // Optional MATERIALIZED / NOT MATERIALIZED.
       for kw in ["MATERIALIZED ", "NOT MATERIALIZED "] {
-        if upper_body[k..].starts_with(kw) { k += kw.len() }
+        if upper_body[k..].starts_with(kw) {
+          k += kw.len()
+        }
       }
       // Skip body paren.
-      if k >= bytes.len() || bytes[k] != b'(' { break }
+      if k >= bytes.len() || bytes[k] != b'(' {
+        break;
+      }
       let mut depth = 1i32;
       k += 1;
       while k < bytes.len() && depth > 0 {
-        if bytes[k] == b'(' { depth += 1 } else if bytes[k] == b')' { depth -= 1 }
+        if bytes[k] == b'(' {
+          depth += 1
+        } else if bytes[k] == b')' {
+          depth -= 1
+        }
         k += 1;
       }
-      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
-      if k >= bytes.len() || bytes[k] != b',' { break }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1
+      }
+      if k >= bytes.len() || bytes[k] != b',' {
+        break;
+      }
       k += 1;
-      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1
+      }
     }
     from = k.max(from + rel + 4);
   }
-  for needle in ["CREATE OR REPLACE FUNCTION ", "CREATE FUNCTION ", "CREATE OR REPLACE PROCEDURE ", "CREATE PROCEDURE "] {
+  for needle in ["CREATE OR REPLACE FUNCTION ", "CREATE FUNCTION ", "CREATE OR REPLACE PROCEDURE ", "CREATE PROCEDURE "]
+  {
     let mut from = 0usize;
     while let Some(rel) = upper_body[from..].find(needle) {
       let at = from + rel + needle.len();
       let mut k = at;
-      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1
+      }
       let name_start = k;
-      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') {
+      while k < bytes.len()
+        && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"')
+      {
         k += 1;
       }
       let name = body[name_start..k].rsplit('.').next().unwrap_or(&body[name_start..k]).trim_matches('"');
@@ -265,55 +538,116 @@ fn build_known_set(body: &str, catalog: &Catalog) -> HashSet<String> {
 /// function-call position. `<word> <ident>(` is therefore a definition,
 /// reference, or DDL clause -- not a function call we should validate.
 const PRECEDING_BLOCKLIST: &[&str] = &[
-  "TABLE", "INDEX", "VIEW", "TYPE", "DOMAIN", "SCHEMA", "EXTENSION",
-  "TRIGGER", "POLICY", "SEQUENCE", "FUNCTION", "PROCEDURE", "ROLE", "USER",
-  "GROUP", "DATABASE", "TABLESPACE", "OPERATOR", "CLASS",
-  "ON", "REFERENCES", "INTO", "FROM", "JOIN", "UPDATE", "DELETE",
-  "ALTER", "DROP", "RENAME", "COLUMN", "CONSTRAINT", "EXISTS",
-  "CASCADE", "RESTRICT", "USING", "WITH", "OF", "TO", "AS",
-  "UNIQUE", "PRIMARY", "FOREIGN", "KEY", "CHECK",
-  "BEFORE", "AFTER",
+  "TABLE",
+  "INDEX",
+  "VIEW",
+  "TYPE",
+  "DOMAIN",
+  "SCHEMA",
+  "EXTENSION",
+  "TRIGGER",
+  "POLICY",
+  "SEQUENCE",
+  "FUNCTION",
+  "PROCEDURE",
+  "ROLE",
+  "USER",
+  "GROUP",
+  "DATABASE",
+  "TABLESPACE",
+  "OPERATOR",
+  "CLASS",
+  "ON",
+  "REFERENCES",
+  "INTO",
+  "FROM",
+  "JOIN",
+  "UPDATE",
+  "DELETE",
+  "ALTER",
+  "DROP",
+  "RENAME",
+  "COLUMN",
+  "CONSTRAINT",
+  "EXISTS",
+  "CASCADE",
+  "RESTRICT",
+  "USING",
+  "WITH",
+  "OF",
+  "TO",
+  "AS",
+  "UNIQUE",
+  "PRIMARY",
+  "FOREIGN",
+  "KEY",
+  "CHECK",
+  "BEFORE",
+  "AFTER",
   // PREPARE / EXECUTE-prepared / DEALLOCATE take a prepared-statement
   // name, not a function name (`EXECUTE upd_pat(...)` invokes a
   // PREPARE'd stmt). `EXECUTE FUNCTION fn()` is handled separately via
   // the FUNCTION blocklist + two-word lookback.
-  "PREPARE", "EXECUTE", "DEALLOCATE",
+  "PREPARE",
+  "EXECUTE",
+  "DEALLOCATE",
   // CREATE AGGREGATE my_sum(bigint) (...): name slot.
-  "AGGREGATE", "COLLATION", "STATISTICS",
+  "AGGREGATE",
+  "COLLATION",
+  "STATISTICS",
   // CREATE OPERATOR @@ (LEFTARG=..., RIGHTARG=...): name slot.
   "OPERATOR",
   // CREATE PUBLICATION p FOR TABLE t / SUBSCRIPTION s CONNECTION ...
-  "PUBLICATION", "SUBSCRIPTION",
+  "PUBLICATION",
+  "SUBSCRIPTION",
   // CREATE SERVER srv FOREIGN DATA WRAPPER fdw OPTIONS (...).
-  "SERVER", "WRAPPER",
+  "SERVER",
+  "WRAPPER",
   // CREATE TEXT SEARCH CONFIGURATION / DICTIONARY / PARSER / TEMPLATE.
-  "CONFIGURATION", "DICTIONARY", "PARSER", "TEMPLATE",
+  "CONFIGURATION",
+  "DICTIONARY",
+  "PARSER",
+  "TEMPLATE",
   // CREATE EVENT TRIGGER / TRANSFORM / CAST / ACCESS METHOD / FOREIGN DATA WRAPPER.
-  "EVENT", "TRANSFORM", "CAST", "ACCESS", "METHOD", "DATA",
+  "EVENT",
+  "TRANSFORM",
+  "CAST",
+  "ACCESS",
+  "METHOD",
+  "DATA",
 ];
-
 
 /// Pull the word ending at byte `end` (exclusive). Skips whitespace,
 /// punctuation, dots. Returns "" when there's no word boundary.
 fn preceding_word(body: &str, end: usize) -> &str {
   let bytes = body.as_bytes();
   let mut i = end;
-  while i > 0 && bytes[i - 1].is_ascii_whitespace() { i -= 1 }
+  while i > 0 && bytes[i - 1].is_ascii_whitespace() {
+    i -= 1
+  }
   let word_end = i;
-  while i > 0 && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_') { i -= 1 }
-  if i == word_end { return "" }
+  while i > 0 && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_') {
+    i -= 1
+  }
+  if i == word_end {
+    return "";
+  }
   &body[i..word_end]
 }
 
 /// Pull the word that immediately precedes the word ending at `end - prev_len`
 /// (so we can look two tokens back without re-walking the whitespace).
-fn preceding_word_before<'a>(body: &'a str, end: usize, prev_len: usize) -> &'a str {
+fn preceding_word_before(body: &str, end: usize, prev_len: usize) -> &str {
   let bytes = body.as_bytes();
   // Reach the start of the previous word: skip ws ending at `end`, then
   // step back over prev_len chars, then ask preceding_word from there.
   let mut i = end;
-  while i > 0 && bytes[i - 1].is_ascii_whitespace() { i -= 1 }
-  if i < prev_len { return "" }
+  while i > 0 && bytes[i - 1].is_ascii_whitespace() {
+    i -= 1
+  }
+  if i < prev_len {
+    return "";
+  }
   preceding_word(body, i - prev_len)
 }
 
@@ -321,8 +655,12 @@ fn find_dollar_close(body: &str, dollar_at: usize) -> Option<usize> {
   let bytes = body.as_bytes();
   let after = dollar_at + 1;
   let mut k = after;
-  while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_') { k += 1 }
-  if k >= bytes.len() || bytes[k] != b'$' { return None }
+  while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_') {
+    k += 1
+  }
+  if k >= bytes.len() || bytes[k] != b'$' {
+    return None;
+  }
   let tag = &body[dollar_at..=k];
   body[k + 1..].find(tag).map(|p| k + 1 + p + tag.len())
 }

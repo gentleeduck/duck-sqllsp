@@ -26,18 +26,26 @@ impl LintRule for Rule {
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
     let trim = upper.trim_start();
-    if !(trim.starts_with("CREATE VIEW") || trim.starts_with("CREATE OR REPLACE VIEW")
-      || trim.starts_with("CREATE MATERIALIZED VIEW") || trim.starts_with("CREATE OR REPLACE MATERIALIZED VIEW"))
-    { return }
+    if !(trim.starts_with("CREATE VIEW")
+      || trim.starts_with("CREATE OR REPLACE VIEW")
+      || trim.starts_with("CREATE MATERIALIZED VIEW")
+      || trim.starts_with("CREATE OR REPLACE MATERIALIZED VIEW"))
+    {
+      return;
+    }
     let Some(as_at) = upper.find(" AS ") else { return };
     let after_as = as_at + " AS ".len();
     let rest = body[after_as..].trim_start();
     let rest_upper = rest.to_ascii_uppercase();
-    if !rest_upper.starts_with("SELECT") { return }
+    if !rest_upper.starts_with("SELECT") {
+      return;
+    }
     let after_sel = 6;
     let proj_end = rest_upper.find(" FROM ").unwrap_or(rest.len());
     let proj = rest[after_sel..proj_end].trim();
-    if proj != "*" { return }
+    if proj != "*" {
+      return;
+    }
     let star_off = rest.find('*').unwrap_or(0);
     let abs_s = start + after_as + (body[after_as..].len() - rest.len()) + star_off;
     let abs_e = abs_s + 1;

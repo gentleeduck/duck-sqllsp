@@ -25,17 +25,26 @@ impl LintRule for Rule {
     let body_owned = crate::textutil::strip_noise_full(raw);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
-    if !upper.trim_start().starts_with("COPY") { return }
+    if !upper.trim_start().starts_with("COPY") {
+      return;
+    }
     // Match COPY ... { FROM | TO } '<lit>' (any quote)
     for kw in [" FROM ", " TO "] {
       let Some(rel) = upper.find(kw) else { continue };
       let after = rel + kw.len();
       let rest = body[after..].trim_start();
-      if rest.starts_with("STDIN") || rest.starts_with("STDOUT")
-        || rest.starts_with("stdin") || rest.starts_with("stdout")
-        || rest.starts_with("PROGRAM") || rest.starts_with("program")
-      { continue }
-      if !rest.starts_with('\'') { continue }
+      if rest.starts_with("STDIN")
+        || rest.starts_with("STDOUT")
+        || rest.starts_with("stdin")
+        || rest.starts_with("stdout")
+        || rest.starts_with("PROGRAM")
+        || rest.starts_with("program")
+      {
+        continue;
+      }
+      if !rest.starts_with('\'') {
+        continue;
+      }
       // Find the matching closing quote.
       let lit_start = after + (body[after..].len() - rest.len()) + 1;
       let Some(close_rel) = body[lit_start..].find('\'') else { continue };

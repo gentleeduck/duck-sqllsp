@@ -22,7 +22,9 @@ impl LintRule for Rule {
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
     let trim = upper.trim();
-    if trim != "GO" && !trim.starts_with("GO\n") && !trim.starts_with("GO ") { return }
+    if trim != "GO" && !trim.starts_with("GO\n") && !trim.starts_with("GO ") {
+      return;
+    }
     let lead = body.len() - body.trim_start().len();
     let abs_s = start + lead;
     let abs_e = abs_s + 2;

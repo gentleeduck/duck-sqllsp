@@ -30,8 +30,12 @@ impl LintRule for Rule {
       || upper.contains("CREATE OR REPLACE PROCEDURE")
       || upper.contains("CREATE PROCEDURE")
       || upper.contains("DO $$");
-    if !in_fn { return }
-    if !upper.contains("EXCEPTION") { return }
+    if !in_fn {
+      return;
+    }
+    if !upper.contains("EXCEPTION") {
+      return;
+    }
     let Some(at) = upper.find("TRUNCATE") else { return };
     let abs_s = start + at;
     let abs_e = abs_s + "TRUNCATE".len();

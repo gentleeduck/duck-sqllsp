@@ -28,7 +28,9 @@ impl LintRule for Rule {
     // boundary
     if v_at > 0 {
       let prev = body.as_bytes()[v_at - 1] as char;
-      if prev.is_ascii_alphanumeric() || prev == '_' { return }
+      if prev.is_ascii_alphanumeric() || prev == '_' {
+        return;
+      }
     }
     let after = v_at + "VALUES".len();
     // Collect each (...) tuple after VALUES.
@@ -36,8 +38,12 @@ impl LintRule for Rule {
     let mut i = after;
     let mut widths: Vec<(usize, usize, usize)> = Vec::new(); // (open_abs, close_abs, width)
     while i < bytes.len() {
-      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
-      if i >= bytes.len() || bytes[i] != b'(' { break }
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1
+      }
+      if i >= bytes.len() || bytes[i] != b'(' {
+        break;
+      }
       let open = i;
       let close = find_matching_paren(body, open);
       let Some(close) = close else { break };
@@ -45,11 +51,18 @@ impl LintRule for Rule {
       let width = 1 + count_top_level_commas(inner);
       widths.push((open, close, width));
       i = close + 1;
-      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
-      if i < bytes.len() && bytes[i] == b',' { i += 1; continue }
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1
+      }
+      if i < bytes.len() && bytes[i] == b',' {
+        i += 1;
+        continue;
+      }
       break;
     }
-    if widths.len() < 2 { return }
+    if widths.len() < 2 {
+      return;
+    }
     let first_w = widths[0].2;
     for (open, close, w) in widths.iter().skip(1) {
       if *w != first_w {
@@ -58,9 +71,7 @@ impl LintRule for Rule {
         out.push(Diagnostic {
           code: "sql216",
           severity: Severity::Error,
-          message: format!(
-            "VALUES row has {w} columns; first row has {first_w} -- all VALUES rows must match width"
-          ),
+          message: format!("VALUES row has {w} columns; first row has {first_w} -- all VALUES rows must match width"),
           range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
         });
       }
@@ -82,9 +93,11 @@ fn count_top_level_commas(text: &str) -> usize {
       b',' if depth == 0 => commas += 1,
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -98,12 +111,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

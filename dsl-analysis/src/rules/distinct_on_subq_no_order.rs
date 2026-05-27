@@ -28,8 +28,11 @@ impl LintRule for Rule {
       let at = from + rel;
       // Walk back to enclosing `(`.
       let pre = &body[..at];
-      let Some(open) = pre.rfind('(') else { from = at + 11; continue };
-      let Some(close) = find_matching_paren(body, open) else { from = at + 11; break };
+      let Some(open) = pre.rfind('(') else {
+        from = at + 11;
+        continue;
+      };
+      let Some(close) = find_matching_paren(body, open) else { break };
       let inner = &body[open + 1..close];
       let inner_upper = inner.to_ascii_uppercase();
       if !inner_upper.contains("ORDER BY") {
@@ -52,12 +55,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

@@ -30,8 +30,7 @@ impl LintRule for Rule {
     let triggers = ["1=1", "1 = 1", "TRUE"];
     let mut hit_len = 0usize;
     for needle in triggers {
-      if tail_upper.starts_with(needle) {
-        let post = &tail_upper[needle.len()..];
+      if let Some(post) = tail_upper.strip_prefix(needle) {
         let post_trim = post.trim_start();
         if post_trim.starts_with("AND ") || post_trim.starts_with("OR ") || post_trim.is_empty() {
           hit_len = needle.len();
@@ -39,7 +38,9 @@ impl LintRule for Rule {
         }
       }
     }
-    if hit_len == 0 { return }
+    if hit_len == 0 {
+      return;
+    }
     let abs_s = start + after + (body[after..].len() - tail.len());
     let abs_e = abs_s + hit_len;
     out.push(Diagnostic {

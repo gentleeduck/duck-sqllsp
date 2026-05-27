@@ -31,28 +31,54 @@ impl LintRule for Rule {
     let mut i = after;
     let mut cte_names: Vec<(String, usize, usize, bool)> = Vec::new(); // (name, open, close, has_returning)
     loop {
-      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
-      if i >= bytes.len() { break }
-      if upper[i..].starts_with("RECURSIVE ") { i += "RECURSIVE ".len(); continue }
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1
+      }
+      if i >= bytes.len() {
+        break;
+      }
+      if upper[i..].starts_with("RECURSIVE ") {
+        i += "RECURSIVE ".len();
+        continue;
+      }
       let name_start = i;
-      while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') { i += 1 }
-      if i == name_start { break }
+      while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+        i += 1
+      }
+      if i == name_start {
+        break;
+      }
       let name = body[name_start..i].to_string();
-      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1
+      }
       // optional (col, col)
       if i < bytes.len() && bytes[i] == b'(' {
         let Some(close) = find_matching_paren(body, i) else { break };
         i = close + 1;
-        while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+          i += 1
+        }
       }
       // AS
-      if i + 2 > bytes.len() || !upper[i..].starts_with("AS") { break }
+      if i + 2 > bytes.len() || !upper[i..].starts_with("AS") {
+        break;
+      }
       i += 2;
-      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
-      if upper[i..].starts_with("MATERIALIZED ") { i += "MATERIALIZED ".len(); }
-      else if upper[i..].starts_with("NOT MATERIALIZED ") { i += "NOT MATERIALIZED ".len(); }
-      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
-      if i >= bytes.len() || bytes[i] != b'(' { break }
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1
+      }
+      if upper[i..].starts_with("MATERIALIZED ") {
+        i += "MATERIALIZED ".len();
+      } else if upper[i..].starts_with("NOT MATERIALIZED ") {
+        i += "NOT MATERIALIZED ".len();
+      }
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1
+      }
+      if i >= bytes.len() || bytes[i] != b'(' {
+        break;
+      }
       let body_open = i;
       let Some(body_close) = find_matching_paren(body, body_open) else { break };
       let cte_body = &body[body_open + 1..body_close];
@@ -65,14 +91,21 @@ impl LintRule for Rule {
         cte_names.push((name, body_open, body_close, has_returning));
       }
       i = body_close + 1;
-      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
-      if i < bytes.len() && bytes[i] == b',' { i += 1; continue }
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1
+      }
+      if i < bytes.len() && bytes[i] == b',' {
+        i += 1;
+        continue;
+      }
       break;
     }
     // The outer query is what follows.
     let outer_upper = body[i..].to_ascii_uppercase();
     for (name, open, close, has_returning) in cte_names {
-      if has_returning { continue }
+      if has_returning {
+        continue;
+      }
       let ref_pattern = name.to_ascii_uppercase();
       if outer_upper.contains(&ref_pattern) {
         out.push(Diagnostic {
@@ -95,12 +128,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

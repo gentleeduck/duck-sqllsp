@@ -88,9 +88,13 @@ impl LintRule for Rule {
             // NOTICE/INFO/WARNING/DEBUG/LOG just emit a message and
             // continue. Peek the next word.
             let mut j = i;
-            while j < n && bytes[j].is_ascii_whitespace() { j += 1 }
+            while j < n && bytes[j].is_ascii_whitespace() {
+              j += 1
+            }
             let s2 = j;
-            while j < n && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') { j += 1 }
+            while j < n && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') {
+              j += 1
+            }
             let next_tok = &stripped[s2..j];
             // Bare `RAISE;` (re-raise current exception) also
             // terminates. `RAISE EXCEPTION ...` and the SQLSTATE
@@ -136,10 +140,8 @@ impl LintRule for Rule {
           },
         }
       } else {
-        if bytes[i] == b';' {
-          if state == State::InTerminator {
-            state = State::PostTerminator;
-          }
+        if bytes[i] == b';' && state == State::InTerminator {
+          state = State::PostTerminator;
         }
         if bytes[i] == b'\'' {
           i += 1;

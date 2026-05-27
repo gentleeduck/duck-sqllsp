@@ -11,10 +11,26 @@ use dsl_resolve::Scope;
 pub struct Rule;
 
 const VOLATILE: &[&str] = &[
-  "random", "now", "clock_timestamp", "statement_timestamp", "transaction_timestamp",
-  "current_timestamp", "current_time", "current_date", "localtime", "localtimestamp",
-  "gen_random_uuid", "uuid_generate_v1", "uuid_generate_v4", "nextval", "currval",
-  "lastval", "setval", "txid_current", "pg_backend_pid", "pg_advisory_lock",
+  "random",
+  "now",
+  "clock_timestamp",
+  "statement_timestamp",
+  "transaction_timestamp",
+  "current_timestamp",
+  "current_time",
+  "current_date",
+  "localtime",
+  "localtimestamp",
+  "gen_random_uuid",
+  "uuid_generate_v1",
+  "uuid_generate_v4",
+  "nextval",
+  "currval",
+  "lastval",
+  "setval",
+  "txid_current",
+  "pg_backend_pid",
+  "pg_advisory_lock",
 ];
 
 impl LintRule for Rule {
@@ -75,13 +91,17 @@ impl LintRule for Rule {
 fn find_word(haystack: &str, needle: &str) -> Option<usize> {
   let h = haystack.as_bytes();
   let n = needle.as_bytes();
-  if n.is_empty() { return None }
+  if n.is_empty() {
+    return None;
+  }
   let mut i = 0usize;
   while i + n.len() <= h.len() {
     if h[i..i + n.len()] == *n {
       let prev_ok = i == 0 || !(h[i - 1].is_ascii_alphanumeric() || h[i - 1] == b'_');
       let next_ok = i + n.len() == h.len() || !(h[i + n.len()].is_ascii_alphanumeric() || h[i + n.len()] == b'_');
-      if prev_ok && next_ok { return Some(i) }
+      if prev_ok && next_ok {
+        return Some(i);
+      }
     }
     i += 1;
   }
@@ -94,23 +114,46 @@ fn strip_noise(s: &str) -> String {
   let mut i = 0usize;
   while i < n {
     if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
-      while i < n && out[i] != b'\n' { out[i] = b' '; i += 1 }
+      while i < n && out[i] != b'\n' {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
       let mut depth = 1u32;
-      out[i] = b' '; out[i + 1] = b' '; i += 2;
+      out[i] = b' ';
+      out[i + 1] = b' ';
+      i += 2;
       while i + 1 < n && depth > 0 {
-        if out[i] == b'/' && out[i + 1] == b'*' { depth += 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else if out[i] == b'*' && out[i + 1] == b'/' { depth -= 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else { out[i] = b' '; i += 1; }
+        if out[i] == b'/' && out[i + 1] == b'*' {
+          depth += 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else if out[i] == b'*' && out[i + 1] == b'/' {
+          depth -= 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else {
+          out[i] = b' ';
+          i += 1;
+        }
       }
       continue;
     }
     if out[i] == b'\'' {
-      out[i] = b' '; i += 1;
-      while i < n && out[i] != b'\'' { out[i] = b' '; i += 1 }
-      if i < n { out[i] = b' '; i += 1 }
+      out[i] = b' ';
+      i += 1;
+      while i < n && out[i] != b'\'' {
+        out[i] = b' ';
+        i += 1
+      }
+      if i < n {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     i += 1;
@@ -125,12 +168,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

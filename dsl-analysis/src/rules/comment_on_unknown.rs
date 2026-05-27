@@ -40,20 +40,27 @@ impl LintRule for Rule {
       let after = rel + needle.len();
       let bytes = body.as_bytes();
       let mut k = after;
-      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1;
+      }
       let id_start = k;
-      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') {
+      while k < bytes.len()
+        && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"')
+      {
         k += 1;
       }
       let id = &body[id_start..k];
-      if id.is_empty() { return; }
+      if id.is_empty() {
+        return;
+      }
       let parts: Vec<&str> = id.split('.').map(|s| s.trim_matches('"')).collect();
       let target_name = parts.last().unwrap_or(&"");
       let exists = match kind {
         "table" | "view" | "matview" => catalog.find_table(None, target_name).is_some(),
         "column" => {
-          if parts.len() < 2 { false }
-          else {
+          if parts.len() < 2 {
+            false
+          } else {
             let tbl = parts[parts.len() - 2];
             let col = parts[parts.len() - 1];
             catalog
@@ -61,14 +68,18 @@ impl LintRule for Rule {
               .map(|t| t.columns.iter().any(|c| c.name.eq_ignore_ascii_case(col)))
               .unwrap_or(false)
           }
-        }
-        "function" => catalog.functions.iter().any(|f| f.name.eq_ignore_ascii_case(target_name))
-          || dsl_knowledge::tables::functions().contains_key(target_name.to_ascii_lowercase().as_str()),
+        },
+        "function" => {
+          catalog.functions.iter().any(|f| f.name.eq_ignore_ascii_case(target_name))
+            || dsl_knowledge::tables::functions().contains_key(target_name.to_ascii_lowercase().as_str())
+        },
         "type" | "domain" => catalog.types().any(|t| t.name.eq_ignore_ascii_case(target_name)),
         "sequence" => catalog.sequences().any(|s| s.name.eq_ignore_ascii_case(target_name)),
         _ => true, // index / trigger less commonly cataloged; skip.
       };
-      if exists { return; }
+      if exists {
+        return;
+      }
       let abs_s = start + id_start;
       let abs_e = start + k;
       out.push(Diagnostic {

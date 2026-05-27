@@ -44,8 +44,8 @@ impl LintRule for Rule {
             if depth == 0 {
               break;
             }
-          }
-          _ => {}
+          },
+          _ => {},
         }
         k += 1;
       }
@@ -55,17 +55,10 @@ impl LintRule for Rule {
         continue;
       }
       // Strip leading DISTINCT.
-      let arg_no_distinct = arg
-        .strip_prefix("DISTINCT ")
-        .or_else(|| arg.strip_prefix("distinct "))
-        .unwrap_or(arg)
-        .trim();
+      let arg_no_distinct =
+        arg.strip_prefix("DISTINCT ").or_else(|| arg.strip_prefix("distinct ")).unwrap_or(arg).trim();
       // Strip alias prefix `a.col` -> `col`.
-      let col_name = arg_no_distinct
-        .rsplit('.')
-        .next()
-        .unwrap_or(arg_no_distinct)
-        .trim_matches('"');
+      let col_name = arg_no_distinct.rsplit('.').next().unwrap_or(arg_no_distinct).trim_matches('"');
       let Some(col) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(col_name)) else { continue };
       if !col.nullable {
         continue;

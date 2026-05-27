@@ -23,8 +23,12 @@ impl LintRule for Rule {
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
     let trim = upper.trim_start();
-    if !trim.starts_with("CREATE EXTENSION") { return }
-    if upper.contains("IF NOT EXISTS") { return }
+    if !trim.starts_with("CREATE EXTENSION") {
+      return;
+    }
+    if upper.contains("IF NOT EXISTS") {
+      return;
+    }
     let lead = body.len() - body.trim_start().len();
     let abs_s = start + lead;
     let abs_e = start + body.find(';').unwrap_or(body.len());

@@ -35,16 +35,21 @@ impl LintRule for Rule {
     let after_insert = insert_at + "INSERT INTO ".len();
     let rest = &body[after_insert..];
     let raw = rest.trim_start();
-    let id_end = raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(raw.len());
+    let id_end =
+      raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(raw.len());
     let table_raw = &raw[..id_end];
     let table = table_raw.rsplit('.').next().unwrap_or(table_raw).trim_matches('"').to_string();
-    if table.is_empty() { return; }
+    if table.is_empty() {
+      return;
+    }
     let Some(t) = catalog.find_table(None, &table) else { return };
 
     let Some(oc_at) = upper.find("ON CONFLICT") else { return };
     // Skip ON CONFLICT ON CONSTRAINT form.
     let post = &upper[oc_at + "ON CONFLICT".len()..];
-    if post.trim_start().starts_with("ON CONSTRAINT") { return; }
+    if post.trim_start().starts_with("ON CONSTRAINT") {
+      return;
+    }
     // Find the column list paren after ON CONFLICT.
     let paren_off = post.find('(');
     let Some(paren_off) = paren_off else { return };
@@ -52,30 +57,41 @@ impl LintRule for Rule {
     let close = body[abs_paren..].find(')');
     let Some(close) = close else { return };
     let cols_text = &body[abs_paren..abs_paren + close];
-    let mut cols: Vec<String> = cols_text
-      .split(',')
-      .map(|s| s.trim().trim_matches('"').to_ascii_lowercase())
-      .filter(|s| !s.is_empty())
-      .collect();
+    let mut cols: Vec<String> =
+      cols_text.split(',').map(|s| s.trim().trim_matches('"').to_ascii_lowercase()).filter(|s| !s.is_empty()).collect();
     cols.sort();
-    if cols.is_empty() { return; }
+    if cols.is_empty() {
+      return;
+    }
 
     let mut found = false;
     for con in &t.constraints {
-      if !matches!(con.kind, ConstraintKind::PrimaryKey | ConstraintKind::Unique) { continue; }
+      if !matches!(con.kind, ConstraintKind::PrimaryKey | ConstraintKind::Unique) {
+        continue;
+      }
       let mut c2: Vec<String> = con.columns.iter().map(|s| s.to_ascii_lowercase()).collect();
       c2.sort();
-      if c2 == cols { found = true; break; }
+      if c2 == cols {
+        found = true;
+        break;
+      }
     }
     if !found {
       for idx in &t.indexes {
-        if !idx.unique { continue; }
+        if !idx.unique {
+          continue;
+        }
         let mut c2: Vec<String> = idx.columns.iter().map(|s| s.to_ascii_lowercase()).collect();
         c2.sort();
-        if c2 == cols { found = true; break; }
+        if c2 == cols {
+          found = true;
+          break;
+        }
       }
     }
-    if found { return; }
+    if found {
+      return;
+    }
     let abs_s = start + oc_at;
     let abs_e = start + abs_paren + close + 1;
     out.push(Diagnostic {
@@ -98,12 +114,21 @@ fn strip_comments_and_strings(s: &str) -> String {
   let mut i = 0usize;
   while i < n {
     if i + 1 < n && bytes[i] == b'-' && bytes[i + 1] == b'-' {
-      while i < n && bytes[i] != b'\n' { out.push(' '); i += 1 }
+      while i < n && bytes[i] != b'\n' {
+        out.push(' ');
+        i += 1
+      }
     } else if bytes[i] == b'\'' {
       out.push(' ');
       i += 1;
-      while i < n && bytes[i] != b'\'' { out.push(' '); i += 1 }
-      if i < n { out.push(' '); i += 1 }
+      while i < n && bytes[i] != b'\'' {
+        out.push(' ');
+        i += 1
+      }
+      if i < n {
+        out.push(' ');
+        i += 1
+      }
     } else if bytes[i].is_ascii() {
       out.push(bytes[i] as char);
       i += 1;

@@ -27,13 +27,22 @@ impl LintRule for Rule {
       let at = from + rel;
       if at > 0 {
         let prev = body.as_bytes()[at - 1] as char;
-        if prev.is_ascii_alphanumeric() || prev == '_' { from = at + 10; continue }
+        if prev.is_ascii_alphanumeric() || prev == '_' {
+          from = at + 10;
+          continue;
+        }
       }
       let open = at + "jsonb_set(".len();
-      let Some(close) = find_matching_paren(body, open - 1) else { from = open; continue };
+      let Some(close) = find_matching_paren(body, open - 1) else {
+        from = open;
+        continue;
+      };
       let inner = &body[open..close];
       let args = split_top_level(inner);
-      if args.len() < 2 { from = close + 1; continue }
+      if args.len() < 2 {
+        from = close + 1;
+        continue;
+      }
       let path = args[1].trim();
       if let Some(stripped) = path.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')) {
         let p = stripped.trim();
@@ -44,10 +53,12 @@ impl LintRule for Rule {
             severity: Severity::Error,
             message: format!(
               "jsonb_set path `{p}` must be a `text[]` literal -- use `'{{{}}}'` or `ARRAY['{}']` (PG 22P02)",
-              p,
-              p,
+              p, p,
             ),
-            range: text_size::TextRange::new(((start + open + off) as u32).into(), ((start + open + off + path.len()) as u32).into()),
+            range: text_size::TextRange::new(
+              ((start + open + off) as u32).into(),
+              ((start + open + off + path.len()) as u32).into(),
+            ),
           });
         }
       }
@@ -66,12 +77,17 @@ fn split_top_level(text: &str) -> Vec<String> {
     match bytes[i] {
       b'(' => depth += 1,
       b')' => depth -= 1,
-      b',' if depth == 0 => { out.push(text[start..i].to_string()); start = i + 1 }
+      b',' if depth == 0 => {
+        out.push(text[start..i].to_string());
+        start = i + 1
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -86,12 +102,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

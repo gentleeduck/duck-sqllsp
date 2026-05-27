@@ -28,21 +28,33 @@ impl LintRule for Rule {
       let at = from + rel;
       if at > 0 {
         let prev = body.as_bytes()[at - 1] as char;
-        if prev.is_ascii_alphanumeric() || prev == '_' { from = at + 6; continue }
+        if prev.is_ascii_alphanumeric() || prev == '_' {
+          from = at + 6;
+          continue;
+        }
       }
       let open = at + "ARRAY[".len() - 1;
-      let Some(close) = find_matching_bracket(body, open) else { from = open; break };
+      let Some(close) = find_matching_bracket(body, open) else { break };
       let inner = &body[open + 1..close];
       let has_null = inner.split(',').any(|tok| tok.trim().eq_ignore_ascii_case("NULL"));
-      if !has_null { from = close + 1; continue }
+      if !has_null {
+        from = close + 1;
+        continue;
+      }
       // Walk left looking for `=` (skipping whitespace).
       let mut k = at;
       while k > 0 {
         let c = body.as_bytes()[k - 1] as char;
         if c.is_ascii_whitespace() { k -= 1 } else { break }
       }
-      if k == 0 { from = close + 1; continue }
-      if body.as_bytes()[k - 1] != b'=' { from = close + 1; continue }
+      if k == 0 {
+        from = close + 1;
+        continue;
+      }
+      if body.as_bytes()[k - 1] != b'=' {
+        from = close + 1;
+        continue;
+      }
       out.push(Diagnostic {
         code: "sql238",
         severity: Severity::Warning,
@@ -61,12 +73,19 @@ fn find_matching_bracket(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'[' => depth += 1,
-      b']' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b']' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

@@ -34,24 +34,43 @@ impl LintRule for Rule {
     let bytes = body.as_bytes();
     let mut i = after;
     while i < bytes.len() {
-      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1
+      }
       // CTE name + optional col list + AS.
-      while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') { i += 1 }
-      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
+      while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+        i += 1
+      }
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1
+      }
       if i < bytes.len() && bytes[i] == b'(' {
         let Some(close) = find_matching_paren(body, i) else { break };
         i = close + 1;
       }
-      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1
+      }
       // AS
-      if i + 2 > bytes.len() || !upper[i..].starts_with("AS") { break }
+      if i + 2 > bytes.len() || !upper[i..].starts_with("AS") {
+        break;
+      }
       i += 2;
-      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1
+      }
       // optional MATERIALIZED / NOT MATERIALIZED
-      if upper[i..].starts_with("MATERIALIZED") { i += "MATERIALIZED".len(); }
-      else if upper[i..].starts_with("NOT MATERIALIZED") { i += "NOT MATERIALIZED".len(); }
-      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
-      if i >= bytes.len() || bytes[i] != b'(' { break }
+      if upper[i..].starts_with("MATERIALIZED") {
+        i += "MATERIALIZED".len();
+      } else if upper[i..].starts_with("NOT MATERIALIZED") {
+        i += "NOT MATERIALIZED".len();
+      }
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1
+      }
+      if i >= bytes.len() || bytes[i] != b'(' {
+        break;
+      }
       let body_open = i;
       let Some(body_close) = find_matching_paren(body, body_open) else { break };
       let cte_body = &body[body_open + 1..body_close];
@@ -65,8 +84,13 @@ impl LintRule for Rule {
         });
       }
       i = body_close + 1;
-      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
-      if i < bytes.len() && bytes[i] == b',' { i += 1; continue }
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1
+      }
+      if i < bytes.len() && bytes[i] == b',' {
+        i += 1;
+        continue;
+      }
       break;
     }
   }
@@ -78,23 +102,46 @@ fn strip_noise(s: &str) -> String {
   let mut i = 0usize;
   while i < n {
     if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
-      while i < n && out[i] != b'\n' { out[i] = b' '; i += 1 }
+      while i < n && out[i] != b'\n' {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
       let mut depth = 1u32;
-      out[i] = b' '; out[i + 1] = b' '; i += 2;
+      out[i] = b' ';
+      out[i + 1] = b' ';
+      i += 2;
       while i + 1 < n && depth > 0 {
-        if out[i] == b'/' && out[i + 1] == b'*' { depth += 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else if out[i] == b'*' && out[i + 1] == b'/' { depth -= 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else { out[i] = b' '; i += 1; }
+        if out[i] == b'/' && out[i + 1] == b'*' {
+          depth += 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else if out[i] == b'*' && out[i + 1] == b'/' {
+          depth -= 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else {
+          out[i] = b' ';
+          i += 1;
+        }
       }
       continue;
     }
     if out[i] == b'\'' {
-      out[i] = b' '; i += 1;
-      while i < n && out[i] != b'\'' { out[i] = b' '; i += 1 }
-      if i < n { out[i] = b' '; i += 1 }
+      out[i] = b' ';
+      i += 1;
+      while i < n && out[i] != b'\'' {
+        out[i] = b' ';
+        i += 1
+      }
+      if i < n {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     i += 1;
@@ -109,12 +156,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

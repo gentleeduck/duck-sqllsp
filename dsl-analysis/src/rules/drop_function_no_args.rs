@@ -26,7 +26,9 @@ impl LintRule for Rule {
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
     let trim = upper.trim_start();
-    if !trim.starts_with("DROP FUNCTION") && !trim.starts_with("DROP PROCEDURE") { return }
+    if !trim.starts_with("DROP FUNCTION") && !trim.starts_with("DROP PROCEDURE") {
+      return;
+    }
     // Find the name after DROP FUNCTION / DROP PROCEDURE [IF EXISTS] ...
     let needle = if trim.starts_with("DROP FUNCTION") { "DROP FUNCTION" } else { "DROP PROCEDURE" };
     let after = upper.find(needle).unwrap() + needle.len();
@@ -34,12 +36,18 @@ impl LintRule for Rule {
     let rest_upper = rest.to_ascii_uppercase();
     let head_skip = if rest_upper.starts_with("IF EXISTS") { "IF EXISTS".len() } else { 0 };
     let after_head = &rest[head_skip..].trim_start();
-    let id_end = after_head.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(after_head.len());
+    let id_end = after_head
+      .find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"')
+      .unwrap_or(after_head.len());
     let name = after_head[..id_end].to_string();
-    if name.is_empty() { return }
+    if name.is_empty() {
+      return;
+    }
     // After the name, look for an open paren.
     let post = after_head[id_end..].trim_start();
-    if post.starts_with('(') { return }
+    if post.starts_with('(') {
+      return;
+    }
     let lead = body.len() - body.trim_start().len();
     let abs_s = start + lead;
     let abs_e = start + body.find(';').unwrap_or(body.len());

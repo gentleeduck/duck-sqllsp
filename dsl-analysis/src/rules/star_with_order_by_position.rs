@@ -19,7 +19,9 @@ impl LintRule for Rule {
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let StatementKind::Select(s) = &stmt.kind else { return };
-    if !s.projections.iter().any(|p| matches!(p, dsl_parse::Projection::Star)) { return }
+    if !s.projections.iter().any(|p| matches!(p, dsl_parse::Projection::Star)) {
+      return;
+    }
     let start: usize = u32::from(stmt.range.start()) as usize;
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let raw = &source[start..end];
@@ -31,7 +33,9 @@ impl LintRule for Rule {
     let rest = &body[after..];
     let id_end = rest.find(|c: char| c == ',' || c == ';' || c == '\n' || c.is_whitespace()).unwrap_or(rest.len());
     let first = rest[..id_end].trim();
-    if first.parse::<u32>().is_err() { return }
+    if first.parse::<u32>().is_err() {
+      return;
+    }
     let abs_s = start + at;
     let abs_e = start + after + id_end;
     out.push(Diagnostic {

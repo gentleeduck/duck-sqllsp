@@ -31,21 +31,30 @@ impl LintRule for Rule {
     let stmt_is_before_insert = upper.contains("BEFORE INSERT");
     let is_trigger_fn_body = upper.contains("RETURNS TRIGGER") || upper.contains("RETURNS  TRIGGER");
     let buffer_has_before_insert = source.to_ascii_uppercase().contains("BEFORE INSERT");
-    if !(stmt_is_before_insert || (is_trigger_fn_body && buffer_has_before_insert)) { return }
+    if !(stmt_is_before_insert || (is_trigger_fn_body && buffer_has_before_insert)) {
+      return;
+    }
     let bytes = body.as_bytes();
     // Walk every `NEW.<ident> :=` assignment.
     let mut i = 0usize;
     while i + 4 < bytes.len() {
       if upper.as_bytes()[i] == b'N' && i + 4 < bytes.len() && &upper[i..i + 4] == "NEW." {
         let prev_ok = i == 0 || !is_word(bytes[i - 1] as char);
-        if !prev_ok { i += 1; continue }
+        if !prev_ok {
+          i += 1;
+          continue;
+        }
         let mut k = i + 4;
         let col_start = k;
-        while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_') { k += 1 }
+        while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_') {
+          k += 1
+        }
         let col = &body[col_start..k];
         // Skip whitespace then look for ':='.
         let mut m = k;
-        while m < bytes.len() && bytes[m].is_ascii_whitespace() { m += 1 }
+        while m < bytes.len() && bytes[m].is_ascii_whitespace() {
+          m += 1
+        }
         if m + 1 < bytes.len() && bytes[m] == b':' && bytes[m + 1] == b'=' {
           // Heuristic: column name `id` or `*_id` is the most common PK shape.
           let lc = col.to_ascii_lowercase();
@@ -71,4 +80,6 @@ impl LintRule for Rule {
   }
 }
 
-fn is_word(c: char) -> bool { c.is_alphanumeric() || c == '_' }
+fn is_word(c: char) -> bool {
+  c.is_alphanumeric() || c == '_'
+}

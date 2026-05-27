@@ -29,12 +29,21 @@ impl LintRule for Rule {
       while let Some(rel) = upper[from..].find(needle) {
         let at = from + rel;
         let prev_ok = at == 0 || !is_word(body.as_bytes()[at - 1] as char);
-        if !prev_ok { from = at + needle.len(); continue }
+        if !prev_ok {
+          from = at + needle.len();
+          continue;
+        }
         let inner_start = at + needle.len();
-        let Some(close) = matched_close(body.as_bytes(), inner_start - 1) else { from = inner_start; continue };
+        let Some(close) = matched_close(body.as_bytes(), inner_start - 1) else {
+          from = inner_start;
+          continue;
+        };
         let arg = body[inner_start..close].trim();
         let (qual, col) = split_dotted(arg);
-        let Some(nullable) = column_nullable(scope, catalog, qual.as_deref(), &col) else { from = close + 1; continue };
+        let Some(nullable) = column_nullable(scope, catalog, qual.as_deref(), &col) else {
+          from = close + 1;
+          continue;
+        };
         if nullable {
           let abs_s = start + at;
           let abs_e = abs_s + needle.len() - 1;
@@ -43,7 +52,9 @@ impl LintRule for Rule {
             severity: Severity::Hint,
             message: format!(
               "{} ignores NULL inputs silently -- column `{}` is nullable, wrap in COALESCE({}, false) if you mean it",
-              &needle[..needle.len() - 1], col, arg
+              &needle[..needle.len() - 1],
+              col,
+              arg
             ),
             range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
           });
@@ -55,7 +66,9 @@ impl LintRule for Rule {
   }
 }
 
-fn is_word(c: char) -> bool { c.is_alphanumeric() || c == '_' }
+fn is_word(c: char) -> bool {
+  c.is_alphanumeric() || c == '_'
+}
 
 fn split_dotted(s: &str) -> (Option<String>, String) {
   let s = s.trim().trim_matches('"');
@@ -74,9 +87,19 @@ fn matched_close(bytes: &[u8], open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i) } }
-      b'\'' => { i += 1; while i < bytes.len() && bytes[i] != b'\'' { i += 1 } }
-      _ => {}
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
+      b'\'' => {
+        i += 1;
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

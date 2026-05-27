@@ -9,11 +9,7 @@ use dsl_resolve::Scope;
 
 pub struct Rule;
 
-const FNS: &[(&str, &str)] = &[
-  ("ISNULL", "MSSQL/MySQL"),
-  ("NVL",    "Oracle"),
-  ("IFNULL", "MySQL"),
-];
+const FNS: &[(&str, &str)] = &[("ISNULL", "MSSQL/MySQL"), ("NVL", "Oracle"), ("IFNULL", "MySQL")];
 
 impl LintRule for Rule {
   fn code(&self) -> &'static str {
@@ -34,17 +30,22 @@ impl LintRule for Rule {
       let mut from = 0usize;
       while let Some(rel) = upper[from..].find(&needle) {
         let at = from + rel;
-        let prev_ok = at == 0 || !{ let p = bytes[at - 1] as char; p.is_ascii_alphanumeric() || p == '_' };
-        if !prev_ok { from = at + needle.len(); continue }
+        let prev_ok = at == 0
+          || !{
+            let p = bytes[at - 1] as char;
+            p.is_ascii_alphanumeric() || p == '_'
+          };
+        if !prev_ok {
+          from = at + needle.len();
+          continue;
+        }
         // Skip `IS NULL` (different from ISNULL fn) -- needle requires `(`.
         let abs_s = start + at;
         let abs_e = abs_s + fname.len();
         out.push(Diagnostic {
           code: "sql319",
           severity: Severity::Error,
-          message: format!(
-            "`{fname}(...)` is {dialect} syntax -- PG uses `COALESCE(x, y, ...)` (SQL standard, n-ary)"
-          ),
+          message: format!("`{fname}(...)` is {dialect} syntax -- PG uses `COALESCE(x, y, ...)` (SQL standard, n-ary)"),
           range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
         });
         from = at + needle.len();

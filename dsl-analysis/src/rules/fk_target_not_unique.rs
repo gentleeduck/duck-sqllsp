@@ -22,30 +22,43 @@ impl LintRule for Rule {
     let StatementKind::CreateTable(ct) = &stmt.kind else { return };
     let Some(self_t) = catalog.find_table(ct.table.schema.as_deref(), &ct.table.name) else { return };
     for con in &self_t.constraints {
-      if !matches!(con.kind, ConstraintKind::ForeignKey) { continue }
+      if !matches!(con.kind, ConstraintKind::ForeignKey) {
+        continue;
+      }
       let Some(refs) = &con.references else { continue };
-      let target = catalog
-        .find_table(Some(&refs.schema), &refs.table)
-        .or_else(|| catalog.find_table(None, &refs.table));
+      let target =
+        catalog.find_table(Some(&refs.schema), &refs.table).or_else(|| catalog.find_table(None, &refs.table));
       let Some(target) = target else { continue };
       let mut needed: Vec<String> = refs.columns.iter().map(|s| s.to_ascii_lowercase()).collect();
       needed.sort();
       let mut found = false;
       for c in &target.constraints {
-        if !matches!(c.kind, ConstraintKind::PrimaryKey | ConstraintKind::Unique) { continue }
+        if !matches!(c.kind, ConstraintKind::PrimaryKey | ConstraintKind::Unique) {
+          continue;
+        }
         let mut have: Vec<String> = c.columns.iter().map(|s| s.to_ascii_lowercase()).collect();
         have.sort();
-        if have == needed { found = true; break }
+        if have == needed {
+          found = true;
+          break;
+        }
       }
       if !found {
         for idx in &target.indexes {
-          if !idx.unique { continue }
+          if !idx.unique {
+            continue;
+          }
           let mut have: Vec<String> = idx.columns.iter().map(|s| s.to_ascii_lowercase()).collect();
           have.sort();
-          if have == needed { found = true; break }
+          if have == needed {
+            found = true;
+            break;
+          }
         }
       }
-      if found { continue }
+      if found {
+        continue;
+      }
       out.push(Diagnostic {
         code: "sql196",
         severity: Severity::Error,

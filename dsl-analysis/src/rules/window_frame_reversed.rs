@@ -31,14 +31,14 @@ impl LintRule for Rule {
       let and_at = bet_at + and_rel;
       let start_bound = upper[bet_at..and_at].trim();
       let after_and = and_at + " AND ".len();
-      let stop = upper[after_and..]
-        .find(|c: char| c == ')' || c == ';' || c == ',')
-        .unwrap_or(upper.len() - after_and);
+      let stop = upper[after_and..].find([')', ';', ',']).unwrap_or(upper.len() - after_and);
       let end_bound = upper[after_and..after_and + stop].trim();
       from = after_and + stop;
       let Some((s_rank, _)) = bound_rank(start_bound) else { continue };
       let Some((e_rank, _)) = bound_rank(end_bound) else { continue };
-      if s_rank <= e_rank { continue; }
+      if s_rank <= e_rank {
+        continue;
+      }
       let abs_s = start + bet_at - " BETWEEN ".len();
       let abs_e = start + after_and + stop;
       out.push(Diagnostic {
@@ -59,14 +59,24 @@ impl LintRule for Rule {
 /// predicate forms, which return None here).
 fn bound_rank(s: &str) -> Option<(i64, &'static str)> {
   let t = s.trim();
-  if t == "UNBOUNDED PRECEDING" { return Some((i64::MIN, "UNBOUNDED PRECEDING")); }
-  if t == "CURRENT ROW" { return Some((0, "CURRENT ROW")); }
-  if t == "UNBOUNDED FOLLOWING" { return Some((i64::MAX, "UNBOUNDED FOLLOWING")); }
-  if let Some(n) = t.strip_suffix(" PRECEDING") {
-    if let Ok(v) = n.trim().parse::<i64>() { return Some((-v, "PRECEDING")); }
+  if t == "UNBOUNDED PRECEDING" {
+    return Some((i64::MIN, "UNBOUNDED PRECEDING"));
   }
-  if let Some(n) = t.strip_suffix(" FOLLOWING") {
-    if let Ok(v) = n.trim().parse::<i64>() { return Some((v, "FOLLOWING")); }
+  if t == "CURRENT ROW" {
+    return Some((0, "CURRENT ROW"));
+  }
+  if t == "UNBOUNDED FOLLOWING" {
+    return Some((i64::MAX, "UNBOUNDED FOLLOWING"));
+  }
+  if let Some(n) = t.strip_suffix(" PRECEDING")
+    && let Ok(v) = n.trim().parse::<i64>()
+  {
+    return Some((-v, "PRECEDING"));
+  }
+  if let Some(n) = t.strip_suffix(" FOLLOWING")
+    && let Ok(v) = n.trim().parse::<i64>()
+  {
+    return Some((v, "FOLLOWING"));
   }
   None
 }

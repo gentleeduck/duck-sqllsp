@@ -25,26 +25,39 @@ impl LintRule for Rule {
     while i < bytes.len() {
       if bytes[i] == b'\'' {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-        if i < bytes.len() { i += 1 }
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+        if i < bytes.len() {
+          i += 1
+        }
         continue;
       }
-      if bytes[i] == b'/' && i + 1 < bytes.len() && bytes[i + 1] != b'/' && bytes[i + 1] != b'*' {
+      // Division `/ 0` and modulo `% 0` -- both raise 22012 in PG.
+      let is_div = bytes[i] == b'/' && i + 1 < bytes.len() && bytes[i + 1] != b'/' && bytes[i + 1] != b'*';
+      let is_mod = bytes[i] == b'%';
+      if is_div || is_mod {
+        let op_char = bytes[i] as char;
         let mut k = i + 1;
-        while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+        while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+          k += 1
+        }
         let num_start = k;
-        while k < bytes.len() && (bytes[k].is_ascii_digit() || bytes[k] == b'.') { k += 1 }
+        while k < bytes.len() && (bytes[k].is_ascii_digit() || bytes[k] == b'.') {
+          k += 1
+        }
         if k > num_start {
           let lit = &body[num_start..k];
-          if let Ok(v) = lit.parse::<f64>() {
-            if v == 0.0 {
-              out.push(Diagnostic {
-                code: "sql278",
-                severity: Severity::Error,
-                message: format!("Literal division by zero `/ {lit}` -- PG raises 22012 at runtime"),
-                range: text_size::TextRange::new(((start + i) as u32).into(), ((start + k) as u32).into()),
-              });
-            }
+          if let Ok(v) = lit.parse::<f64>()
+            && v == 0.0
+          {
+            let label = if is_div { "division" } else { "modulo" };
+            out.push(Diagnostic {
+              code: "sql278",
+              severity: Severity::Error,
+              message: format!("Literal {label} by zero `{op_char} {lit}` -- PG raises 22012 at runtime"),
+              range: text_size::TextRange::new(((start + i) as u32).into(), ((start + k) as u32).into()),
+            });
           }
         }
         i = k;

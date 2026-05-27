@@ -112,7 +112,7 @@ fn stmt_start(bytes: &[u8], i: usize) -> bool {
   // Check word-bounded prior keyword.
   for kw in ["BEGIN", "THEN", "ELSE", "LOOP"] {
     let w = kw.len();
-    if k >= w && bytes.get(k - w..k).map_or(false, |s| s.eq_ignore_ascii_case(kw.as_bytes())) {
+    if k >= w && bytes.get(k - w..k).is_some_and(|s| s.eq_ignore_ascii_case(kw.as_bytes())) {
       let pre_ok = k - w == 0 || !is_word(bytes[k - w - 1] as char);
       if pre_ok {
         return true;

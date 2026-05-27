@@ -95,20 +95,28 @@ fn alter_added_columns(source: &str, table: &str) -> Vec<String> {
   while let Some(rel) = upper[from..].find(needle) {
     let at = from + rel;
     let mut k = at + needle.len();
-    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+    while k < n && bytes[k].is_ascii_whitespace() {
+      k += 1
+    }
     // Optional ONLY / IF EXISTS prefix.
     for kw in ["ONLY ", "IF EXISTS "] {
       if upper[k..].starts_with(kw) {
         k += kw.len();
-        while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+        while k < n && bytes[k].is_ascii_whitespace() {
+          k += 1
+        }
       }
     }
     let id_start = k;
-    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') { k += 1 }
+    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') {
+      k += 1
+    }
     let id = source[id_start..k].trim_matches('"').to_ascii_lowercase();
     let bare = id.rsplit('.').next().unwrap_or(&id);
     from = k;
-    if bare != table_lc { continue }
+    if bare != table_lc {
+      continue;
+    }
     // Scan `ADD COLUMN <name>` within this ALTER stmt (up to `;`).
     let stmt_end = source[k..].find(';').map(|i| k + i).unwrap_or(n);
     let stmt_body_upper = &upper[k..stmt_end];
@@ -118,14 +126,20 @@ fn alter_added_columns(source: &str, table: &str) -> Vec<String> {
       let p = local + p_rel + "ADD COLUMN".len();
       let pb = stmt_body.as_bytes();
       let mut q = p;
-      while q < pb.len() && pb[q].is_ascii_whitespace() { q += 1 }
+      while q < pb.len() && pb[q].is_ascii_whitespace() {
+        q += 1
+      }
       // Skip optional IF NOT EXISTS.
       if stmt_body_upper[q..].starts_with("IF NOT EXISTS") {
         q += "IF NOT EXISTS".len();
-        while q < pb.len() && pb[q].is_ascii_whitespace() { q += 1 }
+        while q < pb.len() && pb[q].is_ascii_whitespace() {
+          q += 1
+        }
       }
       let name_start = q;
-      while q < pb.len() && (pb[q].is_ascii_alphanumeric() || pb[q] == b'_' || pb[q] == b'"') { q += 1 }
+      while q < pb.len() && (pb[q].is_ascii_alphanumeric() || pb[q] == b'_' || pb[q] == b'"') {
+        q += 1
+      }
       if q > name_start {
         out.push(stmt_body[name_start..q].trim_matches('"').to_ascii_lowercase());
       }
@@ -150,33 +164,57 @@ fn alter_renamed_columns(source: &str, table: &str) -> Vec<(String, String)> {
   while let Some(rel) = upper[from..].find(needle) {
     let at = from + rel;
     let mut k = at + needle.len();
-    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+    while k < n && bytes[k].is_ascii_whitespace() {
+      k += 1
+    }
     for kw in ["ONLY ", "IF EXISTS "] {
       if upper[k..].starts_with(kw) {
         k += kw.len();
-        while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+        while k < n && bytes[k].is_ascii_whitespace() {
+          k += 1
+        }
       }
     }
     let id_start = k;
-    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') { k += 1 }
+    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') {
+      k += 1
+    }
     let id = source[id_start..k].trim_matches('"').to_ascii_lowercase();
     let bare = id.rsplit('.').next().unwrap_or(&id);
     from = k;
-    if bare != table_lc { continue }
+    if bare != table_lc {
+      continue;
+    }
     // Skip whitespace then look for RENAME COLUMN.
-    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
-    if !upper[k..].starts_with("RENAME COLUMN") { continue }
+    while k < n && bytes[k].is_ascii_whitespace() {
+      k += 1
+    }
+    if !upper[k..].starts_with("RENAME COLUMN") {
+      continue;
+    }
     k += "RENAME COLUMN".len();
-    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+    while k < n && bytes[k].is_ascii_whitespace() {
+      k += 1
+    }
     let old_start = k;
-    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'"') { k += 1 }
+    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'"') {
+      k += 1
+    }
     let old_name = source[old_start..k].trim_matches('"').to_ascii_lowercase();
-    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
-    if !upper[k..].starts_with("TO") { continue }
+    while k < n && bytes[k].is_ascii_whitespace() {
+      k += 1
+    }
+    if !upper[k..].starts_with("TO") {
+      continue;
+    }
     k += 2;
-    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+    while k < n && bytes[k].is_ascii_whitespace() {
+      k += 1
+    }
     let new_start = k;
-    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'"') { k += 1 }
+    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'"') {
+      k += 1
+    }
     let new_name = source[new_start..k].trim_matches('"').to_ascii_lowercase();
     if !old_name.is_empty() && !new_name.is_empty() {
       out.push((old_name, new_name));
@@ -191,23 +229,46 @@ fn strip_noise(s: &str) -> String {
   let mut i = 0usize;
   while i < n {
     if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
-      while i < n && out[i] != b'\n' { out[i] = b' '; i += 1 }
+      while i < n && out[i] != b'\n' {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
       let mut depth = 1u32;
-      out[i] = b' '; out[i + 1] = b' '; i += 2;
+      out[i] = b' ';
+      out[i + 1] = b' ';
+      i += 2;
       while i + 1 < n && depth > 0 {
-        if out[i] == b'/' && out[i + 1] == b'*' { depth += 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else if out[i] == b'*' && out[i + 1] == b'/' { depth -= 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else { out[i] = b' '; i += 1; }
+        if out[i] == b'/' && out[i + 1] == b'*' {
+          depth += 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else if out[i] == b'*' && out[i + 1] == b'/' {
+          depth -= 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else {
+          out[i] = b' ';
+          i += 1;
+        }
       }
       continue;
     }
     if out[i] == b'\'' {
-      out[i] = b' '; i += 1;
-      while i < n && out[i] != b'\'' { out[i] = b' '; i += 1 }
-      if i < n { out[i] = b' '; i += 1 }
+      out[i] = b' ';
+      i += 1;
+      while i < n && out[i] != b'\'' {
+        out[i] = b' ';
+        i += 1
+      }
+      if i < n {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     i += 1;

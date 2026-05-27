@@ -132,6 +132,7 @@ impl LintRule for Rule {
 /// Returns `(name, nullable)` per column. A column is nullable unless
 /// its definition contains the literal `NOT NULL` (case-insensitive)
 /// or `PRIMARY KEY` (implies NOT NULL).
+#[allow(dead_code)]
 fn parse_columns(body: &str) -> Vec<(String, bool)> {
   let upper = body.to_ascii_uppercase();
   let Some(open) = body.find('(') else { return Vec::new() };

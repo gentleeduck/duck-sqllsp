@@ -29,13 +29,21 @@ impl LintRule for Rule {
     let body_owned = crate::textutil::strip_noise_full(raw);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
-    if !upper.contains("CREATE") || !upper.contains("FUNCTION") { return }
-    if !upper.contains("RETURNS TRIGGER") { return }
+    if !upper.contains("CREATE") || !upper.contains("FUNCTION") {
+      return;
+    }
+    if !upper.contains("RETURNS TRIGGER") {
+      return;
+    }
     let Some(name) = function_name(body) else { return };
     let mut timings: HashSet<&'static str> = HashSet::new();
     collect_timings(source, &name, &mut timings);
-    if !timings.contains("AFTER") { return }
-    if timings.contains("BEFORE") || timings.contains("INSTEAD") { return } // skip if also BEFORE — ambiguous
+    if !timings.contains("AFTER") {
+      return;
+    }
+    if timings.contains("BEFORE") || timings.contains("INSTEAD") {
+      return;
+    } // skip if also BEFORE -- ambiguous
     let Some(body_start) = body.find("$$").map(|p| p + 2) else { return };
     let body_end = body[body_start..].find("$$").map(|p| body_start + p).unwrap_or(body.len());
     let fbody = &body[body_start..body_end];
@@ -47,7 +55,10 @@ impl LintRule for Rule {
       let at = from + rel;
       if at > 0 {
         let prev = bytes[at - 1] as char;
-        if prev.is_ascii_alphanumeric() || prev == '_' { from = at + 7; continue }
+        if prev.is_ascii_alphanumeric() || prev == '_' {
+          from = at + 7;
+          continue;
+        }
       }
       let after = at + "RETURN ".len();
       let tail = &fupper[after..];
@@ -79,7 +90,9 @@ fn function_name(body: &str) -> Option<String> {
   let off = after_fn + (body[after_fn..].len() - tail.len());
   let bytes = body.as_bytes();
   let mut j = off;
-  while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_' || bytes[j] == b'.' || bytes[j] == b'"') {
+  while j < bytes.len()
+    && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_' || bytes[j] == b'.' || bytes[j] == b'"')
+  {
     j += 1;
   }
   let name = body[off..j].rsplit('.').next().unwrap_or(&body[off..j]).trim_matches('"').to_string();
@@ -92,16 +105,21 @@ fn collect_timings(source: &str, fn_name: &str, out: &mut HashSet<&'static str>)
   let n_b = format!("execute procedure {}", fn_name.to_ascii_lowercase());
   let mut from = 0usize;
   loop {
-    let pos = lower[from..].find(&n_a)
-      .map(|p| (p, n_a.len()))
-      .or_else(|| lower[from..].find(&n_b).map(|p| (p, n_b.len())));
+    let pos =
+      lower[from..].find(&n_a).map(|p| (p, n_a.len())).or_else(|| lower[from..].find(&n_b).map(|p| (p, n_b.len())));
     let Some((rel, _)) = pos else { break };
     let abs = from + rel;
     let Some(trig_at) = lower[..abs].rfind("create trigger") else { break };
     let window = &lower[trig_at..abs];
-    if window.contains("before") { out.insert("BEFORE"); }
-    if window.contains("after") { out.insert("AFTER"); }
-    if window.contains("instead of") { out.insert("INSTEAD"); }
+    if window.contains("before") {
+      out.insert("BEFORE");
+    }
+    if window.contains("after") {
+      out.insert("AFTER");
+    }
+    if window.contains("instead of") {
+      out.insert("INSTEAD");
+    }
     from = abs + 1;
   }
 }

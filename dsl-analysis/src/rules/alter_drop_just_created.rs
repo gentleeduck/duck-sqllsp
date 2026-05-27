@@ -5,7 +5,7 @@
 
 use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
-use dsl_parse::{Statement, StatementKind};
+use dsl_parse::Statement;
 use dsl_resolve::Scope;
 
 pub struct Rule;
@@ -25,28 +25,40 @@ impl LintRule for Rule {
     let body_owned = crate::textutil::strip_noise_full(raw);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
-    if !upper.trim_start().starts_with("ALTER TABLE") { return }
-    if !upper.contains("DROP COLUMN") { return }
+    if !upper.trim_start().starts_with("ALTER TABLE") {
+      return;
+    }
+    if !upper.contains("DROP COLUMN") {
+      return;
+    }
     // Extract table + column.
     let Some(at_at) = upper.find("ALTER TABLE") else { return };
     let after = at_at + "ALTER TABLE".len();
     let rest = body[after..].trim_start();
-    let id_end = rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(rest.len());
+    let id_end =
+      rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(rest.len());
     let table_raw = &rest[..id_end];
     let table = table_raw.rsplit('.').next().unwrap_or(table_raw).trim_matches('"').to_string();
     let Some(drop_at) = upper.find("DROP COLUMN") else { return };
     let after_drop = drop_at + "DROP COLUMN".len();
     let drop_rest = body[after_drop..].trim_start();
-    let col_end = drop_rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '"').unwrap_or(drop_rest.len());
+    let col_end =
+      drop_rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '"').unwrap_or(drop_rest.len());
     let col = drop_rest[..col_end].trim_matches('"').to_string();
-    if col.is_empty() || table.is_empty() { return }
+    if col.is_empty() || table.is_empty() {
+      return;
+    }
     // Walk the prelude for a matching CREATE TABLE with this column.
     let prelude_upper = source[..start].to_ascii_uppercase();
     if !prelude_upper.contains(&format!("CREATE TABLE {}", table.to_ascii_uppercase()))
       && !prelude_upper.contains(&format!("CREATE TABLE IF NOT EXISTS {}", table.to_ascii_uppercase()))
-    { return }
+    {
+      return;
+    }
     // Find the matching CREATE body and check the column is there.
-    if !column_in_create(&source[..start], &table, &col) { return }
+    if !column_in_create(&source[..start], &table, &col) {
+      return;
+    }
     let abs_s = start;
     let abs_e = start + body.find(';').unwrap_or(body.len());
     out.push(Diagnostic {
@@ -90,12 +102,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

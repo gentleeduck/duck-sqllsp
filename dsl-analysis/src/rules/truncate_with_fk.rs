@@ -25,24 +25,30 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
-    if !upper.trim_start().starts_with("TRUNCATE") { return }
-    if upper.contains(" CASCADE") { return }
+    if !upper.trim_start().starts_with("TRUNCATE") {
+      return;
+    }
+    if upper.contains(" CASCADE") {
+      return;
+    }
     let after_kw = if let Some(p) = upper.find("TRUNCATE TABLE ") {
       p + "TRUNCATE TABLE ".len()
     } else if let Some(p) = upper.find("TRUNCATE ") {
       p + "TRUNCATE ".len()
-    } else { return };
-    let list_end = body[after_kw..].find(|c: char| c == ';' || c == '\n').unwrap_or(body.len() - after_kw);
+    } else {
+      return;
+    };
+    let list_end = body[after_kw..].find([';', '\n']).unwrap_or(body.len() - after_kw);
     let list = &body[after_kw..after_kw + list_end];
     let stop_words = ["RESTART", "CONTINUE", "RESTRICT", "CASCADE"];
     for raw in list.split(',') {
       let trimmed = raw.trim();
-      let no_kw = trimmed
-        .split_whitespace()
-        .find(|w| !stop_words.iter().any(|s| w.eq_ignore_ascii_case(s)))
-        .unwrap_or("");
+      let no_kw =
+        trimmed.split_whitespace().find(|w| !stop_words.iter().any(|s| w.eq_ignore_ascii_case(s))).unwrap_or("");
       let name = no_kw.trim_matches('"');
-      if name.is_empty() { continue }
+      if name.is_empty() {
+        continue;
+      }
       let bare = name.rsplit('.').next().unwrap_or(name);
       let inbound: Vec<&dsl_catalog::Table> = catalog
         .tables()
@@ -53,7 +59,9 @@ impl LintRule for Rule {
           })
         })
         .collect();
-      if inbound.is_empty() { continue }
+      if inbound.is_empty() {
+        continue;
+      }
       let ref_names: Vec<String> = inbound.iter().take(3).map(|t| t.name.clone()).collect();
       let extra = if inbound.len() > 3 { format!(" (+{} more)", inbound.len() - 3) } else { String::new() };
       let off = body[after_kw..].find(name).unwrap_or(0);

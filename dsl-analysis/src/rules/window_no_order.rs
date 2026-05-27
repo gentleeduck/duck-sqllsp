@@ -11,8 +11,16 @@ use dsl_resolve::Scope;
 pub struct Rule;
 
 const ORDER_DEPENDENT: &[&str] = &[
-  "row_number(", "rank(", "dense_rank(", "ntile(", "lag(", "lead(",
-  "first_value(", "last_value(", "nth_value(", "percent_rank(",
+  "row_number(",
+  "rank(",
+  "dense_rank(",
+  "ntile(",
+  "lag(",
+  "lead(",
+  "first_value(",
+  "last_value(",
+  "nth_value(",
+  "percent_rank(",
   "cume_dist(",
 ];
 
@@ -36,24 +44,36 @@ impl LintRule for Rule {
         let at = from + rel;
         if at > 0 {
           let prev = body.as_bytes()[at - 1] as char;
-          if prev.is_ascii_alphanumeric() || prev == '_' { from = at + fn_name.len(); continue }
+          if prev.is_ascii_alphanumeric() || prev == '_' {
+            from = at + fn_name.len();
+            continue;
+          }
         }
         // Find the matching call paren close.
         let open = at + fn_name.len() - 1;
-        let Some(call_close) = find_matching_paren(body, open) else { from = open; break };
+        let Some(call_close) = find_matching_paren(body, open) else { break };
         // Look for OVER (...) immediately after.
         let after = call_close + 1;
         let post = body[after..].trim_start();
         let post_upper = post.to_ascii_uppercase();
-        if !post_upper.starts_with("OVER") { from = after; continue }
+        if !post_upper.starts_with("OVER") {
+          from = after;
+          continue;
+        }
         let over_at = after + (body[after..].len() - post.len());
         let after_over = over_at + "OVER".len();
         let win_post = body[after_over..].trim_start();
-        if !win_post.starts_with('(') { from = after_over; continue }
+        if !win_post.starts_with('(') {
+          from = after_over;
+          continue;
+        }
         let win_open = after_over + (body[after_over..].len() - win_post.len());
-        let Some(win_close) = find_matching_paren(body, win_open) else { from = win_open; break };
+        let Some(win_close) = find_matching_paren(body, win_open) else { break };
         let win = &upper[win_open + 1..win_close];
-        if win.contains("ORDER BY") { from = win_close + 1; continue }
+        if win.contains("ORDER BY") {
+          from = win_close + 1;
+          continue;
+        }
         out.push(Diagnostic {
           code: "sql255",
           severity: Severity::Warning,
@@ -76,12 +96,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

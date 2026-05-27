@@ -26,10 +26,21 @@ impl LintRule for Rule {
     let mut from = 0usize;
     while let Some(rel) = upper[from..].find("ROWNUM") {
       let at = from + rel;
-      let prev_ok = at == 0 || !{ let p = bytes[at - 1] as char; p.is_ascii_alphanumeric() || p == '_' };
+      let prev_ok = at == 0
+        || !{
+          let p = bytes[at - 1] as char;
+          p.is_ascii_alphanumeric() || p == '_'
+        };
       let after = at + "ROWNUM".len();
-      let after_ok = after >= bytes.len() || !{ let p = bytes[after] as char; p.is_ascii_alphanumeric() || p == '_' };
-      if !prev_ok || !after_ok { from = after; continue }
+      let after_ok = after >= bytes.len()
+        || !{
+          let p = bytes[after] as char;
+          p.is_ascii_alphanumeric() || p == '_'
+        };
+      if !prev_ok || !after_ok {
+        from = after;
+        continue;
+      }
       let abs_s = start + at;
       let abs_e = abs_s + "ROWNUM".len();
       out.push(Diagnostic {

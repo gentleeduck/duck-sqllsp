@@ -109,14 +109,44 @@ fn levenshtein(a: &str, b: &str) -> usize {
   prev[n]
 }
 
-fn column_exists(scope: &Scope, catalog: &Catalog, qualifier: Option<&str>, name: &str) -> bool {
+/// System schemas we never introspect (PG's planner-internal catalog +
+/// the SQL-standard read-only views). When any in-scope binding targets
+/// one of these, we cannot enumerate its columns -- be lenient and
+/// accept anything rather than crying wolf on `information_schema.tables
+/// .table_schema`, `pg_catalog.pg_class.oid`, etc.
+fn is_system_schema(s: &str) -> bool {
+  matches!(s.to_ascii_lowercase().as_str(), "information_schema" | "pg_catalog" | "pg_toast")
+}
+
+/// PG system columns that exist implicitly on every table (`pg_attribute`
+/// "system attributes") but are NOT part of the column list in the live
+/// or workspace catalog. Treating any of these as unknown produces a
+/// false positive for legitimate queries like `SELECT ctid, xmin FROM t`.
+fn is_pg_system_column(s: &str) -> bool {
+  matches!(s.to_ascii_lowercase().as_str(), "ctid" | "xmin" | "xmax" | "cmin" | "cmax" | "tableoid" | "oid")
+}
+
+pub(crate) fn column_exists(scope: &Scope, catalog: &Catalog, qualifier: Option<&str>, name: &str) -> bool {
+  // PG system columns (ctid, xmin, xmax, cmin, cmax, tableoid, oid)
+  // are implicit on every table; never flag them as unknown.
+  if is_pg_system_column(name) {
+    return true;
+  }
   if let Some(q) = qualifier {
+    // Qualifier names a system schema directly (`pg_catalog.pg_class`,
+    // `information_schema.tables`): we don't introspect those, so any
+    // column reference is accepted.
+    if let Some((schema, _)) = q.split_once('.')
+      && is_system_schema(schema)
+    {
+      return true;
+    }
     // Schema-qualified qualifier `schema.table` -- look up directly
     // in the catalog before falling back to scope/CTE lookups.
-    if let Some((schema, table)) = q.split_once('.') {
-      if let Some(t) = catalog.find_table(Some(schema), table) {
-        return t.columns.iter().any(|c| c.name.eq_ignore_ascii_case(name));
-      }
+    if let Some((schema, table)) = q.split_once('.')
+      && let Some(t) = catalog.find_table(Some(schema), table)
+    {
+      return t.columns.iter().any(|c| c.name.eq_ignore_ascii_case(name));
     }
     // Qualifier matches a CTE name? Check declared CTE columns.
     // Empty Vec means the resolver could not parse the body --
@@ -131,7 +161,15 @@ fn column_exists(scope: &Scope, catalog: &Catalog, qualifier: Option<&str>, name
     if let Some(b) = scope.get(q) {
       // Synthetic binding (function-call / subquery / CTE alias) --
       // we can't enumerate columns, so accept anything.
-      if b.table.schema.as_deref().map_or(false, |s| s.starts_with('<')) {
+      if b.table.schema.as_deref().is_some_and(|s| s.starts_with('<')) {
+        return true;
+      }
+      // Binding points at a system schema we don't introspect
+      // (`pg_catalog`, `information_schema`, `pg_toast`). Resolve
+      // anything leniently -- columns of system catalogs aren't in
+      // the offline catalog and false-firing on `c.relname` after
+      // `FROM pg_catalog.pg_class c` is louder than the missed typo.
+      if b.table.schema.as_deref().is_some_and(is_system_schema) {
         return true;
       }
       // Follow alias to underlying CTE: `WITH foo AS (...) SELECT a.col FROM foo a`
@@ -146,7 +184,13 @@ fn column_exists(scope: &Scope, catalog: &Catalog, qualifier: Option<&str>, name
         return t.columns.iter().any(|c| c.name == name);
       }
     }
-    return false;
+    // Unknown qualifier: most likely an outer-scope binding from a
+    // correlated subquery (`EXISTS (SELECT ... WHERE inner.x = outer.y)`)
+    // that the per-statement resolver can't see. False-firing here is
+    // worse than missing a typo, so accept the column. Keeps sql001
+    // (unresolved table) as the canonical check for "alias doesn't
+    // exist at all".
+    return true;
   }
   // Unqualified column: check catalog tables in scope and CTE columns.
   // Also accept when `name` matches a binding's alias / name -- function
@@ -156,19 +200,21 @@ fn column_exists(scope: &Scope, catalog: &Catalog, qualifier: Option<&str>, name
     return true;
   }
   // Lenient when any in-scope binding is synthetic (function-call FROM
-  // `<func>`, subquery alias `<subq>`): we cannot enumerate the source's
-  // columns reliably, so an unqualified reference may legitimately
-  // resolve against it. Better silent than crying wolf.
+  // `<func>`, subquery alias `<subq>`) OR targets a system schema we
+  // don't introspect (`information_schema`, `pg_catalog`): we cannot
+  // enumerate the source's columns reliably, so an unqualified
+  // reference may legitimately resolve against it. Better silent than
+  // crying wolf.
   for b in scope.tables() {
-    if b.table.schema.as_deref().map_or(false, |s| s.starts_with('<')) {
+    if b.table.schema.as_deref().is_some_and(|s| s.starts_with('<') || is_system_schema(s)) {
       return true;
     }
   }
   for b in scope.tables() {
-    if let Some(t) = catalog.find_table(b.table.schema.as_deref(), &b.table.name) {
-      if t.columns.iter().any(|c| c.name == name) {
-        return true;
-      }
+    if let Some(t) = catalog.find_table(b.table.schema.as_deref(), &b.table.name)
+      && t.columns.iter().any(|c| c.name == name)
+    {
+      return true;
     }
   }
   for (cte_name, cols) in &scope.cte_columns {
@@ -214,6 +260,11 @@ fn walk(e: &Expr, out: &mut Vec<(Option<String>, String, TextRange)>) {
     Expr::Call { args, .. } => {
       for a in args {
         walk(a, out);
+      }
+    },
+    Expr::List(items) => {
+      for it in items {
+        walk(it, out);
       }
     },
     _ => {},

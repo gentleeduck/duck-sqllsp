@@ -1,4 +1,4 @@
-//! sql038: `INSERT INTO t (a, b) VALUES (1)` — column-list length must
+//! sql038: `INSERT INTO t (a, b) VALUES (1)` -- column-list length must
 //! match the VALUES tuple length.
 //!
 //! Postgres raises `INSERT has more/fewer expressions than target
@@ -84,20 +84,34 @@ fn contains_word_depth0(haystack_upper: &str, needle: &str) -> bool {
   let mut i = 0;
   while i + nlen <= n {
     match h[i] {
-      b'(' => { depth += 1; i += 1; continue; }
-      b')' => { depth -= 1; i += 1; continue; }
+      b'(' => {
+        depth += 1;
+        i += 1;
+        continue;
+      },
+      b')' => {
+        depth -= 1;
+        i += 1;
+        continue;
+      },
       b'\'' => {
         i += 1;
-        while i < n && h[i] != b'\'' { i += 1 }
-        if i < n { i += 1 }
+        while i < n && h[i] != b'\'' {
+          i += 1
+        }
+        if i < n {
+          i += 1
+        }
         continue;
-      }
-      _ => {}
+      },
+      _ => {},
     }
     if depth == 0 && haystack_upper[i..i + nlen].eq_ignore_ascii_case(needle) {
       let prev_ok = i == 0 || !(h[i - 1].is_ascii_alphanumeric() || h[i - 1] == b'_');
       let next_ok = i + nlen == n || !(h[i + nlen].is_ascii_alphanumeric() || h[i + nlen] == b'_');
-      if prev_ok && next_ok { return true; }
+      if prev_ok && next_ok {
+        return true;
+      }
     }
     i += 1;
   }

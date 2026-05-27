@@ -65,8 +65,12 @@ pub fn classify(data_type: &str) -> TypeFamily {
   }
   let s = s.trim();
   match s {
-    "int" | "int2" | "int4" | "int8" | "integer" | "smallint" | "bigint" | "serial" | "smallserial" | "bigserial" => TypeFamily::Int,
-    "numeric" | "decimal" | "real" | "double precision" | "double" | "float" | "float4" | "float8" => TypeFamily::Numeric,
+    "int" | "int2" | "int4" | "int8" | "integer" | "smallint" | "bigint" | "serial" | "smallserial" | "bigserial" => {
+      TypeFamily::Int
+    },
+    "numeric" | "decimal" | "real" | "double precision" | "double" | "float" | "float4" | "float8" => {
+      TypeFamily::Numeric
+    },
     "text" | "varchar" | "character varying" | "character" | "char" | "bpchar" | "citext" | "name" => TypeFamily::Text,
     "bool" | "boolean" => TypeFamily::Bool,
     "json" | "jsonb" => TypeFamily::Json,
@@ -84,13 +88,25 @@ pub fn classify(data_type: &str) -> TypeFamily {
 /// return `Unknown` (the caller should run column lookup instead).
 pub fn literal_family(text: &str) -> TypeFamily {
   let t = text.trim();
-  if t.is_empty() { return TypeFamily::Unknown }
+  if t.is_empty() {
+    return TypeFamily::Unknown;
+  }
   let upper = t.to_ascii_uppercase();
-  if upper == "NULL" { return TypeFamily::Unknown }
-  if upper == "TRUE" || upper == "FALSE" { return TypeFamily::Bool }
-  if t.starts_with('\'') && t.ends_with('\'') { return TypeFamily::Text }
-  if t.starts_with("E'") || t.starts_with("e'") { return TypeFamily::Text }
-  if (t.starts_with("ARRAY[") || t.starts_with("array[")) && t.ends_with(']') { return TypeFamily::Array }
+  if upper == "NULL" {
+    return TypeFamily::Unknown;
+  }
+  if upper == "TRUE" || upper == "FALSE" {
+    return TypeFamily::Bool;
+  }
+  if t.starts_with('\'') && t.ends_with('\'') {
+    return TypeFamily::Text;
+  }
+  if t.starts_with("E'") || t.starts_with("e'") {
+    return TypeFamily::Text;
+  }
+  if (t.starts_with("ARRAY[") || t.starts_with("array[")) && t.ends_with(']') {
+    return TypeFamily::Array;
+  }
   let bytes = t.as_bytes();
   if !bytes.is_empty() && (bytes[0].is_ascii_digit() || bytes[0] == b'-' || bytes[0] == b'+') {
     let has_dot = t.contains('.') || t.contains('e') || t.contains('E');
@@ -101,11 +117,12 @@ pub fn literal_family(text: &str) -> TypeFamily {
     return classify(&t[at + 2..]);
   }
   let upper_t = t.to_ascii_uppercase();
-  if upper_t.starts_with("CAST(") && upper_t.ends_with(')') {
-    if let Some(as_at) = upper_t.rfind(" AS ") {
-      let inner = &t[as_at + 4..t.len() - 1];
-      return classify(inner);
-    }
+  if upper_t.starts_with("CAST(")
+    && upper_t.ends_with(')')
+    && let Some(as_at) = upper_t.rfind(" AS ")
+  {
+    let inner = &t[as_at + 4..t.len() - 1];
+    return classify(inner);
   }
   TypeFamily::Unknown
 }
@@ -126,7 +143,12 @@ pub fn column_nullable(scope: &Scope, catalog: &Catalog, qualifier: Option<&str>
   Some(cat_col.nullable)
 }
 
-fn lookup_column<'a>(scope: &Scope, catalog: &'a Catalog, qualifier: Option<&str>, col: &str) -> Option<&'a dsl_catalog::Column> {
+fn lookup_column<'a>(
+  scope: &Scope,
+  catalog: &'a Catalog,
+  qualifier: Option<&str>,
+  col: &str,
+) -> Option<&'a dsl_catalog::Column> {
   if let Some(q) = qualifier {
     let binding = scope.get(q)?;
     let table = catalog.find_table(binding.table.schema.as_deref(), &binding.table.name)?;
@@ -136,7 +158,9 @@ fn lookup_column<'a>(scope: &Scope, catalog: &'a Catalog, qualifier: Option<&str
   for b in scope.tables() {
     let Some(table) = catalog.find_table(b.table.schema.as_deref(), &b.table.name) else { continue };
     if let Some(c) = table.columns.iter().find(|c| c.name.eq_ignore_ascii_case(col)) {
-      if hit.is_some() { return None }
+      if hit.is_some() {
+        return None;
+      }
       hit = Some(c);
     }
   }

@@ -34,22 +34,33 @@ impl LintRule for Rule {
     let cols_upper = &upper[paren_at + 1..close_rel];
     for raw in split_top_level(cols_text) {
       let trimmed_upper = cols_upper[raw.start..raw.end].trim().to_ascii_uppercase();
-      if trimmed_upper.starts_with("CONSTRAINT ") || trimmed_upper.starts_with("CHECK ") || trimmed_upper.starts_with("CHECK(")
-        || trimmed_upper.starts_with("PRIMARY ") || trimmed_upper.starts_with("FOREIGN ")
-        || trimmed_upper.starts_with("UNIQUE ") || trimmed_upper.starts_with("UNIQUE(")
-        || trimmed_upper.starts_with("EXCLUDE ") || trimmed_upper.starts_with("LIKE ")
-      { continue }
+      if trimmed_upper.starts_with("CONSTRAINT ")
+        || trimmed_upper.starts_with("CHECK ")
+        || trimmed_upper.starts_with("CHECK(")
+        || trimmed_upper.starts_with("PRIMARY ")
+        || trimmed_upper.starts_with("FOREIGN ")
+        || trimmed_upper.starts_with("UNIQUE ")
+        || trimmed_upper.starts_with("UNIQUE(")
+        || trimmed_upper.starts_with("EXCLUDE ")
+        || trimmed_upper.starts_with("LIKE ")
+      {
+        continue;
+      }
       let frag = &cols_text[raw.start..raw.end];
       let frag_upper = &cols_upper[raw.start..raw.end];
       let Some(check_at) = frag_upper.find(" CHECK") else { continue };
       let post = &frag[check_at + " CHECK".len()..];
       let post_trim = post.trim_start();
-      if !post_trim.starts_with('(') { continue }
+      if !post_trim.starts_with('(') {
+        continue;
+      }
       let chk_open = check_at + " CHECK".len() + (post.len() - post_trim.len());
       let Some(chk_close_rel) = find_matching_paren(frag, chk_open) else { continue };
       let expr = &frag[chk_open + 1..chk_close_rel];
       let col_name = frag.split_whitespace().next().unwrap_or("").trim_matches('"');
-      if col_name.is_empty() { continue }
+      if col_name.is_empty() {
+        continue;
+      }
       let bytes = expr.as_bytes();
       let mut i = 0usize;
       let mut found_other = false;
@@ -60,7 +71,10 @@ impl LintRule for Rule {
           i += 1;
           while i < bytes.len() {
             if bytes[i] == b'\'' {
-              if i + 1 < bytes.len() && bytes[i + 1] == b'\'' { i += 2; continue }
+              if i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
+                i += 2;
+                continue;
+              }
               i += 1;
               break;
             }
@@ -70,11 +84,15 @@ impl LintRule for Rule {
         }
         if bytes[i].is_ascii_alphabetic() || bytes[i] == b'_' {
           let s = i;
-          while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') { i += 1 }
+          while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+            i += 1
+          }
           let id = &expr[s..i];
           // Skip if followed by `(` (function call name) -- not a column ref.
           let mut k = i;
-          while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+          while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+            k += 1
+          }
           if k < bytes.len() && bytes[k] == b'(' {
             continue;
           }
@@ -88,7 +106,9 @@ impl LintRule for Rule {
           i += 1;
         }
       }
-      if !found_other { continue }
+      if !found_other {
+        continue;
+      }
       let abs_s = start + paren_at + 1 + raw.start;
       let abs_e = start + paren_at + 1 + raw.end;
       out.push(Diagnostic {
@@ -103,7 +123,10 @@ impl LintRule for Rule {
   }
 }
 
-struct Span { start: usize, end: usize }
+struct Span {
+  start: usize,
+  end: usize,
+}
 
 fn split_top_level(text: &str) -> Vec<Span> {
   let mut out = Vec::new();
@@ -115,12 +138,17 @@ fn split_top_level(text: &str) -> Vec<Span> {
     match bytes[i] {
       b'(' => depth += 1,
       b')' => depth -= 1,
-      b',' if depth == 0 => { out.push(Span { start, end: i }); start = i + 1 }
+      b',' if depth == 0 => {
+        out.push(Span { start, end: i });
+        start = i + 1
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -135,12 +163,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -148,12 +183,40 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
 }
 
 fn is_reserved(up: &str) -> bool {
-  matches!(up,
-    "AND" | "OR" | "NOT" | "IS" | "NULL" | "TRUE" | "FALSE" | "IN" | "BETWEEN"
-    | "LIKE" | "ILIKE" | "ANY" | "ALL" | "SOME" | "EXISTS" | "DISTINCT"
-    | "CASE" | "WHEN" | "THEN" | "ELSE" | "END" | "AS" | "ON" | "OFF"
-    | "DEFAULT" | "CURRENT_DATE" | "CURRENT_TIME" | "CURRENT_TIMESTAMP"
-    | "NOW" | "LOCALTIME" | "LOCALTIMESTAMP"
-    | "CAST" | "USING"
+  matches!(
+    up,
+    "AND"
+      | "OR"
+      | "NOT"
+      | "IS"
+      | "NULL"
+      | "TRUE"
+      | "FALSE"
+      | "IN"
+      | "BETWEEN"
+      | "LIKE"
+      | "ILIKE"
+      | "ANY"
+      | "ALL"
+      | "SOME"
+      | "EXISTS"
+      | "DISTINCT"
+      | "CASE"
+      | "WHEN"
+      | "THEN"
+      | "ELSE"
+      | "END"
+      | "AS"
+      | "ON"
+      | "OFF"
+      | "DEFAULT"
+      | "CURRENT_DATE"
+      | "CURRENT_TIME"
+      | "CURRENT_TIMESTAMP"
+      | "NOW"
+      | "LOCALTIME"
+      | "LOCALTIMESTAMP"
+      | "CAST"
+      | "USING"
   )
 }

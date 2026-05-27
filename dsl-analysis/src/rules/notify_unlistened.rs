@@ -26,15 +26,21 @@ impl LintRule for Rule {
     let body_owned = crate::textutil::strip_noise_full(raw);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
-    if !upper.trim_start().starts_with("NOTIFY") { return }
+    if !upper.trim_start().starts_with("NOTIFY") {
+      return;
+    }
     let after = upper.find("NOTIFY ").map(|p| p + "NOTIFY ".len());
     let Some(after) = after else { return };
     let rest = &body[after..];
     let tok_end = rest.find(|c: char| c == ',' || c == ';' || c.is_whitespace()).unwrap_or(rest.len());
     let channel = rest[..tok_end].trim_matches('"');
-    if channel.is_empty() { return }
+    if channel.is_empty() {
+      return;
+    }
     let known = collect_listeners(source);
-    if known.iter().any(|l| l.eq_ignore_ascii_case(channel)) { return }
+    if known.iter().any(|l| l.eq_ignore_ascii_case(channel)) {
+      return;
+    }
     let abs_s = start + after;
     let abs_e = abs_s + tok_end;
     out.push(Diagnostic {
@@ -57,13 +63,18 @@ fn collect_listeners(source: &str) -> HashSet<String> {
     // Word boundary -- avoid matching UNLISTEN.
     if at > 0 {
       let prev = upper.as_bytes()[at - 1] as char;
-      if prev.is_ascii_alphanumeric() || prev == '_' { from = at + "LISTEN ".len(); continue }
+      if prev.is_ascii_alphanumeric() || prev == '_' {
+        from = at + "LISTEN ".len();
+        continue;
+      }
     }
     let after = at + "LISTEN ".len();
     let rest = &source[after..];
     let tok_end = rest.find(|c: char| c == ',' || c == ';' || c.is_whitespace()).unwrap_or(rest.len());
     let chan = rest[..tok_end].trim_matches('"').to_string();
-    if !chan.is_empty() { out.insert(chan); }
+    if !chan.is_empty() {
+      out.insert(chan);
+    }
     from = after + tok_end;
   }
   out

@@ -94,20 +94,29 @@ fn count_with_prev_exclude(haystack: &str, needle: &str, excluded_prev: &[&str],
       let next_ok = i + w == n || !is_word(h[i + w] as char);
       if prev_ok && next_ok {
         let mut p = i;
-        while p > 0 && h[p - 1].is_ascii_whitespace() { p -= 1 }
+        while p > 0 && h[p - 1].is_ascii_whitespace() {
+          p -= 1
+        }
         let word_end = p;
-        while p > 0 && is_word(h[p - 1] as char) { p -= 1 }
+        while p > 0 && is_word(h[p - 1] as char) {
+          p -= 1
+        }
         let prev_word = &haystack[p..word_end];
         let prev_excluded = excluded_prev.iter().any(|wd| prev_word.eq_ignore_ascii_case(wd));
         let mut k = i + w;
-        while k < n && h[k].is_ascii_whitespace() { k += 1 }
+        while k < n && h[k].is_ascii_whitespace() {
+          k += 1
+        }
         let after = &haystack[k..];
         let next_excluded = excluded_next.iter().any(|ex| {
           let elen = ex.len();
-          after.len() >= elen && after[..elen].eq_ignore_ascii_case(ex)
+          after.len() >= elen
+            && after[..elen].eq_ignore_ascii_case(ex)
             && (after.len() == elen || !is_word(after.as_bytes()[elen] as char))
         });
-        if !prev_excluded && !next_excluded { c += 1 }
+        if !prev_excluded && !next_excluded {
+          c += 1
+        }
       }
     }
     i += 1;
@@ -127,14 +136,19 @@ fn count_word_excluding(haystack: &str, needle: &str, excluded: &[&str]) -> usiz
       let next_ok = i + w == n || !is_word(h[i + w] as char);
       if prev_ok && next_ok {
         let mut k = i + w;
-        while k < n && h[k].is_ascii_whitespace() { k += 1 }
+        while k < n && h[k].is_ascii_whitespace() {
+          k += 1
+        }
         let after = &haystack[k..];
         let is_excluded = excluded.iter().any(|ex| {
           let elen = ex.len();
-          after.len() >= elen && after[..elen].eq_ignore_ascii_case(ex)
+          after.len() >= elen
+            && after[..elen].eq_ignore_ascii_case(ex)
             && (after.len() == elen || !is_word(after.as_bytes()[elen] as char))
         });
-        if !is_excluded { c += 1 }
+        if !is_excluded {
+          c += 1
+        }
         i += w;
         continue;
       }
@@ -153,45 +167,73 @@ fn strip_noise_and_dollar(s: &str) -> String {
   let mut i = 0usize;
   while i < n {
     if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
-      while i < n && out[i] != b'\n' { out[i] = b' '; i += 1 }
+      while i < n && out[i] != b'\n' {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
       let mut depth = 1u32;
-      out[i] = b' '; out[i + 1] = b' '; i += 2;
+      out[i] = b' ';
+      out[i + 1] = b' ';
+      i += 2;
       while i + 1 < n && depth > 0 {
-        if out[i] == b'/' && out[i + 1] == b'*' { depth += 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else if out[i] == b'*' && out[i + 1] == b'/' { depth -= 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else { out[i] = b' '; i += 1; }
+        if out[i] == b'/' && out[i + 1] == b'*' {
+          depth += 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else if out[i] == b'*' && out[i + 1] == b'/' {
+          depth -= 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else {
+          out[i] = b' ';
+          i += 1;
+        }
       }
       continue;
     }
     if out[i] == b'\'' {
-      out[i] = b' '; i += 1;
-      while i < n && out[i] != b'\'' { out[i] = b' '; i += 1 }
-      if i < n { out[i] = b' '; i += 1 }
+      out[i] = b' ';
+      i += 1;
+      while i < n && out[i] != b'\'' {
+        out[i] = b' ';
+        i += 1
+      }
+      if i < n {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     // Dollar-quote: $tag$ ... $tag$ where tag is empty or [A-Za-z0-9_]*.
     if out[i] == b'$' {
       // Read optional tag.
       let mut k = i + 1;
-      while k < n && (out[k].is_ascii_alphanumeric() || out[k] == b'_') { k += 1 }
+      while k < n && (out[k].is_ascii_alphanumeric() || out[k] == b'_') {
+        k += 1
+      }
       if k < n && out[k] == b'$' {
         let tag_bytes = &out[i + 1..k];
         let closer_len = 1 + tag_bytes.len() + 1;
         // Build closer needle once.
-        let closer: Vec<u8> = std::iter::once(b'$').chain(tag_bytes.iter().copied()).chain(std::iter::once(b'$')).collect();
+        let closer: Vec<u8> =
+          std::iter::once(b'$').chain(tag_bytes.iter().copied()).chain(std::iter::once(b'$')).collect();
         // Blank out opener.
-        for j in i..k + 1 { out[j] = b' '; }
+        out[i..k + 1].fill(b' ');
         i = k + 1;
         while i + closer_len <= n {
-          if out[i..i + closer_len] == *closer { break }
+          if out[i..i + closer_len] == *closer {
+            break;
+          }
           out[i] = b' ';
           i += 1;
         }
         if i + closer_len <= n {
-          for j in i..i + closer_len { out[j] = b' '; }
+          out[i..i + closer_len].fill(b' ');
           i += closer_len;
         }
         continue;

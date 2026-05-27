@@ -14,9 +14,17 @@ use dsl_resolve::Scope;
 pub struct Rule;
 
 const FNS: &[&str] = &[
-  "array_length", "array_lower", "array_upper", "array_ndims",
-  "array_to_string", "array_position", "array_positions", "array_remove",
-  "array_replace", "cardinality", "unnest",
+  "array_length",
+  "array_lower",
+  "array_upper",
+  "array_ndims",
+  "array_to_string",
+  "array_position",
+  "array_positions",
+  "array_remove",
+  "array_replace",
+  "cardinality",
+  "unnest",
 ];
 
 impl LintRule for Rule {
@@ -39,29 +47,44 @@ impl LintRule for Rule {
         let at = from + rel;
         if at > 0 {
           let prev = body.as_bytes()[at - 1] as char;
-          if prev.is_ascii_alphanumeric() || prev == '_' { from = at + needle.len(); continue }
+          if prev.is_ascii_alphanumeric() || prev == '_' {
+            from = at + needle.len();
+            continue;
+          }
         }
         let open = at + needle.len();
-        let Some(close_off) = body[open..].find(|c: char| c == ',' || c == ')') else { from = open; continue };
+        let Some(close_off) = body[open..].find([',', ')']) else {
+          from = open;
+          continue;
+        };
         let arg = body[open..open + close_off].trim();
-        if arg.is_empty() { from = open; continue }
-        let (alias, col) = if let Some((a, c)) = arg.split_once('.') {
-          (Some(a.trim()), c.trim())
-        } else { (None, arg) };
-        if col.contains(' ') || col.contains('(') { from = open; continue }
+        if arg.is_empty() {
+          from = open;
+          continue;
+        }
+        let (alias, col) =
+          if let Some((a, c)) = arg.split_once('.') { (Some(a.trim()), c.trim()) } else { (None, arg) };
+        if col.contains(' ') || col.contains('(') {
+          from = open;
+          continue;
+        }
         let col = col.trim_matches('"');
         let alias = alias.map(|a| a.trim_matches('"'));
         let col_type = resolve_column_type(scope, catalog, alias, col);
-        let Some(ty) = col_type else { from = open; continue };
-        if is_array_type(&ty) { from = open; continue }
+        let Some(ty) = col_type else {
+          from = open;
+          continue;
+        };
+        if is_array_type(&ty) {
+          from = open;
+          continue;
+        }
         let abs_s = start + at;
         let abs_e = start + open + close_off;
         out.push(Diagnostic {
           code: "sql197",
           severity: Severity::Warning,
-          message: format!(
-            "`{fname}({arg})` -- `{col}` is `{ty}` (not array) -- PG 42883 at runtime"
-          ),
+          message: format!("`{fname}({arg})` -- `{col}` is `{ty}` (not array) -- PG 42883 at runtime"),
           range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
         });
         from = open + close_off;

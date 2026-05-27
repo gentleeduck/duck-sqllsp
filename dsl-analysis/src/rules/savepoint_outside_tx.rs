@@ -27,12 +27,16 @@ impl LintRule for Rule {
     let upper = body.to_ascii_uppercase();
     let Some(rel) = upper.find("SAVEPOINT") else { return };
     let kw_at = start + rel;
-    if let Some(prev) = source.as_bytes().get(kw_at.saturating_sub(1)).copied() {
-      if (prev as char).is_ascii_alphanumeric() || prev == b'_' { return; }
+    if let Some(prev) = source.as_bytes().get(kw_at.saturating_sub(1)).copied()
+      && ((prev as char).is_ascii_alphanumeric() || prev == b'_')
+    {
+      return;
     }
     let after = kw_at + "SAVEPOINT".len();
-    if let Some(next) = source.as_bytes().get(after).copied() {
-      if (next as char).is_ascii_alphanumeric() || next == b'_' { return; }
+    if let Some(next) = source.as_bytes().get(after).copied()
+      && ((next as char).is_ascii_alphanumeric() || next == b'_')
+    {
+      return;
     }
     // Count BEGIN/START TRANSACTION vs COMMIT/ROLLBACK in source up
     // to the SAVEPOINT keyword, with comments stripped to keep counts
@@ -69,14 +73,20 @@ fn count_word_excluding_followups(haystack: &str, needle: &str, excluded: &[&str
       let next_ok = i + nlen == n || !(bytes[i + nlen].is_ascii_alphanumeric() || bytes[i + nlen] == b'_');
       if prev_ok && next_ok {
         let mut k = i + nlen;
-        while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+        while k < n && bytes[k].is_ascii_whitespace() {
+          k += 1
+        }
         let after = &haystack[k..];
         let is_excluded = excluded.iter().any(|ex| {
           let elen = ex.len();
-          after.len() >= elen && after[..elen].eq_ignore_ascii_case(ex)
-            && (after.len() == elen || !(after.as_bytes()[elen].is_ascii_alphanumeric() || after.as_bytes()[elen] == b'_'))
+          after.len() >= elen
+            && after[..elen].eq_ignore_ascii_case(ex)
+            && (after.len() == elen
+              || !(after.as_bytes()[elen].is_ascii_alphanumeric() || after.as_bytes()[elen] == b'_'))
         });
-        if !is_excluded { count += 1 }
+        if !is_excluded {
+          count += 1
+        }
       }
     }
     i += 1;
@@ -110,12 +120,21 @@ fn strip_comments(s: &str) -> String {
   let mut i = 0usize;
   while i < n {
     if i + 1 < n && bytes[i] == b'-' && bytes[i + 1] == b'-' {
-      while i < n && bytes[i] != b'\n' { out.push(' '); i += 1 }
+      while i < n && bytes[i] != b'\n' {
+        out.push(' ');
+        i += 1
+      }
     } else if bytes[i] == b'\'' {
       out.push(' ');
       i += 1;
-      while i < n && bytes[i] != b'\'' { out.push(' '); i += 1 }
-      if i < n { out.push(' '); i += 1 }
+      while i < n && bytes[i] != b'\'' {
+        out.push(' ');
+        i += 1
+      }
+      if i < n {
+        out.push(' ');
+        i += 1
+      }
     } else if bytes[i].is_ascii() {
       out.push(bytes[i] as char);
       i += 1;

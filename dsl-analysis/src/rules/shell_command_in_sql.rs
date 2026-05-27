@@ -11,8 +11,16 @@ use dsl_resolve::Scope;
 pub struct Rule;
 
 const SHELL_CMDS: &[&str] = &[
-  "pg_dump", "pg_restore", "psql", "createdb", "dropdb",
-  "createuser", "dropuser", "pg_basebackup", "pgbench", "vacuumdb",
+  "pg_dump",
+  "pg_restore",
+  "psql",
+  "createdb",
+  "dropdb",
+  "createuser",
+  "dropuser",
+  "pg_basebackup",
+  "pgbench",
+  "vacuumdb",
   "reindexdb",
 ];
 
@@ -30,9 +38,13 @@ impl LintRule for Rule {
     let body = &source[start..end];
     let trimmed = body.trim_start();
     let first_token: String = trimmed.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
-    if first_token.is_empty() { return }
+    if first_token.is_empty() {
+      return;
+    }
     let lc = first_token.to_ascii_lowercase();
-    if !SHELL_CMDS.contains(&lc.as_str()) { return }
+    if !SHELL_CMDS.contains(&lc.as_str()) {
+      return;
+    }
     let lead = body.len() - trimmed.len();
     let abs_s = start + lead;
     let abs_e = abs_s + first_token.len();

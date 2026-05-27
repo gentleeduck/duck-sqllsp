@@ -26,7 +26,9 @@ impl LintRule for Rule {
     let body_owned = crate::textutil::strip_noise_full(raw);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
-    if !upper.contains("PRIMARY KEY") { return }
+    if !upper.contains("PRIMARY KEY") {
+      return;
+    }
     let Some(on_at) = upper.find("ON UPDATE CASCADE") else { return };
     // Walk back from `ON UPDATE CASCADE` to find the enclosing
     // `FOREIGN KEY (...)` clause; pull the local FK column list.
@@ -35,11 +37,17 @@ impl LintRule for Rule {
     // declared on a table that happens to have a PK, which is every
     // normal child table.
     let fk_cols = preceding_fk_columns(&upper, on_at);
-    if fk_cols.is_empty() { return }
+    if fk_cols.is_empty() {
+      return;
+    }
     let pk_cols = primary_key_columns(&upper);
-    if pk_cols.is_empty() { return }
+    if pk_cols.is_empty() {
+      return;
+    }
     let intersects = fk_cols.iter().any(|c| pk_cols.iter().any(|p| p.eq_ignore_ascii_case(c)));
-    if !intersects { return }
+    if !intersects {
+      return;
+    }
     let abs_s = start + on_at;
     let abs_e = abs_s + "ON UPDATE CASCADE".len();
     out.push(Diagnostic {
@@ -58,11 +66,11 @@ fn preceding_fk_columns(upper: &str, at: usize) -> Vec<String> {
   let prefix = &upper[..at];
   if let Some(fk_at) = prefix.rfind("FOREIGN KEY") {
     let after = &prefix[fk_at + "FOREIGN KEY".len()..];
-    if let Some(open) = after.find('(') {
-      if let Some(close) = after[open + 1..].find(')') {
-        let list = &after[open + 1..open + 1 + close];
-        return list.split(',').map(|s| s.trim().trim_matches('"').to_string()).collect();
-      }
+    if let Some(open) = after.find('(')
+      && let Some(close) = after[open + 1..].find(')')
+    {
+      let list = &after[open + 1..open + 1 + close];
+      return list.split(',').map(|s| s.trim().trim_matches('"').to_string()).collect();
     }
     return Vec::new();
   }
@@ -80,18 +88,28 @@ fn preceding_fk_columns(upper: &str, at: usize) -> Vec<String> {
     match b {
       b')' => depth += 1,
       b'(' => {
-        if depth == 0 { entry_start = i; break }
+        if depth == 0 {
+          entry_start = i;
+          break;
+        }
         depth -= 1;
-      }
-      b',' if depth == 0 => { entry_start = i; break }
-      _ => {}
+      },
+      b',' if depth == 0 => {
+        entry_start = i;
+        break;
+      },
+      _ => {},
     }
     i -= 1;
   }
   let entry = &upper[entry_start..at];
-  if !entry.contains("REFERENCES") { return Vec::new() }
-  let head = entry.trim_start().split_whitespace().next().unwrap_or("");
-  if head.is_empty() { return Vec::new() }
+  if !entry.contains("REFERENCES") {
+    return Vec::new();
+  }
+  let head = entry.split_whitespace().next().unwrap_or("");
+  if head.is_empty() {
+    return Vec::new();
+  }
   vec![head.trim_matches('"').to_string()]
 }
 
@@ -117,10 +135,12 @@ fn primary_key_columns(upper: &str) -> Vec<String> {
     } else {
       // Inline: column NAME ... PRIMARY KEY. Walk back to find the col name.
       let prefix = &upper[..at];
-      let line_start = prefix.rfind(|c: char| c == ',' || c == '\n' || c == '(').map(|p| p + 1).unwrap_or(0);
+      let line_start = prefix.rfind([',', '\n', '(']).map(|p| p + 1).unwrap_or(0);
       let line = &upper[line_start..at];
-      let head = line.trim_start().split_whitespace().next().unwrap_or("");
-      if !head.is_empty() { out.push(head.trim_matches('"').to_string()); }
+      let head = line.split_whitespace().next().unwrap_or("");
+      if !head.is_empty() {
+        out.push(head.trim_matches('"').to_string());
+      }
     }
     from = at + "PRIMARY KEY".len();
   }

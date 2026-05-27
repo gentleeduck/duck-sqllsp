@@ -8,12 +8,8 @@ use dsl_resolve::Scope;
 
 pub struct Rule;
 
-const FNS: &[(&str, &str)] = &[
-  ("GETDATE",     "MSSQL"),
-  ("GETUTCDATE",  "MSSQL"),
-  ("SYSDATETIME", "MSSQL"),
-  ("SYSDATE",     "Oracle"),
-];
+const FNS: &[(&str, &str)] =
+  &[("GETDATE", "MSSQL"), ("GETUTCDATE", "MSSQL"), ("SYSDATETIME", "MSSQL"), ("SYSDATE", "Oracle")];
 
 impl LintRule for Rule {
   fn code(&self) -> &'static str {
@@ -33,10 +29,21 @@ impl LintRule for Rule {
       let mut from = 0usize;
       while let Some(rel) = upper[from..].find(fname) {
         let at = from + rel;
-        let prev_ok = at == 0 || !{ let p = bytes[at - 1] as char; p.is_ascii_alphanumeric() || p == '_' };
+        let prev_ok = at == 0
+          || !{
+            let p = bytes[at - 1] as char;
+            p.is_ascii_alphanumeric() || p == '_'
+          };
         let after = at + fname.len();
-        let after_ok = after >= bytes.len() || !{ let p = bytes[after] as char; p.is_ascii_alphanumeric() || p == '_' };
-        if !prev_ok || !after_ok { from = at + fname.len(); continue }
+        let after_ok = after >= bytes.len()
+          || !{
+            let p = bytes[after] as char;
+            p.is_ascii_alphanumeric() || p == '_'
+          };
+        if !prev_ok || !after_ok {
+          from = at + fname.len();
+          continue;
+        }
         let abs_s = start + at;
         let abs_e = abs_s + fname.len();
         out.push(Diagnostic {

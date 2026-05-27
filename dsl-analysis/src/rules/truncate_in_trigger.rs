@@ -26,12 +26,16 @@ impl LintRule for Rule {
     let Some(rel) = upper.find("TRUNCATE") else { return };
     let kw_at = start + rel;
     // Word-boundary check.
-    if let Some(prev) = source.as_bytes().get(kw_at.saturating_sub(1)).copied() {
-      if (prev as char).is_ascii_alphanumeric() || prev == b'_' { return; }
+    if let Some(prev) = source.as_bytes().get(kw_at.saturating_sub(1)).copied()
+      && ((prev as char).is_ascii_alphanumeric() || prev == b'_')
+    {
+      return;
     }
     let after = kw_at + "TRUNCATE".len();
-    if let Some(next) = source.as_bytes().get(after).copied() {
-      if (next as char).is_ascii_alphanumeric() || next == b'_' { return; }
+    if let Some(next) = source.as_bytes().get(after).copied()
+      && ((next as char).is_ascii_alphanumeric() || next == b'_')
+    {
+      return;
     }
     // Are we inside a CREATE FUNCTION ... RETURNS TRIGGER body?
     if !inside_trigger_function(source, kw_at) {
@@ -60,7 +64,9 @@ fn inside_trigger_function(source: &str, pos: usize) -> bool {
   // CREATE FUNCTION ... $$ body $$ would still see the closing $$
   // as the "opener" and falsely fire.
   let dollar_count = prior.matches("$$").count();
-  if dollar_count % 2 == 0 { return false; }
+  if dollar_count.is_multiple_of(2) {
+    return false;
+  }
   // The opener is at the *last* $$ in `prior` -- because the count
   // is odd, this is the unmatched opener.
   let Some(dollar_at) = prior.rfind("$$") else { return false };

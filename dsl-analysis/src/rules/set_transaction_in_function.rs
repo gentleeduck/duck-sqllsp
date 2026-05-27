@@ -24,7 +24,9 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
-    if !upper.contains("CREATE") || !upper.contains("FUNCTION") { return }
+    if !upper.contains("CREATE") || !upper.contains("FUNCTION") {
+      return;
+    }
     let Some(body_start) = body.find("$$").map(|p| p + 2) else { return };
     let body_end = body[body_start..].find("$$").map(|p| body_start + p).unwrap_or(body.len());
     let fbody = &body[body_start..body_end];
@@ -34,7 +36,10 @@ impl LintRule for Rule {
       let at = from + rel;
       if at > 0 {
         let prev = fupper.as_bytes()[at - 1] as char;
-        if prev.is_ascii_alphanumeric() || prev == '_' { from = at + 15; continue }
+        if prev.is_ascii_alphanumeric() || prev == '_' {
+          from = at + 15;
+          continue;
+        }
       }
       let abs_s = start + body_start + at;
       let abs_e = abs_s + "SET TRANSACTION".len();

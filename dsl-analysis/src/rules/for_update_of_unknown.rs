@@ -34,17 +34,24 @@ impl LintRule for Rule {
       let tail_upper = &upper[after..];
       let mut stop = tail_upper.len();
       for term in [" NOWAIT", " SKIP LOCKED", ";", "\n"] {
-        if let Some(p) = tail_upper.find(term) { stop = stop.min(p); }
+        if let Some(p) = tail_upper.find(term) {
+          stop = stop.min(p);
+        }
       }
       let list = &body[after..after + stop];
       for raw in list.split(',') {
         let name = raw.trim().trim_matches('"');
-        if name.is_empty() { continue; }
+        if name.is_empty() {
+          continue;
+        }
         let bare = name.rsplit('.').next().unwrap_or(name);
-        let known = scope.bindings.values().any(|b| {
-          b.alias.eq_ignore_ascii_case(bare) || b.table.name.eq_ignore_ascii_case(bare)
-        });
-        if known { continue; }
+        let known = scope
+          .bindings
+          .values()
+          .any(|b| b.alias.eq_ignore_ascii_case(bare) || b.table.name.eq_ignore_ascii_case(bare));
+        if known {
+          continue;
+        }
         // Locate the offending name in the source span.
         let off = list.find(name).unwrap_or(0);
         let abs_s = start + after + off;
@@ -52,9 +59,7 @@ impl LintRule for Rule {
         out.push(Diagnostic {
           code: "sql192",
           severity: Severity::Error,
-          message: format!(
-            "`FOR UPDATE OF {name}` -- `{bare}` not in FROM list, PG raises 42P01"
-          ),
+          message: format!("`FOR UPDATE OF {name}` -- `{bare}` not in FROM list, PG raises 42P01"),
           range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
         });
       }

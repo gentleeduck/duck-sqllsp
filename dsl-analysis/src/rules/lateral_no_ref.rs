@@ -35,10 +35,16 @@ impl LintRule for Rule {
       // boundary check
       if kw_at > 0 {
         let prev = body.as_bytes()[kw_at - 1] as char;
-        if prev.is_ascii_alphanumeric() || prev == '_' { from = after; continue }
+        if prev.is_ascii_alphanumeric() || prev == '_' {
+          from = after;
+          continue;
+        }
       }
       let rest = body[after..].trim_start();
-      if !rest.starts_with('(') { from = after; continue }
+      if !rest.starts_with('(') {
+        from = after;
+        continue;
+      }
       let body_open = after + (body[after..].len() - rest.len());
       let Some(close) = find_matching_paren(body, body_open) else { break };
       let inner = &body[body_open + 1..close];
@@ -47,7 +53,10 @@ impl LintRule for Rule {
       let mut ref_found = false;
       for b in scope.bindings.values() {
         let needle = format!("{}.", b.alias.to_ascii_lowercase());
-        if inner_lc.contains(&needle) { ref_found = true; break }
+        if inner_lc.contains(&needle) {
+          ref_found = true;
+          break;
+        }
       }
       if !ref_found {
         out.push(Diagnostic {
@@ -69,12 +78,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

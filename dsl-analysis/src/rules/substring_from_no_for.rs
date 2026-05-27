@@ -30,7 +30,9 @@ impl LintRule for Rule {
     while i + 10 <= bytes.len() {
       if &upper[i..i + 9] == "SUBSTRING" && (i == 0 || !is_word(bytes[i - 1] as char)) {
         let mut j = i + 9;
-        while j < bytes.len() && bytes[j].is_ascii_whitespace() { j += 1 }
+        while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+          j += 1
+        }
         if j < bytes.len() && bytes[j] == b'(' {
           let inner_start = j + 1;
           let Some(close) = match_paren(bytes, j) else { break };
@@ -42,7 +44,9 @@ impl LintRule for Rule {
             out.push(Diagnostic {
               code: "sql329",
               severity: Severity::Hint,
-              message: "substring(... FROM n) without FOR returns the rest of the string -- add FOR <len> to be explicit".into(),
+              message:
+                "substring(... FROM n) without FOR returns the rest of the string -- add FOR <len> to be explicit"
+                  .into(),
               range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
             });
           }
@@ -55,7 +59,9 @@ impl LintRule for Rule {
   }
 }
 
-fn is_word(c: char) -> bool { c.is_alphanumeric() || c == '_' }
+fn is_word(c: char) -> bool {
+  c.is_alphanumeric() || c == '_'
+}
 
 fn match_paren(bytes: &[u8], open: usize) -> Option<usize> {
   let mut depth = 0i32;
@@ -63,9 +69,19 @@ fn match_paren(bytes: &[u8], open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
-      b'\'' => { i += 1; while i < bytes.len() && bytes[i] != b'\'' { i += 1 } }
-      _ => {}
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
+      b'\'' => {
+        i += 1;
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

@@ -28,7 +28,9 @@ impl LintRule for Rule {
     let after = at + " FROM DUAL".len();
     if after < upper.len() {
       let next = upper.as_bytes()[after] as char;
-      if next.is_ascii_alphanumeric() || next == '_' { return }
+      if next.is_ascii_alphanumeric() || next == '_' {
+        return;
+      }
     }
     let abs_s = start + at + " FROM ".len();
     let abs_e = abs_s + "DUAL".len();

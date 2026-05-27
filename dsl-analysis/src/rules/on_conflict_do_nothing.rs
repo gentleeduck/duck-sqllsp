@@ -32,9 +32,13 @@ impl LintRule for Rule {
     let post_oc = &upper[oc_at + "ON CONFLICT".len()..];
     let trimmed = post_oc.trim_start();
     // Scoped via ON CONSTRAINT or (col, ...) -- fine.
-    if trimmed.starts_with("ON CONSTRAINT") || trimmed.starts_with('(') { return }
+    if trimmed.starts_with("ON CONSTRAINT") || trimmed.starts_with('(') {
+      return;
+    }
     // Must be followed by DO NOTHING (else DO UPDATE form which still benefits but is intentional).
-    if !post_oc.contains("DO NOTHING") { return }
+    if !post_oc.contains("DO NOTHING") {
+      return;
+    }
     let abs_s = start + oc_at;
     let abs_e = abs_s + "ON CONFLICT DO NOTHING".len().min(body.len() - oc_at);
     out.push(Diagnostic {
@@ -52,23 +56,46 @@ fn strip_noise(s: &str) -> String {
   let mut i = 0usize;
   while i < n {
     if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
-      while i < n && out[i] != b'\n' { out[i] = b' '; i += 1 }
+      while i < n && out[i] != b'\n' {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
       let mut depth = 1u32;
-      out[i] = b' '; out[i + 1] = b' '; i += 2;
+      out[i] = b' ';
+      out[i + 1] = b' ';
+      i += 2;
       while i + 1 < n && depth > 0 {
-        if out[i] == b'/' && out[i + 1] == b'*' { depth += 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else if out[i] == b'*' && out[i + 1] == b'/' { depth -= 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else { out[i] = b' '; i += 1; }
+        if out[i] == b'/' && out[i + 1] == b'*' {
+          depth += 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else if out[i] == b'*' && out[i + 1] == b'/' {
+          depth -= 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else {
+          out[i] = b' ';
+          i += 1;
+        }
       }
       continue;
     }
     if out[i] == b'\'' {
-      out[i] = b' '; i += 1;
-      while i < n && out[i] != b'\'' { out[i] = b' '; i += 1 }
-      if i < n { out[i] = b' '; i += 1 }
+      out[i] = b' ';
+      i += 1;
+      while i < n && out[i] != b'\'' {
+        out[i] = b' ';
+        i += 1
+      }
+      if i < n {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     i += 1;

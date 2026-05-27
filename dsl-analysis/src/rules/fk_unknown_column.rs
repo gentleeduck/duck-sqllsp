@@ -24,10 +24,15 @@ impl LintRule for Rule {
     // already harvested REFERENCES details from this CREATE TABLE.
     let Some(t) = catalog.find_table(ct.table.schema.as_deref(), &ct.table.name) else { return };
     for con in &t.constraints {
-      if !matches!(con.kind, ConstraintKind::ForeignKey) { continue; }
+      if !matches!(con.kind, ConstraintKind::ForeignKey) {
+        continue;
+      }
       let Some(refs) = &con.references else { continue };
-      let Some(target) = catalog.find_table(Some(&refs.schema), &refs.table)
-        .or_else(|| catalog.find_table(None, &refs.table)) else { continue };
+      let Some(target) =
+        catalog.find_table(Some(&refs.schema), &refs.table).or_else(|| catalog.find_table(None, &refs.table))
+      else {
+        continue;
+      };
       for col in &refs.columns {
         if target.columns.iter().any(|c| c.name.eq_ignore_ascii_case(col)) {
           continue;

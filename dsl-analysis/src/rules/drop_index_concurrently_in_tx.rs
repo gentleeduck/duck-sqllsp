@@ -29,7 +29,9 @@ impl LintRule for Rule {
     }
     // Buffer has an explicit BEGIN before this statement?
     let prefix_upper = source[..start].to_ascii_uppercase();
-    if !prefix_upper.contains("BEGIN") && !prefix_upper.contains("START TRANSACTION") { return }
+    if !prefix_upper.contains("BEGIN") && !prefix_upper.contains("START TRANSACTION") {
+      return;
+    }
     let abs_s = start + (source[start..].len() - source[start..].trim_start().len());
     let abs_e = (abs_s + "DROP INDEX CONCURRENTLY".len()).min(end);
     out.push(Diagnostic {

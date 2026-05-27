@@ -32,13 +32,19 @@ impl LintRule for Rule {
     let bytes = before.as_bytes();
     let mut i = 0usize;
     while i < bytes.len() {
-      if bytes[i] != b'(' { i += 1; continue }
+      if bytes[i] != b'(' {
+        i += 1;
+        continue;
+      }
       let open = i;
       let Some(close) = find_matching_paren(body, open) else { break };
       let inner = &body[open + 1..close];
       let inner_upper = inner.to_ascii_uppercase();
-      if inner_upper.contains("SELECT") && inner_upper.contains("ORDER BY")
-        && !inner_upper.contains("LIMIT") && !inner_upper.contains("OFFSET") && !inner_upper.contains("FETCH")
+      if inner_upper.contains("SELECT")
+        && inner_upper.contains("ORDER BY")
+        && !inner_upper.contains("LIMIT")
+        && !inner_upper.contains("OFFSET")
+        && !inner_upper.contains("FETCH")
       {
         out.push(Diagnostic {
           code: "sql268",
@@ -60,12 +66,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

@@ -22,8 +22,12 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
-    if !upper.trim_start().starts_with("REVOKE") { return }
-    if upper.contains(" FROM ") { return }
+    if !upper.trim_start().starts_with("REVOKE") {
+      return;
+    }
+    if upper.contains(" FROM ") {
+      return;
+    }
     let lead = body.len() - body.trim_start().len();
     let abs_s = start + lead;
     let abs_e = start + body.find(';').unwrap_or(body.len());

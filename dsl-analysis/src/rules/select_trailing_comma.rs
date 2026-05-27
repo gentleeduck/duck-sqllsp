@@ -29,7 +29,9 @@ impl LintRule for Rule {
     let Some(from_rel) = upper[after_sel..].find(" FROM ") else { return };
     let proj_end = after_sel + from_rel;
     let proj = body[after_sel..proj_end].trim_end();
-    if !proj.ends_with(',') { return }
+    if !proj.ends_with(',') {
+      return;
+    }
     let abs_s = start + after_sel + (body[after_sel..proj_end].trim_end_matches(',').len());
     let abs_e = start + proj_end;
     out.push(Diagnostic {

@@ -10,10 +10,8 @@ use dsl_resolve::Scope;
 
 pub struct Rule;
 
-const FNS: &[&str] = &[
-  "string_agg(", "array_agg(", "json_agg(", "jsonb_agg(",
-  "json_object_agg(", "jsonb_object_agg(", "xmlagg(",
-];
+const FNS: &[&str] =
+  &["string_agg(", "array_agg(", "json_agg(", "jsonb_agg(", "json_object_agg(", "jsonb_object_agg(", "xmlagg("];
 
 impl LintRule for Rule {
   fn code(&self) -> &'static str {
@@ -36,13 +34,19 @@ impl LintRule for Rule {
         let at = from + rel;
         if at > 0 {
           let prev = body.as_bytes()[at - 1] as char;
-          if prev.is_ascii_alphanumeric() || prev == '_' { from = at + fname.len(); continue }
+          if prev.is_ascii_alphanumeric() || prev == '_' {
+            from = at + fname.len();
+            continue;
+          }
         }
         let open = at + fname.len() - 1;
-        let Some(close) = find_matching_paren(body, open) else { from = open; break };
+        let Some(close) = find_matching_paren(body, open) else { break };
         let inner = &body[open + 1..close];
         let inner_upper = inner.to_ascii_uppercase();
-        if inner_upper.contains("ORDER BY") { from = close + 1; continue }
+        if inner_upper.contains("ORDER BY") {
+          from = close + 1;
+          continue;
+        }
         out.push(Diagnostic {
           code: "sql311",
           severity: Severity::Hint,
@@ -65,12 +69,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -83,23 +94,46 @@ fn strip_noise(s: &str) -> String {
   let mut i = 0usize;
   while i < n {
     if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
-      while i < n && out[i] != b'\n' { out[i] = b' '; i += 1 }
+      while i < n && out[i] != b'\n' {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
       let mut depth = 1u32;
-      out[i] = b' '; out[i + 1] = b' '; i += 2;
+      out[i] = b' ';
+      out[i + 1] = b' ';
+      i += 2;
       while i + 1 < n && depth > 0 {
-        if out[i] == b'/' && out[i + 1] == b'*' { depth += 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else if out[i] == b'*' && out[i + 1] == b'/' { depth -= 1; out[i] = b' '; out[i + 1] = b' '; i += 2; }
-        else { out[i] = b' '; i += 1; }
+        if out[i] == b'/' && out[i + 1] == b'*' {
+          depth += 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else if out[i] == b'*' && out[i + 1] == b'/' {
+          depth -= 1;
+          out[i] = b' ';
+          out[i + 1] = b' ';
+          i += 2;
+        } else {
+          out[i] = b' ';
+          i += 1;
+        }
       }
       continue;
     }
     if out[i] == b'\'' {
-      out[i] = b' '; i += 1;
-      while i < n && out[i] != b'\'' { out[i] = b' '; i += 1 }
-      if i < n { out[i] = b' '; i += 1 }
+      out[i] = b' ';
+      i += 1;
+      while i < n && out[i] != b'\'' {
+        out[i] = b' ';
+        i += 1
+      }
+      if i < n {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     i += 1;

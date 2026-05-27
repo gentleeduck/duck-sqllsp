@@ -26,12 +26,23 @@ impl LintRule for Rule {
     let body_owned = crate::textutil::strip_noise_full(raw);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
-    if !upper.trim_start().starts_with("ALTER TABLE") { return }
-    let has_add_check = upper.contains("ADD CONSTRAINT") && upper.contains("CHECK");
-    let has_add_fk = upper.contains("ADD CONSTRAINT") && upper.contains("FOREIGN KEY");
-    if !(has_add_check || has_add_fk) { return }
-    if upper.contains("NOT VALID") { return }
-    let Some(at) = upper.find("ADD CONSTRAINT") else { return };
+    if !upper.trim_start().starts_with("ALTER TABLE") {
+      return;
+    }
+    let has_add_constraint_check = upper.contains("ADD CONSTRAINT") && upper.contains("CHECK");
+    let has_add_constraint_fk = upper.contains("ADD CONSTRAINT") && upper.contains("FOREIGN KEY");
+    // Also catch the unnamed form `ALTER TABLE t ADD CHECK (...)` /
+    // `ADD FOREIGN KEY (...)` -- the validation cost is identical.
+    let has_add_check_unnamed = !has_add_constraint_check && upper.contains("ADD CHECK");
+    let has_add_fk_unnamed = !has_add_constraint_fk && upper.contains("ADD FOREIGN KEY");
+    if !(has_add_constraint_check || has_add_constraint_fk || has_add_check_unnamed || has_add_fk_unnamed) {
+      return;
+    }
+    if upper.contains("NOT VALID") {
+      return;
+    }
+    let at = upper.find("ADD CONSTRAINT").or_else(|| upper.find("ADD CHECK")).or_else(|| upper.find("ADD FOREIGN KEY"));
+    let Some(at) = at else { return };
     let abs_s = start + at;
     let abs_e = start + body.find(';').unwrap_or(body.len());
     out.push(Diagnostic {

@@ -30,23 +30,29 @@ impl LintRule for Rule {
         let at = from + rel;
         if at > 0 {
           let prev = body.as_bytes()[at - 1] as char;
-          if prev.is_ascii_alphanumeric() || prev == '_' { from = at + ty.len(); continue }
+          if prev.is_ascii_alphanumeric() || prev == '_' {
+            from = at + ty.len();
+            continue;
+          }
         }
         let after = at + ty.len();
-        if after >= body.len() || body.as_bytes()[after] != b'(' { from = after; continue }
-        let Some(close) = find_matching_paren(body, after) else { from = after; break };
+        if after >= body.len() || body.as_bytes()[after] != b'(' {
+          from = after;
+          continue;
+        }
+        let Some(close) = find_matching_paren(body, after) else { break };
         let inside = body[after + 1..close].trim();
-        if let Ok(p) = inside.parse::<u32>() {
-          if p > 6 {
-            out.push(Diagnostic {
-              code: "sql308",
-              severity: Severity::Hint,
-              message: format!(
-                "{ty}({p}) -- PG caps date/time precision at 6 (microseconds); higher precision is silently capped"
-              ),
-              range: text_size::TextRange::new(((start + at) as u32).into(), ((start + close + 1) as u32).into()),
-            });
-          }
+        if let Ok(p) = inside.parse::<u32>()
+          && p > 6
+        {
+          out.push(Diagnostic {
+            code: "sql308",
+            severity: Severity::Hint,
+            message: format!(
+              "{ty}({p}) -- PG caps date/time precision at 6 (microseconds); higher precision is silently capped"
+            ),
+            range: text_size::TextRange::new(((start + at) as u32).into(), ((start + close + 1) as u32).into()),
+          });
         }
         from = close + 1;
       }
@@ -61,8 +67,13 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
-      _ => {}
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

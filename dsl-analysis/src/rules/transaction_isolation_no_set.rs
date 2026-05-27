@@ -47,10 +47,9 @@ impl LintRule for Rule {
     // If a COMMIT / ROLLBACK appears after the BEGIN, we're not in
     // that transaction anymore -- skip.
     if let Some(end_at) = before_upper[begin_at..].find("COMMIT").or_else(|| before_upper[begin_at..].find("ROLLBACK"))
+      && end_at > 0
     {
-      if end_at > 0 {
-        return;
-      }
+      return;
     }
     // Look for any executable statement in between -- a `;` that
     // closes something other than BEGIN/START TRANSACTION/SET.

@@ -21,8 +21,12 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
-    if !upper.trim_start().starts_with("MERGE") { return }
-    if upper.contains("WHEN MATCHED") || upper.contains("WHEN NOT MATCHED") { return }
+    if !upper.trim_start().starts_with("MERGE") {
+      return;
+    }
+    if upper.contains("WHEN MATCHED") || upper.contains("WHEN NOT MATCHED") {
+      return;
+    }
     let abs_s = start;
     let abs_e = start + body.find(';').unwrap_or(body.len());
     out.push(Diagnostic {

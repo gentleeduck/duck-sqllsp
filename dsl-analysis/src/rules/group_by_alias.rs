@@ -36,20 +36,26 @@ impl LintRule for Rule {
       let Some(as_at) = upper_item.rfind(" AS ") else { continue };
       let alias_raw = item[as_at + 4..].trim();
       let alias = alias_raw.trim_matches('"').to_ascii_lowercase();
-      if alias.is_empty() || !alias.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') { continue }
+      if alias.is_empty() || !alias.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        continue;
+      }
       aliases.push(alias);
     }
-    if aliases.is_empty() { return }
+    if aliases.is_empty() {
+      return;
+    }
     let Some(rel_gb) = find_kw_top_level(&body[from_at..], "GROUP") else { return };
     let gb_at = from_at + rel_gb;
     // Must be followed by BY (whitespace + BY).
     let after_group = gb_at + "GROUP".len();
     let trimmed = body[after_group..].trim_start();
-    if !trimmed.to_ascii_uppercase().starts_with("BY ") { return }
+    if !trimmed.to_ascii_uppercase().starts_with("BY ") {
+      return;
+    }
     let by_at = after_group + (body[after_group..].len() - trimmed.len());
     let after = by_at + "BY".len() + 1; // BY + at least one space
     let gb_end = upper[after..]
-      .find(|c: char| c == ';')
+      .find(';')
       .or_else(|| upper[after..].find("ORDER BY"))
       .or_else(|| upper[after..].find("LIMIT"))
       .or_else(|| upper[after..].find("HAVING"))
@@ -87,14 +93,19 @@ fn find_kw_top_level(s: &str, kw: &str) -> Option<usize> {
     match bytes[i] {
       b'(' => depth += 1,
       b')' => depth -= 1,
-      b'\'' => { i += 1; while i < bytes.len() && bytes[i] != b'\'' { i += 1 } }
-      _ => {}
+      b'\'' => {
+        i += 1;
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
-    if depth == 0 && i + kw.len() <= upper_bytes.len() {
-      if &upper_bytes[i..i + kw.len()] == kw.as_bytes() {
-        let prev_ok = i == 0 || !is_word(bytes[i - 1] as char);
-        let next_ok = i + kw.len() == bytes.len() || !is_word(bytes[i + kw.len()] as char);
-        if prev_ok && next_ok { return Some(i) }
+    if depth == 0 && i + kw.len() <= upper_bytes.len() && &upper_bytes[i..i + kw.len()] == kw.as_bytes() {
+      let prev_ok = i == 0 || !is_word(bytes[i - 1] as char);
+      let next_ok = i + kw.len() == bytes.len() || !is_word(bytes[i + kw.len()] as char);
+      if prev_ok && next_ok {
+        return Some(i);
       }
     }
     i += 1;
@@ -102,7 +113,9 @@ fn find_kw_top_level(s: &str, kw: &str) -> Option<usize> {
   None
 }
 
-fn is_word(c: char) -> bool { c.is_alphanumeric() || c == '_' }
+fn is_word(c: char) -> bool {
+  c.is_alphanumeric() || c == '_'
+}
 
 fn split_top_level_commas(s: &str) -> Vec<&str> {
   let bytes = s.as_bytes();
@@ -114,9 +127,17 @@ fn split_top_level_commas(s: &str) -> Vec<&str> {
     match bytes[i] {
       b'(' => depth += 1,
       b')' => depth -= 1,
-      b'\'' => { i += 1; while i < bytes.len() && bytes[i] != b'\'' { i += 1 } }
-      b',' if depth == 0 => { out.push(&s[start..i]); start = i + 1 }
-      _ => {}
+      b'\'' => {
+        i += 1;
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      b',' if depth == 0 => {
+        out.push(&s[start..i]);
+        start = i + 1
+      },
+      _ => {},
     }
     i += 1;
   }

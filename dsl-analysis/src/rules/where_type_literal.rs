@@ -110,11 +110,21 @@ fn extract_comparisons(clause: &str) -> Vec<(usize, &str, &str, usize, &str)> {
   let mut depth = 0i32;
   let mut i = 0usize;
   while i < n {
-    if bytes[i] == b'(' { depth += 1; i += 1; continue; }
-    if bytes[i] == b')' { depth -= 1; i += 1; continue; }
+    if bytes[i] == b'(' {
+      depth += 1;
+      i += 1;
+      continue;
+    }
+    if bytes[i] == b')' {
+      depth -= 1;
+      i += 1;
+      continue;
+    }
     if bytes[i] == b'\'' {
       i += 1;
-      while i < n && bytes[i] != b'\'' { i += 1; }
+      while i < n && bytes[i] != b'\'' {
+        i += 1;
+      }
       i = (i + 1).min(n);
       continue;
     }
@@ -139,14 +149,22 @@ fn extract_comparisons(clause: &str) -> Vec<(usize, &str, &str, usize, &str)> {
   }
   for (off, conj) in conjuncts {
     let trimmed = conj.trim();
-    if trimmed.is_empty() { continue; }
+    if trimmed.is_empty() {
+      continue;
+    }
     let lead_ws = conj.len() - conj.trim_start().len();
     // Find the operator.
     let upper_c = trimmed.to_ascii_uppercase();
     let ops: &[(&str, &str)] = &[
-      ("<>", "<>"), ("!=", "!="), ("<=", "<="), (">=", ">="),
-      ("=", "="), ("<", "<"), (">", ">"),
-      (" LIKE ", "LIKE"), (" ILIKE ", "ILIKE"),
+      ("<>", "<>"),
+      ("!=", "!="),
+      ("<=", "<="),
+      (">=", ">="),
+      ("=", "="),
+      ("<", "<"),
+      (">", ">"),
+      (" LIKE ", "LIKE"),
+      (" ILIKE ", "ILIKE"),
     ];
     let mut op_rel = None;
     let mut op_len = 0usize;
@@ -162,7 +180,9 @@ fn extract_comparisons(clause: &str) -> Vec<(usize, &str, &str, usize, &str)> {
     let Some(op_at) = op_rel else { continue };
     let lhs = trimmed[..op_at].trim();
     let rhs = trimmed[op_at + op_len..].trim();
-    if lhs.is_empty() || rhs.is_empty() { continue; }
+    if lhs.is_empty() || rhs.is_empty() {
+      continue;
+    }
     // Only fire when lhs is a plain (optionally-dotted) identifier.
     if !lhs.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '"') {
       continue;
@@ -183,14 +203,22 @@ fn kw_at(upper: &str, pos: usize, kw: &str) -> Option<usize> {
   // Need leading word-boundary.
   if pos > 0 {
     let prev = bytes[pos - 1] as char;
-    if prev.is_ascii_alphanumeric() || prev == '_' { return None; }
+    if prev.is_ascii_alphanumeric() || prev == '_' {
+      return None;
+    }
   }
-  if pos + kw.len() > n { return None; }
-  if &upper[pos..pos + kw.len()] != kw { return None; }
+  if pos + kw.len() > n {
+    return None;
+  }
+  if &upper[pos..pos + kw.len()] != kw {
+    return None;
+  }
   let after = pos + kw.len();
   if after < n {
     let next = bytes[after] as char;
-    if next.is_ascii_alphanumeric() || next == '_' { return None; }
+    if next.is_ascii_alphanumeric() || next == '_' {
+      return None;
+    }
   }
   Some(kw.len())
 }
@@ -249,16 +277,18 @@ fn compatible(kind: LitKind, declared: &str) -> bool {
   // don't flag a mismatch. The lint must be conservative -- a false
   // positive on a custom type is worse than a missed type error.
   let is_known = all_known.iter().any(|grp| grp.iter().any(|t| d.starts_with(t)));
-  if !is_known { return true; }
+  if !is_known {
+    return true;
+  }
   match kind {
     LitKind::Str => {
       str_types.iter().any(|t| d.starts_with(t))
-        || uuid_types.iter().any(|t| d == *t)
+        || uuid_types.contains(&d)
         || time_types.iter().any(|t| d.starts_with(t))
-    }
-    LitKind::Int => int_types.iter().any(|t| d == *t) || num_types.iter().any(|t| d.starts_with(t)),
+    },
+    LitKind::Int => int_types.contains(&d) || num_types.iter().any(|t| d.starts_with(t)),
     LitKind::Float => num_types.iter().any(|t| d.starts_with(t)),
-    LitKind::Bool => bool_types.iter().any(|t| d == *t),
+    LitKind::Bool => bool_types.contains(&d),
     _ => true,
   }
 }

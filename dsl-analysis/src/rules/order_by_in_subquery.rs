@@ -25,7 +25,10 @@ impl LintRule for Rule {
     let bytes = body.as_bytes();
     let mut i = 0usize;
     while i < bytes.len() {
-      if bytes[i] != b'(' { i += 1; continue }
+      if bytes[i] != b'(' {
+        i += 1;
+        continue;
+      }
       let open = i;
       let Some(close) = find_matching_paren(body, open) else { break };
       let inner = &body[open + 1..close];
@@ -45,8 +48,7 @@ impl LintRule for Rule {
         i = close + 1;
         continue;
       }
-      if inner_upper.trim_start().starts_with("SELECT") && has_top_order_by && !has_top_limit
-      {
+      if inner_upper.trim_start().starts_with("SELECT") && has_top_order_by && !has_top_limit {
         // Outer must wrap further SQL (the subquery is in a context, not a top stmt).
         let prefix_upper = body[..open].to_ascii_uppercase();
         if prefix_upper.contains("FROM ") || prefix_upper.contains("JOIN ") {
@@ -71,20 +73,34 @@ fn contains_at_depth_zero(haystack_upper: &str, needle_upper: &str) -> bool {
   let mut i = 0usize;
   while i + nlen <= n {
     match bytes[i] {
-      b'(' => { depth += 1; i += 1; continue; }
-      b')' => { depth -= 1; i += 1; continue; }
+      b'(' => {
+        depth += 1;
+        i += 1;
+        continue;
+      },
+      b')' => {
+        depth -= 1;
+        i += 1;
+        continue;
+      },
       b'\'' => {
         i += 1;
-        while i < n && bytes[i] != b'\'' { i += 1 }
-        if i < n { i += 1 }
+        while i < n && bytes[i] != b'\'' {
+          i += 1
+        }
+        if i < n {
+          i += 1
+        }
         continue;
-      }
-      _ => {}
+      },
+      _ => {},
     }
     if depth == 0 && haystack_upper[i..i + nlen].eq_ignore_ascii_case(needle_upper) {
       let prev_ok = i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
       let next_ok = i + nlen == n || !(bytes[i + nlen].is_ascii_alphanumeric() || bytes[i + nlen] == b'_');
-      if prev_ok && next_ok { return true; }
+      if prev_ok && next_ok {
+        return true;
+      }
     }
     i += 1;
   }
@@ -94,9 +110,13 @@ fn contains_at_depth_zero(haystack_upper: &str, needle_upper: &str) -> bool {
 fn preceding_word(body: &str, at: usize) -> String {
   let bytes = body.as_bytes();
   let mut i = at;
-  while i > 0 && bytes[i - 1].is_ascii_whitespace() { i -= 1 }
+  while i > 0 && bytes[i - 1].is_ascii_whitespace() {
+    i -= 1
+  }
   let word_end = i;
-  while i > 0 && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_') { i -= 1 }
+  while i > 0 && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_') {
+    i -= 1
+  }
   body[i..word_end].to_ascii_uppercase()
 }
 
@@ -107,12 +127,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

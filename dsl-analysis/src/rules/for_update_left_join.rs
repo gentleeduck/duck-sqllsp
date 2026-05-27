@@ -29,18 +29,27 @@ impl LintRule for Rule {
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
     let has_left = upper.contains("LEFT JOIN") || upper.contains("LEFT OUTER JOIN");
-    let has_for_lock = upper.contains("FOR UPDATE") || upper.contains("FOR SHARE")
-      || upper.contains("FOR NO KEY UPDATE") || upper.contains("FOR KEY SHARE");
-    if !has_left || !has_for_lock { return }
+    let has_for_lock = upper.contains("FOR UPDATE")
+      || upper.contains("FOR SHARE")
+      || upper.contains("FOR NO KEY UPDATE")
+      || upper.contains("FOR KEY SHARE");
+    if !has_left || !has_for_lock {
+      return;
+    }
     // If author already scoped via OF <alias>, accept it.
-    if upper.contains(" OF ") { return }
-    let Some(at) = upper.find("FOR UPDATE")
+    if upper.contains(" OF ") {
+      return;
+    }
+    let Some(at) = upper
+      .find("FOR UPDATE")
       .or_else(|| upper.find("FOR SHARE"))
       .or_else(|| upper.find("FOR NO KEY UPDATE"))
       .or_else(|| upper.find("FOR KEY SHARE"))
-    else { return };
+    else {
+      return;
+    };
     let abs_s = start + at;
-    let abs_e = abs_s + upper[at..].find(|c: char| c == ';' || c == '\n').unwrap_or(upper.len() - at);
+    let abs_e = abs_s + upper[at..].find([';', '\n']).unwrap_or(upper.len() - at);
     out.push(Diagnostic {
       code: "sql217",
       severity: Severity::Warning,

@@ -46,10 +46,21 @@ impl LintRule for Rule {
       let mut from = 0usize;
       while let Some(rel) = upper[from..].find(ty) {
         let at = from + rel;
-        let prev_ok = at == 0 || !{ let p = bytes[at - 1] as char; p.is_ascii_alphanumeric() || p == '_' };
+        let prev_ok = at == 0
+          || !{
+            let p = bytes[at - 1] as char;
+            p.is_ascii_alphanumeric() || p == '_'
+          };
         let after = at + ty.len();
-        let after_ok = after >= bytes.len() || !{ let p = bytes[after] as char; p.is_ascii_alphanumeric() || p == '_' };
-        if !prev_ok || !after_ok { from = at + ty.len(); continue }
+        let after_ok = after >= bytes.len()
+          || !{
+            let p = bytes[after] as char;
+            p.is_ascii_alphanumeric() || p == '_'
+          };
+        if !prev_ok || !after_ok {
+          from = at + ty.len();
+          continue;
+        }
         // Skip when the token is an EXTRACT/DATE_TRUNC/DATE_PART field
         // name (YEAR, MONTH, DAY, HOUR, etc inside `EXTRACT(YEAR FROM ...)`).
         let prefix_upper = &upper[..at];
@@ -67,7 +78,10 @@ impl LintRule for Rule {
         // DOUBLE special-case: skip when followed by " PRECISION".
         if *ty == "DOUBLE" {
           let post = upper[after..].trim_start();
-          if post.starts_with("PRECISION") { from = after; continue }
+          if post.starts_with("PRECISION") {
+            from = after;
+            continue;
+          }
         }
         // The type might actually be a column NAME -- skip when the
         // very next non-whitespace token is another identifier that
@@ -78,15 +92,28 @@ impl LintRule for Rule {
         let post_bytes = post_upper.as_bytes();
         if !post_bytes.is_empty() && (post_bytes[0].is_ascii_alphabetic() || post_bytes[0] == b'_') {
           let mut k = 0usize;
-          while k < post_bytes.len() && (post_bytes[k].is_ascii_alphanumeric() || post_bytes[k] == b'_') { k += 1 }
+          while k < post_bytes.len() && (post_bytes[k].is_ascii_alphanumeric() || post_bytes[k] == b'_') {
+            k += 1
+          }
           let next_word = &post_upper[..k];
           // Constraint keywords + storage modifiers that legitimately
           // follow a type name; if any of these follow, treat BLOB as
           // the type (fire).
           let constraint_kws = [
-            "NOT", "NULL", "DEFAULT", "PRIMARY", "UNIQUE", "REFERENCES",
-            "CHECK", "GENERATED", "COLLATE", "COMPRESSION", "STORAGE",
-            "CONSTRAINT", "DEFERRABLE", "INITIALLY",
+            "NOT",
+            "NULL",
+            "DEFAULT",
+            "PRIMARY",
+            "UNIQUE",
+            "REFERENCES",
+            "CHECK",
+            "GENERATED",
+            "COLLATE",
+            "COMPRESSION",
+            "STORAGE",
+            "CONSTRAINT",
+            "DEFERRABLE",
+            "INITIALLY",
           ];
           if !constraint_kws.contains(&next_word) {
             from = after;
@@ -114,12 +141,21 @@ fn strip_strings_and_comments(s: &str) -> String {
   let mut i = 0usize;
   while i < n {
     if i + 1 < n && bytes[i] == b'-' && bytes[i + 1] == b'-' {
-      while i < n && bytes[i] != b'\n' { out.push(' '); i += 1 }
+      while i < n && bytes[i] != b'\n' {
+        out.push(' ');
+        i += 1
+      }
     } else if bytes[i] == b'\'' {
       out.push(' ');
       i += 1;
-      while i < n && bytes[i] != b'\'' { out.push(' '); i += 1 }
-      if i < n { out.push(' '); i += 1 }
+      while i < n && bytes[i] != b'\'' {
+        out.push(' ');
+        i += 1
+      }
+      if i < n {
+        out.push(' ');
+        i += 1
+      }
     } else if bytes[i].is_ascii() {
       out.push(bytes[i] as char);
       i += 1;

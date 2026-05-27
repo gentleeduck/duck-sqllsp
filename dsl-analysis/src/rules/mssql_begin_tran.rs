@@ -23,8 +23,12 @@ impl LintRule for Rule {
     let upper = body.to_ascii_uppercase();
     let trim = upper.trim_start();
     // Match "BEGIN TRAN" but not "BEGIN TRANSACTION".
-    if !trim.starts_with("BEGIN TRAN") { return }
-    if trim.starts_with("BEGIN TRANSACTION") { return }
+    if !trim.starts_with("BEGIN TRAN") {
+      return;
+    }
+    if trim.starts_with("BEGIN TRANSACTION") {
+      return;
+    }
     let lead = body.len() - body.trim_start().len();
     let abs_s = start + lead;
     let abs_e = abs_s + "BEGIN TRAN".len();

@@ -20,3 +20,4 @@ dsl-catalog = { workspace = true }
 dsl-knowledge = { workspace = true }
 text-size = { workspace = true }
 serde = { workspace = true }
+

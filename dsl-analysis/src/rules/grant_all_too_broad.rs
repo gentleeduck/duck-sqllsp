@@ -26,9 +26,14 @@ impl LintRule for Rule {
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
     let trim = upper.trim_start();
-    if !trim.starts_with("GRANT") { return }
-    let has_all = upper.contains("GRANT ALL") && (upper.contains("GRANT ALL PRIVILEGES") || upper.contains("GRANT ALL ON"));
-    if !has_all { return }
+    if !trim.starts_with("GRANT") {
+      return;
+    }
+    let has_all =
+      upper.contains("GRANT ALL") && (upper.contains("GRANT ALL PRIVILEGES") || upper.contains("GRANT ALL ON"));
+    if !has_all {
+      return;
+    }
     let Some(at) = upper.find("GRANT ALL") else { return };
     let abs_s = start + at;
     let abs_e = abs_s + "GRANT ALL".len();

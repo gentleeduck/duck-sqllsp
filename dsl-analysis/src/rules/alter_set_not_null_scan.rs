@@ -27,8 +27,12 @@ impl LintRule for Rule {
     let body_owned = crate::textutil::strip_noise_full(raw);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
-    if !upper.trim_start().starts_with("ALTER TABLE") { return }
-    if !upper.contains("SET NOT NULL") { return }
+    if !upper.trim_start().starts_with("ALTER TABLE") {
+      return;
+    }
+    if !upper.contains("SET NOT NULL") {
+      return;
+    }
     let Some(at) = upper.find("SET NOT NULL") else { return };
     let abs_s = start + at;
     let abs_e = abs_s + "SET NOT NULL".len();

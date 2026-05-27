@@ -29,10 +29,13 @@ impl LintRule for Rule {
     while let Some(rel) = upper[from..].find("NOT IN (") {
       let at = from + rel;
       let open = at + "NOT IN ".len();
-      let Some(close) = find_matching_paren(body, open) else { from = open; break };
+      let Some(close) = find_matching_paren(body, open) else { break };
       let inner = body[open + 1..close].trim();
       let inner_upper = inner.to_ascii_uppercase();
-      if !inner_upper.starts_with("SELECT") { from = close + 1; continue }
+      if !inner_upper.starts_with("SELECT") {
+        from = close + 1;
+        continue;
+      }
       // Single-column projection text-scan.
       let proj_end = inner_upper.find(" FROM ").unwrap_or(inner.len());
       let proj = inner[6..proj_end].trim();
@@ -40,16 +43,27 @@ impl LintRule for Rule {
       let bare = col.rsplit('.').next().unwrap_or(col);
       // Locate the FROM tail and extract the first identifier (table name).
       let tbl_start = proj_end + " FROM ".len();
-      if tbl_start >= inner.len() { from = close + 1; continue }
+      if tbl_start >= inner.len() {
+        from = close + 1;
+        continue;
+      }
       let tail = &inner[tbl_start..];
-      let tbl_end = tail
-        .find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"')
-        .unwrap_or(tail.len());
+      let tbl_end =
+        tail.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(tail.len());
       let table = &tail[..tbl_end];
       let table_bare = table.rsplit('.').next().unwrap_or(table).trim_matches('"');
-      let Some(t) = catalog.find_table(None, table_bare) else { from = close + 1; continue };
-      let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(bare)) else { from = close + 1; continue };
-      if !c.nullable { from = close + 1; continue }
+      let Some(t) = catalog.find_table(None, table_bare) else {
+        from = close + 1;
+        continue;
+      };
+      let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(bare)) else {
+        from = close + 1;
+        continue;
+      };
+      if !c.nullable {
+        from = close + 1;
+        continue;
+      }
       out.push(Diagnostic {
         code: "sql253",
         severity: Severity::Warning,
@@ -71,12 +85,19 @@ fn find_matching_paren(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }

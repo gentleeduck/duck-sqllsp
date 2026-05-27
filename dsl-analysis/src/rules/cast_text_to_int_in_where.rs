@@ -1,5 +1,5 @@
 //! sql121: comparing a text expression to an int literal in WHERE.
-//! Common bug -- PG will cast text → int row-by-row and discard the
+//! Common bug -- PG will cast text -> int row-by-row and discard the
 //! index. Catches `t.id_text = 123` style patterns where the left side
 //! is wrapped in a text function.
 

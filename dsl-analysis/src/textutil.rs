@@ -65,14 +65,10 @@ pub fn strip_noise_full(s: &str) -> String {
       }
       if k < n && out[k] == b'$' {
         let tag_bytes = &out[i + 1..k];
-        let closer: Vec<u8> = std::iter::once(b'$')
-          .chain(tag_bytes.iter().copied())
-          .chain(std::iter::once(b'$'))
-          .collect();
+        let closer: Vec<u8> =
+          std::iter::once(b'$').chain(tag_bytes.iter().copied()).chain(std::iter::once(b'$')).collect();
         let closer_len = closer.len();
-        for j in i..k + 1 {
-          out[j] = b' ';
-        }
+        out[i..k + 1].fill(b' ');
         i = k + 1;
         while i + closer_len <= n {
           if out[i..i + closer_len] == *closer {
@@ -82,9 +78,7 @@ pub fn strip_noise_full(s: &str) -> String {
           i += 1;
         }
         if i + closer_len <= n {
-          for j in i..i + closer_len {
-            out[j] = b' ';
-          }
+          out[i..i + closer_len].fill(b' ');
           i += closer_len;
         }
         continue;

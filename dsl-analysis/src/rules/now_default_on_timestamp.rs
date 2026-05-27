@@ -25,13 +25,19 @@ impl LintRule for Rule {
     let _ = source;
     for col in &ct.columns {
       let ty = col.type_name.to_ascii_lowercase();
-      if !(ty == "timestamp" || ty == "timestamp without time zone") { continue }
+      if !(ty == "timestamp" || ty == "timestamp without time zone") {
+        continue;
+      }
       let Some(def) = &col.default else { continue };
       let dl = def.to_ascii_lowercase();
-      let calls_now = dl.contains("now()") || dl.contains("current_timestamp")
-        || dl.contains("statement_timestamp") || dl.contains("transaction_timestamp")
+      let calls_now = dl.contains("now()")
+        || dl.contains("current_timestamp")
+        || dl.contains("statement_timestamp")
+        || dl.contains("transaction_timestamp")
         || dl.contains("clock_timestamp");
-      if !calls_now { continue }
+      if !calls_now {
+        continue;
+      }
       let abs_s = u32::from(col.range.start()) as usize + start;
       let abs_e = u32::from(col.range.end()) as usize + start;
       out.push(Diagnostic {

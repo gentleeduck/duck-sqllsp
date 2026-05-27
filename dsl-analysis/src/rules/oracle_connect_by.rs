@@ -29,7 +29,8 @@ impl LintRule for Rule {
     out.push(Diagnostic {
       code: "sql325",
       severity: Severity::Error,
-      message: "`CONNECT BY` is Oracle hierarchical query syntax -- PG uses `WITH RECURSIVE` for tree/graph traversal".into(),
+      message: "`CONNECT BY` is Oracle hierarchical query syntax -- PG uses `WITH RECURSIVE` for tree/graph traversal"
+        .into(),
       range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
     });
   }

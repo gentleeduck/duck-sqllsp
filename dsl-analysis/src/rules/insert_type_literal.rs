@@ -162,16 +162,18 @@ fn compatible(kind: LitKind, declared: &str) -> bool {
   let time_types = ["DATE", "TIMESTAMP", "TIMESTAMPTZ", "TIME", "INTERVAL"];
   let all_known: &[&[&str]] = &[&int_types, &num_types, &str_types, &uuid_types, &bool_types, &time_types];
   let is_known = all_known.iter().any(|grp| grp.iter().any(|t| d.starts_with(t)));
-  if !is_known { return true; }
+  if !is_known {
+    return true;
+  }
   match kind {
     LitKind::Str => {
       str_types.iter().any(|t| d.starts_with(t))
-        || uuid_types.iter().any(|t| d == *t)
+        || uuid_types.contains(&d)
         || time_types.iter().any(|t| d.starts_with(t))
     },
-    LitKind::Int => int_types.iter().any(|t| d == *t) || num_types.iter().any(|t| d.starts_with(t)),
+    LitKind::Int => int_types.contains(&d) || num_types.iter().any(|t| d.starts_with(t)),
     LitKind::Float => num_types.iter().any(|t| d.starts_with(t)),
-    LitKind::Bool => bool_types.iter().any(|t| d == *t),
+    LitKind::Bool => bool_types.contains(&d),
     _ => true,
   }
 }

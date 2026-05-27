@@ -41,7 +41,9 @@ impl LintRule for Rule {
     }
     for fr in sel.from.iter().skip(1) {
       if let Some(t) = catalog.find_table(fr.schema.as_deref(), &fr.name) {
-        for c in &t.columns { visible.insert(c.name.to_ascii_lowercase()); }
+        for c in &t.columns {
+          visible.insert(c.name.to_ascii_lowercase());
+        }
       }
     }
 
@@ -70,7 +72,9 @@ impl LintRule for Rule {
         let col_lc = col.to_ascii_lowercase();
         let in_left = visible.contains(&col_lc);
         let in_right = right.is_some_and(|r| r.columns.iter().any(|c| c.name.eq_ignore_ascii_case(col)));
-        if in_left && in_right { continue; }
+        if in_left && in_right {
+          continue;
+        }
         // The AST doesn't distinguish USING vs ON joins. When the
         // query mixes them the text-based pairing of USING -> next
         // join may misalign and falsely flag a valid USING. Only fire
@@ -81,7 +85,9 @@ impl LintRule for Rule {
             .find_table(j.table.schema.as_deref(), &j.table.name)
             .is_some_and(|t| t.columns.iter().any(|c| c.name.eq_ignore_ascii_case(col)))
         });
-        if in_any_join_table { continue; }
+        if in_any_join_table {
+          continue;
+        }
         let abs_s = start + k + 1;
         let abs_e = start + close;
         let detail = if !in_left {
@@ -99,7 +105,9 @@ impl LintRule for Rule {
       // After processing this JOIN, merge its right-side columns into
       // the visible-left set for subsequent USING clauses.
       if let Some(r) = right {
-        for c in &r.columns { visible.insert(c.name.to_ascii_lowercase()); }
+        for c in &r.columns {
+          visible.insert(c.name.to_ascii_lowercase());
+        }
       }
       from = close + 1;
     }
@@ -118,8 +126,8 @@ fn match_paren(bytes: &[u8], open: usize) -> usize {
         if depth == 0 {
           return i;
         }
-      }
-      _ => {}
+      },
+      _ => {},
     }
     i += 1;
   }

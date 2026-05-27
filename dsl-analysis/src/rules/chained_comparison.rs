@@ -31,33 +31,67 @@ impl LintRule for Rule {
         b')' => depth -= 1,
         b'\'' => {
           i += 1;
-          while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-        }
-        b'=' if depth == 0 && i + 1 < bytes.len() && bytes[i + 1] != b'=' && bytes[i + 1] != b'>' && (i == 0 || (bytes[i - 1] != b'!' && bytes[i - 1] != b'<' && bytes[i - 1] != b'>')) => {
+          while i < bytes.len() && bytes[i] != b'\'' {
+            i += 1
+          }
+        },
+        b'='
+          if depth == 0
+            && i + 1 < bytes.len()
+            && bytes[i + 1] != b'='
+            && bytes[i + 1] != b'>'
+            && (i == 0 || (bytes[i - 1] != b'!' && bytes[i - 1] != b'<' && bytes[i - 1] != b'>')) =>
+        {
           // Find next non-space identifier, then skip past it and check for another `=`.
           let mut k = i + 1;
-          while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
-          while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') { k += 1 }
-          while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
-          if k < bytes.len() && bytes[k] == b'=' && k + 1 < bytes.len() && bytes[k + 1] != b'=' && bytes[k + 1] != b'>' {
+          while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+            k += 1
+          }
+          while k < bytes.len()
+            && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"')
+          {
+            k += 1
+          }
+          while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+            k += 1
+          }
+          if k < bytes.len() && bytes[k] == b'=' && k + 1 < bytes.len() && bytes[k + 1] != b'=' && bytes[k + 1] != b'>'
+          {
             // Walk back to find the lhs start of the first `=`.
             let mut s = i;
-            while s > 0 && (bytes[s - 1].is_ascii_whitespace()) { s -= 1 }
-            while s > 0 && (bytes[s - 1].is_ascii_alphanumeric() || bytes[s - 1] == b'_' || bytes[s - 1] == b'.' || bytes[s - 1] == b'"') { s -= 1 }
+            while s > 0 && (bytes[s - 1].is_ascii_whitespace()) {
+              s -= 1
+            }
+            while s > 0
+              && (bytes[s - 1].is_ascii_alphanumeric()
+                || bytes[s - 1] == b'_'
+                || bytes[s - 1] == b'.'
+                || bytes[s - 1] == b'"')
+            {
+              s -= 1
+            }
             let mut e = k + 1;
-            while e < bytes.len() && bytes[e].is_ascii_whitespace() { e += 1 }
-            while e < bytes.len() && (bytes[e].is_ascii_alphanumeric() || bytes[e] == b'_' || bytes[e] == b'.' || bytes[e] == b'"') { e += 1 }
+            while e < bytes.len() && bytes[e].is_ascii_whitespace() {
+              e += 1
+            }
+            while e < bytes.len()
+              && (bytes[e].is_ascii_alphanumeric() || bytes[e] == b'_' || bytes[e] == b'.' || bytes[e] == b'"')
+            {
+              e += 1
+            }
             out.push(Diagnostic {
               code: "sql267",
               severity: Severity::Warning,
-              message: "Chained `=` -- SQL doesn't chain comparisons; this parses as `(a=b)=c` -- rewrite as `a = b AND b = c`".into(),
+              message:
+                "Chained `=` -- SQL doesn't chain comparisons; this parses as `(a=b)=c` -- rewrite as `a = b AND b = c`"
+                  .into(),
               range: text_size::TextRange::new(((start + s) as u32).into(), ((start + e) as u32).into()),
             });
             i = e;
             continue;
           }
-        }
-        _ => {}
+        },
+        _ => {},
       }
       i += 1;
     }

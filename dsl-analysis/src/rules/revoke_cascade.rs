@@ -26,8 +26,12 @@ impl LintRule for Rule {
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
     let trim = upper.trim_start();
-    if !trim.starts_with("REVOKE") { return }
-    if !upper.contains("CASCADE") { return }
+    if !trim.starts_with("REVOKE") {
+      return;
+    }
+    if !upper.contains("CASCADE") {
+      return;
+    }
     let Some(at) = upper.find("CASCADE") else { return };
     let abs_s = start + at;
     let abs_e = abs_s + "CASCADE".len();

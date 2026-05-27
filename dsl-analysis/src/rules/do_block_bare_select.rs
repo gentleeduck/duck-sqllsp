@@ -23,7 +23,9 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
-    if !upper.contains("DO $$") && !upper.contains("DO LANGUAGE") { return }
+    if !upper.contains("DO $$") && !upper.contains("DO LANGUAGE") {
+      return;
+    }
     let Some(body_start) = body.find("$$").map(|p| p + 2) else { return };
     let body_end = body[body_start..].find("$$").map(|p| body_start + p).unwrap_or(body.len());
     let do_body = &body[body_start..body_end];
@@ -36,16 +38,28 @@ impl LintRule for Rule {
       let at = i + rel;
       if at > 0 {
         let prev = bytes[at - 1] as char;
-        if prev.is_ascii_alphanumeric() || prev == '_' { i = at + 6; continue }
+        if prev.is_ascii_alphanumeric() || prev == '_' {
+          i = at + 6;
+          continue;
+        }
       }
       // Walk back to the preceding statement boundary (`;`, `BEGIN`, `THEN`, `ELSE`, `LOOP`, start).
       let head = &do_upper[..at].trim_end();
-      let prev_kw_end = head.rfind(|c: char| c == ';').map(|p| p + 1).unwrap_or(0);
+      let prev_kw_end = head.rfind(';').map(|p| p + 1).unwrap_or(0);
       let mut between = do_upper[prev_kw_end..at].trim().to_string();
-      if between.ends_with("BEGIN") || between.ends_with("THEN") || between.ends_with("ELSE")
-        || between.ends_with("LOOP") { between.clear(); }
-      if !between.is_empty() && !between.eq_ignore_ascii_case("BEGIN") && !between.eq_ignore_ascii_case("THEN")
-        && !between.eq_ignore_ascii_case("ELSE") && !between.eq_ignore_ascii_case("LOOP") {
+      if between.ends_with("BEGIN")
+        || between.ends_with("THEN")
+        || between.ends_with("ELSE")
+        || between.ends_with("LOOP")
+      {
+        between.clear();
+      }
+      if !between.is_empty()
+        && !between.eq_ignore_ascii_case("BEGIN")
+        && !between.eq_ignore_ascii_case("THEN")
+        && !between.eq_ignore_ascii_case("ELSE")
+        && !between.eq_ignore_ascii_case("LOOP")
+      {
         i = at + 6;
         continue;
       }
@@ -53,7 +67,10 @@ impl LintRule for Rule {
       let stmt_text = &do_upper[at..];
       let stmt_end = stmt_text.find(';').unwrap_or(stmt_text.len());
       let stmt_slice = &stmt_text[..stmt_end];
-      if stmt_slice.contains("INTO ") { i = at + stmt_end + 1; continue }
+      if stmt_slice.contains("INTO ") {
+        i = at + stmt_end + 1;
+        continue;
+      }
       let abs_s = start + body_start + at;
       let abs_e = abs_s + 6;
       out.push(Diagnostic {

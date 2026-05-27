@@ -61,17 +61,16 @@ impl LintRule for Rule {
       // RAISEs means the second may be reachable). Note: do NOT
       // include EXCEPTION here -- the inner check already skips
       // past `RAISE EXCEPTION` so we don't double-count.
-      if first.is_some() {
-        if word_at(&upper, bytes, i, "IF")
+      if first.is_some()
+        && (word_at(&upper, bytes, i, "IF")
           || word_at(&upper, bytes, i, "ELSE")
           || word_at(&upper, bytes, i, "ELSIF")
           || word_at(&upper, bytes, i, "WHEN")
           || word_at(&upper, bytes, i, "END")
           || word_at(&upper, bytes, i, "LOOP")
-          || word_at(&upper, bytes, i, "EXCEPTIONS")
-        {
-          first = None;
-        }
+          || word_at(&upper, bytes, i, "EXCEPTIONS"))
+      {
+        first = None;
       }
       i += 1;
     }

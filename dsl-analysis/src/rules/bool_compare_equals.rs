@@ -7,7 +7,7 @@
 
 use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
-use dsl_parse::{Statement, StatementKind};
+use dsl_parse::Statement;
 use dsl_resolve::Scope;
 
 pub struct Rule;
@@ -52,11 +52,31 @@ impl LintRule for Rule {
     // don't false-fire; offsets stay 1:1 with the original source.
     let bytes = cleaned.as_bytes();
     let n = bytes.len();
+    // Ordered LONGEST-FIRST so `!= TRUE` matches as `!= TRUE`, not
+    // as the trailing `= TRUE` substring. Each entry: (needle,
+    // advice, kind) where kind tracks whether the left side of the
+    // needle is a comparison operator (used to enforce a prev_ok
+    // word-boundary check on the operator).
     let needles: &[(&[u8], &str)] = &[
+      // Inequality forms (eq-true / neq-true semantics).
+      (b"<> TRUE", "use `NOT <expr>` instead of `<> true`"),
+      (b"<>TRUE", "use `NOT <expr>` instead of `<>true`"),
+      (b"!= TRUE", "use `NOT <expr>` instead of `!= true`"),
+      (b"!=TRUE", "use `NOT <expr>` instead of `!=true`"),
+      (b"<> FALSE", "drop `<> false` -- write the predicate directly"),
+      (b"<>FALSE", "drop `<>false` -- write the predicate directly"),
+      (b"!= FALSE", "drop `!= false` -- write the predicate directly"),
+      (b"!=FALSE", "drop `!=false` -- write the predicate directly"),
+      // Equality forms.
       (b"= TRUE", "drop `= true`"),
       (b"=TRUE", "drop `=true`"),
       (b"= FALSE", "use `NOT <expr>` instead of `= false`"),
       (b"=FALSE", "use `NOT <expr>` instead of `=false`"),
+      // Commuted (literal on LHS).
+      (b"TRUE = ", "drop `true =` -- write the predicate directly"),
+      (b"TRUE =", "drop `true =` -- write the predicate directly"),
+      (b"FALSE = ", "use `NOT <expr>` instead of `false =`"),
+      (b"FALSE =", "use `NOT <expr>` instead of `false =`"),
     ];
     let mut i = 0;
     while i < n {
@@ -76,6 +96,18 @@ impl LintRule for Rule {
           continue;
         }
         if !bytes[i..i + needle.len()].eq_ignore_ascii_case(needle) {
+          continue;
+        }
+        // For needles starting with `=` (bare equality), require that
+        // the previous char is NOT one of `!`, `<`, `>` -- otherwise
+        // we'd misclassify `!= TRUE` / `<> TRUE` as `= TRUE`.
+        if needle.starts_with(b"=") && i > 0 && matches!(bytes[i - 1], b'!' | b'<' | b'>') {
+          continue;
+        }
+        // For commuted forms (`TRUE`/`FALSE` at start), require that
+        // the previous char is NOT an identifier char -- otherwise
+        // `mytrue = x` would match.
+        if (needle.starts_with(b"TRUE") || needle.starts_with(b"FALSE")) && i > 0 && is_word(bytes[i - 1] as char) {
           continue;
         }
         let end_pos = i + needle.len();
@@ -145,14 +177,26 @@ fn contains_with_or_options_paren(s: &str) -> bool {
     let mut from = 0usize;
     while let Some(rel) = s[from..].find(kw) {
       let at = from + rel;
-      let prev_ok = at == 0 || !{ let c = bytes[at - 1] as char; c.is_ascii_alphanumeric() || c == '_' };
+      let prev_ok = at == 0
+        || !{
+          let c = bytes[at - 1] as char;
+          c.is_ascii_alphanumeric() || c == '_'
+        };
       let after = at + kw.len();
-      let next_ok = after < n && !{ let c = bytes[after] as char; c.is_ascii_alphanumeric() || c == '_' };
+      let next_ok = after < n
+        && !{
+          let c = bytes[after] as char;
+          c.is_ascii_alphanumeric() || c == '_'
+        };
       if prev_ok && next_ok {
         // Walk forward through whitespace; require `(` next.
         let mut k = after;
-        while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
-        if k < n && bytes[k] == b'(' { return true; }
+        while k < n && bytes[k].is_ascii_whitespace() {
+          k += 1
+        }
+        if k < n && bytes[k] == b'(' {
+          return true;
+        }
       }
       from = at + kw.len();
     }

@@ -25,7 +25,9 @@ impl LintRule for Rule {
     let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
     let body = &source[start..end];
     let upper = body.to_ascii_uppercase();
-    if !upper.contains("PARTITION OF") { return }
+    if !upper.contains("PARTITION OF") {
+      return;
+    }
     let Some(at) = upper.find("INCLUDING INDEXES") else { return };
     let abs_s = start + at;
     let abs_e = abs_s + "INCLUDING INDEXES".len();

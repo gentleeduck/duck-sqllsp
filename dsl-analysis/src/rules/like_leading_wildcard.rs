@@ -46,25 +46,23 @@ impl LintRule for Rule {
       while j < n && bytes[j].is_ascii_whitespace() {
         j += 1;
       }
-      if j < n && bytes[j] == b'\'' {
-        if j + 1 < n && bytes[j + 1] == b'%' {
-          // Span the literal: from opening `'` through closing `'`.
-          let str_start = j;
-          let mut k = j + 1;
-          while k < n && bytes[k] != b'\'' {
-            k += 1;
-          }
-          let abs_start = start + str_start;
-          let abs_end = start + (k + 1).min(n);
-          out.push(Diagnostic {
-            code: "sql088",
-            severity: Severity::Warning,
-            message: "LIKE/ILIKE with leading `%` prevents B-tree index use -- consider pg_trgm or full-text search"
-              .into(),
-            range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
-          });
-          return;
+      if j < n && bytes[j] == b'\'' && j + 1 < n && bytes[j + 1] == b'%' {
+        // Span the literal: from opening `'` through closing `'`.
+        let str_start = j;
+        let mut k = j + 1;
+        while k < n && bytes[k] != b'\'' {
+          k += 1;
         }
+        let abs_start = start + str_start;
+        let abs_end = start + (k + 1).min(n);
+        out.push(Diagnostic {
+          code: "sql088",
+          severity: Severity::Warning,
+          message: "LIKE/ILIKE with leading `%` prevents B-tree index use -- consider pg_trgm or full-text search"
+            .into(),
+          range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+        });
+        return;
       }
       i += kw_len;
     }
