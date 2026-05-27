@@ -20,9 +20,8 @@
 //! (constraints, indexes, comments).
 
 use dsl_catalog::{
-  CATALOG_VERSION, Catalog, Column, Constraint, ConstraintKind, ConstraintRef, Extension,
-  Function, FunctionArg, IndexDef, Policy, Schema, Sequence, Table, TableKind, Trigger, Type,
-  TypeKind,
+  CATALOG_VERSION, Catalog, Column, Constraint, ConstraintKind, ConstraintRef, Extension, Function, FunctionArg,
+  IndexDef, Policy, Schema, Sequence, Table, TableKind, Trigger, Type, TypeKind,
 };
 use dsl_parse::{ParsedFile, StatementKind};
 
@@ -63,6 +62,7 @@ pub fn from_file(file: &ParsedFile) -> Catalog {
       // scan_table_comments() below when present.
       comment: None,
       row_estimate: None,
+      owner: None,
     };
     if schema_name == "public" {
       public.tables.push(table);
@@ -120,6 +120,7 @@ pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
   let indexes_by_table = scan_indexes(source);
   let triggers_by_table = scan_triggers(source);
   let policies_by_table = scan_policies(source);
+  let insert_counts = scan_insert_tuple_counts(source);
   for schema in cat.schemas.iter_mut() {
     for table in schema.tables.iter_mut() {
       table.constraints = scan_constraints_for(source, &table.name);
@@ -136,8 +137,22 @@ pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
       if let Some(pols) = policies_by_table.get(&key) {
         table.policies = pols.clone();
       }
+      // Offline-mode row estimate: count INSERT VALUES tuples that
+      // target this table across the source. Gives a usable chip in
+      // workspaces without a live DB (learning projects, test
+      // fixtures). Live introspection overrides this via merge.
+      if let Some(&n) = insert_counts.get(&key) {
+        table.row_estimate = Some(n as f64);
+      }
       let generated_by_col = scan_generated_for(source, &table.name);
       let json_keys_by_col = scan_json_keys_for(source, &table.name);
+      let defaults_by_col = scan_defaults_for(source, &table.name);
+      // `ALTER TABLE <t> OWNER TO <role>` -- last occurrence in the
+      // buffer wins, matching PG's "last write" semantics across a
+      // migration file.
+      if let Some(o) = scan_owner_for(source, &table.name) {
+        table.owner = Some(o);
+      }
       for col in table.columns.iter_mut() {
         let ckey = format!("{}.{}", table.name.to_ascii_lowercase(), col.name.to_ascii_lowercase());
         if let Some(c) = comments_by_col.get(&ckey) {
@@ -148,6 +163,17 @@ pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
         }
         if let Some(keys) = json_keys_by_col.get(&col.name.to_ascii_lowercase()) {
           col.json_keys = Some(keys.clone());
+        }
+        // pg_query's raw_expr deparse for ConstrDefault isn't available
+        // through the public surface, so the AST converter leaves
+        // col.default = None for offline-mode CREATE TABLE statements.
+        // Text-scan the table body for `DEFAULT <expr>` per column so
+        // hover renders `id int DEFAULT gen_random_uuid()` instead of
+        // dropping the DEFAULT clause.
+        if col.default.is_none()
+          && let Some(d) = defaults_by_col.get(&col.name.to_ascii_lowercase())
+        {
+          col.default = Some(d.clone());
         }
       }
     }
@@ -179,25 +205,41 @@ fn inherit_partition_columns(cat: &mut Catalog, src: &str) {
   while let Some(rel) = upper[from..].find(needle) {
     let at = from + rel;
     let mut k = at + needle.len();
-    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+    while k < n && bytes[k].is_ascii_whitespace() {
+      k += 1
+    }
     if upper[k..].starts_with("IF NOT EXISTS") {
       k += "IF NOT EXISTS".len();
-      while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+      while k < n && bytes[k].is_ascii_whitespace() {
+        k += 1
+      }
     }
     let id_start = k;
-    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') { k += 1 }
+    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') {
+      k += 1
+    }
     let child = cleaned[id_start..k].trim_matches('"').to_string();
     from = k;
-    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
-    if !upper[k..].starts_with("PARTITION OF") { continue }
+    while k < n && bytes[k].is_ascii_whitespace() {
+      k += 1
+    }
+    if !upper[k..].starts_with("PARTITION OF") {
+      continue;
+    }
     k += "PARTITION OF".len();
-    while k < n && bytes[k].is_ascii_whitespace() { k += 1 }
+    while k < n && bytes[k].is_ascii_whitespace() {
+      k += 1
+    }
     let p_start = k;
-    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') { k += 1 }
+    while k < n && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') {
+      k += 1
+    }
     let parent = cleaned[p_start..k].trim_matches('"').to_string();
     pairs.push((child, parent));
   }
-  if pairs.is_empty() { return }
+  if pairs.is_empty() {
+    return;
+  }
   // For each pair, locate parent in catalog, copy its columns onto child.
   for (child_fq, parent_fq) in pairs {
     let p_bare = parent_fq.rsplit('.').next().unwrap_or(&parent_fq).to_string();
@@ -225,13 +267,23 @@ fn strip_string_literals(s: &str) -> String {
   let mut i = 0usize;
   while i < n {
     if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
-      while i < n && out[i] != b'\n' { out[i] = b' '; i += 1 }
+      while i < n && out[i] != b'\n' {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     if out[i] == b'\'' {
-      out[i] = b' '; i += 1;
-      while i < n && out[i] != b'\'' { out[i] = b' '; i += 1 }
-      if i < n { out[i] = b' '; i += 1 }
+      out[i] = b' ';
+      i += 1;
+      while i < n && out[i] != b'\'' {
+        out[i] = b' ';
+        i += 1
+      }
+      if i < n {
+        out[i] = b' ';
+        i += 1
+      }
       continue;
     }
     i += 1;
@@ -248,7 +300,9 @@ fn scan_policies(src: &str) -> std::collections::HashMap<String, Vec<Policy>> {
     while let Some(rel) = upper[from..].find(needle) {
       let after = from + rel + needle.len();
       let mut k = after;
-      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1;
+      }
       let name_start = k;
       while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'"') {
         k += 1;
@@ -261,7 +315,8 @@ fn scan_policies(src: &str) -> std::collections::HashMap<String, Vec<Policy>> {
         let rest = &stmt[on_at + 4..];
         let lead = rest.len() - rest.trim_start().len();
         let raw = &rest[lead..];
-        let id_end = raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(raw.len());
+        let id_end =
+          raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(raw.len());
         raw[..id_end].rsplit('.').next().unwrap_or(&raw[..id_end]).trim_matches('"').to_ascii_lowercase()
       } else {
         from = after;
@@ -275,15 +330,11 @@ fn scan_policies(src: &str) -> std::collections::HashMap<String, Vec<Policy>> {
         .unwrap_or_else(|| "ALL".into());
       let roles = if let Some(to_at) = stmt_upper.find(" TO ") {
         let rest = &stmt[to_at + 4..];
-        let end = rest.find(|c: char| c == ';' || c == '\n').unwrap_or(rest.len());
+        let end = rest.find([';', '\n']).unwrap_or(rest.len());
         let raw = rest[..end].trim();
         // Trim trailing clauses like USING / WITH CHECK.
         let raw_upper = raw.to_ascii_uppercase();
-        let cut = ["USING", "WITH CHECK"]
-          .iter()
-          .filter_map(|kw| raw_upper.find(kw))
-          .min()
-          .unwrap_or(raw.len());
+        let cut = ["USING", "WITH CHECK"].iter().filter_map(|kw| raw_upper.find(kw)).min().unwrap_or(raw.len());
         raw[..cut].trim().to_string()
       } else {
         "PUBLIC".into()
@@ -310,10 +361,16 @@ fn extract_paren_after(stmt: &str, kw: &str) -> Option<String> {
   let after = at + kw.len();
   let rest_bytes = stmt.as_bytes();
   let mut k = after;
-  while k < rest_bytes.len() && rest_bytes[k].is_ascii_whitespace() { k += 1; }
-  if k >= rest_bytes.len() || rest_bytes[k] != b'(' { return None; }
+  while k < rest_bytes.len() && rest_bytes[k].is_ascii_whitespace() {
+    k += 1;
+  }
+  if k >= rest_bytes.len() || rest_bytes[k] != b'(' {
+    return None;
+  }
   let close = match_paren(rest_bytes, k);
-  if close >= rest_bytes.len() { return None; }
+  if close >= rest_bytes.len() {
+    return None;
+  }
   Some(stmt[k + 1..close].trim().to_string())
 }
 
@@ -330,26 +387,36 @@ fn scan_table_comments(src: &str) -> std::collections::HashMap<String, String> {
       k += 1;
     }
     let id_start = k;
-    while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') {
+    while k < bytes.len()
+      && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"')
+    {
       k += 1;
     }
     let id = &src[id_start..k];
     let bare = id.rsplit('.').next().unwrap_or(id).trim_matches('"').to_ascii_lowercase();
-    while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+    while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+      k += 1;
+    }
     if k + 2 > bytes.len() || !upper[k..].starts_with("IS") {
       from = after;
       continue;
     }
     k += 2;
-    while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+    while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+      k += 1;
+    }
     if k >= bytes.len() || bytes[k] != b'\'' {
       from = after;
       continue;
     }
     let s_start = k + 1;
     let mut s_end = s_start;
-    while s_end < bytes.len() && bytes[s_end] != b'\'' { s_end += 1; }
-    if s_end >= bytes.len() { break; }
+    while s_end < bytes.len() && bytes[s_end] != b'\'' {
+      s_end += 1;
+    }
+    if s_end >= bytes.len() {
+      break;
+    }
     out.insert(bare, src[s_start..s_end].to_string());
     from = s_end + 1;
   }
@@ -372,28 +439,38 @@ fn scan_indexes(src: &str) -> std::collections::HashMap<String, Vec<IndexDef>> {
     while let Some(rel) = upper[from..].find(needle) {
       let after = from + rel + needle.len();
       let mut k = after;
-      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1;
+      }
       let name_start = k;
       while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'"') {
         k += 1;
       }
       let name = src[name_start..k].trim_matches('"').to_string();
-      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1;
+      }
       if upper[k..].starts_with("ON ") {
         k += 3;
       } else {
         from = after;
         continue;
       }
-      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1;
+      }
       let tbl_start = k;
-      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') {
+      while k < bytes.len()
+        && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"')
+      {
         k += 1;
       }
       let raw_tbl = &src[tbl_start..k];
       let bare = raw_tbl.rsplit('.').next().unwrap_or(raw_tbl).trim_matches('"').to_ascii_lowercase();
       // Find `(`.
-      while k < bytes.len() && bytes[k] != b'(' && bytes[k] != b';' { k += 1; }
+      while k < bytes.len() && bytes[k] != b'(' && bytes[k] != b';' {
+        k += 1;
+      }
       let cols = if k < bytes.len() && bytes[k] == b'(' {
         let end = match_paren(bytes, k);
         let body = &src[k + 1..end];
@@ -408,12 +485,7 @@ fn scan_indexes(src: &str) -> std::collections::HashMap<String, Vec<IndexDef>> {
       // Find the end of this statement.
       let stmt_end = src[name_start..].find(';').map(|i| name_start + i + 1).unwrap_or(src.len());
       let definition = src[from + rel..stmt_end].trim().to_string();
-      out.entry(bare).or_default().push(IndexDef {
-        name,
-        columns: cols,
-        unique,
-        definition: Some(definition),
-      });
+      out.entry(bare).or_default().push(IndexDef { name, columns: cols, unique, definition: Some(definition) });
       from = after;
     }
   }
@@ -432,22 +504,39 @@ fn scan_triggers(src: &str) -> std::collections::HashMap<String, Vec<Trigger>> {
     while let Some(rel) = upper[from..].find(needle) {
       let after = from + rel + needle.len();
       let mut k = after;
-      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1;
+      }
       let name_start = k;
-      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'"') { k += 1; }
+      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'"') {
+        k += 1;
+      }
       let name = src[name_start..k].trim_matches('"').to_string();
       let stmt_end = src[after..].find(';').map(|i| after + i).unwrap_or(src.len());
       let stmt = &src[after..stmt_end];
       let stmt_upper = stmt.to_ascii_uppercase();
-      let timing = if stmt_upper.contains("INSTEAD OF") { "INSTEAD OF" }
-        else if stmt_upper.contains("BEFORE") { "BEFORE" }
-        else if stmt_upper.contains("AFTER") { "AFTER" }
-        else { "" };
+      let timing = if stmt_upper.contains("INSTEAD OF") {
+        "INSTEAD OF"
+      } else if stmt_upper.contains("BEFORE") {
+        "BEFORE"
+      } else if stmt_upper.contains("AFTER") {
+        "AFTER"
+      } else {
+        ""
+      };
       let mut events = Vec::new();
-      if stmt_upper.contains("INSERT") { events.push("INSERT"); }
-      if stmt_upper.contains("UPDATE") { events.push("UPDATE"); }
-      if stmt_upper.contains("DELETE") { events.push("DELETE"); }
-      if stmt_upper.contains("TRUNCATE") { events.push("TRUNCATE"); }
+      if stmt_upper.contains("INSERT") {
+        events.push("INSERT");
+      }
+      if stmt_upper.contains("UPDATE") {
+        events.push("UPDATE");
+      }
+      if stmt_upper.contains("DELETE") {
+        events.push("DELETE");
+      }
+      if stmt_upper.contains("TRUNCATE") {
+        events.push("TRUNCATE");
+      }
       let event = events.join(" OR ");
       // `ON <tbl>`.
       let tbl = if let Some(on_at) = stmt_upper.find(" ON ") {
@@ -455,24 +544,30 @@ fn scan_triggers(src: &str) -> std::collections::HashMap<String, Vec<Trigger>> {
         let rest = &stmt[after_on..];
         let lead = rest.len() - rest.trim_start().len();
         let raw = &rest[lead..];
-        let id_end = raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(raw.len());
+        let id_end =
+          raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(raw.len());
         raw[..id_end].rsplit('.').next().unwrap_or(&raw[..id_end]).trim_matches('"').to_ascii_lowercase()
       } else {
         String::new()
       };
-      let granularity = if stmt_upper.contains("FOR EACH ROW") { "ROW" }
-        else if stmt_upper.contains("FOR EACH STATEMENT") { "STATEMENT" }
-        else { "ROW" };
-      let function = if let Some(at) = stmt_upper.find("EXECUTE FUNCTION ").or_else(|| stmt_upper.find("EXECUTE PROCEDURE ")) {
-        let after_kw = at + "EXECUTE FUNCTION ".len();
-        let rest = &stmt[after_kw..];
-        let lead = rest.len() - rest.trim_start().len();
-        let raw = &rest[lead..];
-        let id_end = raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.').unwrap_or(raw.len());
-        raw[..id_end].to_string()
+      let granularity = if stmt_upper.contains("FOR EACH ROW") {
+        "ROW"
+      } else if stmt_upper.contains("FOR EACH STATEMENT") {
+        "STATEMENT"
       } else {
-        String::new()
+        "ROW"
       };
+      let function =
+        if let Some(at) = stmt_upper.find("EXECUTE FUNCTION ").or_else(|| stmt_upper.find("EXECUTE PROCEDURE ")) {
+          let after_kw = at + "EXECUTE FUNCTION ".len();
+          let rest = &stmt[after_kw..];
+          let lead = rest.len() - rest.trim_start().len();
+          let raw = &rest[lead..];
+          let id_end = raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.').unwrap_or(raw.len());
+          raw[..id_end].to_string()
+        } else {
+          String::new()
+        };
       if !tbl.is_empty() {
         out.entry(tbl).or_default().push(Trigger {
           name,
@@ -505,7 +600,9 @@ fn scan_column_comments(src: &str) -> std::collections::HashMap<String, String> 
       k += 1;
     }
     let id_start = k;
-    while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') {
+    while k < bytes.len()
+      && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"')
+    {
       k += 1;
     }
     let id = &src[id_start..k];
@@ -564,14 +661,27 @@ fn scan_generated_for(src: &str, name: &str) -> std::collections::HashMap<String
       let after = from + rel + needle.len();
       let bytes = src.as_bytes();
       let mut k = after;
-      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1
+      }
       let id_start = k;
-      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') { k += 1 }
+      while k < bytes.len()
+        && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"')
+      {
+        k += 1
+      }
       let raw = &src[id_start..k];
       let bare = raw.rsplit('.').next().unwrap_or(raw).trim_matches('"');
-      if !bare.eq_ignore_ascii_case(name) { from = after; continue }
-      while k < bytes.len() && bytes[k] != b'(' { k += 1 }
-      if k >= bytes.len() { return out }
+      if !bare.eq_ignore_ascii_case(name) {
+        from = after;
+        continue;
+      }
+      while k < bytes.len() && bytes[k] != b'(' {
+        k += 1
+      }
+      if k >= bytes.len() {
+        return out;
+      }
       let body_start = k + 1;
       let body_end = match_paren(bytes, k);
       let body = &src[body_start..body_end];
@@ -580,16 +690,210 @@ fn scan_generated_for(src: &str, name: &str) -> std::collections::HashMap<String
         let Some(g_at) = upper_line.find("GENERATED") else { continue };
         let post = &line[g_at..];
         let post_upper = post.to_ascii_uppercase();
-        if !post_upper.starts_with("GENERATED ALWAYS AS") { continue }
+        if !post_upper.starts_with("GENERATED ALWAYS AS") {
+          continue;
+        }
         let after_kw = g_at + "GENERATED ALWAYS AS".len();
         let rest = line[after_kw..].trim_start();
-        if !rest.starts_with('(') { continue }
+        if !rest.starts_with('(') {
+          continue;
+        }
         let abs_open = after_kw + (line[after_kw..].len() - rest.len());
         let Some(close_rel) = match_paren_offset(&line, abs_open) else { continue };
         let expr = &line[abs_open + 1..close_rel];
         let col_name = line.split_whitespace().next().unwrap_or("").trim_matches('"').to_ascii_lowercase();
         if !col_name.is_empty() {
           out.insert(col_name, expr.to_string());
+        }
+      }
+      return out;
+    }
+  }
+  out
+}
+
+/// Scan the source for `ALTER TABLE <name> OWNER TO <role>` and return
+/// the last owner declaration. Matches the table name case-insensitively
+/// and accepts both bare and quoted role names.
+fn scan_owner_for(src: &str, name: &str) -> Option<String> {
+  let upper = src.to_ascii_uppercase();
+  let bytes = src.as_bytes();
+  let needle = "ALTER TABLE";
+  let mut from = 0usize;
+  let mut last: Option<String> = None;
+  while let Some(rel) = upper[from..].find(needle) {
+    let at = from + rel;
+    let mut k = at + needle.len();
+    while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+      k += 1;
+    }
+    if upper[k..].starts_with("IF EXISTS") {
+      k += 9;
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1;
+      }
+    }
+    if upper[k..].starts_with("ONLY") {
+      k += 4;
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1;
+      }
+    }
+    let id_start = k;
+    while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"')
+    {
+      k += 1;
+    }
+    let raw = &src[id_start..k];
+    let bare = raw.rsplit('.').next().unwrap_or(raw).trim_matches('"');
+    if !bare.eq_ignore_ascii_case(name) {
+      from = at + needle.len();
+      continue;
+    }
+    let after = upper[k..].trim_start();
+    if !after.starts_with("OWNER TO") {
+      from = k;
+      continue;
+    }
+    let skip = " OWNER TO ".len();
+    let owner_start_rel = upper[k..].find("OWNER TO")? + "OWNER TO".len();
+    let owner_start = k + owner_start_rel;
+    let mut j = owner_start;
+    while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+      j += 1;
+    }
+    let id_start = j;
+    while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_' || bytes[j] == b'"') {
+      j += 1;
+    }
+    let role = src[id_start..j].trim_matches('"').to_string();
+    if !role.is_empty() {
+      last = Some(role);
+    }
+    let _ = skip;
+    from = j;
+  }
+  last
+}
+
+/// Walks the body of `CREATE TABLE <name> (...)` and extracts the
+/// `DEFAULT <expr>` clause for each column definition. Returns a map of
+/// lowercase column name -> the expression text (everything between
+/// `DEFAULT` and the next comma / `NOT NULL` / `CHECK` / `REFERENCES` /
+/// `UNIQUE` / `PRIMARY KEY` / `GENERATED` / end-of-line at depth 0).
+fn scan_defaults_for(src: &str, name: &str) -> std::collections::HashMap<String, String> {
+  let upper = src.to_ascii_uppercase();
+  let mut out: std::collections::HashMap<String, String> = Default::default();
+  for needle in ["CREATE TABLE IF NOT EXISTS ", "CREATE TEMP TABLE ", "CREATE TEMPORARY TABLE ", "CREATE TABLE "] {
+    let mut from = 0usize;
+    while let Some(rel) = upper[from..].find(needle) {
+      let after = from + rel + needle.len();
+      let bytes = src.as_bytes();
+      let mut k = after;
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1
+      }
+      let id_start = k;
+      while k < bytes.len()
+        && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"')
+      {
+        k += 1
+      }
+      let raw = &src[id_start..k];
+      let bare = raw.rsplit('.').next().unwrap_or(raw).trim_matches('"');
+      if !bare.eq_ignore_ascii_case(name) {
+        from = after;
+        continue;
+      }
+      while k < bytes.len() && bytes[k] != b'(' {
+        k += 1
+      }
+      if k >= bytes.len() {
+        return out;
+      }
+      let body_start = k + 1;
+      let body_end = match_paren(bytes, k);
+      let body = &src[body_start..body_end];
+      for line in split_top_level(body) {
+        let upper_line = line.to_ascii_uppercase();
+        // Skip table-level constraints.
+        let head_upper = upper_line.split_whitespace().next().unwrap_or("");
+        if matches!(head_upper, "CONSTRAINT" | "PRIMARY" | "UNIQUE" | "FOREIGN" | "CHECK" | "EXCLUDE" | "LIKE") {
+          continue;
+        }
+        // Find a word-boundary `DEFAULT` at top paren depth.
+        let line_bytes = line.as_bytes();
+        let mut depth = 0i32;
+        let mut def_at: Option<usize> = None;
+        let mut i = 0usize;
+        while i < line_bytes.len() {
+          match line_bytes[i] {
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            b'\'' => {
+              i += 1;
+              while i < line_bytes.len() && line_bytes[i] != b'\'' {
+                i += 1;
+              }
+            },
+            _ => {},
+          }
+          if depth == 0
+            && upper_line[i..].starts_with("DEFAULT")
+            && (i == 0 || !line_bytes[i - 1].is_ascii_alphanumeric() && line_bytes[i - 1] != b'_')
+            && i + 7 < line_bytes.len()
+            && line_bytes[i + 7].is_ascii_whitespace()
+          {
+            def_at = Some(i);
+            break;
+          }
+          i += 1;
+        }
+        let Some(def_at) = def_at else { continue };
+        // Skip `DEFAULT` keyword + whitespace.
+        let mut j = def_at + "DEFAULT".len();
+        while j < line_bytes.len() && line_bytes[j].is_ascii_whitespace() {
+          j += 1;
+        }
+        // Walk the expression to its terminator: comma at depth 0 OR
+        // one of the trailing column-level keywords (NOT NULL, CHECK,
+        // REFERENCES, UNIQUE, PRIMARY KEY, GENERATED, COLLATE).
+        let mut depth = 0i32;
+        let expr_start = j;
+        let mut expr_end = line_bytes.len();
+        while j < line_bytes.len() {
+          match line_bytes[j] {
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            b'\'' => {
+              j += 1;
+              while j < line_bytes.len() && line_bytes[j] != b'\'' {
+                j += 1;
+              }
+            },
+            _ => {},
+          }
+          if depth == 0 {
+            let tail_upper = &upper_line[j..];
+            if line_bytes[j] == b','
+              || tail_upper.starts_with(" NOT NULL")
+              || tail_upper.starts_with(" CHECK")
+              || tail_upper.starts_with(" REFERENCES")
+              || tail_upper.starts_with(" UNIQUE")
+              || tail_upper.starts_with(" PRIMARY KEY")
+              || tail_upper.starts_with(" GENERATED")
+              || tail_upper.starts_with(" COLLATE")
+            {
+              expr_end = j;
+              break;
+            }
+          }
+          j += 1;
+        }
+        let expr = line[expr_start..expr_end].trim().to_string();
+        let col_name = line.split_whitespace().next().unwrap_or("").trim_matches('"').to_ascii_lowercase();
+        if !col_name.is_empty() && !expr.is_empty() {
+          out.insert(col_name, expr);
         }
       }
       return out;
@@ -612,14 +916,27 @@ fn scan_json_keys_for(src: &str, name: &str) -> std::collections::HashMap<String
       let after = from + rel + needle.len();
       let bytes = src.as_bytes();
       let mut k = after;
-      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1 }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1
+      }
       let id_start = k;
-      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') { k += 1 }
+      while k < bytes.len()
+        && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"')
+      {
+        k += 1
+      }
       let raw = &src[id_start..k];
       let bare = raw.rsplit('.').next().unwrap_or(raw).trim_matches('"');
-      if !bare.eq_ignore_ascii_case(name) { from = after; continue }
-      while k < bytes.len() && bytes[k] != b'(' { k += 1 }
-      if k >= bytes.len() { return out }
+      if !bare.eq_ignore_ascii_case(name) {
+        from = after;
+        continue;
+      }
+      while k < bytes.len() && bytes[k] != b'(' {
+        k += 1
+      }
+      if k >= bytes.len() {
+        return out;
+      }
       let body_start = k + 1;
       let body_end = match_paren(bytes, k);
       let body = &src[body_start..body_end];
@@ -629,26 +946,38 @@ fn scan_json_keys_for(src: &str, name: &str) -> std::collections::HashMap<String
         let trimmed = line.trim();
         if let Some(at) = trimmed.find("@json-keys:") {
           let payload = &trimmed[at + "@json-keys:".len()..];
-          let keys: Vec<String> = payload
-            .split(',')
-            .map(|s| s.trim().trim_matches('"').to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-          if !keys.is_empty() { pending = Some(keys); }
+          let keys: Vec<String> =
+            payload.split(',').map(|s| s.trim().trim_matches('"').to_string()).filter(|s| !s.is_empty()).collect();
+          if !keys.is_empty() {
+            pending = Some(keys);
+          }
           continue;
         }
-        if trimmed.is_empty() || trimmed.starts_with("--") { continue }
+        if trimmed.is_empty() || trimmed.starts_with("--") {
+          continue;
+        }
         let entered_at = paren_depth;
         for b in trimmed.as_bytes() {
-          match b { b'(' => paren_depth += 1, b')' => paren_depth -= 1, _ => {} }
+          match b {
+            b'(' => paren_depth += 1,
+            b')' => paren_depth -= 1,
+            _ => {},
+          }
         }
-        if entered_at != 0 { continue }
+        if entered_at != 0 {
+          continue;
+        }
         let Some(keys) = pending.take() else { continue };
         let head = trimmed.split_whitespace().next().unwrap_or("");
         let head_upper = head.to_ascii_uppercase();
-        if matches!(head_upper.as_str(), "CONSTRAINT" | "PRIMARY" | "UNIQUE" | "FOREIGN" | "CHECK" | "EXCLUDE" | "LIKE") { continue }
+        if matches!(head_upper.as_str(), "CONSTRAINT" | "PRIMARY" | "UNIQUE" | "FOREIGN" | "CHECK" | "EXCLUDE" | "LIKE")
+        {
+          continue;
+        }
         let col_name = head.trim_matches('"').trim_end_matches(',').to_ascii_lowercase();
-        if !col_name.is_empty() { out.insert(col_name, keys); }
+        if !col_name.is_empty() {
+          out.insert(col_name, keys);
+        }
       }
       return out;
     }
@@ -669,12 +998,14 @@ fn split_top_level(text: &str) -> Vec<String> {
       b',' if depth == 0 => {
         out.push(text[start..i].trim().to_string());
         start = i + 1;
-      }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -689,12 +1020,19 @@ fn match_paren_offset(s: &str, open: usize) -> Option<usize> {
   while i < bytes.len() {
     match bytes[i] {
       b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
       b'\'' => {
         i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -714,7 +1052,9 @@ fn scan_constraints_for(src: &str, name: &str) -> Vec<Constraint> {
         k += 1;
       }
       let id_start = k;
-      while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"') {
+      while k < bytes.len()
+        && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"')
+      {
         k += 1;
       }
       let raw = &src[id_start..k];
@@ -751,14 +1091,14 @@ fn match_paren(bytes: &[u8], open: usize) -> usize {
         if depth == 0 {
           return i;
         }
-      }
+      },
       b'\'' => {
         i += 1;
         while i < n && bytes[i] != b'\'' {
           i += 1;
         }
-      }
-      _ => {}
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -782,6 +1122,7 @@ fn parse_constraints(body: &str) -> Vec<Constraint> {
           columns: cols,
           references: None,
           definition: Some(trimmed.to_string()),
+          inline: false,
         });
       }
       continue;
@@ -794,6 +1135,7 @@ fn parse_constraints(body: &str) -> Vec<Constraint> {
           columns: cols,
           references: None,
           definition: Some(trimmed.to_string()),
+          inline: false,
         });
       }
       continue;
@@ -806,6 +1148,7 @@ fn parse_constraints(body: &str) -> Vec<Constraint> {
           columns: local,
           references: Some(refs),
           definition: Some(trimmed.to_string()),
+          inline: false,
         });
       }
       continue;
@@ -817,6 +1160,7 @@ fn parse_constraints(body: &str) -> Vec<Constraint> {
         columns: Vec::new(),
         references: None,
         definition: Some(trimmed.to_string()),
+        inline: false,
       });
       continue;
     }
@@ -834,6 +1178,7 @@ fn parse_constraints(body: &str) -> Vec<Constraint> {
           columns: paren_csv(body).unwrap_or_default(),
           references: None,
           definition: Some(body.to_string()),
+          inline: false,
         });
       } else if body_upper.starts_with("UNIQUE") {
         out.push(Constraint {
@@ -842,6 +1187,7 @@ fn parse_constraints(body: &str) -> Vec<Constraint> {
           columns: paren_csv(body).unwrap_or_default(),
           references: None,
           definition: Some(body.to_string()),
+          inline: false,
         });
       } else if body_upper.starts_with("FOREIGN KEY") {
         out.push(Constraint {
@@ -850,6 +1196,7 @@ fn parse_constraints(body: &str) -> Vec<Constraint> {
           columns: paren_csv(body).unwrap_or_default(),
           references: parse_references(body),
           definition: Some(body.to_string()),
+          inline: false,
         });
       } else if body_upper.starts_with("CHECK") {
         out.push(Constraint {
@@ -858,6 +1205,7 @@ fn parse_constraints(body: &str) -> Vec<Constraint> {
           columns: Vec::new(),
           references: None,
           definition: Some(body.to_string()),
+          inline: false,
         });
       }
       continue;
@@ -873,7 +1221,8 @@ fn parse_constraints(body: &str) -> Vec<Constraint> {
         kind: ConstraintKind::PrimaryKey,
         columns: vec![col.clone()],
         references: None,
-        definition: Some(trimmed.to_string()),
+        definition: Some(format!("PRIMARY KEY ({col})")),
+        inline: true,
       });
     }
     if upper.contains("UNIQUE") && !upper.starts_with("UNIQUE") {
@@ -882,16 +1231,24 @@ fn parse_constraints(body: &str) -> Vec<Constraint> {
         kind: ConstraintKind::Unique,
         columns: vec![col.clone()],
         references: None,
-        definition: Some(trimmed.to_string()),
+        definition: Some(format!("UNIQUE ({col})")),
+        inline: true,
       });
     }
     if let Some(refs) = inline_references(trimmed) {
+      let def = format!(
+        "FOREIGN KEY ({col}) REFERENCES {}.{} ({})",
+        refs.schema,
+        refs.table,
+        refs.columns.join(", ")
+      );
       out.push(Constraint {
         name: format!("fk_{col}"),
         kind: ConstraintKind::ForeignKey,
         columns: vec![col],
         references: Some(refs),
-        definition: Some(trimmed.to_string()),
+        definition: Some(def),
+        inline: true,
       });
     }
   }
@@ -906,11 +1263,7 @@ fn paren_csv(s: &str) -> Option<Vec<String>> {
     return None;
   }
   Some(
-    s[open + 1..close]
-      .split(',')
-      .map(|c| c.trim().trim_matches('"').to_string())
-      .filter(|c| !c.is_empty())
-      .collect(),
+    s[open + 1..close].split(',').map(|c| c.trim().trim_matches('"').to_string()).filter(|c| !c.is_empty()).collect(),
   )
 }
 
@@ -919,9 +1272,8 @@ fn parse_references(s: &str) -> Option<ConstraintRef> {
   let upper = s.to_ascii_uppercase();
   let at = upper.find("REFERENCES")?;
   let rest = s[at + "REFERENCES".len()..].trim_start();
-  let name_end = rest
-    .find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"')
-    .unwrap_or(rest.len());
+  let name_end =
+    rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(rest.len());
   let raw = rest[..name_end].trim_matches('"');
   let (schema, table) = if let Some(dot) = raw.find('.') {
     (raw[..dot].trim_matches('"').to_string(), raw[dot + 1..].trim_matches('"').to_string())
@@ -938,7 +1290,6 @@ fn inline_references(s: &str) -> Option<ConstraintRef> {
   }
   parse_references(s)
 }
-
 
 /// The conventional roles that exist in any fresh Postgres install.
 /// Returned as a Vec so callers can union them into the offline cat.
@@ -986,17 +1337,10 @@ fn scan_extensions(src: &str) -> Vec<Extension> {
 fn scan_types(src: &str) -> Vec<Type> {
   let mut out = Vec::new();
   let upper = src.to_ascii_uppercase();
-  for (prefix, kind) in [
-    ("CREATE TYPE ", TypeKind::Composite),
-    ("CREATE DOMAIN ", TypeKind::Domain),
-  ] {
+  for (prefix, kind) in [("CREATE TYPE ", TypeKind::Composite), ("CREATE DOMAIN ", TypeKind::Domain)] {
     for name in scan_create_named_with_upper(src, &upper, prefix) {
       // Peek a few chars past the name for AS ENUM -> Enum.
-      let resolved_kind = if name_followed_by_as_enum(src, &upper, prefix, &name) {
-        TypeKind::Enum
-      } else {
-        kind
-      };
+      let resolved_kind = if name_followed_by_as_enum(src, &upper, prefix, &name) { TypeKind::Enum } else { kind };
       out.push(Type { schema: "public".into(), name, kind: resolved_kind });
     }
   }
@@ -1006,7 +1350,9 @@ fn scan_types(src: &str) -> Vec<Type> {
 fn name_followed_by_as_enum(src: &str, upper: &str, prefix: &str, name: &str) -> bool {
   let needle = format!("{prefix}{name}");
   let needle_upper = needle.to_ascii_uppercase();
-  let Some(rel) = upper.find(&needle_upper) else { return false; };
+  let Some(rel) = upper.find(&needle_upper) else {
+    return false;
+  };
   let after = rel + needle.len();
   let tail = src[after..].trim_start();
   tail.to_ascii_uppercase().starts_with("AS ENUM")
@@ -1021,7 +1367,7 @@ fn extract_returns(ddl: &str) -> String {
   let after = at + 9;
   let rest = &ddl[after..];
   let stop = rest
-    .find(|c: char| c == '\n')
+    .find('\n')
     .or_else(|| {
       let u = rest.to_ascii_uppercase();
       u.find(" AS ").or_else(|| u.find(" LANGUAGE "))
@@ -1050,7 +1396,9 @@ fn scan_functions(src: &str) -> Vec<Function> {
       let stmt_start = from + rel;
       let after = stmt_start + prefix.len();
       let mut k = after;
-      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1;
+      }
       let name_start = k;
       while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.') {
         k += 1;
@@ -1118,13 +1466,134 @@ fn find_function_end(src: &str, start: usize) -> usize {
     }
     if c == b'\'' {
       i += 1;
-      while i < n && bytes[i] != b'\'' { i += 1; }
+      while i < n && bytes[i] != b'\'' {
+        i += 1;
+      }
       i = (i + 1).min(n);
       continue;
     }
     i += 1;
   }
   n
+}
+
+/// Scan the source for `INSERT INTO <table> [(...)] VALUES (...), (...)`
+/// occurrences and return how many tuples land in each table. Keys are
+/// lowercased table names (bare; schema prefix stripped). Used by
+/// `from_source` to seed an offline `row_estimate` so the SELECT chip
+/// shows a useful count even without a live DB connection.
+fn scan_insert_tuple_counts(src: &str) -> std::collections::HashMap<String, usize> {
+  let mut out: std::collections::HashMap<String, usize> = Default::default();
+  let upper = src.to_ascii_uppercase();
+  let bytes = src.as_bytes();
+  let n = bytes.len();
+  let needle = "INSERT INTO";
+  let mut from = 0usize;
+  while let Some(rel) = upper[from..].find(needle) {
+    let at = from + rel;
+    let prev_ok = at == 0 || !is_word_char(bytes[at - 1]);
+    if !prev_ok {
+      from = at + needle.len();
+      continue;
+    }
+    let mut i = at + needle.len();
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
+    }
+    // Optional `ONLY` keyword.
+    if upper[i..].starts_with("ONLY") && i + 4 < n && (bytes[i + 4] as char).is_whitespace() {
+      i += 4;
+      while i < n && bytes[i].is_ascii_whitespace() {
+        i += 1;
+      }
+    }
+    let id_start = i;
+    while i < n && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_' || bytes[i] == b'.' || bytes[i] == b'"') {
+      i += 1;
+    }
+    if i == id_start {
+      from = at + needle.len();
+      continue;
+    }
+    let raw = &src[id_start..i];
+    let bare = raw.rsplit('.').next().unwrap_or(raw).trim_matches('"').to_ascii_lowercase();
+    // Skip any optional `(col, col)` column list.
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
+    }
+    if i < n && bytes[i] == b'(' {
+      if let Some(close) = match_paren_opt(bytes, i) {
+        i = close + 1;
+      } else {
+        from = i;
+        continue;
+      }
+    }
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
+    }
+    // Look for VALUES; bail if next token is SELECT (INSERT ... SELECT).
+    if !upper[i..].starts_with("VALUES") {
+      from = i;
+      continue;
+    }
+    i += "VALUES".len();
+    // Count the (...) tuples that follow, separated by commas.
+    let mut tuples = 0usize;
+    loop {
+      while i < n && bytes[i].is_ascii_whitespace() {
+        i += 1;
+      }
+      if i >= n || bytes[i] != b'(' {
+        break;
+      }
+      let Some(close) = match_paren_opt(bytes, i) else { break };
+      tuples += 1;
+      i = close + 1;
+      while i < n && bytes[i].is_ascii_whitespace() {
+        i += 1;
+      }
+      if i < n && bytes[i] == b',' {
+        i += 1;
+      } else {
+        break;
+      }
+    }
+    if !bare.is_empty() && tuples > 0 {
+      *out.entry(bare).or_insert(0) += tuples;
+    }
+    from = i.max(at + needle.len());
+  }
+  out
+}
+
+fn match_paren_opt(bytes: &[u8], open: usize) -> Option<usize> {
+  let mut depth = 0i32;
+  let mut i = open;
+  while i < bytes.len() {
+    match bytes[i] {
+      b'(' => depth += 1,
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
+      b'\'' => {
+        i += 1;
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1;
+        }
+      },
+      _ => {},
+    }
+    i += 1;
+  }
+  None
+}
+
+fn is_word_char(b: u8) -> bool {
+  b.is_ascii_alphanumeric() || b == b'_'
 }
 
 fn scan_roles(src: &str) -> Vec<String> {
@@ -1378,12 +1847,7 @@ mod tests {
     let src = "CREATE TABLE event (\n  id int,\n  -- @json-keys: name, age, tier\n  payload jsonb\n);\n";
     let parsed = dsl_parse::parse(src, Dialect::Postgres);
     let cat = from_source(&parsed, src);
-    let tbl = cat
-      .schemas
-      .iter()
-      .flat_map(|s| s.tables.iter())
-      .find(|t| t.name == "event")
-      .expect("event table");
+    let tbl = cat.schemas.iter().flat_map(|s| s.tables.iter()).find(|t| t.name == "event").expect("event table");
     let payload = tbl.columns.iter().find(|c| c.name == "payload").expect("payload col");
     assert_eq!(payload.json_keys.as_deref(), Some(&["name".to_string(), "age".to_string(), "tier".to_string()][..]));
     let id = tbl.columns.iter().find(|c| c.name == "id").expect("id col");

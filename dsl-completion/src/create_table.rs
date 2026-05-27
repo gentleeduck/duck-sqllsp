@@ -107,18 +107,18 @@ fn find_enclosing_body(source: &str, pos: usize) -> Option<Body> {
       i = (i + 1).min(bytes.len());
       continue;
     }
-    if c == '$' {
-      if let Some(end) = source[i + 1..].find('$') {
-        let tag = &source[i + 1..i + 1 + end];
-        if tag.chars().all(|ch| ch.is_alphanumeric() || ch == '_') {
-          let closer = format!("${tag}$");
-          let body_start = i + 1 + end + 1;
-          if let Some(off) = source[body_start..].find(&closer) {
-            i = body_start + off + closer.len();
-            continue;
-          }
-          return None;
+    if c == '$'
+      && let Some(end) = source[i + 1..].find('$')
+    {
+      let tag = &source[i + 1..i + 1 + end];
+      if tag.chars().all(|ch| ch.is_alphanumeric() || ch == '_') {
+        let closer = format!("${tag}$");
+        let body_start = i + 1 + end + 1;
+        if let Some(off) = source[body_start..].find(&closer) {
+          i = body_start + off + closer.len();
+          continue;
         }
+        return None;
       }
     }
     // Look for "CREATE TABLE" as a whole word at i. Byte compare
@@ -128,7 +128,7 @@ fn find_enclosing_body(source: &str, pos: usize) -> Option<Body> {
     if i + CT.len() <= bytes.len()
       && upper_src.as_bytes()[i..i + CT.len()].eq_ignore_ascii_case(CT)
       && (i == 0 || !is_word(bytes[i - 1] as char))
-      && bytes.get(i + CT.len()).map_or(true, |b| !is_word(*b as char))
+      && bytes.get(i + CT.len()).is_none_or(|b| !is_word(*b as char))
     {
       // Walk forward to the next '(' that is not inside a quote.
       let mut j = i + "CREATE TABLE".len();
@@ -209,10 +209,7 @@ fn classify_entry(_source: &str, entry: &Entry<'_>, enclosing: Option<&str>) -> 
   // next slot we expect the user to fill. Strip it so the phase
   // reflects what they are typing, not what they have committed.
   let bytes = raw.as_bytes();
-  let trailing_partial = match bytes.last() {
-    Some(&b) if (b as char).is_alphanumeric() || b == b'_' => true,
-    _ => false,
-  };
+  let trailing_partial = matches!(bytes.last(), Some(&b) if (b as char).is_alphanumeric() || b == b'_');
   let committed: &str = if trailing_partial {
     let mut end = raw.len();
     while end > 0 {
@@ -243,10 +240,10 @@ fn classify_entry(_source: &str, entry: &Entry<'_>, enclosing: Option<&str>) -> 
     };
     let after_upper = after_name.trim_start().to_uppercase();
     if after_upper.starts_with("PRIMARY KEY") || after_upper.starts_with("UNIQUE") {
-      if inside_paren(committed) {
-        if let Some(t) = enclosing.map(str::to_string) {
-          return Phase::CtlExpectFkColumn { table: t };
-        }
+      if inside_paren(committed)
+        && let Some(t) = enclosing.map(str::to_string)
+      {
+        return Phase::CtlExpectFkColumn { table: t };
       }
       return Phase::Unknown;
     }
@@ -261,10 +258,11 @@ fn classify_entry(_source: &str, entry: &Entry<'_>, enclosing: Option<&str>) -> 
       return Phase::Unknown;
     }
     if after_upper.starts_with("FOREIGN KEY") {
-      if !after_upper.contains("REFERENCES") && inside_paren(committed) {
-        if let Some(t) = enclosing.map(str::to_string) {
-          return Phase::CtlExpectFkColumn { table: t };
-        }
+      if !after_upper.contains("REFERENCES")
+        && inside_paren(committed)
+        && let Some(t) = enclosing.map(str::to_string)
+      {
+        return Phase::CtlExpectFkColumn { table: t };
       }
       return fk_phase(&after_upper);
     }
@@ -281,10 +279,10 @@ fn classify_entry(_source: &str, entry: &Entry<'_>, enclosing: Option<&str>) -> 
   // Bare table-level PRIMARY KEY / UNIQUE clause -- once the cursor is
   // inside the parens, suggest columns of the table being created.
   if upper.starts_with("PRIMARY KEY") || upper.starts_with("UNIQUE") {
-    if inside_paren(committed) {
-      if let Some(t) = enclosing.map(str::to_string) {
-        return Phase::CtlExpectFkColumn { table: t };
-      }
+    if inside_paren(committed)
+      && let Some(t) = enclosing.map(str::to_string)
+    {
+      return Phase::CtlExpectFkColumn { table: t };
     }
     return Phase::Unknown;
   }
@@ -297,10 +295,11 @@ fn classify_entry(_source: &str, entry: &Entry<'_>, enclosing: Option<&str>) -> 
   if upper.starts_with("FOREIGN KEY") {
     // Inside the LEFT paren (the local-column list) but before REFERENCES
     // -- suggest columns of this table.
-    if !upper.contains("REFERENCES") && inside_paren(committed) {
-      if let Some(t) = enclosing.map(str::to_string) {
-        return Phase::CtlExpectFkColumn { table: t };
-      }
+    if !upper.contains("REFERENCES")
+      && inside_paren(committed)
+      && let Some(t) = enclosing.map(str::to_string)
+    {
+      return Phase::CtlExpectFkColumn { table: t };
     }
     return fk_phase(&upper);
   }

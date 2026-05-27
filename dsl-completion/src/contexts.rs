@@ -40,7 +40,10 @@ pub fn detect(source: &str, offset: TextSize, cat: &Catalog) -> Option<Vec<Item>
   }
 
   // ---- CREATE TRIGGER ----
-  if upper.contains("CREATE TRIGGER") || upper.contains("CREATE OR REPLACE TRIGGER") || upper.contains("CREATE CONSTRAINT TRIGGER") {
+  if upper.contains("CREATE TRIGGER")
+    || upper.contains("CREATE OR REPLACE TRIGGER")
+    || upper.contains("CREATE CONSTRAINT TRIGGER")
+  {
     if let Some(items) = trigger_event(&upper) {
       return Some(items);
     }
@@ -68,10 +71,11 @@ pub fn detect(source: &str, offset: TextSize, cat: &Catalog) -> Option<Vec<Item>
   }
 
   // ---- ALTER TABLE ALTER COLUMN ... TYPE <type> ----
-  if upper.contains("ALTER TABLE") && upper.contains("ALTER COLUMN") {
-    if let Some(items) = alter_column_type(&upper) {
-      return Some(items);
-    }
+  if upper.contains("ALTER TABLE")
+    && upper.contains("ALTER COLUMN")
+    && let Some(items) = alter_column_type(&upper)
+  {
+    return Some(items);
   }
 
   None
@@ -82,10 +86,14 @@ fn index_using_method(upper: &str) -> Option<Vec<Item>> {
   let using_at = upper.rfind("USING ")?;
   let after = &upper[using_at + 6..];
   // Bail if there's a paren already -- we're past the method.
-  if after.contains('(') { return None }
+  if after.contains('(') {
+    return None;
+  }
   // Bail if there's a space after a non-whitespace token (method already complete).
   let trimmed = after.trim_start();
-  if trimmed.split_whitespace().count() > 1 { return None }
+  if trimmed.split_whitespace().count() > 1 {
+    return None;
+  }
   let mut out = Vec::new();
   for (m, doc) in [
     ("btree", "default index, supports = < > BETWEEN ORDER BY"),
@@ -116,7 +124,7 @@ fn index_opclass(upper: &str, stmt: &str) -> Option<Vec<Item>> {
   let after = &upper[using_at + 6..];
   let method: String = after.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
   let method_lc = method.to_ascii_lowercase();
-  let Some(paren_rel) = after.find('(') else { return None };
+  let paren_rel = after.find('(')?;
   let paren_body = &after[paren_rel + 1..];
   // Find the last comma at depth 0 -- everything after is the current column entry.
   let mut depth = 0i32;
@@ -132,7 +140,9 @@ fn index_opclass(upper: &str, stmt: &str) -> Option<Vec<Item>> {
   }
   let entry = &paren_body[entry_start..];
   let tokens: Vec<&str> = entry.split_whitespace().collect();
-  if tokens.len() < 2 { return None }
+  if tokens.len() < 2 {
+    return None;
+  }
   // After the column token, suggest opclasses appropriate to the method.
   let opclasses: Vec<(&str, &str)> = match method_lc.as_str() {
     "btree" => vec![
@@ -173,12 +183,19 @@ fn index_opclass(upper: &str, stmt: &str) -> Option<Vec<Item>> {
 
 fn trigger_event(upper: &str) -> Option<Vec<Item>> {
   // Match the most recent BEFORE / AFTER / INSTEAD OF in the statement.
-  let kw = ["BEFORE ", "AFTER ", "INSTEAD OF "].into_iter().filter_map(|k| upper.rfind(k).map(|p| (p, k))).max_by_key(|x| x.0)?;
+  let kw = ["BEFORE ", "AFTER ", "INSTEAD OF "]
+    .into_iter()
+    .filter_map(|k| upper.rfind(k).map(|p| (p, k)))
+    .max_by_key(|x| x.0)?;
   let after = &upper[kw.0 + kw.1.len()..];
   // Bail if we already past the event (an OR / ON appears).
-  if after.contains(" ON ") { return None }
+  if after.contains(" ON ") {
+    return None;
+  }
   let toks: Vec<&str> = after.split_whitespace().collect();
-  if toks.len() > 2 { return None }
+  if toks.len() > 2 {
+    return None;
+  }
   let mut out = Vec::new();
   for (ev, doc) in [
     ("INSERT", "row insertion"),
@@ -207,26 +224,38 @@ fn trigger_on_table(upper: &str, cat: &Catalog) -> Option<Vec<Item>> {
   // Bail if we're past the table (FOR / EXECUTE / WHEN keyword present).
   let post_upper = after.to_ascii_uppercase();
   for stop in ["FOR ", "EXECUTE", "WHEN", "REFERENCING"] {
-    if post_upper.contains(stop) { return None }
+    if post_upper.contains(stop) {
+      return None;
+    }
   }
   let toks: Vec<&str> = after.split_whitespace().collect();
-  if toks.len() > 1 { return None }
+  if toks.len() > 1 {
+    return None;
+  }
   let mut out = Vec::new();
   sources::tables(cat, &mut out);
   Some(out)
 }
 
 fn trigger_execute_function(upper: &str, stmt: &str, cat: &Catalog) -> Option<Vec<Item>> {
-  let exec_at = upper.rfind("EXECUTE FUNCTION ").map(|p| p + "EXECUTE FUNCTION ".len())
+  let exec_at = upper
+    .rfind("EXECUTE FUNCTION ")
+    .map(|p| p + "EXECUTE FUNCTION ".len())
     .or_else(|| upper.rfind("EXECUTE PROCEDURE ").map(|p| p + "EXECUTE PROCEDURE ".len()))?;
   let after = &upper[exec_at..];
-  if after.contains('(') { return None }
+  if after.contains('(') {
+    return None;
+  }
   let toks: Vec<&str> = after.split_whitespace().collect();
-  if toks.len() > 1 { return None }
+  if toks.len() > 1 {
+    return None;
+  }
   let mut out = Vec::new();
   // Catalog functions returning `trigger`.
   for f in &cat.functions {
-    if !f.return_type.eq_ignore_ascii_case("trigger") { continue }
+    if !f.return_type.eq_ignore_ascii_case("trigger") {
+      continue;
+    }
     out.push(Item {
       label: f.name.clone(),
       kind: ItemKind::Function,
@@ -245,22 +274,21 @@ fn trigger_execute_function(upper: &str, stmt: &str, cat: &Catalog) -> Option<Ve
     while let Some(rel) = upper_src[from..].find(needle) {
       let at = from + rel + needle.len();
       let after_kw = &stmt[at..];
-      let name_end = after_kw.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '.')).unwrap_or(after_kw.len());
+      let name_end =
+        after_kw.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '.')).unwrap_or(after_kw.len());
       let name = after_kw[..name_end].rsplit('.').next().unwrap_or(&after_kw[..name_end]).to_string();
       let tail_upper = upper_src[at..].to_string();
-      if tail_upper.contains("RETURNS TRIGGER") {
-        if !out.iter().any(|i| i.label == name) {
-          out.push(Item {
-            label: name.clone(),
-            kind: ItemKind::Function,
-            detail: Some("returns trigger (defined in this buffer)".into()),
-            description: Some("source".into()),
-            documentation_md: None,
-            insert_text: format!("{name}()"),
-            is_snippet: false,
-            sort_priority: 1,
-          });
-        }
+      if tail_upper.contains("RETURNS TRIGGER") && !out.iter().any(|i| i.label == name) {
+        out.push(Item {
+          label: name.clone(),
+          kind: ItemKind::Function,
+          detail: Some("returns trigger (defined in this buffer)".into()),
+          description: Some("source".into()),
+          documentation_md: None,
+          insert_text: format!("{name}()"),
+          is_snippet: false,
+          sort_priority: 1,
+        });
       }
       from = at + name_end;
     }
@@ -271,16 +299,24 @@ fn trigger_execute_function(upper: &str, stmt: &str, cat: &Catalog) -> Option<Ve
 fn call_procedure(upper: &str, cat: &Catalog) -> Option<Vec<Item>> {
   // CALL is a top-level keyword introducing a procedure call.
   let trimmed = upper.trim_start();
-  if !trimmed.starts_with("CALL ") { return None }
+  if !trimmed.starts_with("CALL ") {
+    return None;
+  }
   let after = &trimmed[5..];
-  if after.contains('(') { return None }
+  if after.contains('(') {
+    return None;
+  }
   let toks: Vec<&str> = after.split_whitespace().collect();
-  if toks.len() > 1 { return None }
+  if toks.len() > 1 {
+    return None;
+  }
   // Catalog functions with no return type (typical of procedures);
   // also accept anything with `void` return.
   let mut out = Vec::new();
   for f in &cat.functions {
-    if !(f.return_type.is_empty() || f.return_type.eq_ignore_ascii_case("void")) { continue }
+    if !(f.return_type.is_empty() || f.return_type.eq_ignore_ascii_case("void")) {
+      continue;
+    }
     out.push(Item {
       label: f.name.clone(),
       kind: ItemKind::Function,
@@ -299,7 +335,9 @@ fn policy_for_command(upper: &str) -> Option<Vec<Item>> {
   let for_at = upper.rfind(" FOR ")?;
   let after = &upper[for_at + 5..];
   let toks: Vec<&str> = after.split_whitespace().collect();
-  if toks.len() > 1 { return None }
+  if toks.len() > 1 {
+    return None;
+  }
   let mut out = Vec::new();
   for cmd in ["ALL", "SELECT", "INSERT", "UPDATE", "DELETE"] {
     out.push(Item {
@@ -319,9 +357,13 @@ fn policy_for_command(upper: &str) -> Option<Vec<Item>> {
 fn policy_to_role(upper: &str, cat: &Catalog) -> Option<Vec<Item>> {
   let to_at = upper.rfind(" TO ")?;
   let after = &upper[to_at + 4..];
-  if after.contains("USING") || after.contains("WITH CHECK") { return None }
+  if after.contains("USING") || after.contains("WITH CHECK") {
+    return None;
+  }
   let toks: Vec<&str> = after.split_whitespace().collect();
-  if toks.len() > 1 { return None }
+  if toks.len() > 1 {
+    return None;
+  }
   let mut out = Vec::new();
   out.push(Item {
     label: "PUBLIC".into(),
@@ -357,14 +399,38 @@ fn alter_column_type(upper: &str) -> Option<Vec<Item>> {
   } else {
     return None;
   };
-  if after.contains("USING") || after.contains(';') { return None }
+  if after.contains("USING") || after.contains(';') {
+    return None;
+  }
   let toks: Vec<&str> = after.split_whitespace().collect();
-  if toks.len() > 1 { return None }
+  if toks.len() > 1 {
+    return None;
+  }
   let mut out = Vec::new();
   for ty in [
-    "text", "varchar", "char(1)", "integer", "bigint", "smallint", "serial", "bigserial",
-    "numeric", "real", "double precision", "boolean", "uuid", "jsonb", "json",
-    "date", "time", "timestamp", "timestamptz", "interval", "bytea", "inet", "cidr",
+    "text",
+    "varchar",
+    "char(1)",
+    "integer",
+    "bigint",
+    "smallint",
+    "serial",
+    "bigserial",
+    "numeric",
+    "real",
+    "double precision",
+    "boolean",
+    "uuid",
+    "jsonb",
+    "json",
+    "date",
+    "time",
+    "timestamp",
+    "timestamptz",
+    "interval",
+    "bytea",
+    "inet",
+    "cidr",
   ] {
     out.push(Item {
       label: ty.into(),

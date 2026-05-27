@@ -26,6 +26,7 @@ pub struct Item {
   pub sort_priority: u8,
 }
 
+#[allow(dead_code)]
 fn default_sort() -> u8 {
   5
 }

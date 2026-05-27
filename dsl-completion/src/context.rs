@@ -101,9 +101,10 @@ fn in_projection_list(before: &str) -> bool {
       return false;
     }
   }
-  // Need to actually be inside whitespace or after a comma in the list.
-  let last = before.chars().rev().find(|c| !c.is_whitespace());
-  matches!(last, Some(',') | Some('(') | None) || true
+  // Past the SELECT and not yet past FROM: treat as projection list.
+  // (Cursor position inside the list is permissive on purpose -- completion
+  // engine filters further once the partial token is known.)
+  true
 }
 
 /// True when `before` looks like `... ALTER TABLE [IF EXISTS] [ONLY]

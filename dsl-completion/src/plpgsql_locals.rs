@@ -173,10 +173,10 @@ fn parse_decl_body(s: &str) -> Vec<(String, String)> {
       continue;
     };
     // Skip CONSTANT keyword.
-    if let Some(t) = tokens.peek() {
-      if t.eq_ignore_ascii_case("CONSTANT") {
-        tokens.next();
-      }
+    if let Some(t) = tokens.peek()
+      && t.eq_ignore_ascii_case("CONSTANT")
+    {
+      tokens.next();
     }
     let ty: String = tokens.collect::<Vec<_>>().join(" ");
     if !ty.is_empty() {

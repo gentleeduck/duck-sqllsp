@@ -4,7 +4,7 @@
 //! [`dsl_knowledge::render_markdown`] so we have one canonical source of
 //! truth for those bodies.
 
-use dsl_catalog::{Column, Table};
+use dsl_catalog::{Column, Table, display_type};
 
 pub fn table(t: &Table) -> String {
   let mut s = format!("**table** `{}.{}`\n\n", t.schema, t.name);
@@ -15,7 +15,7 @@ pub fn table(t: &Table) -> String {
   s.push_str("| column | type |\n");
   s.push_str("|--------|------|\n");
   for c in &t.columns {
-    s.push_str(&format!("| `{}` | `{}` |\n", c.name, c.data_type));
+    s.push_str(&format!("| `{}` | `{}` |\n", c.name, display_type(&c.data_type)));
   }
   s
 }
@@ -27,6 +27,6 @@ pub fn column(t: &Table, c: &Column) -> String {
     "**column** `{}.{}.{}`\n\n\
          - **type:** `{}`\n\
          - **nullable:** `{}`\n",
-    t.schema, t.name, c.name, c.data_type, c.nullable
+    t.schema, t.name, c.name, display_type(&c.data_type), c.nullable
   )
 }

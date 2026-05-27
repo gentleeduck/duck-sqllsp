@@ -5,8 +5,8 @@
 
 use crate::item::{Item, ItemKind};
 use crate::render;
-use dsl_catalog::{Catalog, Column, Table, TableKind};
-use dsl_knowledge::{self as kb, Entry, Kind};
+use dsl_catalog::{Catalog, Column, Table, TableKind, display_type};
+use dsl_knowledge::{self as kb, Entry};
 use dsl_resolve::Scope;
 
 pub fn keywords(out: &mut Vec<Item>) {
@@ -59,12 +59,12 @@ pub fn db_functions(cat: &Catalog, out: &mut Vec<Item>) {
       .arguments
       .iter()
       .map(|a| match &a.name {
-        Some(n) => format!("{n} {}", a.data_type),
-        None => a.data_type.clone(),
+        Some(n) => format!("{n} {}", display_type(&a.data_type)),
+        None => display_type(&a.data_type).to_string(),
       })
       .collect::<Vec<_>>()
       .join(", ");
-    let signature = format!("{}({}) -> {}", f.name, args, f.return_type);
+    let signature = format!("{}({}) -> {}", f.name, args, display_type(&f.return_type));
     let doc = format!("**DB function** `{}.{}`\n\n```sql\n{}\n```\n", f.schema, f.name, signature);
     let insert_text = if f.arguments.is_empty() { format!("{}()", f.name) } else { format!("{}($0)", f.name) };
     out.push(Item {
@@ -768,6 +768,22 @@ pub fn tables(cat: &Catalog, out: &mut Vec<Item>) {
   }
 }
 
+/// Emit tables/views belonging to the named schema. Used by dot
+/// completion when the user types `<schema>.` and we don't have a
+/// matching alias in scope -- the next valid token in that position is
+/// a relation name in that schema. Returns the number of items emitted.
+pub fn tables_in_schema(cat: &Catalog, schema_name: &str, out: &mut Vec<Item>) -> usize {
+  let start = out.len();
+  for s in &cat.schemas {
+    if s.name.eq_ignore_ascii_case(schema_name) {
+      for t in &s.tables {
+        out.push(table_item(t));
+      }
+    }
+  }
+  out.len() - start
+}
+
 /// In-scope FROM/JOIN aliases declared in the current statement. Lets
 /// the user complete `u` after writing `FROM users AS u, orders o ...`
 /// without having to remember every alias. Each alias item carries the
@@ -814,6 +830,7 @@ pub fn columns(cat: &Catalog, out: &mut Vec<Item>) {
 /// `detail` lists every owner so the user still sees the origins.
 pub fn columns_all(cat: &Catalog, out: &mut Vec<Item>) {
   use std::collections::BTreeMap;
+  #[allow(clippy::type_complexity)]
   let mut by_name: BTreeMap<String, (Vec<(&Table, &Column)>, &Table, &Column)> = BTreeMap::new();
   for t in cat.tables() {
     for c in &t.columns {
@@ -824,9 +841,9 @@ pub fn columns_all(cat: &Catalog, out: &mut Vec<Item>) {
   for (_, (all_owners, first_t, first_c)) in by_name {
     let owners: Vec<String> = all_owners.iter().map(|(t, _)| t.name.clone()).collect();
     let detail = if owners.len() == 1 {
-      format!("{}  {}", first_c.data_type, owners[0])
+      format!("{}  {}", display_type(&first_c.data_type), owners[0])
     } else {
-      format!("{}  in {} tables: {}", first_c.data_type, owners.len(), owners.join(", "))
+      format!("{}  in {} tables: {}", display_type(&first_c.data_type), owners.len(), owners.join(", "))
     };
     let mut item = column_item(first_t, first_c);
     item.detail = Some(detail);
@@ -893,7 +910,7 @@ pub fn column_item(t: &Table, c: &Column) -> Item {
   Item {
     label: c.name.clone(),
     kind: ItemKind::Column,
-    detail: Some(format!("{}  {}", c.data_type, t.name)),
+    detail: Some(format!("{}  {}", display_type(&c.data_type), t.name)),
     description: Some(t.name.clone()),
     documentation_md: Some(render::column(t, c)),
     insert_text: c.name.clone(),
@@ -919,7 +936,7 @@ fn from_entry(label: &str, e: &Entry, kind: ItemKind) -> Item {
     let zero_args = e
       .signature
       .map(|s| {
-        let trimmed = s.trim_end_matches(|c: char| c == ' ' || c == '\t');
+        let trimmed = s.trim_end_matches([' ', '\t']);
         trimmed.contains("()")
           || trimmed.ends_with("() -> ")
           || trimmed.split_once("(").map(|(_, rest)| rest.trim_start().starts_with(')')).unwrap_or(false)

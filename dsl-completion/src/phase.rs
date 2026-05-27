@@ -74,6 +74,10 @@ pub enum Phase {
   AfterUpdateTable,
   UpdateAssignment,
   AfterDelete,
+  /// After `RETURNING` in INSERT / UPDATE / DELETE. Expect columns of
+  /// the target table (the one named in INTO / UPDATE / DELETE FROM),
+  /// plus `*`. Acts like a SELECT projection scoped to that one table.
+  ReturningClause,
 
   // ----- DDL -----
   AfterCreate,
@@ -292,10 +296,16 @@ fn after_owner_to(src: &str, pos: usize) -> bool {
   while i > 0 && bytes[i - 1].is_ascii() && bytes[i - 1].is_ascii_whitespace() {
     i -= 1;
   }
-  if i < 2 || !src.is_char_boundary(i) { return false; }
-  if !src[..i].to_ascii_uppercase().ends_with("TO") { return false; }
+  if i < 2 || !src.is_char_boundary(i) {
+    return false;
+  }
+  if !src[..i].to_ascii_uppercase().ends_with("TO") {
+    return false;
+  }
   let pre_end = i - 2;
-  if !src.is_char_boundary(pre_end) { return false; }
+  if !src.is_char_boundary(pre_end) {
+    return false;
+  }
   let pre = src[..pre_end].trim_end();
   pre.to_ascii_uppercase().ends_with("OWNER")
 }
@@ -310,10 +320,16 @@ fn after_set_role(src: &str, pos: usize) -> bool {
   while i > 0 && bytes[i - 1].is_ascii() && bytes[i - 1].is_ascii_whitespace() {
     i -= 1;
   }
-  if i < 4 || !src.is_char_boundary(i) { return false; }
-  if !src[..i].to_ascii_uppercase().ends_with("ROLE") { return false; }
+  if i < 4 || !src.is_char_boundary(i) {
+    return false;
+  }
+  if !src[..i].to_ascii_uppercase().ends_with("ROLE") {
+    return false;
+  }
   let pre_end = i - 4;
-  if !src.is_char_boundary(pre_end) { return false; }
+  if !src.is_char_boundary(pre_end) {
+    return false;
+  }
   let pre = src[..pre_end].trim_end();
   pre.to_ascii_uppercase().ends_with("SET")
 }
@@ -334,6 +350,239 @@ fn after_double_colon(src: &str, pos: usize) -> bool {
 
 /// Find the byte offset of the last unquoted `;` before `pos`. Returns
 /// 0 when none. This is where the current statement starts.
+/// When the cursor at `pos` sits inside an unclosed parenthesized
+/// subquery body (the body starts with SELECT / INSERT / UPDATE /
+/// DELETE), return the byte offset immediately after the opening
+/// `(`. The innermost unclosed subquery wins so nested cases like
+/// `SELECT * FROM (SELECT * FROM (SELECT |))` route to the deepest
+/// SELECT. Strings and double-quoted identifiers are skipped.
+fn subquery_body_start(src: &str, start: usize, pos: usize) -> Option<usize> {
+  let bytes = src.as_bytes();
+  let upper = src.to_ascii_uppercase();
+  let upper_bytes = upper.as_bytes();
+  let end = pos.min(bytes.len());
+  let mut in_single = false;
+  let mut in_double = false;
+  let mut stack: Vec<usize> = Vec::new(); // bodies (after-paren positions) of SELECT-like subqueries
+  let mut depth: i32 = 0; // running paren depth
+  let mut subq_depths: Vec<i32> = Vec::new(); // matching depth for each stack entry
+  let mut i = start;
+  while i < end {
+    let c = bytes[i] as char;
+    if !in_double && c == '\'' && (i == 0 || bytes[i - 1] != b'\\') {
+      in_single = !in_single;
+      i += 1;
+      continue;
+    }
+    if !in_single && c == '"' {
+      in_double = !in_double;
+      i += 1;
+      continue;
+    }
+    if in_single || in_double {
+      i += 1;
+      continue;
+    }
+    if c == '(' {
+      depth += 1;
+      // Peek for SELECT / INSERT / UPDATE / DELETE after optional ws.
+      let mut k = i + 1;
+      while k < end && bytes[k].is_ascii_whitespace() {
+        k += 1;
+      }
+      let starts_subquery = ["SELECT", "INSERT", "UPDATE", "DELETE", "WITH", "VALUES"]
+        .iter()
+        .any(|kw| k + kw.len() <= upper_bytes.len() && &upper_bytes[k..k + kw.len()] == kw.as_bytes() && (k + kw.len() == upper_bytes.len() || !is_word_cont(upper_bytes[k + kw.len()] as char)));
+      if starts_subquery {
+        stack.push(i + 1);
+        subq_depths.push(depth);
+      }
+    } else if c == ')' {
+      if let Some(&d) = subq_depths.last()
+        && d == depth
+      {
+        stack.pop();
+        subq_depths.pop();
+      }
+      depth -= 1;
+    }
+    i += 1;
+  }
+  stack.last().copied()
+}
+
+/// When the cursor sits inside a `CREATE [OR REPLACE] [TEMP|TEMPORARY]
+/// [RECURSIVE] [MATERIALIZED] VIEW <name> AS <body>` statement,
+/// return the offset just after the ` AS ` so the walker treats the
+/// body as a fresh SELECT/WITH. Returns None when the cursor is
+/// before the AS or the prefix doesn't match.
+fn create_view_body_start(src: &str, start: usize, pos: usize) -> Option<usize> {
+  let end = pos.min(src.len());
+  if start >= end {
+    return None;
+  }
+  let upper = src[start..end].to_ascii_uppercase();
+  // Quick reject -- avoid the expensive scan when there's no CREATE.
+  if !upper.contains("CREATE") || !upper.contains("VIEW") {
+    return None;
+  }
+  let bytes = upper.as_bytes();
+  let n = bytes.len();
+  // Skip leading whitespace.
+  let mut i = 0usize;
+  while i < n && bytes[i].is_ascii_whitespace() {
+    i += 1;
+  }
+  // Must begin with CREATE (word-bounded).
+  if !match_word(bytes, i, b"CREATE") {
+    return None;
+  }
+  i += 6;
+  // Consume optional `OR REPLACE`, `TEMP|TEMPORARY`, `RECURSIVE`,
+  // `MATERIALIZED` modifiers in any plausible order before VIEW.
+  loop {
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
+    }
+    if match_word(bytes, i, b"OR") {
+      i += 2;
+      while i < n && bytes[i].is_ascii_whitespace() {
+        i += 1;
+      }
+      if !match_word(bytes, i, b"REPLACE") {
+        return None;
+      }
+      i += 7;
+      continue;
+    }
+    if match_word(bytes, i, b"TEMP") {
+      i += 4;
+      continue;
+    }
+    if match_word(bytes, i, b"TEMPORARY") {
+      i += 9;
+      continue;
+    }
+    if match_word(bytes, i, b"RECURSIVE") {
+      i += 9;
+      continue;
+    }
+    if match_word(bytes, i, b"MATERIALIZED") {
+      i += 12;
+      continue;
+    }
+    break;
+  }
+  while i < n && bytes[i].is_ascii_whitespace() {
+    i += 1;
+  }
+  // Must reach VIEW.
+  if !match_word(bytes, i, b"VIEW") {
+    return None;
+  }
+  i += 4;
+  while i < n && bytes[i].is_ascii_whitespace() {
+    i += 1;
+  }
+  // Optional IF NOT EXISTS.
+  if match_word(bytes, i, b"IF") {
+    i += 2;
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
+    }
+    if !match_word(bytes, i, b"NOT") {
+      return None;
+    }
+    i += 3;
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
+    }
+    if !match_word(bytes, i, b"EXISTS") {
+      return None;
+    }
+    i += 6;
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
+    }
+  }
+  // View name -- read until whitespace / `(` / end.
+  let name_start = i;
+  while i < n && !bytes[i].is_ascii_whitespace() && bytes[i] != b'(' {
+    i += 1;
+  }
+  if i == name_start {
+    return None;
+  }
+  while i < n && bytes[i].is_ascii_whitespace() {
+    i += 1;
+  }
+  // Optional `(col1, col2, ...)` column-alias list.
+  if i < n && bytes[i] == b'(' {
+    let mut depth = 1i32;
+    i += 1;
+    while i < n && depth > 0 {
+      match bytes[i] {
+        b'(' => depth += 1,
+        b')' => depth -= 1,
+        _ => {},
+      }
+      i += 1;
+    }
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
+    }
+  }
+  // Optional WITH (...) options.
+  if match_word(bytes, i, b"WITH") {
+    let after = i + 4;
+    let mut k = after;
+    while k < n && bytes[k].is_ascii_whitespace() {
+      k += 1;
+    }
+    if k < n && bytes[k] == b'(' {
+      let mut depth = 1i32;
+      i = k + 1;
+      while i < n && depth > 0 {
+        match bytes[i] {
+          b'(' => depth += 1,
+          b')' => depth -= 1,
+          _ => {},
+        }
+        i += 1;
+      }
+      while i < n && bytes[i].is_ascii_whitespace() {
+        i += 1;
+      }
+    }
+  }
+  // Now must see AS.
+  if !match_word(bytes, i, b"AS") {
+    return None;
+  }
+  let after_as = i + 2;
+  if after_as > pos.saturating_sub(start) {
+    return None;
+  }
+  Some(start + after_as)
+}
+
+fn match_word(bytes: &[u8], i: usize, word: &[u8]) -> bool {
+  let n = bytes.len();
+  if i + word.len() > n {
+    return false;
+  }
+  if &bytes[i..i + word.len()] != word {
+    return false;
+  }
+  if i + word.len() < n && is_word_cont(bytes[i + word.len()] as char) {
+    return false;
+  }
+  if i > 0 && is_word_cont(bytes[i - 1] as char) {
+    return false;
+  }
+  true
+}
+
 fn statement_start(src: &str, pos: usize) -> usize {
   let bytes = src.as_bytes();
   let mut in_single = false;
@@ -391,7 +640,21 @@ pub fn detect(src: &str, offset: TextSize) -> Phase {
     return Phase::PlpgsqlBody;
   }
 
-  let start = statement_start(src, pos);
+  let raw_start = statement_start(src, pos);
+  // If the cursor sits inside an unclosed `(SELECT ...` /
+  // `(INSERT ...)` / `(UPDATE ...)` / `(DELETE ...)` -- typical CTE
+  // body, subquery in FROM, or scalar subquery -- pretend the
+  // statement starts at the subquery body. Otherwise the outer
+  // `WITH t AS (` / `SELECT * FROM (` prefix collapses the walker to
+  // Phase::Start and the user sees the whole DDL menu.
+  //
+  // CREATE VIEW / MATERIALIZED VIEW share the problem at top level
+  // (no parens): the body after `AS` is a SELECT but the walker
+  // doesn't recognize the CREATE VIEW prefix. Anchor at the body
+  // start so it sees a fresh SELECT statement.
+  let start = subquery_body_start(src, raw_start, pos)
+    .or_else(|| create_view_body_start(src, raw_start, pos))
+    .unwrap_or(raw_start);
   let toks = tokenise(src, start, pos);
 
   // Strip the trailing partial identifier the user is typing right now
@@ -401,13 +664,47 @@ pub fn detect(src: &str, offset: TextSize) -> Phase {
   // Easier rule: if the cursor sits right after a word char, drop the
   // last Tok::Word; it's the in-progress token.
   let mut effective = toks;
-  if pos > 0 && is_word_cont(src.as_bytes()[pos - 1] as char) {
-    if matches!(effective.last(), Some(Tok::Word(_))) {
-      effective.pop();
-    }
+  if pos > 0 && is_word_cont(src.as_bytes()[pos - 1] as char) && matches!(effective.last(), Some(Tok::Word(_))) {
+    effective.pop();
   }
 
-  walk(&effective)
+  // Skip past a leading WITH ... CTE-list so the walker sees the inner
+  // statement (SELECT/INSERT/UPDATE/DELETE) as if it started fresh.
+  // Tracks paren depth and resumes at the first top-level statement
+  // keyword after the last `)` of the CTE definitions. Without this,
+  // the CTE name (an unknown Word at Start) collapses the walker into
+  // Phase::Unknown and the menu degrades to a 600-item dump.
+  let trimmed = strip_with_prefix(&effective);
+  walk(trimmed)
+}
+
+/// Return the suffix of `toks` after a leading `WITH [RECURSIVE] <cte
+/// list>`. If the first token isn't WITH, returns `toks` unchanged.
+/// If the inner statement keyword hasn't been typed yet (cursor still
+/// inside a CTE body), returns `toks` so the walker keeps the existing
+/// behaviour for that position.
+fn strip_with_prefix<'a, 'b>(toks: &'a [Tok<'b>]) -> &'a [Tok<'b>] {
+  let Some(Tok::Word(w)) = toks.first() else {
+    return toks;
+  };
+  if !w.eq_ignore_ascii_case("WITH") {
+    return toks;
+  }
+  let mut depth = 0i32;
+  for (i, t) in toks.iter().enumerate().skip(1) {
+    match t {
+      Tok::Punct('(') => depth += 1,
+      Tok::Punct(')') => depth -= 1,
+      Tok::Word(w) if depth == 0 => {
+        let up = w.to_ascii_uppercase();
+        if matches!(up.as_str(), "SELECT" | "INSERT" | "UPDATE" | "DELETE") {
+          return &toks[i..];
+        }
+      },
+      _ => {},
+    }
+  }
+  toks
 }
 
 fn upper(s: &str) -> String {
@@ -521,6 +818,7 @@ fn walk(toks: &[Tok<'_>]) -> Phase {
         "ORDER" => AfterOrder,
         "HAVING" => HavingClause,
         "LIMIT" => LimitClause,
+        "RETURNING" => ReturningClause,
         _ => InPredicate,
       },
       (WhereClause, Tok::Punct(';')) => Start,
@@ -532,6 +830,7 @@ fn walk(toks: &[Tok<'_>]) -> Phase {
         "ORDER" => AfterOrder,
         "HAVING" => HavingClause,
         "LIMIT" => LimitClause,
+        "RETURNING" => ReturningClause,
         _ => InPredicate,
       },
       (InPredicate, Tok::Punct(';')) => Start,
@@ -582,6 +881,7 @@ fn walk(toks: &[Tok<'_>]) -> Phase {
       (InsertColumnList, Tok::Punct(';')) => Start,
       (InsertColumnList, _) => InsertColumnList,
       (InsertExpectValues, _) => InsertValuesList,
+      (InsertValuesList, Tok::Word(w)) if upper(w) == "RETURNING" => ReturningClause,
       (InsertValuesList, Tok::Punct(';')) => Start,
       (InsertValuesList, _) => InsertValuesList,
 
@@ -591,6 +891,7 @@ fn walk(toks: &[Tok<'_>]) -> Phase {
       (AfterUpdateTable, _) => AfterUpdateTable,
       (UpdateAssignment, Tok::Word(w)) => match upper(w).as_str() {
         "WHERE" => WhereClause,
+        "RETURNING" => ReturningClause,
         _ => UpdateAssignment,
       },
       (UpdateAssignment, Tok::Punct(';')) => Start,
@@ -598,6 +899,10 @@ fn walk(toks: &[Tok<'_>]) -> Phase {
 
       (AfterDelete, Tok::Word(w)) if upper(w) == "FROM" => ExpectTable,
       (AfterDelete, _) => AfterDelete,
+
+      // RETURNING accepts a comma-separated column list followed by `;`.
+      (ReturningClause, Tok::Punct(';')) => Start,
+      (ReturningClause, _) => ReturningClause,
 
       // ----- DDL -----
       (AfterAlter, Tok::Word(w)) if upper(w) == "TABLE" => AfterAlterTableExpectName,
@@ -662,14 +967,14 @@ fn inside_dollar_quoted(src: &str, pos: usize) -> bool {
       i += 1;
       continue;
     }
-    if bytes[i] == b'$' {
-      if let Some(end) = src[i + 1..].find('$') {
-        let tag = &src[i + 1..i + 1 + end];
-        if tag.chars().all(|c| c.is_alphanumeric() || c == '_') {
-          current_tag = Some(tag.to_string());
-          i += 1 + end + 1;
-          continue;
-        }
+    if bytes[i] == b'$'
+      && let Some(end) = src[i + 1..].find('$')
+    {
+      let tag = &src[i + 1..i + 1 + end];
+      if tag.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        current_tag = Some(tag.to_string());
+        i += 1 + end + 1;
+        continue;
       }
     }
     i += 1;

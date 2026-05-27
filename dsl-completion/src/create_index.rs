@@ -4,9 +4,9 @@
 //! ON <table> (<expr>, ...)` and returns the right [`Phase`] depending on
 //! cursor position:
 //!
-//!   - right after `ON `      -> `ExpectTable` (catalog table list)
-//!   - inside the paren body  -> `CtlExpectFkColumn { table }`
-//!                                so only columns of THIS table appear
+//! - right after `ON ` -> `ExpectTable` (catalog table list)
+//! - inside the paren body -> `CtlExpectFkColumn { table }` so only columns
+//!   of THIS table appear
 
 use crate::phase::Phase;
 use text_size::TextSize;
@@ -56,12 +56,25 @@ pub fn detect(source: &str, offset: TextSize) -> Option<Phase> {
   }
   let after_table = table_start + table.len();
 
-  // Past the table -- are we inside the paren body?
-  let after = rest[after_table..].trim_start();
+  // Past the table -- skip an optional `USING <method>` clause so
+  // `CREATE INDEX ix ON users USING btree (` still routes the cursor
+  // inside the paren body to the table-column slot.
+  let mut after = rest[after_table..].trim_start();
+  let after_upper = after.to_ascii_uppercase();
+  if after_upper.starts_with("USING") {
+    let bytes = after.as_bytes();
+    let n = bytes.len();
+    let kw_ok = n == 5 || !(bytes[5].is_ascii_alphanumeric() || bytes[5] == b'_');
+    if kw_ok {
+      let rest_after_using = after[5..].trim_start();
+      // Consume the method name (single word identifier).
+      let method_len: usize =
+        rest_after_using.chars().take_while(|c| c.is_alphanumeric() || *c == '_').map(|c| c.len_utf8()).sum();
+      after = rest_after_using[method_len..].trim_start();
+    }
+  }
   if !after.starts_with('(') {
     // Still typing the table name -> tables.
-    // (If the user finished typing and a `(` is expected next, the
-    // generic keyword set kicks in -- nothing useful to suggest.)
     if rest[table_start..after_table].len() == rest[table_start..].trim_end().len() {
       return Some(Phase::ExpectTable);
     }
