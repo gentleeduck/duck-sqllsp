@@ -64,6 +64,16 @@ export function activate(context: ExtensionContext) {
     commands.registerCommand("duckSqllsp.testConnection", safe("testConnection", testConnection)),
     commands.registerCommand("duckSqllsp.refreshSchema", () => schemaProvider?.refresh()),
     commands.registerCommand("duckSqllsp.insertColumnAtCursor", safe("insertColumnAtCursor", insertColumnAtCursor)),
+    // The LSP's CodeLens handler emits these command IDs (note: dotted
+    // form `duck-sqllsp.*`, not `duckSqllsp.*`, matching the server). The
+    // extension implements them client-side so clicking `Run` / `EXPLAIN`
+    // / `+ LIMIT 100` above a statement actually does something instead
+    // of popping "command not found".
+    commands.registerCommand("duck-sqllsp.runQuery", safe("runQuery", (sql: string) => runQuery(sql, "run"))),
+    commands.registerCommand("duck-sqllsp.explainQuery", safe("explainQuery", (sql: string) => runQuery(sql, "explain"))),
+    commands.registerCommand("duck-sqllsp.explainAnalyzeQuery", safe("explainAnalyzeQuery", (sql: string) => runQuery(sql, "explain-analyze"))),
+    commands.registerCommand("duck-sqllsp.addLimit", safe("addLimit", addLimitToQuery)),
+    commands.registerCommand("duck-sqllsp.noop", () => {}),
   );
   outputChannel.appendLine("[ext] commands registered");
 
@@ -419,6 +429,104 @@ async function insertColumnAtCursor(name: string): Promise<void> {
       eb.replace(sel, name);
     }
   });
+}
+
+/// `Run` / `EXPLAIN` / `EXPLAIN ANALYZE` CodeLens handler. The LSP itself
+/// doesn't execute SQL, so we route the query to a terminal running the
+/// active connection's CLI client (psql / mysql / sqlite3). Falls back to
+/// copying the SQL to the clipboard when no active connection or no
+/// suitable CLI is configured.
+type RunMode = "run" | "explain" | "explain-analyze";
+async function runQuery(sql: string, mode: RunMode): Promise<void> {
+  if (!sql || !sql.trim()) {
+    window.showWarningMessage("duck-sqllsp: empty query");
+    return;
+  }
+  const stmt = decorateForMode(sql, mode);
+  const cfg = loadConfig();
+  const active = cfg.connections.find((c) => c.name === cfg.active) ?? undefined;
+  if (!active) {
+    await vscode.env.clipboard.writeText(stmt);
+    window.showInformationMessage(
+      "duck-sqllsp: no active connection -- statement copied to clipboard.",
+    );
+    return;
+  }
+  const cli = cliFor(active.url);
+  if (!cli) {
+    await vscode.env.clipboard.writeText(stmt);
+    window.showInformationMessage(
+      `duck-sqllsp: no CLI mapping for \`${active.url}\` -- statement copied to clipboard.`,
+    );
+    return;
+  }
+  const term = window.terminals.find((t) => t.name === "duck-sqllsp") ?? window.createTerminal("duck-sqllsp");
+  term.show(true);
+  const escaped = stmt.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  term.sendText(`${cli.binary} ${cli.urlArg(active.url)} -c "${escaped}"`, true);
+}
+
+function decorateForMode(sql: string, mode: RunMode): string {
+  const trimmed = sql.trim().replace(/;\s*$/, "");
+  switch (mode) {
+    case "run":
+      return trimmed + ";";
+    case "explain":
+      return `EXPLAIN ${trimmed};`;
+    case "explain-analyze":
+      return `EXPLAIN ANALYZE ${trimmed};`;
+  }
+}
+
+function cliFor(url: string): { binary: string; urlArg: (u: string) => string } | undefined {
+  if (/^postgres(?:ql)?:/i.test(url)) {
+    return { binary: "psql", urlArg: (u) => JSON.stringify(u) };
+  }
+  if (/^mysql:/i.test(url) || /^mariadb:/i.test(url)) {
+    return { binary: "mysql", urlArg: (u) => `--defaults-extra-file=<(echo "[client]") ${JSON.stringify(u)}` };
+  }
+  if (/^sqlite:/i.test(url)) {
+    const path = url.replace(/^sqlite:(?:\/+)?/i, "");
+    return { binary: "sqlite3", urlArg: (_) => JSON.stringify(path) };
+  }
+  return undefined;
+}
+
+/// `+ LIMIT 100` CodeLens handler. The LSP doesn't tell us where in the
+/// document the statement lives -- the lens only forwards the SQL text
+/// and the limit. Search the active buffer for that exact text, append
+/// `LIMIT <n>` before the trailing semicolon (or at end-of-statement if
+/// no semicolon), and replace in place. Falls back to a snippet at the
+/// cursor when the text isn't found.
+async function addLimitToQuery(sql: string, n: number): Promise<void> {
+  const ed = window.activeTextEditor;
+  if (!ed) {
+    window.showWarningMessage("duck-sqllsp: open the SQL file first.");
+    return;
+  }
+  const doc = ed.document;
+  const haystack = doc.getText();
+  const idx = haystack.indexOf(sql);
+  const limited = appendLimit(sql, n);
+  if (idx < 0) {
+    // Fallback: insert at cursor.
+    await ed.edit((eb) => {
+      for (const sel of ed.selections) {
+        eb.insert(sel.active, `LIMIT ${n}`);
+      }
+    });
+    return;
+  }
+  const start = doc.positionAt(idx);
+  const end = doc.positionAt(idx + sql.length);
+  await ed.edit((eb) => {
+    eb.replace(new vscode.Range(start, end), limited);
+  });
+}
+
+function appendLimit(sql: string, n: number): string {
+  const trimmed = sql.replace(/\s*;\s*$/, "");
+  return `${trimmed}\nLIMIT ${n};`;
 }
 
 async function restartServer(): Promise<void> {

@@ -45,6 +45,11 @@
     "onCommand:duckSqllsp.testConnection",
     "onCommand:duckSqllsp.refreshSchema",
     "onCommand:duckSqllsp.insertColumnAtCursor",
+    "onCommand:duck-sqllsp.runQuery",
+    "onCommand:duck-sqllsp.explainQuery",
+    "onCommand:duck-sqllsp.explainAnalyzeQuery",
+    "onCommand:duck-sqllsp.addLimit",
+    "onCommand:duck-sqllsp.noop",
     "onView:duckSqllsp.schema"
   ],
   "contributes": {
@@ -106,6 +111,31 @@
       {
         "command": "duckSqllsp.insertColumnAtCursor",
         "title": "Insert column at cursor",
+        "category": "duck-sqllsp"
+      },
+      {
+        "command": "duck-sqllsp.runQuery",
+        "title": "Run Query",
+        "category": "duck-sqllsp"
+      },
+      {
+        "command": "duck-sqllsp.explainQuery",
+        "title": "EXPLAIN Query",
+        "category": "duck-sqllsp"
+      },
+      {
+        "command": "duck-sqllsp.explainAnalyzeQuery",
+        "title": "EXPLAIN ANALYZE Query",
+        "category": "duck-sqllsp"
+      },
+      {
+        "command": "duck-sqllsp.addLimit",
+        "title": "Append LIMIT to query",
+        "category": "duck-sqllsp"
+      },
+      {
+        "command": "duck-sqllsp.noop",
+        "title": "(no-op)",
         "category": "duck-sqllsp"
       }
     ],
