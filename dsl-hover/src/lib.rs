@@ -21,17 +21,12 @@ use dsl_catalog::Catalog;
 use text_size::TextSize;
 
 /// How keywords are cased in synthesized DDL fragments shown in hover.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum KeywordCase {
+  #[default]
   Upper,
   Lower,
   Preserve,
-}
-
-impl Default for KeywordCase {
-  fn default() -> Self {
-    KeywordCase::Upper
-  }
 }
 
 impl KeywordCase {
@@ -47,7 +42,7 @@ impl KeywordCase {
 // Thread-local current keyword case so the render fns don't need a new
 // parameter on every call site. Set by `hover_with`. Default Upper.
 thread_local! {
-    static KW_CASE: std::cell::Cell<KeywordCase> = std::cell::Cell::new(KeywordCase::Upper);
+    static KW_CASE: std::cell::Cell<KeywordCase> = const { std::cell::Cell::new(KeywordCase::Upper) };
 }
 
 pub fn current_keyword_case() -> KeywordCase {
@@ -71,6 +66,14 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
   // the inferred destination column type when we can resolve one
   // (INSERT VALUES / UPDATE SET / WHERE col = ...).
   let pos: usize = u32::from(offset) as usize;
+  // Double-quoted identifier (`"User Id"`) -- a case-preserved name,
+  // never a keyword. Suppress hover entirely so the lookup pipeline
+  // doesn't mis-resolve the inner text to a SQL keyword (e.g. cursor
+  // inside `"User Id"` mustn't fire the USER keyword card). A future
+  // iteration can try a column / table lookup using the unquoted name.
+  if cursor_inside_double_quoted_ident(source, pos) {
+    return None;
+  }
   if inside_string_or_comment(source, pos) {
     // Specific-card paths must run BEFORE the generic string-literal
     // fallback. A cursor inside `'user_id_seq'` of `nextval(...)` wants
@@ -98,7 +101,7 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
     return Some(md);
   }
   // Sequence reference inside `nextval('seq_name')` / `currval(...)`
-  // / `setval(...)` — when the cursor sits on the literal sequence
+  // / `setval(...)` -- when the cursor sits on the literal sequence
   // name, return a card describing it.
   if let Some(md) = sequence_ref_at(source, offset) {
     return Some(md);
@@ -106,13 +109,25 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
   // Cursor on an argument literal inside `fn(arg, arg)`. Surface
   // the function's signature with the current parameter highlighted
   // so the user knows "I'm filling slot 2 of substring(text, int, int)".
-  if let Some(md) = function_arg_at(source, offset) {
+  // Gate: only fire when the cursor is NOT sitting on an identifier-
+  // shaped byte. Identifier hover (column / alias / table) is handled
+  // downstream and must win for cases like `count(u.id)` -- otherwise
+  // the function signature swallows the column the user pointed at.
+  if !cursor_on_word_byte(source, pos)
+    && let Some(md) = function_arg_at(source, offset)
+  {
     return Some(md);
   }
 
   // Cursor on the JSON path operators (-> / ->> / #> / #>>). Surface
   // a short card naming the operator's return type.
   if let Some(md) = jsonb_operator_hover(source, pos) {
+    return Some(md);
+  }
+
+  // Cursor on a comparison / string / range operator (=, <>, !=,
+  // <, >, <=, >=, ||, @>, <@, ?, ?|, ?&). Surface a brief explanation.
+  if let Some(md) = comparison_operator_hover(source, pos) {
     return Some(md);
   }
 
@@ -148,30 +163,30 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
 
   if let Some(tok) = token::token_at(source, offset) {
     // Dotted token `a.b` -- narrow to the side under the cursor.
-    // Cursor on the alias side ⇒ table card. Cursor on the column
-    // side ⇒ single-column card resolved through the alias.
-    if tok.contains('.') {
-      if let Some(part) = dotted_part_under_cursor(source, offset, &tok) {
-        let last_seg = tok.rsplit('.').next().unwrap_or("");
-        let on_right = part == last_seg;
-        if on_right {
-          if let Some(md) = scope_column_lookup(source, offset, &tok, catalog) {
-            return Some(md);
-          }
-          if let Some(md) = catalog_lookup(&part, catalog) {
-            return Some(md);
-          }
-        } else {
-          if let Some(md) = alias_lookup(source, offset, &part, catalog) {
-            return Some(md);
-          }
-          if let Some(md) = catalog_lookup(&part, catalog) {
-            return Some(md);
-          }
+    // Cursor on the alias side => table card. Cursor on the column
+    // side => single-column card resolved through the alias.
+    if tok.contains('.')
+      && let Some(part) = dotted_part_under_cursor(source, offset, &tok)
+    {
+      let last_seg = tok.rsplit('.').next().unwrap_or("");
+      let on_right = part == last_seg;
+      if on_right {
+        if let Some(md) = scope_column_lookup(source, offset, &tok, catalog) {
+          return Some(md);
         }
-        if let Some(entry) = dsl_knowledge::lookup(&part) {
-          return Some(dsl_knowledge::render_markdown(entry));
+        if let Some(md) = catalog_lookup(&part, catalog) {
+          return Some(md);
         }
+      } else {
+        if let Some(md) = alias_lookup(source, offset, &part, catalog) {
+          return Some(md);
+        }
+        if let Some(md) = catalog_lookup(&part, catalog) {
+          return Some(md);
+        }
+      }
+      if let Some(entry) = dsl_knowledge::lookup(&part) {
+        return Some(dsl_knowledge::render_markdown(entry));
       }
     }
     // NEW / OLD trigger row aliases. Inside a CREATE TRIGGER body
@@ -249,7 +264,59 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
     // card fallback so `password` in `(name, email, password)`
     // doesn't pop the PASSWORD reserved-word reference.
     if in_field_list_context(source, u32::from(offset) as usize) {
-      return None;
+      // Grouping / window / sub-query operators are genuine SQL
+      // keywords (not column names) and are useful to hover even
+      // when they appear inside a GROUP BY / ORDER BY / RETURNING /
+      // SET clause that otherwise suppresses keyword cards.
+      //
+      // Types (`int`, `text`, `varchar`, `jsonb`, `timestamptz`, ...)
+      // appear in the type position of a CREATE TABLE column decl
+      // and should also surface their docs -- they are NOT column
+      // references. Check the knowledge entry's kind: TYPE entries
+      // fall through to the lookup below; KEYWORD entries stay
+      // suppressed so `password` in `(name, email, password)`
+      // doesn't pop the PASSWORD reserved-word card.
+      let utok = tok.to_ascii_uppercase();
+      let is_grouping_op = matches!(utok.as_str(), "ROLLUP" | "CUBE" | "LATERAL" | "OVER");
+      let is_type = dsl_knowledge::lookup(&tok).is_some_and(|e| e.kind == dsl_knowledge::Kind::Type);
+      // Column-definition / table-constraint keywords inside a CREATE TABLE
+      // body are real SQL keywords, not column-name uses, so they should
+      // surface their docs the same as outside the paren. Cursor inside
+      // `id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY` previously got
+      // suppressed because the paren-context check assumed every word was
+      // an identifier.
+      let is_col_decl_kw = matches!(
+        utok.as_str(),
+        "PRIMARY"
+          | "KEY"
+          | "UNIQUE"
+          | "REFERENCES"
+          | "CHECK"
+          | "NOT"
+          | "NULL"
+          | "DEFAULT"
+          | "GENERATED"
+          | "ALWAYS"
+          | "BY"
+          | "AS"
+          | "STORED"
+          | "IDENTITY"
+          | "CONSTRAINT"
+          | "COLLATE"
+          | "DEFERRABLE"
+          | "DEFERRED"
+          | "INITIALLY"
+          | "MATCH"
+          | "ON"
+          | "DELETE"
+          | "UPDATE"
+          | "CASCADE"
+          | "RESTRICT"
+          | "SET"
+      );
+      if !is_grouping_op && !is_type && !is_col_decl_kw {
+        return None;
+      }
     }
     if let Some(entry) = dsl_knowledge::lookup(&tok) {
       return Some(dsl_knowledge::render_markdown(entry));
@@ -281,9 +348,16 @@ fn in_field_list_context(src: &str, pos: usize) -> bool {
   let mut depth = 0i32;
   while i > 0 {
     let b = bytes[i - 1];
-    if !b.is_ascii() { i -= 1; continue; }
+    if !b.is_ascii() {
+      i -= 1;
+      continue;
+    }
     let c = b as char;
-    if c == ')' { depth += 1; i -= 1; continue; }
+    if c == ')' {
+      depth += 1;
+      i -= 1;
+      continue;
+    }
     if c == '(' {
       if depth == 0 {
         // Unbalanced `(` -- check what precedes the paren.
@@ -293,7 +367,9 @@ fn in_field_list_context(src: &str, pos: usize) -> bool {
       i -= 1;
       continue;
     }
-    if c == ';' { return false; }
+    if c == ';' {
+      return false;
+    }
     // Clause-introducer keywords without needing a paren.
     if depth == 0 {
       for kw in ["RETURNING", "GROUP BY", "ORDER BY"] {
@@ -302,13 +378,15 @@ fn in_field_list_context(src: &str, pos: usize) -> bool {
           let slice = &src[i - len..i];
           if slice.to_ascii_uppercase() == kw {
             let prev_ok = i == len || !is_word_ch(bytes[i - len - 1]);
-            if prev_ok { return true; }
+            if prev_ok {
+              return true;
+            }
           }
         }
       }
       // UPDATE ... SET <col> = ... : when cursor sits on a column
       // name on the LHS of a SET assignment.
-      if i >= 4 && src[i - 4..i].to_ascii_uppercase() == " SET" {
+      if i >= 4 && src[i - 4..i].eq_ignore_ascii_case(" SET") {
         return true;
       }
     }
@@ -317,7 +395,9 @@ fn in_field_list_context(src: &str, pos: usize) -> bool {
   false
 }
 
-fn is_word_ch(b: u8) -> bool { b.is_ascii_alphanumeric() || b == b'_' }
+fn is_word_ch(b: u8) -> bool {
+  b.is_ascii_alphanumeric() || b == b'_'
+}
 
 fn preceded_by_field_list_intro(src: &str, paren_pos: usize) -> bool {
   // Trim whitespace before `(`.
@@ -327,9 +407,11 @@ fn preceded_by_field_list_intro(src: &str, paren_pos: usize) -> bool {
     k -= 1;
   }
   // Pull preceding word (could be the table name in CREATE TABLE t (...)
-  // or the keyword we care about).
+  // or the keyword we care about). Accept `.` as part of the word so that
+  // schema-qualified names (`public.users`) are consumed as one token and
+  // the head-trim lookup sees `CREATE TABLE` ahead of the paren.
   let word_end = k;
-  while k > 0 && bytes[k - 1].is_ascii() && is_word_ch(bytes[k - 1]) {
+  while k > 0 && bytes[k - 1].is_ascii() && (is_word_ch(bytes[k - 1]) || bytes[k - 1] == b'.') {
     k -= 1;
   }
   let last_word = &src[k..word_end];
@@ -339,11 +421,19 @@ fn preceded_by_field_list_intro(src: &str, paren_pos: usize) -> bool {
   let head_upper = src[..k].to_ascii_uppercase();
   let head_trimmed = head_upper.trim_end();
   for kw in [
-    "INSERT INTO", "CREATE TABLE", "CREATE TABLE IF NOT EXISTS",
-    "CREATE TEMP TABLE", "CREATE TEMPORARY TABLE",
-    "CREATE INDEX", "CREATE UNIQUE INDEX",
-    "CREATE INDEX IF NOT EXISTS", "CREATE UNIQUE INDEX IF NOT EXISTS",
-    "PRIMARY KEY", "FOREIGN KEY", "UNIQUE", "REFERENCES",
+    "INSERT INTO",
+    "CREATE TABLE",
+    "CREATE TABLE IF NOT EXISTS",
+    "CREATE TEMP TABLE",
+    "CREATE TEMPORARY TABLE",
+    "CREATE INDEX",
+    "CREATE UNIQUE INDEX",
+    "CREATE INDEX IF NOT EXISTS",
+    "CREATE UNIQUE INDEX IF NOT EXISTS",
+    "PRIMARY KEY",
+    "FOREIGN KEY",
+    "UNIQUE",
+    "REFERENCES",
     "USING",
   ] {
     if head_trimmed.ends_with(kw) {
@@ -389,10 +479,10 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
     if let Some(t) = catalog.find_table(Some(left), right) {
       return Some(render::table_with_catalog(t, catalog));
     }
-    if let Some(t) = catalog.find_table(None, left) {
-      if let Some(c) = t.columns.iter().find(|c| c.name == right) {
-        return Some(render::column(t, c));
-      }
+    if let Some(t) = catalog.find_table(None, left)
+      && let Some(c) = t.columns.iter().find(|c| c.name == right)
+    {
+      return Some(render::column(t, c));
     }
   }
   if let Some(t) = catalog.find_table(None, token) {
@@ -421,14 +511,14 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
     );
     // Append the handler function's source if it's in the catalog.
     let fn_name = tr.function.rsplit('.').next().unwrap_or(&tr.function);
-    if let Some(f) = catalog.functions.iter().find(|f| f.name.eq_ignore_ascii_case(fn_name)) {
-      if let Some(body) = f.comment.as_ref() {
-        let trimmed = body.trim();
-        if trimmed.to_ascii_uppercase().starts_with("CREATE") {
-          s.push_str("\n**Handler function**\n\n```sql\n");
-          s.push_str(trimmed);
-          s.push_str("\n```\n");
-        }
+    if let Some(f) = catalog.functions.iter().find(|f| f.name.eq_ignore_ascii_case(fn_name))
+      && let Some(body) = f.comment.as_ref()
+    {
+      let trimmed = body.trim();
+      if trimmed.to_ascii_uppercase().starts_with("CREATE") {
+        s.push_str("\n**Handler function**\n\n```sql\n");
+        s.push_str(trimmed);
+        s.push_str("\n```\n");
       }
     }
     return Some(s);
@@ -455,10 +545,7 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
         "\n**Best for**\n\n- `WHERE {lead} = ...`\n- `WHERE {lead} BETWEEN ... AND ...`\n- `ORDER BY {lead}` (no extra sort)\n",
       ));
       if i.columns.len() > 1 {
-        s.push_str(&format!(
-          "- Multi-column equality starting from `{lead}` ({})\n",
-          i.columns.join(", ")
-        ));
+        s.push_str(&format!("- Multi-column equality starting from `{lead}` ({})\n", i.columns.join(", ")));
       }
       if i.unique {
         s.push_str(&format!("- `SELECT ... WHERE {lead} = ...` -> at most one row\n"));
@@ -482,12 +569,7 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
       c.columns.join(", "),
     );
     if let Some(r) = &c.references {
-      s.push_str(&format!(
-        "- **references**: `{}.{}` ({})\n",
-        r.schema,
-        r.table,
-        r.columns.join(", "),
-      ));
+      s.push_str(&format!("- **references**: `{}.{}` ({})\n", r.schema, r.table, r.columns.join(", "),));
     }
     if let Some(def) = &c.definition {
       s.push_str(&format!("\n```sql\n{def}\n```\n"));
@@ -516,18 +598,14 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
   None
 }
 
-/// Hover card for a role name. Active only when the cursor is in a
-/// role-name slot (OWNER TO, GRANT ... TO, REVOKE ... FROM, SET ROLE,
-/// CREATE POLICY ... TO) -- elsewhere a token that happens to share a
-/// name with a role shouldn't be hijacked. Surfaces:
-///   * Catalog membership status (known / unknown / built-in).
-///   * Source: live catalog vs convention whitelist.
 /// Cursor on the NULL keyword. Returns a small card explaining
 /// three-valued logic + the destination column's nullability when
 /// inferrable from INSERT VALUES / UPDATE SET / WHERE.
 fn null_keyword_hover(source: &str, pos: usize, catalog: &Catalog) -> Option<String> {
   let bytes = source.as_bytes();
-  if pos >= bytes.len() { return None; }
+  if pos >= bytes.len() {
+    return None;
+  }
   // Read the word under the cursor.
   let mut s = pos;
   while s > 0 && (bytes[s - 1].is_ascii_alphanumeric() || bytes[s - 1] == b'_') {
@@ -537,27 +615,27 @@ fn null_keyword_hover(source: &str, pos: usize, catalog: &Catalog) -> Option<Str
   while e < bytes.len() && (bytes[e].is_ascii_alphanumeric() || bytes[e] == b'_') {
     e += 1;
   }
-  if s == e { return None; }
-  if !source[s..e].eq_ignore_ascii_case("NULL") { return None; }
-  let mut card =
-    "# `NULL`\n\n_unknown / absent value_\n\nSQL uses three-valued logic. \
+  if s == e {
+    return None;
+  }
+  if !source[s..e].eq_ignore_ascii_case("NULL") {
+    return None;
+  }
+  let mut card = "# `NULL`\n\n_unknown / absent value_\n\nSQL uses three-valued logic. \
      Any expression involving `NULL` (except `IS NULL` / `IS NOT NULL` / \
      `IS [NOT] DISTINCT FROM`) returns `NULL`, not true/false. Use \
      `COALESCE(x, default)` or `x IS NULL` for safe comparisons.\n"
-      .to_string();
+    .to_string();
   if let Some((schema, table, col, ty)) = infer_assigned_column(source, s.saturating_sub(1), catalog) {
-    card.push_str(&format!(
-      "\n- **assigned to:** `{schema}.{table}.{col}`\n- **column type:** `{ty}`\n",
-    ));
+    card.push_str(&format!("\n- **assigned to:** `{schema}.{table}.{col}`\n- **column type:** `{ty}`\n",));
     // Find nullability flag in catalog.
-    if let Some(t) = catalog.find_table(Some(&schema), &table) {
-      if let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(&col)) {
-        if !c.nullable {
-          card.push_str(
+    if let Some(t) = catalog.find_table(Some(&schema), &table)
+      && let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(&col))
+      && !c.nullable
+    {
+      card.push_str(
             "\n_Warning:_ destination column is **NOT NULL** -- PG will reject this INSERT with `null value in column \"...\" violates not-null constraint`.\n",
           );
-        }
-      }
     }
   }
   Some(card)
@@ -567,11 +645,76 @@ fn null_keyword_hover(source: &str, pos: usize, catalog: &Catalog) -> Option<Str
 /// Each returns a different type so users get caught out by mixing
 /// them (especially -> vs ->>). Fires when the cursor sits on any
 /// byte of the operator.
+/// Hover for common comparison / string / range operators that aren't
+/// covered by the JSON path or `::` cast paths. Returns a brief
+/// markdown card explaining the operator's meaning.
+fn comparison_operator_hover(source: &str, pos: usize) -> Option<String> {
+  let bytes = source.as_bytes();
+  if pos >= bytes.len() {
+    return None;
+  }
+  // Find the maximal operator span (consecutive ASCII-punctuation chars
+  // commonly used in PG operators) containing `pos`.
+  let is_op_byte = |b: u8| matches!(b, b'=' | b'<' | b'>' | b'!' | b'|' | b'@' | b'?' | b'&' | b'~' | b'^');
+  if !is_op_byte(bytes[pos]) {
+    return None;
+  }
+  let mut s = pos;
+  while s > 0 && is_op_byte(bytes[s - 1]) {
+    s -= 1;
+  }
+  let mut e = pos;
+  while e < bytes.len() && is_op_byte(bytes[e]) {
+    e += 1;
+  }
+  let op = &source[s..e];
+  // Reject operators handled elsewhere (json-path `->` / `->>` / `#>` /
+  // `#>>`, cast `::`).
+  if op.contains('-') || op.contains('#') || op.contains(':') {
+    return None;
+  }
+  let card = match op {
+    "=" => "# `=`\n\n_Equality comparison_\n\nReturns `true` when both operands are equal, \
+            `false` when not, and `NULL` if either operand is `NULL` (three-valued logic). \
+            Use `IS NOT DISTINCT FROM` to treat `NULL = NULL` as true.\n",
+    "<>" | "!=" => {
+      "# `<>` (also `!=`)\n\n_Inequality comparison_\n\nReturns `true` when operands differ. \
+            Like `=`, returns `NULL` when either side is `NULL`. Use `IS DISTINCT FROM` for \
+            NULL-aware inequality.\n"
+    },
+    "<" => "# `<`\n\n_Less-than comparison_\n\nStandard ordering on the operand type. \
+            Uses lexicographic order for strings, byte order for `bytea`, and the type's natural \
+            ordering for numbers / dates.\n",
+    ">" => "# `>`\n\n_Greater-than comparison_\n\nMirror of `<`.\n",
+    "<=" => "# `<=`\n\n_Less-than-or-equal comparison_\n",
+    ">=" => "# `>=`\n\n_Greater-than-or-equal comparison_\n",
+    "||" => {
+      "# `||`\n\n_String / array concatenation_\n\nFor text operands: \
+            `'a' || 'b'` -> `'ab'`. For arrays: `ARRAY[1,2] || ARRAY[3]` -> `{1,2,3}`. \
+            Returns `NULL` if either operand is `NULL` (text); for arrays, prepending or \
+            appending `NULL` returns the other array.\n"
+    },
+    "@>" => "# `@>`\n\n_Contains operator_\n\nReturns `true` when the left operand contains the \
+            right (jsonb / arrays / ranges). `'{\"a\":1, \"b\":2}'::jsonb @> '{\"a\":1}'::jsonb` -> `true`.\n",
+    "<@" => "# `<@`\n\n_Contained-by operator_\n\nMirror of `@>`. The left operand is contained by the right.\n",
+    "?" => "# `?`\n\n_jsonb key existence_\n\nReturns `true` when the left jsonb has a top-level \
+            key (or array element) equal to the right text. `'{\"a\":1}'::jsonb ? 'a'` -> `true`.\n",
+    "?|" => "# `?|`\n\n_jsonb any-key existence_\n\nReturns `true` when ANY key in the right `text[]` is present in the left jsonb.\n",
+    "?&" => "# `?&`\n\n_jsonb all-keys existence_\n\nReturns `true` when ALL keys in the right `text[]` are present in the left jsonb.\n",
+    _ => return None,
+  };
+  Some(card.to_string())
+}
+
 fn jsonb_operator_hover(source: &str, pos: usize) -> Option<String> {
   let bytes = source.as_bytes();
-  if pos >= bytes.len() { return None; }
+  if pos >= bytes.len() {
+    return None;
+  }
   let b = bytes[pos];
-  if b != b'-' && b != b'>' && b != b'#' { return None; }
+  if b != b'-' && b != b'>' && b != b'#' {
+    return None;
+  }
   // Find the operator span this byte belongs to.
   let mut s = pos;
   while s > 0 && matches!(bytes[s - 1], b'-' | b'>' | b'#') {
@@ -592,7 +735,8 @@ fn jsonb_operator_hover(source: &str, pos: usize) -> Option<String> {
        data -> 'profile'        -- jsonb\n\
        items -> 0               -- first array element as jsonb\n\
        data -> 'a' -> 'b'       -- chain\n\
-       ```\n".into(),
+       ```\n"
+        .into(),
     ),
     "->>" => Some(
       "# `->>`\n\n_JSON path operator returning TEXT_\n\n\
@@ -603,21 +747,24 @@ fn jsonb_operator_hover(source: &str, pos: usize) -> Option<String> {
        items ->> 0              -- first element coerced to text\n\
        ```\n\n\
        Compares with `=` against a string literal directly: `data ->> 'k' = 'x'`. \
-       Compare with `->` against a json literal: `data -> 'k' = '\"x\"'::jsonb`.\n".into(),
+       Compare with `->` against a json literal: `data -> 'k' = '\"x\"'::jsonb`.\n"
+        .into(),
     ),
     "#>" => Some(
       "# `#>`\n\n_JSON path lookup (array form)_\n\n\
        Returns the **JSON value** at the path specified by an array of keys.\n\n\
        ```sql\n\
        data #> '{a,b,0}'        -- equivalent to data -> 'a' -> 'b' -> 0\n\
-       ```\n".into(),
+       ```\n"
+        .into(),
     ),
     "#>>" => Some(
       "# `#>>`\n\n_JSON path lookup returning TEXT_\n\n\
        Same as `#>` but coerces the final value to text.\n\n\
        ```sql\n\
        data #>> '{profile,email}'   -- text\n\
-       ```\n".into(),
+       ```\n"
+        .into(),
     ),
     _ => None,
   }
@@ -628,9 +775,13 @@ fn jsonb_operator_hover(source: &str, pos: usize) -> Option<String> {
 /// type when in INSERT VALUES / UPDATE SET / WHERE.
 fn numeric_literal_hover(source: &str, pos: usize, catalog: &Catalog) -> Option<String> {
   let bytes = source.as_bytes();
-  if pos >= bytes.len() { return None; }
+  if pos >= bytes.len() {
+    return None;
+  }
   let here = bytes[pos];
-  if !here.is_ascii_digit() && here != b'.' { return None; }
+  if !here.is_ascii_digit() && here != b'.' {
+    return None;
+  }
   // Walk back over digits / `.` / `-+`.
   let mut s = pos;
   while s > 0 && (bytes[s - 1].is_ascii_digit() || bytes[s - 1] == b'.') {
@@ -648,13 +799,13 @@ fn numeric_literal_hover(source: &str, pos: usize, catalog: &Catalog) -> Option<
     e += 1;
   }
   let lit = &source[s..e];
-  if lit.is_empty() || lit == "-" || lit == "+" || lit == "." { return None; }
+  if lit.is_empty() || lit == "-" || lit == "+" || lit == "." {
+    return None;
+  }
   let kind = if lit.contains('.') { "float / numeric" } else { "integer" };
   let mut card = format!("# `{lit}`\n\n_{kind} literal_\n");
   if let Some((schema, table, col, ty)) = infer_assigned_column(source, s.saturating_sub(1), catalog) {
-    card.push_str(&format!(
-      "\n- **assigned to:** `{schema}.{table}.{col}`\n- **column type:** `{ty}`\n",
-    ));
+    card.push_str(&format!("\n- **assigned to:** `{schema}.{table}.{col}`\n- **column type:** `{ty}`\n",));
   }
   Some(card)
 }
@@ -671,7 +822,9 @@ fn string_literal_hover(source: &str, pos: usize, catalog: &Catalog) -> Option<S
   while s > 0 && bytes[s - 1] != b'\'' {
     s -= 1;
   }
-  if s == 0 { return None; }
+  if s == 0 {
+    return None;
+  }
   let lit_start = s; // first byte inside the quotes
   let mut e = pos;
   while e < bytes.len() && bytes[e] != b'\'' {
@@ -685,13 +838,16 @@ fn string_literal_hover(source: &str, pos: usize, catalog: &Catalog) -> Option<S
   let header = format!("# `'{}'`\n\n_text/string literal_\n", lit.chars().take(60).collect::<String>());
   let mut body = header;
   if let Some((schema, table, col, ty)) = dest_col {
-    body.push_str(&format!(
-      "\n- **assigned to:** `{schema}.{table}.{col}`\n- **column type:** `{ty}`\n",
-    ));
+    body.push_str(&format!("\n- **assigned to:** `{schema}.{table}.{col}`\n- **column type:** `{ty}`\n",));
     // Compatibility heuristic.
     let lower = ty.to_ascii_lowercase();
-    if lower.contains("int") || lower.contains("numeric") || lower.contains("decimal")
-       || lower.contains("real") || lower.contains("double") || lower.contains("float") {
+    if lower.contains("int")
+      || lower.contains("numeric")
+      || lower.contains("decimal")
+      || lower.contains("real")
+      || lower.contains("double")
+      || lower.contains("float")
+    {
       body.push_str(
         "\n_Warning:_ destination is numeric -- the literal will be cast at runtime; \
          malformed strings raise an `invalid input syntax` error.\n",
@@ -726,22 +882,27 @@ fn infer_assigned_column(
   // identifier (possibly qualified).
   if i > 0 && bytes[i - 1] == b'=' {
     let mut k = i - 1;
-    while k > 0 && bytes[k - 1].is_ascii_whitespace() { k -= 1; }
+    while k > 0 && bytes[k - 1].is_ascii_whitespace() {
+      k -= 1;
+    }
     let id_end = k;
-    while k > 0 && (bytes[k - 1].is_ascii_alphanumeric() || bytes[k - 1] == b'_' || bytes[k - 1] == b'.' || bytes[k - 1] == b'"') {
+    while k > 0
+      && (bytes[k - 1].is_ascii_alphanumeric() || bytes[k - 1] == b'_' || bytes[k - 1] == b'.' || bytes[k - 1] == b'"')
+    {
       k -= 1;
     }
     let raw = &source[k..id_end];
     let bare = raw.rsplit('.').next().unwrap_or(raw).trim_matches('"');
-    if bare.is_empty() { return None; }
+    if bare.is_empty() {
+      return None;
+    }
     // Look back further for the FROM / UPDATE / INSERT context to pin
     // down which table the column lives in.
-    if let Some(table) = enclosing_table_name(source, k) {
-      if let Some(t) = catalog.find_table(None, &table) {
-        if let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(bare)) {
-          return Some((t.schema.clone(), t.name.clone(), c.name.clone(), c.data_type.clone()));
-        }
-      }
+    if let Some(table) = enclosing_table_name(source, k)
+      && let Some(t) = catalog.find_table(None, &table)
+      && let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(bare))
+    {
+      return Some((t.schema.clone(), t.name.clone(), c.name.clone(), c.data_type.clone()));
     }
     // Fall back: search every catalog table for the column name.
     let hits = catalog.columns_named(bare);
@@ -765,15 +926,106 @@ fn enclosing_table_name(source: &str, before: usize) -> Option<String> {
       let after = &slice[at + kw.len()..];
       let lead = after.len() - after.trim_start().len();
       let raw = &after[lead..];
-      let id_end = raw
-        .find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"')
-        .unwrap_or(raw.len());
-      if id_end == 0 { continue; }
+      let id_end =
+        raw.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(raw.len());
+      if id_end == 0 {
+        continue;
+      }
       let bare = raw[..id_end].rsplit('.').next().unwrap_or(&raw[..id_end]).trim_matches('"');
       return Some(bare.to_string());
     }
   }
   None
+}
+
+/// True when `pos` sits strictly inside a `"..."` double-quoted
+/// identifier (cursor on the opening or closing quote returns false).
+/// Walks byte-by-byte from BOF skipping single-quoted strings, line
+/// comments, block comments, and dollar-quoted bodies so a `"` byte
+/// nested in any of those doesn't open a phantom identifier.
+fn cursor_inside_double_quoted_ident(src: &str, pos: usize) -> bool {
+  let bytes = src.as_bytes();
+  let n = bytes.len();
+  let cap = pos.min(n);
+  let mut i = 0usize;
+  while i < n {
+    let c = bytes[i];
+    // Skip `-- line comment`.
+    if c == b'-' && i + 1 < n && bytes[i + 1] == b'-' {
+      let mut j = i + 2;
+      while j < n && bytes[j] != b'\n' {
+        j += 1;
+      }
+      i = j;
+      continue;
+    }
+    // Skip `/* block comment */`.
+    if c == b'/' && i + 1 < n && bytes[i + 1] == b'*' {
+      let mut j = i + 2;
+      while j + 1 < n && !(bytes[j] == b'*' && bytes[j + 1] == b'/') {
+        j += 1;
+      }
+      i = (j + 2).min(n);
+      continue;
+    }
+    // Skip single-quoted string `'...'` with `''` escape.
+    if c == b'\'' {
+      let mut j = i + 1;
+      while j < n {
+        if bytes[j] == b'\'' {
+          if j + 1 < n && bytes[j + 1] == b'\'' {
+            j += 2;
+            continue;
+          }
+          j += 1;
+          break;
+        }
+        j += 1;
+      }
+      i = j;
+      continue;
+    }
+    // Skip dollar-quoted body `$tag$ ... $tag$`.
+    if c == b'$' {
+      let mut j = i + 1;
+      while j < n && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') {
+        j += 1;
+      }
+      if j < n && bytes[j] == b'$' {
+        let tag = &bytes[i..=j];
+        let body_start = j + 1;
+        let mut k = body_start;
+        while k + tag.len() <= n && &bytes[k..k + tag.len()] != tag {
+          k += 1;
+        }
+        i = (k + tag.len()).min(n);
+        continue;
+      }
+    }
+    // Double-quoted identifier `"..."` with `""` escape.
+    if c == b'"' {
+      let open = i;
+      let mut j = i + 1;
+      while j < n {
+        if bytes[j] == b'"' {
+          if j + 1 < n && bytes[j + 1] == b'"' {
+            j += 2;
+            continue;
+          }
+          break;
+        }
+        j += 1;
+      }
+      let close = j; // index of closing `"` or n if unterminated.
+      if cap > open && cap < close {
+        return true;
+      }
+      i = (close + 1).min(n);
+      continue;
+    }
+    i += 1;
+  }
+  false
 }
 
 /// True when `pos` sits inside a single-quoted string literal, a
@@ -790,8 +1042,12 @@ fn inside_string_or_comment(src: &str, pos: usize) -> bool {
     // Line comment runs to end of line.
     if c == b'-' && i + 1 < bytes.len() && bytes[i + 1] == b'-' {
       let mut j = i + 2;
-      while j < bytes.len() && bytes[j] != b'\n' { j += 1; }
-      if pos > i && pos <= j { return true; }
+      while j < bytes.len() && bytes[j] != b'\n' {
+        j += 1;
+      }
+      if pos > i && pos <= j {
+        return true;
+      }
       i = j + 1;
       continue;
     }
@@ -799,9 +1055,13 @@ fn inside_string_or_comment(src: &str, pos: usize) -> bool {
     if c == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'*' {
       let start = i;
       let mut j = i + 2;
-      while j + 1 < bytes.len() && !(bytes[j] == b'*' && bytes[j + 1] == b'/') { j += 1; }
+      while j + 1 < bytes.len() && !(bytes[j] == b'*' && bytes[j + 1] == b'/') {
+        j += 1;
+      }
       let end = (j + 2).min(bytes.len());
-      if pos > start && pos < end { return true; }
+      if pos > start && pos < end {
+        return true;
+      }
       i = end;
       continue;
     }
@@ -811,20 +1071,33 @@ fn inside_string_or_comment(src: &str, pos: usize) -> bool {
       i += 1;
       while i < bytes.len() {
         if bytes[i] == b'\'' {
-          if i + 1 < bytes.len() && bytes[i + 1] == b'\'' { i += 2; continue; }
+          if i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
+            i += 2;
+            continue;
+          }
           i += 1;
           break;
         }
         i += 1;
       }
-      if pos > start && pos < i { return true; }
+      if pos > start && pos < i {
+        return true;
+      }
       continue;
     }
-    // Dollar-quoted body: $tag$ ... $tag$.
+    // Dollar-quoted body `$tag$ ... $tag$`. PL/pgSQL function bodies
+    // and DO blocks live in this form. They contain *code*, not
+    // literal text, so the body itself is NOT inert -- hovering on a
+    // PL/pgSQL keyword like RAISE / EXCEPTION / PERFORM inside the
+    // body should still surface its knowledge card. We only treat
+    // string literals / comments WITHIN the body as inert; recurse
+    // with the body slice so they're detected at the inner cursor.
     if c == b'$' {
       let tag_start = i;
       let mut j = i + 1;
-      while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') { j += 1; }
+      while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') {
+        j += 1;
+      }
       if j < bytes.len() && bytes[j] == b'$' {
         let tag = &src[tag_start..=j];
         let body_start = j + 1;
@@ -833,7 +1106,12 @@ fn inside_string_or_comment(src: &str, pos: usize) -> bool {
           k += 1;
         }
         let body_end = k;
-        if pos >= body_start && pos < body_end { return true; }
+        if pos >= body_start && pos < body_end {
+          // Cursor inside the body -- recurse so an inner `'literal'`
+          // / `-- comment` / `/* ... */` still suppresses hover, but
+          // keyword positions stay live.
+          return inside_string_or_comment(&src[body_start..body_end], pos - body_start);
+        }
         i = (k + tag.len()).min(bytes.len());
         continue;
       }
@@ -849,8 +1127,12 @@ fn inside_string_or_comment(src: &str, pos: usize) -> bool {
 fn cursor_on_double_colon(source: &str, offset: TextSize) -> bool {
   let pos: usize = u32::from(offset) as usize;
   let bytes = source.as_bytes();
-  if pos >= bytes.len() { return false; }
-  if bytes[pos] != b':' { return false; }
+  if pos >= bytes.len() {
+    return false;
+  }
+  if bytes[pos] != b':' {
+    return false;
+  }
   let prev = if pos > 0 { bytes[pos - 1] } else { 0 };
   let next = if pos + 1 < bytes.len() { bytes[pos + 1] } else { 0 };
   prev == b':' || next == b':'
@@ -877,7 +1159,7 @@ fn star_hover(source: &str, offset: TextSize, catalog: &Catalog) -> Option<Strin
     k -= 1;
   }
   if k > 0 && bytes[k - 1] == b'.' {
-    let mut id_end = k - 1;
+    let id_end = k - 1;
     let mut id_start = id_end;
     while id_start > 0 {
       let c = bytes[id_start - 1] as char;
@@ -918,9 +1200,7 @@ fn star_hover(source: &str, offset: TextSize, catalog: &Catalog) -> Option<Strin
     }
     if fn_start < fn_end {
       let fname = &source[fn_start..fn_end];
-      let mut card = format!(
-        "# `{fname}(*)`\n\n_aggregate-over-all-rows form_\n\n",
-      );
+      let mut card = format!("# `{fname}(*)`\n\n_aggregate-over-all-rows form_\n\n",);
       if let Some(entry) = dsl_knowledge::lookup(fname) {
         card.push_str(&dsl_knowledge::render_markdown(entry));
         card.push_str("\n\n");
@@ -937,12 +1217,7 @@ fn star_hover(source: &str, offset: TextSize, catalog: &Catalog) -> Option<Strin
   unqualified_star_hover(source, offset, catalog)
 }
 
-fn qualified_star_hover(
-  source: &str,
-  offset: TextSize,
-  alias: &str,
-  catalog: &Catalog,
-) -> Option<String> {
+fn qualified_star_hover(source: &str, offset: TextSize, alias: &str, catalog: &Catalog) -> Option<String> {
   // Resolve alias -> bound table via the existing alias_lookup path,
   // but we want the column list, not the table card. Find the
   // binding directly.
@@ -1011,24 +1286,20 @@ fn unqualified_star_hover(source: &str, offset: TextSize, catalog: &Catalog) -> 
   if lines.is_empty() {
     return None;
   }
-  Some(format!(
-    "# `*`\n\n_expands to every column of every FROM/JOIN table_\n\n```sql\n{}\n```\n",
-    lines.join(",\n"),
-  ))
+  Some(format!("# `*`\n\n_expands to every column of every FROM/JOIN table_\n\n```sql\n{}\n```\n", lines.join(",\n"),))
 }
 
 fn role_hover(source: &str, offset: TextSize, token: &str, catalog: &Catalog) -> Option<String> {
   let pos: usize = u32::from(offset) as usize;
-  if !near_role_slot(source, pos) { return None; }
+  if !near_role_slot(source, pos) {
+    return None;
+  }
   let role_norm = token.to_ascii_lowercase();
   let in_catalog = catalog.roles.iter().any(|r| r.eq_ignore_ascii_case(&role_norm));
   let is_builtin_postgres = role_norm == "postgres";
   let is_pg_internal = role_norm.starts_with("pg_");
   let is_pseudo = role_norm == "public";
-  let is_session_kw = matches!(
-    role_norm.as_str(),
-    "current_user" | "session_user" | "current_role"
-  );
+  let is_session_kw = matches!(role_norm.as_str(), "current_user" | "session_user" | "current_role");
 
   let label = if is_pseudo {
     "_pseudo-role_ -- every existing role and every future role"
@@ -1057,16 +1328,25 @@ fn near_role_slot(source: &str, pos: usize) -> bool {
   // Snap to a char boundary so the slice doesn't panic on multi-byte
   // chars in a free-form comment / string above the cursor.
   let mut start = start;
-  while start < pos && !source.is_char_boundary(start) { start += 1; }
-  let mut end = pos;
-  while end > start && !source.is_char_boundary(end) { end -= 1; }
-  let window = source[start..end].to_ascii_uppercase();
-  for kw in [
-    "OWNER TO", "GRANT", "REVOKE", "SET ROLE", "RESET ROLE",
-    "POLICY", " TO ", " FROM ",
-  ] {
-    if window.contains(kw) { return true; }
+  while start < pos && !source.is_char_boundary(start) {
+    start += 1;
   }
+  let mut end = pos;
+  while end > start && !source.is_char_boundary(end) {
+    end -= 1;
+  }
+  let window = source[start..end].to_ascii_uppercase();
+  // Bare role-introducing keyword phrases.
+  for kw in ["OWNER TO", "GRANT", "REVOKE", "SET ROLE", "RESET ROLE", "POLICY", " TO "] {
+    if window.contains(kw) {
+      return true;
+    }
+  }
+  // `FROM` is a role-list slot only when paired with REVOKE
+  // (`REVOKE ... FROM <role>`). Bare `FROM` appears in every SELECT
+  // statement and must NOT collapse hover into the role-card path.
+  // We still cover the explicit REVOKE case via the loop above; this
+  // branch is just a no-op now.
   false
 }
 
@@ -1086,10 +1366,10 @@ fn enclosing_table_column(source: &str, offset: TextSize, token: &str, catalog: 
       // Prefer the live catalog row so we get types / nullability /
       // FK info. Fall back to the buffer ColumnDef when the table
       // isn't yet in the catalog.
-      if let Some(t) = catalog.find_table(None, &ct.table.name) {
-        if let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(token)) {
-          return Some(render::column(t, c));
-        }
+      if let Some(t) = catalog.find_table(None, &ct.table.name)
+        && let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(token))
+      {
+        return Some(render::column(t, c));
       }
       if let Some(col) = ct.columns.iter().find(|c| c.name.eq_ignore_ascii_case(token)) {
         return Some(render::column_decl(&ct.table.name, col));
@@ -1191,24 +1471,22 @@ fn scope_column_lookup(source: &str, offset: TextSize, tok: &str, catalog: &Cata
     }
     // CTE-qualified column? Render a CTE card showing the alias and
     // the projected column name.
-    if let Some(cte_cols) = scope.cte_columns_of(left) {
-      if cte_cols.iter().any(|c| c.eq_ignore_ascii_case(right)) {
-        let cols_md = if cte_cols.is_empty() {
-          String::from("_columns not parsed_")
-        } else {
-          cte_cols.iter().map(|c| format!("- `{c}`")).collect::<Vec<_>>().join("\n")
-        };
-        return Some(format!("# `{left}.{right}`\n_CTE column_\n\n**`{left}`** projects:\n\n{cols_md}\n"));
-      }
+    if let Some(cte_cols) = scope.cte_columns_of(left)
+      && cte_cols.iter().any(|c| c.eq_ignore_ascii_case(right))
+    {
+      let cols_md = if cte_cols.is_empty() {
+        String::from("_columns not parsed_")
+      } else {
+        cte_cols.iter().map(|c| format!("- `{c}`")).collect::<Vec<_>>().join("\n")
+      };
+      return Some(format!("# `{left}.{right}`\n_CTE column_\n\n**`{left}`** projects:\n\n{cols_md}\n"));
     }
     if let Some(binding) = scope.bindings.iter().find_map(|(k, v)| {
       if v.alias.eq_ignore_ascii_case(left) || k.eq_ignore_ascii_case(left) { Some(v) } else { None }
-    }) {
-      if let Some(t) = catalog.find_table(binding.table.schema.as_deref(), &binding.table.name) {
-        if let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(right)) {
-          return Some(render::column(t, c));
-        }
-      }
+    }) && let Some(t) = catalog.find_table(binding.table.schema.as_deref(), &binding.table.name)
+      && let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(right))
+    {
+      return Some(render::column(t, c));
     }
     return None;
   }
@@ -1216,15 +1494,15 @@ fn scope_column_lookup(source: &str, offset: TextSize, tok: &str, catalog: &Cata
   // Bare column: scan every in-scope table for a unique match.
   let mut hit: Option<(&dsl_catalog::Table, &dsl_catalog::Column)> = None;
   for b in scope.tables() {
-    if let Some(t) = catalog.find_table(b.table.schema.as_deref(), &b.table.name) {
-      if let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(tok)) {
-        if hit.is_some() {
-          // Ambiguous within scope -- let catalog_lookup render
-          // the multi-table disambiguation card.
-          return None;
-        }
-        hit = Some((t, c));
+    if let Some(t) = catalog.find_table(b.table.schema.as_deref(), &b.table.name)
+      && let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(tok))
+    {
+      if hit.is_some() {
+        // Ambiguous within scope -- let catalog_lookup render
+        // the multi-table disambiguation card.
+        return None;
       }
+      hit = Some((t, c));
     }
   }
   hit.map(|(t, c)| render::column(t, c))
@@ -1235,7 +1513,7 @@ fn scope_column_lookup(source: &str, offset: TextSize, tok: &str, catalog: &Cata
 /// when it's an alias in that statement.
 fn resolve_alias_in(src: &str, pos: usize, token: &str, catalog: &Catalog) -> Option<String> {
   let parsed = dsl_parse::parse(src, dsl_parse::Dialect::Postgres);
-  let scopes = dsl_resolve::resolve(&parsed.statements);
+  let scopes = dsl_resolve::resolve_with_source(&parsed.statements, src);
   let idx = parsed.statements.iter().position(|s| {
     let lo: u32 = s.range.start().into();
     let hi: u32 = s.range.end().into();
@@ -1244,7 +1522,14 @@ fn resolve_alias_in(src: &str, pos: usize, token: &str, catalog: &Catalog) -> Op
   let scope = scopes.get(idx)?;
   let binding = scope.bindings.iter().find_map(|(k, v)| {
     if v.alias.eq_ignore_ascii_case(token) || k.eq_ignore_ascii_case(token) {
-      if v.table.name.eq_ignore_ascii_case(token) {
+      // For real catalog tables, "alias == table name" means the user
+      // is hovering the table itself (not an alias) -- the catalog
+      // path handles that. Synthetic bindings (subquery alias / CTE /
+      // function-call FROM) have table.name == alias by construction,
+      // so skip this filter for them.
+      let is_synthetic = v.table.schema.as_deref().is_some_and(|s| s.starts_with('<'))
+        || scope.cte_columns_of(&v.table.name).is_some();
+      if !is_synthetic && v.table.name.eq_ignore_ascii_case(token) {
         return None;
       }
       Some(v)
@@ -1255,7 +1540,36 @@ fn resolve_alias_in(src: &str, pos: usize, token: &str, catalog: &Catalog) -> Op
   if let Some(t) = catalog.find_table(binding.table.schema.as_deref(), &binding.table.name) {
     return Some(render::table(t));
   }
+  // Synthetic bindings: subquery alias (`<subq>`), function-call FROM
+  // alias (`<func>`), or CTE name -- render a brief card so hovering
+  // the alias name doesn't silently return None.
+  if let Some(card) = synthetic_alias_card(scope, binding, token) {
+    return Some(card);
+  }
   buffer_object(src, &binding.table.name)
+}
+
+fn synthetic_alias_card(scope: &dsl_resolve::Scope, binding: &dsl_resolve::binding::Binding, token: &str) -> Option<String> {
+  // CTE: the binding name matches a cte_columns_of entry. Render the
+  // projected columns so the user can see what `t.<col>` would be.
+  if let Some(cols) = scope.cte_columns_of(&binding.table.name) {
+    let cols_md = if cols.is_empty() {
+      String::from("_columns not parsed_")
+    } else {
+      cols.iter().map(|c| format!("- `{c}`")).collect::<Vec<_>>().join("\n")
+    };
+    return Some(format!("# `{token}`\n\n_CTE alias_\n\n**Projects:**\n\n{cols_md}\n"));
+  }
+  match binding.table.schema.as_deref() {
+    Some("<subq>") => Some(format!(
+      "# `{token}`\n\n_Subquery alias_\n\nThe inner SELECT projects its columns through this alias. Hover the column on the right side of `{token}.col` to inspect each one."
+    )),
+    Some("<func>") => Some(format!(
+      "# `{token}`\n\n_Function-call alias_\n\nBound to a set-returning function in the FROM clause."
+    )),
+    Some(other) if other.starts_with('<') => Some(format!("# `{token}`\n\n_{}_", other.trim_matches(|c| c == '<' || c == '>'))),
+    _ => None,
+  }
 }
 
 /// Return (open_after, close_before) byte offsets when `pos` is inside a
@@ -1338,20 +1652,19 @@ fn scoped_column_in_text(source: &str, offset: TextSize, token: &str, catalog: &
     return None;
   }
 
-  if let Some(t) = catalog.find_table(None, &table) {
-    if let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(token)) {
-      return Some(render::column(t, c));
-    }
+  if let Some(t) = catalog.find_table(None, &table)
+    && let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(token))
+  {
+    return Some(render::column(t, c));
   }
   // Buffer-defined fallback (table being declared in same file).
   let parsed = dsl_parse::parse(source, dsl_parse::Dialect::Postgres);
   for stmt in &parsed.statements {
-    if let dsl_parse::StatementKind::CreateTable(ct) = &stmt.kind {
-      if ct.table.name.eq_ignore_ascii_case(&table) {
-        if let Some(col) = ct.columns.iter().find(|c| c.name.eq_ignore_ascii_case(token)) {
-          return Some(render::column_decl(&ct.table.name, col));
-        }
-      }
+    if let dsl_parse::StatementKind::CreateTable(ct) = &stmt.kind
+      && ct.table.name.eq_ignore_ascii_case(&table)
+      && let Some(col) = ct.columns.iter().find(|c| c.name.eq_ignore_ascii_case(token))
+    {
+      return Some(render::column_decl(&ct.table.name, col));
     }
   }
   None
@@ -1516,10 +1829,37 @@ fn extract_call_targets(body: &str) -> std::collections::BTreeSet<String> {
 fn is_keyword(s: &str) -> bool {
   matches!(
     s.to_ascii_uppercase().as_str(),
-    "IF" | "WHILE" | "FOR" | "CASE" | "WHEN" | "RETURN" | "RAISE" | "SELECT" | "VALUES"
-      | "INSERT" | "UPDATE" | "DELETE" | "PERFORM" | "EXECUTE" | "DECLARE" | "BEGIN"
-      | "EXCEPTION" | "LOOP" | "EXIT" | "CONTINUE" | "ALL" | "ANY" | "OR" | "AND" | "NOT"
-      | "IN" | "NULLIF" | "COALESCE" | "GREATEST" | "LEAST" | "CAST"
+    "IF"
+      | "WHILE"
+      | "FOR"
+      | "CASE"
+      | "WHEN"
+      | "RETURN"
+      | "RAISE"
+      | "SELECT"
+      | "VALUES"
+      | "INSERT"
+      | "UPDATE"
+      | "DELETE"
+      | "PERFORM"
+      | "EXECUTE"
+      | "DECLARE"
+      | "BEGIN"
+      | "EXCEPTION"
+      | "LOOP"
+      | "EXIT"
+      | "CONTINUE"
+      | "ALL"
+      | "ANY"
+      | "OR"
+      | "AND"
+      | "NOT"
+      | "IN"
+      | "NULLIF"
+      | "COALESCE"
+      | "GREATEST"
+      | "LEAST"
+      | "CAST"
   )
 }
 
@@ -1634,6 +1974,36 @@ fn stmt_end(source: &str, mut i: usize) -> usize {
 /// looks up the signature in the knowledge base, and renders a card
 /// pointing at the active parameter slot. Returns None when the
 /// cursor is not inside a call OR the function is unknown.
+/// True when the cursor sits on (or just past) an *identifier-shaped*
+/// token -- one whose first character is `[A-Za-z_]`. Numeric-only
+/// tokens (`1`, `42`) are NOT treated as identifiers since there's no
+/// column / alias named after a bare number; that lets the function-
+/// signature card still fire on numeric literal args. Used as a gate
+/// so the function-arg card defers to column / alias / table hover
+/// paths when the cursor is on a real name.
+fn cursor_on_word_byte(source: &str, pos: usize) -> bool {
+  let bytes = source.as_bytes();
+  let on = pos < bytes.len() && is_word_byte(bytes[pos]);
+  let after = pos > 0 && is_word_byte(bytes[pos - 1]);
+  if !(on || after) {
+    return false;
+  }
+  // Walk back to the start of the word and inspect its first char.
+  let mut start = pos.min(bytes.len());
+  while start > 0 && is_word_byte(bytes[start - 1]) {
+    start -= 1;
+  }
+  if start >= bytes.len() {
+    return false;
+  }
+  let first = bytes[start];
+  first.is_ascii_alphabetic() || first == b'_'
+}
+
+fn is_word_byte(b: u8) -> bool {
+  b.is_ascii_alphanumeric() || b == b'_'
+}
+
 fn function_arg_at(source: &str, offset: TextSize) -> Option<String> {
   let pos: usize = u32::from(offset) as usize;
   let bytes = source.as_bytes();
@@ -1658,9 +2028,7 @@ fn function_arg_at(source: &str, offset: TextSize) -> Option<String> {
     while i > 0 && bytes[i - 1] != b'\'' {
       i -= 1;
     }
-    if i > 0 {
-      i -= 1;
-    } // skip the opening `'`
+    i = i.saturating_sub(1); // skip the opening `'`
   }
   // Now walk back through non-string content, counting commas at the
   // enclosing depth and looking for the unmatched `(`.
@@ -1762,7 +2130,7 @@ fn parse_signature_params(sig: &str) -> Vec<String> {
   out
 }
 
-/// `nextval('seq')`, `currval('seq')`, `setval('seq', 1)` — when the
+/// `nextval('seq')`, `currval('seq')`, `setval('seq', 1)` -- when the
 /// cursor sits inside the single-quoted sequence-name literal, return
 /// a sequence card. Returns None when not in such a context.
 fn sequence_ref_at(source: &str, offset: TextSize) -> Option<String> {

@@ -11,10 +11,10 @@ pub fn from_token(token: &str, catalog: &Catalog) -> Option<String> {
     if let Some(t) = catalog.find_table(Some(left), right) {
       return Some(render::table(t));
     }
-    if let Some(t) = catalog.find_table(None, left) {
-      if let Some(c) = t.columns.iter().find(|c| c.name == right) {
-        return Some(render::column(t, c));
-      }
+    if let Some(t) = catalog.find_table(None, left)
+      && let Some(c) = t.columns.iter().find(|c| c.name == right)
+    {
+      return Some(render::column(t, c));
     }
   }
   if let Some(t) = catalog.find_table(None, token) {

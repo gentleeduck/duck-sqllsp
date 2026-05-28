@@ -1,15 +1,14 @@
 //! Locate the identifier or word run at the cursor.
 //!
 //! Two helpers:
-//!   - [`token_at`]  -- single (possibly dotted) identifier; used for
-//!                     table / column resolution.
-//!   - [`window_at`] -- up to 5 adjacent words spanning the cursor (2
-//!                     before, the cursor's word, 2 after), plus the
-//!                     index of the cursor word. Lets the resolver try
-//!                     every multi-word sliding window that includes the
-//!                     cursor, so hovering on the second word of
-//!                     `INNER JOIN` or the middle word of `IS NOT NULL`
-//!                     still resolves to the multi-word entry.
+//!
+//! - [`token_at`] -- single (possibly dotted) identifier; used for table /
+//!   column resolution.
+//! - [`window_at`] -- up to 5 adjacent words spanning the cursor (2 before,
+//!   the cursor's word, 2 after), plus the index of the cursor word. Lets
+//!   the resolver try every multi-word sliding window that includes the
+//!   cursor, so hovering on the second word of `INNER JOIN` or the middle
+//!   word of `IS NOT NULL` still resolves to the multi-word entry.
 
 use text_size::TextSize;
 

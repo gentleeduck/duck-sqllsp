@@ -5,7 +5,7 @@
 //! NOT NULL, DEFAULT, FK targets) in one glance. Column / function /
 //! column-decl hovers each have their own renderer.
 
-use dsl_catalog::{Column, Constraint, ConstraintKind, Table, TableKind, Type, TypeKind};
+use dsl_catalog::{Column, Constraint, ConstraintKind, Table, TableKind, Type, TypeKind, display_type};
 
 /// Render the table card + every catalog-wide attachment found via
 /// `cat` (inbound FKs from other tables, sequences owned by this
@@ -58,40 +58,49 @@ fn inbound_fks(t: &Table, cat: &dsl_catalog::Catalog) -> Vec<String> {
       continue;
     }
     for c in &other.constraints {
-      if !matches!(c.kind, ConstraintKind::ForeignKey) { continue; }
+      if !matches!(c.kind, ConstraintKind::ForeignKey) {
+        continue;
+      }
       let Some(refs) = &c.references else { continue };
-      if !refs.table.eq_ignore_ascii_case(&t.name) { continue; }
+      if !refs.table.eq_ignore_ascii_case(&t.name) {
+        continue;
+      }
       let local = c.columns.join(", ");
       let target = refs.columns.join(", ");
-      out.push(format!(
-        "-- FK: {}.{} ({}) -> {}.{} ({})",
-        other.schema, other.name, local, t.schema, t.name, target
-      ));
+      out.push(format!("-- FK: {}.{} ({}) -> {}.{} ({})", other.schema, other.name, local, t.schema, t.name, target));
     }
   }
   out
 }
 
 pub fn table(t: &Table) -> String {
-  let fq = format!("{}.{}", t.schema, t.name);
-  let kind = match t.kind {
-    TableKind::View => "View",
-    TableKind::MaterializedView => "Materialised View",
-    _ => "Table",
-  };
-  let mut s = format!("# {kind} `{fq}`\n\n");
-
+  // Compact view: skip the `# Table public.<name>` markdown title and
+  // emit the DDL block straight up. CREATE TABLE / CREATE VIEW already
+  // declares the kind + fully-qualified name on its first line, so the
+  // title was redundant noise.
   if t.columns.is_empty() {
-    s.push_str("_(no columns cached -- run `:DBRefresh` after switching connections)_\n");
-    return s;
+    let fq = format!("{}.{}", t.schema, t.name);
+    let kind = match t.kind {
+      TableKind::View => "View",
+      TableKind::MaterializedView => "Materialised View",
+      _ => "Table",
+    };
+    return format!("_{kind} `{fq}` -- no columns cached; run `:DBRefresh` after connecting._\n");
   }
 
-  // Full DDL block -- the canonical view. The user reads SQL faster
-  // than markdown tables; constraint / index / trigger sections come
-  // as commented sub-blocks after the CREATE TABLE.
+  let mut s = String::new();
   s.push_str("```sql\n");
   s.push_str(&table_ddl(t));
   s.push('\n');
+
+  // Owner: surface ownership on its own line right under the CREATE TABLE
+  // so a quick hover answers "who owns this." Mirrors how PG's
+  // `\d <table>` shows the owner in the metadata block.
+  if let Some(owner) = &t.owner
+    && !owner.is_empty()
+  {
+    s.push_str(&format!("ALTER TABLE {}.{} OWNER TO {};\n", t.schema, t.name, owner));
+  }
 
   if !t.indexes.is_empty() {
     s.push_str("\n-- Indexes\n");
@@ -142,18 +151,18 @@ pub fn table(t: &Table) -> String {
     }
   }
 
-  if let Some(comment) = &t.comment {
-    if !comment.trim().is_empty() {
-      s.push_str("\n-- Comment\n");
-      s.push_str("COMMENT ON TABLE ");
-      s.push_str(&t.schema);
-      s.push('.');
-      s.push_str(&t.name);
-      s.push_str(" IS ");
-      s.push('\'');
-      s.push_str(&comment.replace('\'', "''"));
-      s.push_str("';\n");
-    }
+  if let Some(comment) = &t.comment
+    && !comment.trim().is_empty()
+  {
+    s.push_str("\n-- Comment\n");
+    s.push_str("COMMENT ON TABLE ");
+    s.push_str(&t.schema);
+    s.push('.');
+    s.push_str(&t.name);
+    s.push_str(" IS ");
+    s.push('\'');
+    s.push_str(&comment.replace('\'', "''"));
+    s.push_str("';\n");
   }
 
   s.push_str("```\n");
@@ -171,13 +180,31 @@ pub fn table_ddl(t: &Table) -> String {
   let mut lines: Vec<String> = Vec::new();
   lines.push(format!("{} {} {fq} (", kw("CREATE"), kw("TABLE")));
 
+  // Inline-origin single-column constraints fold back onto the column
+  // row (`id int PRIMARY KEY`, `email text UNIQUE`,
+  // `parent_id int REFERENCES users(id)`). Anything table-level renders
+  // as a separate `CONSTRAINT ...` line below the columns.
+  let inline_by_col: std::collections::HashMap<String, Vec<&Constraint>> = {
+    let mut m: std::collections::HashMap<String, Vec<&Constraint>> = std::collections::HashMap::new();
+    for con in &t.constraints {
+      if con.inline && con.columns.len() == 1 {
+        m.entry(con.columns[0].to_ascii_lowercase()).or_default().push(con);
+      }
+    }
+    m
+  };
+
   let name_w = t.columns.iter().map(|c| c.name.len()).max().unwrap_or(0);
-  let type_w = t.columns.iter().map(|c| c.data_type.len()).max().unwrap_or(0);
+  let type_w = t.columns.iter().map(|c| display_type(&c.data_type).len()).max().unwrap_or(0);
 
   let mut members: Vec<String> = Vec::new();
   for c in &t.columns {
-    let mut row = format!("    {:<nw$} {:<tw$}", c.name, case.apply(&c.data_type), nw = name_w, tw = type_w);
-    if !c.nullable {
+    let inlines = inline_by_col.get(&c.name.to_ascii_lowercase());
+    let has_inline_pk = inlines.is_some_and(|v| v.iter().any(|c| matches!(c.kind, ConstraintKind::PrimaryKey)));
+    let mut row =
+      format!("    {:<nw$} {:<tw$}", c.name, case.apply(display_type(&c.data_type)), nw = name_w, tw = type_w);
+    // PRIMARY KEY already implies NOT NULL -- don't double up.
+    if !c.nullable && !has_inline_pk {
       row.push(' ');
       row.push_str(&kw("NOT NULL"));
     }
@@ -187,14 +214,51 @@ pub fn table_ddl(t: &Table) -> String {
       row.push(' ');
       row.push_str(d);
     }
+    if let Some(cons) = inlines {
+      // Stable order: PK, UNIQUE, FK, CHECK.
+      let order = |k: &ConstraintKind| match k {
+        ConstraintKind::PrimaryKey => 0,
+        ConstraintKind::Unique => 1,
+        ConstraintKind::ForeignKey => 2,
+        ConstraintKind::Check => 3,
+      };
+      let mut sorted: Vec<&&Constraint> = cons.iter().collect();
+      sorted.sort_by_key(|c| order(&c.kind));
+      for con in sorted {
+        row.push(' ');
+        match con.kind {
+          ConstraintKind::PrimaryKey => row.push_str(&kw("PRIMARY KEY")),
+          ConstraintKind::Unique => row.push_str(&kw("UNIQUE")),
+          ConstraintKind::ForeignKey => {
+            row.push_str(&kw("REFERENCES"));
+            if let Some(r) = &con.references {
+              let target_cols = if r.columns.is_empty() { String::new() } else { format!(" ({})", r.columns.join(", ")) };
+              row.push(' ');
+              if r.schema.is_empty() || r.schema == "public" {
+                row.push_str(&format!("{}{target_cols}", r.table));
+              } else {
+                row.push_str(&format!("{}.{}{target_cols}", r.schema, r.table));
+              }
+            }
+          },
+          ConstraintKind::Check => {
+            row.push_str(&kw("CHECK"));
+            if let Some(def) = &con.definition {
+              row.push(' ');
+              row.push_str(def);
+            }
+          },
+        }
+      }
+    }
     members.push(row);
   }
-  // Visual gap between the column block and the table-level
-  // constraints. Every constraint stays as a `CONSTRAINT <name> ...`
-  // line at the bottom -- no inlining onto the column rows.
-  let inject_gap = !t.columns.is_empty() && !t.constraints.is_empty();
+  // Table-level constraints get a blank line then a `CONSTRAINT ...` row each.
+  // Inline-origin constraints are already folded onto the column rows above.
+  let top_level: Vec<&Constraint> = t.constraints.iter().filter(|c| !c.inline).collect();
+  let inject_gap = !t.columns.is_empty() && !top_level.is_empty();
   let columns_end_idx = members.len();
-  for con in &t.constraints {
+  for con in top_level {
     members.push(render_constraint(con));
   }
 
@@ -240,7 +304,7 @@ pub fn column(t: &Table, c: &Column) -> String {
   // default expressions get wrapped at 72 cols so the hover float
   // stays narrow.
   let mut s = format!("# Column `{}.{}.{}`\n\n", t.schema, t.name, c.name);
-  s.push_str(&format!("- **type:** `{}`\n", c.data_type));
+  s.push_str(&format!("- **type:** `{}`\n", display_type(&c.data_type)));
   s.push_str(&format!("- **nullable:** `{}`\n", c.nullable));
   if let Some(g) = &c.generated {
     let wrapped = dsl_knowledge::wrap_paragraphs(g, 64);
@@ -251,11 +315,8 @@ pub fn column(t: &Table, c: &Column) -> String {
     s.push_str(&format!("- **default:** `{wrapped}`\n"));
   }
   // Mention every constraint on this column from its table.
-  let constraints_for_col: Vec<&Constraint> = t
-    .constraints
-    .iter()
-    .filter(|con| con.columns.iter().any(|cn| cn.eq_ignore_ascii_case(&c.name)))
-    .collect();
+  let constraints_for_col: Vec<&Constraint> =
+    t.constraints.iter().filter(|con| con.columns.iter().any(|cn| cn.eq_ignore_ascii_case(&c.name))).collect();
   if !constraints_for_col.is_empty() {
     s.push_str("- **constraints:**\n");
     for con in constraints_for_col {
@@ -268,10 +329,10 @@ pub fn column(t: &Table, c: &Column) -> String {
       s.push_str(&format!("  - {kind} (`{}`)\n", con.name));
     }
   }
-  if let Some(cm) = &c.comment {
-    if !cm.trim().is_empty() {
-      s.push_str(&format!("\n{}\n", dsl_knowledge::wrap_paragraphs(cm, 72)));
-    }
+  if let Some(cm) = &c.comment
+    && !cm.trim().is_empty()
+  {
+    s.push_str(&format!("\n{}\n", dsl_knowledge::wrap_paragraphs(cm, 72)));
   }
   s.push_str(&format!("\n_From table `{}.{}`_\n", t.schema, t.name));
   s
@@ -285,17 +346,20 @@ pub fn column_with_catalog(t: &Table, c: &Column, cat: &dsl_catalog::Catalog) ->
   let inbound: Vec<String> = cat
     .tables()
     .flat_map(|other| {
-      other
-        .constraints
-        .iter()
-        .filter_map(move |con| {
-          if !matches!(con.kind, ConstraintKind::ForeignKey) { return None; }
-          let refs = con.references.as_ref()?;
-          if !refs.table.eq_ignore_ascii_case(&t.name) { return None; }
-          if !refs.columns.iter().any(|x| x.eq_ignore_ascii_case(&c.name)) { return None; }
-          let local = con.columns.join(", ");
-          Some(format!("- `{}.{}` ({})", other.schema, other.name, local))
-        })
+      other.constraints.iter().filter_map(move |con| {
+        if !matches!(con.kind, ConstraintKind::ForeignKey) {
+          return None;
+        }
+        let refs = con.references.as_ref()?;
+        if !refs.table.eq_ignore_ascii_case(&t.name) {
+          return None;
+        }
+        if !refs.columns.iter().any(|x| x.eq_ignore_ascii_case(&c.name)) {
+          return None;
+        }
+        let local = con.columns.join(", ");
+        Some(format!("- `{}.{}` ({})", other.schema, other.name, local))
+      })
     })
     .collect();
   if !inbound.is_empty() {
@@ -316,7 +380,7 @@ pub fn column_in_tables(items: &[(&Table, &Column)]) -> String {
   let rows: Vec<Vec<String>> = items
     .iter()
     .map(|(t, c)| {
-      vec![format!("{}.{}", t.schema, t.name), c.data_type.clone(), if c.nullable { "YES" } else { "NO" }.into()]
+      vec![format!("{}.{}", t.schema, t.name), display_type(&c.data_type).to_string(), if c.nullable { "YES" } else { "NO" }.into()]
     })
     .collect();
   s.push_str(&crate::md_table::render(&["table", "type", "nullable"], &rows));
@@ -392,11 +456,7 @@ pub fn column_decl_with_implicit(
   }
   s.push_str("\n```\n");
 
-  if implicit.primary_key
-    || implicit.auto_increment
-    || implicit.foreign_key.is_some()
-    || (implicit.unique && !implicit.primary_key)
-  {
+  if implicit.primary_key || implicit.auto_increment || implicit.foreign_key.is_some() || implicit.unique {
     s.push_str(
       "\n_Implicit specs come from table-level constraints \
              (PRIMARY KEY, UNIQUE, FOREIGN KEY) or the column type \
@@ -414,8 +474,8 @@ pub fn function_full(f: &dsl_catalog::Function) -> String {
     .arguments
     .iter()
     .map(|a| match &a.name {
-      Some(n) => format!("{n} {}", a.data_type),
-      None => a.data_type.clone(),
+      Some(n) => format!("{n} {}", display_type(&a.data_type)),
+      None => display_type(&a.data_type).to_string(),
     })
     .collect::<Vec<_>>()
     .join(", ");
@@ -423,13 +483,13 @@ pub fn function_full(f: &dsl_catalog::Function) -> String {
   s.push_str("```sql\n");
   // Break the signature across lines when it grows past 72 cols --
   // long argument lists are otherwise unreadable inside the hover.
-  let sig = format!("{}.{}({}) -> {}", f.schema, f.name, args, f.return_type);
+  let sig = format!("{}.{}({}) -> {}", f.schema, f.name, args, display_type(&f.return_type));
   if sig.len() > 72 && !args.is_empty() {
     s.push_str(&format!("{}.{} (\n", f.schema, f.name));
     for (i, a) in f.arguments.iter().enumerate() {
       let arg_str = match &a.name {
-        Some(n) => format!("    {n} {}", a.data_type),
-        None => format!("    {}", a.data_type),
+        Some(n) => format!("    {n} {}", display_type(&a.data_type)),
+        None => format!("    {}", display_type(&a.data_type)),
       };
       s.push_str(&arg_str);
       if i + 1 < f.arguments.len() {
@@ -437,7 +497,7 @@ pub fn function_full(f: &dsl_catalog::Function) -> String {
       }
       s.push('\n');
     }
-    s.push_str(&format!(") -> {}", f.return_type));
+    s.push_str(&format!(") -> {}", display_type(&f.return_type)));
   } else {
     s.push_str(&sig);
   }
