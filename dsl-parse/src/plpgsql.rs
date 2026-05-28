@@ -75,10 +75,7 @@ fn walk_top(value: &serde_json::Value) -> PlpgsqlBody {
   // Top level is an array of function objects: [{"PLpgSQL_function": { action: {...} }}]
   let Some(arr) = value.as_array() else { return out };
   for func in arr {
-    let Some(action) = func
-      .get("PLpgSQL_function")
-      .and_then(|f| f.get("action"))
-    else { continue };
+    let Some(action) = func.get("PLpgSQL_function").and_then(|f| f.get("action")) else { continue };
     walk_stmt(action, &mut out.statements);
   }
   out
@@ -94,25 +91,35 @@ fn walk_stmt(node: &serde_json::Value, out: &mut Vec<PlpgsqlStmt>) {
     out.push(PlpgsqlStmt { kind: kind.clone(), lineno });
     // Recurse into structural children that hold nested statements.
     if let Some(b) = body.get("body").and_then(|b| b.as_array()) {
-      for child in b { walk_stmt(child, out); }
+      for child in b {
+        walk_stmt(child, out);
+      }
     }
     if let Some(b) = body.get("then_body").and_then(|b| b.as_array()) {
-      for child in b { walk_stmt(child, out); }
+      for child in b {
+        walk_stmt(child, out);
+      }
     }
     if let Some(b) = body.get("else_body").and_then(|b| b.as_array()) {
-      for child in b { walk_stmt(child, out); }
+      for child in b {
+        walk_stmt(child, out);
+      }
     }
     if let Some(arms) = body.get("elsif_list").and_then(|a| a.as_array()) {
       for arm in arms {
         if let Some(stmts) = arm.get("stmts").and_then(|s| s.as_array()) {
-          for child in stmts { walk_stmt(child, out); }
+          for child in stmts {
+            walk_stmt(child, out);
+          }
         }
       }
     }
     if let Some(arms) = body.get("case_when_list").and_then(|a| a.as_array()) {
       for arm in arms {
         if let Some(stmts) = arm.get("stmts").and_then(|s| s.as_array()) {
-          for child in stmts { walk_stmt(child, out); }
+          for child in stmts {
+            walk_stmt(child, out);
+          }
         }
       }
     }
@@ -125,7 +132,9 @@ fn walk_stmt(node: &serde_json::Value, out: &mut Vec<PlpgsqlStmt>) {
       for handler in handlers {
         let Some(exc) = handler.get("PLpgSQL_exception") else { continue };
         if let Some(stmts) = exc.get("action").and_then(|s| s.as_array()) {
-          for child in stmts { walk_stmt(child, out); }
+          for child in stmts {
+            walk_stmt(child, out);
+          }
         }
       }
     }

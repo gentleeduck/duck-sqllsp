@@ -55,7 +55,7 @@ pub fn parse(source: &str, dialect: Dialect) -> ParsedFile {
   // Postgres path.
   #[cfg(feature = "pg_query_backend")]
   {
-    return backend::pg_query::parse(source, dialect);
+    backend::pg_query::parse(source, dialect)
   }
   #[cfg(all(not(feature = "pg_query_backend"), feature = "sqlparser"))]
   {

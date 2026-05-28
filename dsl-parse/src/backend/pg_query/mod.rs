@@ -61,36 +61,53 @@ fn offset_ranges_in_kind(kind: &mut StatementKind, offset: u32) {
   use crate::ast::{Expr, Projection};
   fn fix_expr(e: &mut Expr, off: u32) {
     match e {
-      Expr::Column { range, .. } => {
-        if u32::from(range.len()) > 0 {
-          let s = u32::from(range.start()) + off;
-          let en = u32::from(range.end()) + off;
-          *range = text_size::TextRange::new(s.into(), en.into());
+      Expr::Column { range, .. } if u32::from(range.len()) > 0 => {
+        let s = u32::from(range.start()) + off;
+        let en = u32::from(range.end()) + off;
+        *range = text_size::TextRange::new(s.into(), en.into());
+      },
+      Expr::BinaryOp { left, right, .. } => {
+        fix_expr(left, off);
+        fix_expr(right, off);
+      },
+      Expr::Call { args, .. } => {
+        for a in args {
+          fix_expr(a, off);
         }
-      }
-      Expr::BinaryOp { left, right, .. } => { fix_expr(left, off); fix_expr(right, off); }
-      Expr::Call { args, .. } => { for a in args { fix_expr(a, off); } }
-      _ => {}
+      },
+      _ => {},
     }
   }
   fn fix_select(s: &mut crate::ast::SelectStmt, off: u32) {
     for p in &mut s.projections {
-      if let Projection::Expr { expr, .. } = p { fix_expr(expr, off); }
+      if let Projection::Expr { expr, .. } = p {
+        fix_expr(expr, off);
+      }
     }
-    if let Some(w) = &mut s.where_clause { fix_expr(w, off); }
+    if let Some(w) = &mut s.where_clause {
+      fix_expr(w, off);
+    }
     for j in &mut s.joins {
-      if let Some(on) = &mut j.on { fix_expr(on, off); }
+      if let Some(on) = &mut j.on {
+        fix_expr(on, off);
+      }
     }
   }
   match kind {
     StatementKind::Select(s) => fix_select(s, offset),
     StatementKind::Update(u) => {
-      if let Some(w) = &mut u.where_clause { fix_expr(w, offset); }
-      for (_t, e) in &mut u.assignments { fix_expr(e, offset); }
-    }
+      if let Some(w) = &mut u.where_clause {
+        fix_expr(w, offset);
+      }
+      for (_t, e) in &mut u.assignments {
+        fix_expr(e, offset);
+      }
+    },
     StatementKind::Delete(d) => {
-      if let Some(w) = &mut d.where_clause { fix_expr(w, offset); }
-    }
-    _ => {}
+      if let Some(w) = &mut d.where_clause {
+        fix_expr(w, offset);
+      }
+    },
+    _ => {},
   }
 }

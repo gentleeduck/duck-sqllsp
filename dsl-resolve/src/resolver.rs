@@ -188,19 +188,33 @@ fn extract_cte_columns(source: &str, stmt: &Statement, name: &str) -> Vec<String
 
 /// Extract projection column names from a CTE body. Looks for the
 /// outermost `SELECT ...` and parses each comma-separated projection.
+///
+/// The scan tracks paren depth and skips string literals, double-quoted
+/// identifiers, dollar-quoted strings (`$tag$...$tag$`), line comments
+/// (`-- ...`), and block comments (`/* ... */`) so that keywords or
+/// commas inside any of those don't affect projection boundaries.
 fn projection_columns(cte_body: &str) -> Vec<String> {
-  let upper = cte_body.to_ascii_uppercase();
-  let Some(sel) = upper.find("SELECT") else { return Vec::new() };
-  let from_at = upper[sel + 6..].find(" FROM ").map(|p| sel + 6 + p).unwrap_or(upper.len());
-  let proj_text = &cte_body[sel + 6..from_at];
-  // Split on top-level commas.
-  let mut out: Vec<String> = Vec::new();
-  let bytes = proj_text.as_bytes();
+  let bytes = cte_body.as_bytes();
   let n = bytes.len();
+  // Find outer SELECT, skipping comments and strings.
+  let Some(sel) = find_keyword_outside(bytes, 0, b"SELECT") else { return Vec::new() };
+  let proj_start = sel + 6;
+  // Find top-level FROM at depth 0, outside strings/comments.
+  let from_at = find_keyword_outside(bytes, proj_start, b"FROM").unwrap_or(n);
+  let proj_text = &cte_body[proj_start..from_at];
+  // Split on top-level commas, also skipping strings/comments.
+  let pbytes = proj_text.as_bytes();
+  let pn = pbytes.len();
+  let mut out: Vec<String> = Vec::new();
   let mut depth = 0i32;
-  let mut start = 0;
-  for i in 0..n {
-    match bytes[i] {
+  let mut start = 0usize;
+  let mut i = 0usize;
+  while i < pn {
+    if let Some(skip) = skip_string_or_comment(pbytes, i) {
+      i = skip;
+      continue;
+    }
+    match pbytes[i] {
       b'(' => depth += 1,
       b')' => depth -= 1,
       b',' if depth == 0 => {
@@ -209,15 +223,150 @@ fn projection_columns(cte_body: &str) -> Vec<String> {
       },
       _ => {},
     }
+    i += 1;
   }
-  if start < n {
+  if start < pn {
     out.push(alias_of(&proj_text[start..]));
   }
   out.into_iter().filter(|s| !s.is_empty()).collect()
 }
 
-/// Return the alias of a projection expression: `expr AS alias` →
-/// `alias`; `t.col` → `col`; `col` → `col`; `*` → empty.
+/// Return new cursor past a string literal, identifier quote, dollar-quote,
+/// or comment starting at `i`. Returns `None` if `i` is not such a span.
+fn skip_string_or_comment(bytes: &[u8], i: usize) -> Option<usize> {
+  let n = bytes.len();
+  if i >= n {
+    return None;
+  }
+  match bytes[i] {
+    // Single-quoted string. Doubled '' is an escaped quote.
+    b'\'' => {
+      let mut j = i + 1;
+      while j < n {
+        if bytes[j] == b'\'' {
+          if j + 1 < n && bytes[j + 1] == b'\'' {
+            j += 2;
+            continue;
+          }
+          return Some(j + 1);
+        }
+        j += 1;
+      }
+      Some(n)
+    },
+    // Double-quoted identifier. Doubled "" is an escaped quote.
+    b'"' => {
+      let mut j = i + 1;
+      while j < n {
+        if bytes[j] == b'"' {
+          if j + 1 < n && bytes[j + 1] == b'"' {
+            j += 2;
+            continue;
+          }
+          return Some(j + 1);
+        }
+        j += 1;
+      }
+      Some(n)
+    },
+    // Line comment `-- ...` to end of line.
+    b'-' if i + 1 < n && bytes[i + 1] == b'-' => {
+      let mut j = i + 2;
+      while j < n && bytes[j] != b'\n' {
+        j += 1;
+      }
+      Some(j)
+    },
+    // Block comment `/* ... */` (non-nested -- good enough for projection scan).
+    b'/' if i + 1 < n && bytes[i + 1] == b'*' => {
+      let mut j = i + 2;
+      while j + 1 < n && !(bytes[j] == b'*' && bytes[j + 1] == b'/') {
+        j += 1;
+      }
+      Some((j + 2).min(n))
+    },
+    // Dollar-quoted string `$tag$ ... $tag$` (tag may be empty).
+    b'$' => {
+      // Read optional tag of [A-Za-z0-9_]* until next `$`.
+      let mut j = i + 1;
+      while j < n && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') {
+        j += 1;
+      }
+      if j >= n || bytes[j] != b'$' {
+        return None;
+      }
+      let tag = &bytes[i..j + 1]; // includes both `$`s
+      let body_start = j + 1;
+      let mut k = body_start;
+      while k + tag.len() <= n {
+        if &bytes[k..k + tag.len()] == tag {
+          return Some(k + tag.len());
+        }
+        k += 1;
+      }
+      Some(n)
+    },
+    _ => None,
+  }
+}
+
+/// Find `kw` (case-insensitive) as a word-bounded match at depth 0,
+/// outside strings/comments. `kw` must be uppercase ASCII.
+/// For `FROM`, requires whitespace on the left side; right side allows
+/// whitespace, `(`, or end-of-input.
+fn find_keyword_outside(bytes: &[u8], from: usize, kw: &[u8]) -> Option<usize> {
+  let n = bytes.len();
+  let klen = kw.len();
+  let mut depth = 0i32;
+  let mut i = from;
+  while i + klen <= n {
+    if let Some(skip) = skip_string_or_comment(bytes, i) {
+      i = skip;
+      continue;
+    }
+    match bytes[i] {
+      b'(' => {
+        depth += 1;
+        i += 1;
+        continue;
+      },
+      b')' => {
+        depth -= 1;
+        i += 1;
+        continue;
+      },
+      _ => {},
+    }
+    if depth == 0 {
+      // Word-boundary check on the left.
+      let left_ok = i == from || !is_ident_byte(bytes[i - 1]);
+      if left_ok {
+        let mut matched = true;
+        for (off, kb) in kw.iter().enumerate() {
+          if bytes[i + off].to_ascii_uppercase() != *kb {
+            matched = false;
+            break;
+          }
+        }
+        if matched {
+          let right_ok = i + klen == n || !is_ident_byte(bytes[i + klen]);
+          if right_ok {
+            return Some(i);
+          }
+        }
+      }
+    }
+    i += 1;
+  }
+  None
+}
+
+fn is_ident_byte(b: u8) -> bool {
+  b.is_ascii_alphanumeric() || b == b'_'
+}
+
+/// Return the alias of a projection expression: `expr AS alias` ->
+/// `alias`; `t.col` -> `col`; `col` -> `col`; `*` -> empty.
 fn alias_of(proj: &str) -> String {
   let trimmed = proj.trim();
   if trimmed == "*" {
@@ -241,7 +390,7 @@ fn alias_of(proj: &str) -> String {
   if !tail.is_empty()
     && end > 0
     && bytes[end - 1].is_ascii_whitespace()
-    && tail.chars().next().map_or(false, |c| c.is_alphabetic() || c == '_')
+    && tail.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')
   {
     return tail.trim().trim_matches('"').to_string();
   }
@@ -261,8 +410,7 @@ fn add_synthetic(scope: &mut Scope, name: &str) {
   if name.is_empty() {
     return;
   }
-  let mut table = dsl_parse::TableRef::default();
-  table.name = name.to_string();
+  let table = dsl_parse::TableRef { name: name.to_string(), ..Default::default() };
   scope.bindings.entry(name.to_string()).or_insert(Binding { alias: name.to_string(), table });
 }
 

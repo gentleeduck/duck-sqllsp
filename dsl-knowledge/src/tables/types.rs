@@ -214,14 +214,29 @@ pub fn build() -> HashMap<&'static str, Entry> {
   // ---- Bit / serial / lsn / geometric ----
   t!("BIT", "Fixed-width bit string. BIT(n).", "flags BIT(8)", pg("datatype-bit.html"));
   t!("VARBIT", "Variable-width bit string. BIT VARYING(n).", "mask VARBIT(64)", pg("datatype-bit.html"));
-  t!("SMALLSERIAL", "Auto-increment INT2. Sugar for INT2 + sequence + NOT NULL.", "id SMALLSERIAL PRIMARY KEY", pg("datatype-numeric.html#DATATYPE-SERIAL"));
-  t!("PG_LSN", "Postgres log sequence number (8 bytes). Used for WAL positions.", "lsn PG_LSN", pg("datatype-pg-lsn.html"));
+  t!(
+    "SMALLSERIAL",
+    "Auto-increment INT2. Sugar for INT2 + sequence + NOT NULL.",
+    "id SMALLSERIAL PRIMARY KEY",
+    pg("datatype-numeric.html#DATATYPE-SERIAL")
+  );
+  t!(
+    "PG_LSN",
+    "Postgres log sequence number (8 bytes). Used for WAL positions.",
+    "lsn PG_LSN",
+    pg("datatype-pg-lsn.html")
+  );
   t!("LSEG", "Geometric line segment.", "edge LSEG", pg("datatype-geometric.html"));
   t!("PATH", "Geometric path (closed or open).", "trail PATH", pg("datatype-geometric.html"));
-  t!("REGCLASS", "OID alias for tables / sequences / views. Validates the name at parse.", "tbl REGCLASS", pg("datatype-oid.html"));
-  t!("REGPROC",  "OID alias for functions (no argument types).", "fn REGPROC", pg("datatype-oid.html"));
-  t!("REGTYPE",  "OID alias for types.", "ty REGTYPE", pg("datatype-oid.html"));
-  t!("REGROLE",  "OID alias for roles.", "r REGROLE", pg("datatype-oid.html"));
+  t!(
+    "REGCLASS",
+    "OID alias for tables / sequences / views. Validates the name at parse.",
+    "tbl REGCLASS",
+    pg("datatype-oid.html")
+  );
+  t!("REGPROC", "OID alias for functions (no argument types).", "fn REGPROC", pg("datatype-oid.html"));
+  t!("REGTYPE", "OID alias for types.", "ty REGTYPE", pg("datatype-oid.html"));
+  t!("REGROLE", "OID alias for roles.", "r REGROLE", pg("datatype-oid.html"));
   t!("REGNAMESPACE", "OID alias for schemas.", "ns REGNAMESPACE", pg("datatype-oid.html"));
 
   m

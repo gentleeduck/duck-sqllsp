@@ -2,15 +2,15 @@
 //!
 //! Only the slots downstream crates actually use are populated:
 //!
-//!   - CREATE TABLE   -> [`StatementKind::CreateTable`] with columns
-//!   - CREATE INDEX   -> not yet a dedicated variant; reported as Unknown
-//!   - SELECT         -> [`StatementKind::Select`] with FROM tables +
-//!                       optional WHERE expression text
-//!   - INSERT/UPDATE/DELETE -> respective variants with target table +
-//!                       presence-of-WHERE bit
-//!   - ALTER TABLE / DROP TABLE -> respective variants
-//!   - Everything else -> `StatementKind::Unknown { text }` so the
-//!                       feature stack still sees the raw SQL.
+//! - CREATE TABLE -> [`StatementKind::CreateTable`] with columns
+//! - CREATE INDEX -> not yet a dedicated variant; reported as Unknown
+//! - SELECT -> [`StatementKind::Select`] with FROM tables + optional WHERE
+//!   expression text
+//! - INSERT/UPDATE/DELETE -> respective variants with target table +
+//!   presence-of-WHERE bit
+//! - ALTER TABLE / DROP TABLE -> respective variants
+//! - Everything else -> `StatementKind::Unknown { text }` so the feature
+//!   stack still sees the raw SQL.
 //!
 //! Goal: full PG18 syntax coverage at parse-time, even when our AST
 //! doesn't model the new constructs.
@@ -88,10 +88,8 @@ fn column_def(c: &PgCol) -> ColumnDef {
       let ct = ConstrType::try_from(con.contype).unwrap_or(ConstrType::Undefined);
       match ct {
         ConstrType::ConstrNotnull | ConstrType::ConstrPrimary => nullable = false,
-        ConstrType::ConstrDefault => {
-          if !con.raw_expr_string().is_empty() {
-            default = Some(con.raw_expr_string());
-          }
+        ConstrType::ConstrDefault if !con.raw_expr_string().is_empty() => {
+          default = Some(con.raw_expr_string());
         },
         _ => {},
       }
@@ -167,8 +165,138 @@ fn select(s: &pg_query::protobuf::SelectStmt, _text: &str) -> SelectStmt {
     projections,
     from,
     joins,
-    where_clause: s.where_clause.as_ref().map(|_| Expr::Other(String::new())),
+    where_clause: s.where_clause.as_ref().map(|n| extract_column_refs_expr(n.node.as_ref())),
     cte_names,
+  }
+}
+
+/// Walk a pg_query node, collecting every `ColumnRef` it contains as an
+/// `Expr::Column`. Wraps the result in `Expr::List` so downstream
+/// walkers (e.g. unknown_column rule) can recurse element-wise. When the
+/// node contains no ColumnRefs we still return an empty List rather than
+/// `Other` so the variant is uniform across WHERE / ON / argument
+/// contexts.
+fn extract_column_refs_expr(node: Option<&PgNode>) -> Expr {
+  let mut out = Vec::new();
+  if let Some(n) = node {
+    collect_column_refs(n, &mut out);
+  }
+  Expr::List(out)
+}
+
+fn collect_column_refs(node: &PgNode, out: &mut Vec<Expr>) {
+  use pg_query::protobuf::node::Node as N;
+  match node {
+    N::ColumnRef(c) => {
+      // pg_query represents `a.b` as a `fields` Vec of String/A_Star nodes.
+      let parts: Vec<String> = c
+        .fields
+        .iter()
+        .filter_map(|f| f.node.as_ref())
+        .filter_map(|f| match f {
+          N::String(s) => Some(s.sval.clone()),
+          _ => None,
+        })
+        .collect();
+      let (qualifier, name) = match parts.len() {
+        1 => (None, parts.into_iter().next().unwrap()),
+        2 => {
+          let mut it = parts.into_iter();
+          let q = it.next().unwrap();
+          let n = it.next().unwrap();
+          (Some(q), n)
+        },
+        3 => {
+          // schema.table.col
+          let mut it = parts.into_iter();
+          let schema = it.next().unwrap();
+          let table = it.next().unwrap();
+          let n = it.next().unwrap();
+          (Some(format!("{schema}.{table}")), n)
+        },
+        _ => return,
+      };
+      if name.is_empty() {
+        return;
+      }
+      out.push(Expr::Column { qualifier, name, range: TextRange::default() });
+    },
+    N::AExpr(a) => {
+      if let Some(l) = a.lexpr.as_ref().and_then(|n| n.node.as_ref()) {
+        collect_column_refs(l, out);
+      }
+      if let Some(r) = a.rexpr.as_ref().and_then(|n| n.node.as_ref()) {
+        collect_column_refs(r, out);
+      }
+    },
+    N::BoolExpr(b) => {
+      for arg in &b.args {
+        if let Some(n) = arg.node.as_ref() {
+          collect_column_refs(n, out);
+        }
+      }
+    },
+    N::FuncCall(f) => {
+      for arg in &f.args {
+        if let Some(n) = arg.node.as_ref() {
+          collect_column_refs(n, out);
+        }
+      }
+    },
+    N::List(l) => {
+      for item in &l.items {
+        if let Some(n) = item.node.as_ref() {
+          collect_column_refs(n, out);
+        }
+      }
+    },
+    N::SubLink(s) => {
+      if let Some(t) = s.testexpr.as_ref().and_then(|n| n.node.as_ref()) {
+        collect_column_refs(t, out);
+      }
+      // Subselect body: walk its targetList + WHERE so unknown columns
+      // referenced inside `IN (SELECT noexist FROM ...)` / `EXISTS
+      // (SELECT noexist FROM ...)` still surface as sql002.
+      if let Some(PgNode::SelectStmt(subsel)) = s.subselect.as_ref().and_then(|n| n.node.as_ref()) {
+        for target in &subsel.target_list {
+          if let Some(n) = target.node.as_ref() {
+            collect_column_refs(n, out);
+          }
+        }
+        if let Some(w) = subsel.where_clause.as_ref().and_then(|n| n.node.as_ref()) {
+          collect_column_refs(w, out);
+        }
+      }
+    },
+    N::ResTarget(rt) => {
+      if let Some(n) = rt.val.as_ref().and_then(|n| n.node.as_ref()) {
+        collect_column_refs(n, out);
+      }
+    },
+    N::NullTest(t) => {
+      if let Some(n) = t.arg.as_ref().and_then(|n| n.node.as_ref()) {
+        collect_column_refs(n, out);
+      }
+    },
+    N::CaseExpr(c) => {
+      for w in &c.args {
+        if let Some(n) = w.node.as_ref() {
+          collect_column_refs(n, out);
+        }
+      }
+      if let Some(d) = c.defresult.as_ref().and_then(|n| n.node.as_ref()) {
+        collect_column_refs(d, out);
+      }
+    },
+    N::CaseWhen(c) => {
+      if let Some(e) = c.expr.as_ref().and_then(|n| n.node.as_ref()) {
+        collect_column_refs(e, out);
+      }
+      if let Some(r) = c.result.as_ref().and_then(|n| n.node.as_ref()) {
+        collect_column_refs(r, out);
+      }
+    },
+    _ => {},
   }
 }
 
@@ -176,36 +304,34 @@ fn select(s: &pg_query::protobuf::SelectStmt, _text: &str) -> SelectStmt {
 /// JoinExpr (chained joins), the right arg is typically a RangeVar.
 fn walk_join(j: &pg_query::protobuf::JoinExpr, from: &mut Vec<TableRef>, joins: &mut Vec<JoinClause>) {
   match j.larg.as_ref().and_then(|n| n.node.as_ref()) {
-    Some(PgNode::RangeVar(r)) => {
-      if from.is_empty() {
-        from.push(rangevar_to_tableref(r));
-      }
+    Some(PgNode::RangeVar(r)) if from.is_empty() => {
+      from.push(rangevar_to_tableref(r));
     },
     Some(PgNode::JoinExpr(inner)) => walk_join(inner, from, joins),
     Some(PgNode::RangeFunction(rf)) => {
       let alias = rf.alias.as_ref().map(|a| a.aliasname.clone()).filter(|n| !n.is_empty());
-      if let Some(alias_str) = alias {
-        if from.is_empty() {
-          from.push(TableRef {
-            schema: Some("<func>".into()),
-            name: alias_str.clone(),
-            alias: Some(alias_str),
-            range: TextRange::default(),
-          });
-        }
+      if let Some(alias_str) = alias
+        && from.is_empty()
+      {
+        from.push(TableRef {
+          schema: Some("<func>".into()),
+          name: alias_str.clone(),
+          alias: Some(alias_str),
+          range: TextRange::default(),
+        });
       }
     },
     Some(PgNode::RangeSubselect(rs)) => {
       let alias = rs.alias.as_ref().map(|a| a.aliasname.clone()).filter(|n| !n.is_empty());
-      if let Some(alias_str) = alias {
-        if from.is_empty() {
-          from.push(TableRef {
-            schema: Some("<subq>".into()),
-            name: alias_str.clone(),
-            alias: Some(alias_str),
-            range: TextRange::default(),
-          });
-        }
+      if let Some(alias_str) = alias
+        && from.is_empty()
+      {
+        from.push(TableRef {
+          schema: Some("<subq>".into()),
+          name: alias_str.clone(),
+          alias: Some(alias_str),
+          range: TextRange::default(),
+        });
       }
     },
     _ => {},
@@ -215,7 +341,7 @@ fn walk_join(j: &pg_query::protobuf::JoinExpr, from: &mut Vec<TableRef>, joins: 
       joins.push(JoinClause {
         kind: join_kind(j.jointype),
         table: rangevar_to_tableref(r),
-        on: j.quals.as_ref().map(|_| Expr::Other(String::new())),
+        on: j.quals.as_ref().map(|n| extract_column_refs_expr(n.node.as_ref())),
       });
     },
     Some(PgNode::RangeFunction(rf)) => {
@@ -229,7 +355,7 @@ fn walk_join(j: &pg_query::protobuf::JoinExpr, from: &mut Vec<TableRef>, joins: 
             alias: Some(alias_str),
             range: TextRange::default(),
           },
-          on: j.quals.as_ref().map(|_| Expr::Other(String::new())),
+          on: j.quals.as_ref().map(|n| extract_column_refs_expr(n.node.as_ref())),
         });
       }
     },
@@ -244,7 +370,7 @@ fn walk_join(j: &pg_query::protobuf::JoinExpr, from: &mut Vec<TableRef>, joins: 
             alias: Some(alias_str),
             range: TextRange::default(),
           },
-          on: j.quals.as_ref().map(|_| Expr::Other(String::new())),
+          on: j.quals.as_ref().map(|n| extract_column_refs_expr(n.node.as_ref())),
         });
       }
     },
@@ -272,11 +398,16 @@ fn target_to_projection(t: &pg_query::protobuf::ResTarget) -> Projection {
   let alias = if t.name.is_empty() { None } else { Some(t.name.clone()) };
   let val = match t.val.as_ref().and_then(|n| n.node.as_ref()) {
     Some(v) => v,
-    None => return Projection::Expr { expr: Expr::Other(String::new()), alias },
+    None => return Projection::Expr { expr: Expr::List(Vec::new()), alias },
   };
   match val {
     PgNode::ColumnRef(cref) => column_ref_to_projection(cref, alias),
-    _ => Projection::Expr { expr: Expr::Other(String::new()), alias },
+    // Function calls / CASE / arithmetic / boolean expressions in the
+    // projection: don't drop the entire predicate to `Other("")`.
+    // Walk and collect every column reference so downstream rules
+    // (sql002 unknown column, sql003 ambiguous, ...) can still flag
+    // typos inside `length(noexist)` / `CASE WHEN noexist THEN ...`.
+    other => Projection::Expr { expr: extract_column_refs_expr(Some(other)), alias },
   }
 }
 
@@ -346,12 +477,12 @@ fn update(u: &pg_query::protobuf::UpdateStmt, _text: &str) -> UpdateStmt {
       _ => None,
     })
     .collect();
-  UpdateStmt { table, assignments, where_clause: u.where_clause.as_ref().map(|_| Expr::Other(String::new())) }
+  UpdateStmt { table, assignments, where_clause: u.where_clause.as_ref().map(|n| extract_column_refs_expr(n.node.as_ref())) }
 }
 
 fn delete(d: &pg_query::protobuf::DeleteStmt, _text: &str) -> DeleteStmt {
   let table = d.relation.as_ref().map(rangevar_to_tableref).unwrap_or_default();
-  DeleteStmt { table, where_clause: d.where_clause.as_ref().map(|_| Expr::Other(String::new())) }
+  DeleteStmt { table, where_clause: d.where_clause.as_ref().map(|n| extract_column_refs_expr(n.node.as_ref())) }
 }
 
 fn alter_table(a: &pg_query::protobuf::AlterTableStmt) -> AlterTableStmt {

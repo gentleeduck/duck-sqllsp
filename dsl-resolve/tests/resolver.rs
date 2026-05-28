@@ -94,3 +94,47 @@ fn resolve_with_source_handles_alias_with_as() {
   let cols = scopes[0].cte_columns_of("t").expect("t declared");
   assert!(cols.contains(&"total".to_string()), "got {cols:?}");
 }
+
+#[test]
+fn resolve_with_source_handles_subquery_in_projection() {
+  use dsl_resolve::resolve_with_source;
+  let src = "WITH t AS (SELECT (SELECT MAX(x) FROM other) AS m, id FROM users) SELECT * FROM t;";
+  let p = parse(src, Dialect::Postgres);
+  let scopes = resolve_with_source(&p.statements, src);
+  let cols = scopes[0].cte_columns_of("t").expect("t declared");
+  assert!(cols.contains(&"m".to_string()), "subquery alias 'm' missing, got {cols:?}");
+  assert!(cols.contains(&"id".to_string()), "trailing 'id' missing, got {cols:?}");
+}
+
+#[test]
+fn resolve_with_source_handles_window_function_with_partition_by() {
+  use dsl_resolve::resolve_with_source;
+  let src = "WITH t AS (SELECT id, COUNT(*) OVER (PARTITION BY user_id) AS cnt FROM events) SELECT * FROM t;";
+  let p = parse(src, Dialect::Postgres);
+  let scopes = resolve_with_source(&p.statements, src);
+  let cols = scopes[0].cte_columns_of("t").expect("t declared");
+  assert!(cols.contains(&"id".to_string()), "got {cols:?}");
+  assert!(cols.contains(&"cnt".to_string()), "window alias 'cnt' missing, got {cols:?}");
+}
+
+#[test]
+fn resolve_with_source_handles_string_literal_containing_from() {
+  use dsl_resolve::resolve_with_source;
+  let src = "WITH t AS (SELECT 'hello FROM world' AS greeting, id FROM users) SELECT * FROM t;";
+  let p = parse(src, Dialect::Postgres);
+  let scopes = resolve_with_source(&p.statements, src);
+  let cols = scopes[0].cte_columns_of("t").expect("t declared");
+  assert!(cols.contains(&"greeting".to_string()), "got {cols:?}");
+  assert!(cols.contains(&"id".to_string()), "trailing 'id' missing, got {cols:?}");
+}
+
+#[test]
+fn resolve_with_source_handles_quoted_identifier_alias() {
+  use dsl_resolve::resolve_with_source;
+  let src = "WITH t AS (SELECT id AS \"User Id\", email FROM users) SELECT * FROM t;";
+  let p = parse(src, Dialect::Postgres);
+  let scopes = resolve_with_source(&p.statements, src);
+  let cols = scopes[0].cte_columns_of("t").expect("t declared");
+  assert!(cols.iter().any(|c| c == "User Id"), "quoted alias missing, got {cols:?}");
+  assert!(cols.contains(&"email".to_string()), "got {cols:?}");
+}

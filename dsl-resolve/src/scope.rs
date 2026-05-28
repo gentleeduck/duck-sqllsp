@@ -20,8 +20,16 @@ pub struct Scope {
 }
 
 impl Scope {
+  /// Case-insensitive lookup by alias or bare table name. SQL folds
+  /// unquoted identifiers (PG: lowercase, ANSI: upper), so the user
+  /// typing `U.` must resolve a binding declared as `u`. The fast
+  /// exact-match path runs first; a linear case-insensitive scan
+  /// covers the cold path.
   pub fn get(&self, name: &str) -> Option<&Binding> {
-    self.bindings.get(name)
+    if let Some(b) = self.bindings.get(name) {
+      return Some(b);
+    }
+    self.bindings.iter().find_map(|(k, v)| k.eq_ignore_ascii_case(name).then_some(v))
   }
 
   pub fn tables(&self) -> impl Iterator<Item = &Binding> {
@@ -38,7 +46,11 @@ impl Scope {
   /// CTE columns for `name`, in projection order. Returns `None` when
   /// the CTE was not declared in this scope; `Some(empty)` when it
   /// was declared but the resolver could not parse its body yet.
+  /// Matches case-insensitively for the same reason as [`get`].
   pub fn cte_columns_of(&self, name: &str) -> Option<&Vec<String>> {
-    self.cte_columns.get(name)
+    if let Some(v) = self.cte_columns.get(name) {
+      return Some(v);
+    }
+    self.cte_columns.iter().find_map(|(k, v)| k.eq_ignore_ascii_case(name).then_some(v))
   }
 }

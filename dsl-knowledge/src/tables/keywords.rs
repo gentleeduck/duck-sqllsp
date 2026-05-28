@@ -1079,6 +1079,12 @@ pub fn build() -> HashMap<&'static str, Entry> {
     pg("sql-expressions.html#SYNTAX-WINDOW-FUNCTIONS")
   );
   k!(
+    "WINDOW",
+    "Named window clause -- declare a reusable window spec for window functions.",
+    "SELECT rank() OVER w FROM t WINDOW w AS (PARTITION BY id ORDER BY ts)",
+    pg("sql-select.html#SQL-WINDOW")
+  );
+  k!(
     "BETWEEN AND",
     "BETWEEN range predicate uses AND to separate the bounds.",
     "WHERE age BETWEEN 18 AND 65",

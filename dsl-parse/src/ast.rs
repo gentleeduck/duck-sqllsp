@@ -57,19 +57,13 @@ pub enum Projection {
 // Tables and joins
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct TableRef {
   /// `schema.table` -- schema is the part before the dot when present.
   pub schema: Option<String>,
   pub name: String,
   pub alias: Option<String>,
   pub range: TextRange,
-}
-
-impl Default for TableRef {
-  fn default() -> Self {
-    Self { schema: None, name: String::new(), alias: None, range: TextRange::default() }
-  }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -111,6 +105,12 @@ pub enum Expr {
   },
   /// Anything we don't model individually yet -- stringified upstream AST.
   Other(String),
+  /// Flat container of sub-expressions. Used when the parser can't yet
+  /// build a structured AST for a clause (WHERE / ON predicates,
+  /// argument lists in unsupported constructs) but still wants
+  /// downstream rules to see the column references inside it. Walkers
+  /// recurse element-wise.
+  List(Vec<Expr>),
 }
 
 // ---------------------------------------------------------------------------

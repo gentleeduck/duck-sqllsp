@@ -106,9 +106,18 @@ pub fn split_statements(src: &str) -> Vec<(String, TextRange)> {
 }
 
 fn push_chunk(src: &str, start: usize, end: usize, out: &mut Vec<(String, TextRange)>) {
-  let chunk = src[start..end].trim().to_string();
+  let raw = &src[start..end];
+  let chunk = raw.trim().to_string();
   if chunk.is_empty() {
     return;
   }
-  out.push((chunk, TextRange::new(TextSize::from(start as u32), TextSize::from(end as u32))));
+  // The raw slice spans `start..end` (semicolon-bounded), but the
+  // trimmed chunk excludes leading/trailing whitespace and the
+  // trailing semicolon. The range must follow the trimmed chunk so
+  // diagnostics and inlay hints anchor on the actual statement, not
+  // a preceding blank line or the previous statement's terminator.
+  let leading_ws = raw.len() - raw.trim_start().len();
+  let trimmed_start = start + leading_ws;
+  let trimmed_end = trimmed_start + chunk.len();
+  out.push((chunk, TextRange::new(TextSize::from(trimmed_start as u32), TextSize::from(trimmed_end as u32))));
 }

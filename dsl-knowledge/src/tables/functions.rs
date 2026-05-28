@@ -773,6 +773,13 @@ pub fn build() -> HashMap<&'static str, Entry> {
     pg("functions-aggregate.html")
   );
   f!(
+    "mode",
+    "mode() WITHIN GROUP (ORDER BY ...) -> any",
+    "Ordered-set aggregate: the most-frequent value of the sort expression.",
+    "SELECT mode() WITHIN GROUP (ORDER BY status) FROM orders;",
+    pg("functions-aggregate.html#FUNCTIONS-ORDEREDSET-TABLE")
+  );
+  f!(
     "percentile_cont",
     "percentile_cont(fraction) WITHIN GROUP (ORDER BY ...) -> numeric",
     "Continuous percentile. p50 -> median.",
@@ -810,6 +817,83 @@ pub fn build() -> HashMap<&'static str, Entry> {
     "Get the type of an expression.",
     "SELECT pg_typeof(now());",
     pg("functions-info.html")
+  );
+  f!(
+    "format_type",
+    "format_type(type_oid, typemod) -> text",
+    "SQL-name of a type given its OID and typmod. Useful for catalog introspection.",
+    "SELECT format_type(atttypid, atttypmod) FROM pg_attribute WHERE attname = 'id';",
+    pg("functions-info.html")
+  );
+  f!(
+    "obj_description",
+    "obj_description(object_oid [, catalog_name text]) -> text",
+    "Comment attached to a database object (table, function, ...).",
+    "SELECT obj_description('users'::regclass);",
+    pg("functions-info.html#FUNCTIONS-INFO-COMMENT")
+  );
+  f!(
+    "col_description",
+    "col_description(table_oid, column_number) -> text",
+    "Comment on a specific column.",
+    "SELECT col_description('users'::regclass, 1);",
+    pg("functions-info.html#FUNCTIONS-INFO-COMMENT")
+  );
+  f!(
+    "shobj_description",
+    "shobj_description(object_oid, shared_catalog_name text) -> text",
+    "Comment on a shared (cluster-wide) object such as a role or database.",
+    "SELECT shobj_description(d.oid, 'pg_database') FROM pg_database d;",
+    pg("functions-info.html#FUNCTIONS-INFO-COMMENT")
+  );
+  f!(
+    "bit_count",
+    "bit_count(bytea | bit) -> bigint",
+    "Population count -- number of 1-bits in the argument (PG 14+).",
+    "SELECT bit_count(B'10110100');",
+    pg("functions-bitstring.html")
+  );
+  f!(
+    "gen_random_bytes",
+    "gen_random_bytes(n int) -> bytea (pgcrypto)",
+    "Cryptographically strong random bytes. Requires the pgcrypto extension.",
+    "SELECT gen_random_bytes(16);",
+    pg("pgcrypto.html")
+  );
+  f!(
+    "crypt",
+    "crypt(password text, salt text) -> text (pgcrypto)",
+    "One-way password hash. Pair with `gen_salt('bf')` to verify with `crypt(password, stored_hash) = stored_hash`.",
+    "SELECT crypt('pwd', gen_salt('bf'));",
+    pg("pgcrypto.html")
+  );
+  f!(
+    "gen_salt",
+    "gen_salt(algorithm text [, iter int]) -> text (pgcrypto)",
+    "Generate a salt for crypt(). Algorithms: bf, md5, xdes, des.",
+    "SELECT gen_salt('bf');",
+    pg("pgcrypto.html")
+  );
+  f!(
+    "hmac",
+    "hmac(data text|bytea, key text|bytea, type text) -> bytea (pgcrypto)",
+    "Keyed-hash MAC. Algorithms: md5, sha1, sha224, sha256, sha384, sha512.",
+    "SELECT hmac('msg', 'key', 'sha256');",
+    pg("pgcrypto.html")
+  );
+  f!(
+    "to_hex",
+    "to_hex(int | bigint) -> text",
+    "Hex-string representation of an integer.",
+    "SELECT to_hex(255);  -- 'ff'",
+    pg("functions-string.html#FUNCTIONS-STRING-OTHER")
+  );
+  f!(
+    "normalize",
+    "normalize(text [, form NFC|NFD|NFKC|NFKD]) -> text",
+    "Unicode normalization (PG 13+). Default form is NFC.",
+    "SELECT normalize('café', NFC);",
+    pg("functions-string.html#FUNCTIONS-STRING-OTHER")
   );
   f!(
     "current_setting",
@@ -1057,6 +1141,20 @@ pub fn build() -> HashMap<&'static str, Entry> {
     pg("functions-range.html")
   );
   f!(
+    "range_merge",
+    "range_merge(anyrange, anyrange) -> anyrange",
+    "Smallest range that contains both inputs (may include the gap between them).",
+    "SELECT range_merge(int4range(1,5), int4range(10,20));",
+    pg("functions-range.html")
+  );
+  f!(
+    "int4multirange",
+    "int4multirange(VARIADIC int4range) -> int4multirange",
+    "Constructor for int4multirange from explicit int4range pieces (PG 14+).",
+    "SELECT int4multirange(int4range(1,4), int4range(10,12));",
+    pg("rangetypes.html#RANGETYPES-BUILTIN")
+  );
+  f!(
     "isempty",
     "isempty(anyrange) -> boolean",
     "True when the range or multirange contains no points.",
@@ -1135,6 +1233,20 @@ pub fn build() -> HashMap<&'static str, Entry> {
     "pg_sleep(double precision) -> void",
     "Block for N seconds. Useful in tests; never in hot paths.",
     "SELECT pg_sleep(0.5);",
+    pg("functions-datetime.html#FUNCTIONS-DATETIME-DELAY")
+  );
+  f!(
+    "pg_sleep_for",
+    "pg_sleep_for(interval) -> void",
+    "Block for the given interval (more readable than `pg_sleep(seconds)`).",
+    "SELECT pg_sleep_for('5 seconds');",
+    pg("functions-datetime.html#FUNCTIONS-DATETIME-DELAY")
+  );
+  f!(
+    "pg_sleep_until",
+    "pg_sleep_until(timestamp with time zone) -> void",
+    "Block until the given wall-clock timestamp.",
+    "SELECT pg_sleep_until(now() + interval '1 minute');",
     pg("functions-datetime.html#FUNCTIONS-DATETIME-DELAY")
   );
   f!(
@@ -1271,246 +1383,1374 @@ pub fn build() -> HashMap<&'static str, Entry> {
     pg("functions-datetime.html#FUNCTIONS-DATETIME-CONSTRUCT")
   );
   // String helpers commonly used in dynamic SQL.
-  f!("quote_literal",  "quote_literal(text) -> text", "Quote a literal so it's a safe SQL string literal.", "SELECT quote_literal($$it's$$);", pg("functions-string.html"));
-  f!("quote_ident",    "quote_ident(text) -> text", "Quote an identifier so it parses as a single name.", "SELECT quote_ident('weird name');", pg("functions-string.html"));
-  f!("quote_nullable", "quote_nullable(anyelement) -> text", "Like quote_literal but renders NULL as the unquoted token.", "SELECT quote_nullable(NULL);", pg("functions-string.html"));
-  f!("translate",      "translate(text, from text, to text) -> text", "Per-character substitution.", "SELECT translate('hello','el','EL');", pg("functions-string.html"));
-  f!("repeat",         "repeat(text, n int) -> text", "Repeat the input n times.", "SELECT repeat('ab', 3);", pg("functions-string.html"));
-  f!("reverse",        "reverse(text) -> text", "Reverse the characters.", "SELECT reverse('hello');", pg("functions-string.html"));
-  f!("replace",        "replace(text, from text, to text) -> text", "Replace every occurrence.", "SELECT replace('a b a','a','x');", pg("functions-string.html"));
-  f!("split_part",     "split_part(text, sep text, n int) -> text", "Return the n-th field after splitting on sep.", "SELECT split_part('a,b,c', ',', 2);", pg("functions-string.html"));
-  f!("strpos",         "strpos(haystack text, needle text) -> integer", "1-based index of needle in haystack, 0 if not found.", "SELECT strpos('hello world','world');", pg("functions-string.html"));
-  f!("btrim",          "btrim(text, chars text) -> text", "Trim chars from both ends (default whitespace).", "SELECT btrim('  hi  ');", pg("functions-string.html"));
-  f!("ltrim",          "ltrim(text, chars text) -> text", "Trim chars from the left.", "SELECT ltrim('xxxhi','x');", pg("functions-string.html"));
-  f!("rtrim",          "rtrim(text, chars text) -> text", "Trim chars from the right.", "SELECT rtrim('hiyyy','y');", pg("functions-string.html"));
-  f!("initcap",        "initcap(text) -> text", "Capitalize the first letter of each word.", "SELECT initcap('hello WORLD');", pg("functions-string.html"));
-  f!("octet_length",   "octet_length(text|bytea) -> integer", "Length in bytes.", "SELECT octet_length('héllo');", pg("functions-string.html"));
-  f!("bit_length",     "bit_length(text|bytea|bit) -> integer", "Length in bits.", "SELECT bit_length('a');", pg("functions-string.html"));
-  f!("ord",            "ord(text) -> integer", "Codepoint of the first character.", "SELECT ord('A');", pg("functions-string.html"));
+  f!(
+    "quote_literal",
+    "quote_literal(text) -> text",
+    "Quote a literal so it's a safe SQL string literal.",
+    "SELECT quote_literal($$it's$$);",
+    pg("functions-string.html")
+  );
+  f!(
+    "quote_ident",
+    "quote_ident(text) -> text",
+    "Quote an identifier so it parses as a single name.",
+    "SELECT quote_ident('weird name');",
+    pg("functions-string.html")
+  );
+  f!(
+    "quote_nullable",
+    "quote_nullable(anyelement) -> text",
+    "Like quote_literal but renders NULL as the unquoted token.",
+    "SELECT quote_nullable(NULL);",
+    pg("functions-string.html")
+  );
+  f!(
+    "translate",
+    "translate(text, from text, to text) -> text",
+    "Per-character substitution.",
+    "SELECT translate('hello','el','EL');",
+    pg("functions-string.html")
+  );
+  f!(
+    "repeat",
+    "repeat(text, n int) -> text",
+    "Repeat the input n times.",
+    "SELECT repeat('ab', 3);",
+    pg("functions-string.html")
+  );
+  f!(
+    "reverse",
+    "reverse(text) -> text",
+    "Reverse the characters.",
+    "SELECT reverse('hello');",
+    pg("functions-string.html")
+  );
+  f!(
+    "replace",
+    "replace(text, from text, to text) -> text",
+    "Replace every occurrence.",
+    "SELECT replace('a b a','a','x');",
+    pg("functions-string.html")
+  );
+  f!(
+    "split_part",
+    "split_part(text, sep text, n int) -> text",
+    "Return the n-th field after splitting on sep.",
+    "SELECT split_part('a,b,c', ',', 2);",
+    pg("functions-string.html")
+  );
+  f!(
+    "strpos",
+    "strpos(haystack text, needle text) -> integer",
+    "1-based index of needle in haystack, 0 if not found.",
+    "SELECT strpos('hello world','world');",
+    pg("functions-string.html")
+  );
+  f!(
+    "btrim",
+    "btrim(text, chars text) -> text",
+    "Trim chars from both ends (default whitespace).",
+    "SELECT btrim('  hi  ');",
+    pg("functions-string.html")
+  );
+  f!(
+    "ltrim",
+    "ltrim(text, chars text) -> text",
+    "Trim chars from the left.",
+    "SELECT ltrim('xxxhi','x');",
+    pg("functions-string.html")
+  );
+  f!(
+    "rtrim",
+    "rtrim(text, chars text) -> text",
+    "Trim chars from the right.",
+    "SELECT rtrim('hiyyy','y');",
+    pg("functions-string.html")
+  );
+  f!(
+    "initcap",
+    "initcap(text) -> text",
+    "Capitalize the first letter of each word.",
+    "SELECT initcap('hello WORLD');",
+    pg("functions-string.html")
+  );
+  f!(
+    "octet_length",
+    "octet_length(text|bytea) -> integer",
+    "Length in bytes.",
+    "SELECT octet_length('héllo');",
+    pg("functions-string.html")
+  );
+  f!(
+    "bit_length",
+    "bit_length(text|bytea|bit) -> integer",
+    "Length in bits.",
+    "SELECT bit_length('a');",
+    pg("functions-string.html")
+  );
+  f!(
+    "ord",
+    "ord(text) -> integer",
+    "Codepoint of the first character.",
+    "SELECT ord('A');",
+    pg("functions-string.html")
+  );
   // Bit / byte ops on bytea/bit.
-  f!("get_bit",  "get_bit(bytea|bit, n int) -> integer", "Extract the n-th bit.", "SELECT get_bit(B'10101010', 3);", pg("functions-binarystring.html"));
-  f!("set_bit",  "set_bit(bytea|bit, n int, v int) -> same", "Set the n-th bit to v.", "SELECT set_bit(B'10000000', 3, 1);", pg("functions-binarystring.html"));
-  f!("get_byte", "get_byte(bytea, n int) -> integer", "Extract the n-th byte.", "SELECT get_byte('\\xDEADBEEF'::bytea, 1);", pg("functions-binarystring.html"));
-  f!("set_byte", "set_byte(bytea, n int, v int) -> bytea", "Set the n-th byte to v.", "SELECT set_byte('\\xDEAD'::bytea, 0, 255);", pg("functions-binarystring.html"));
+  f!(
+    "get_bit",
+    "get_bit(bytea|bit, n int) -> integer",
+    "Extract the n-th bit.",
+    "SELECT get_bit(B'10101010', 3);",
+    pg("functions-binarystring.html")
+  );
+  f!(
+    "set_bit",
+    "set_bit(bytea|bit, n int, v int) -> same",
+    "Set the n-th bit to v.",
+    "SELECT set_bit(B'10000000', 3, 1);",
+    pg("functions-binarystring.html")
+  );
+  f!(
+    "get_byte",
+    "get_byte(bytea, n int) -> integer",
+    "Extract the n-th byte.",
+    "SELECT get_byte('\\xDEADBEEF'::bytea, 1);",
+    pg("functions-binarystring.html")
+  );
+  f!(
+    "set_byte",
+    "set_byte(bytea, n int, v int) -> bytea",
+    "Set the n-th byte to v.",
+    "SELECT set_byte('\\xDEAD'::bytea, 0, 255);",
+    pg("functions-binarystring.html")
+  );
   // Conversion / encoding helpers.
-  f!("convert_from", "convert_from(bytea, src_encoding text) -> text", "Decode bytes from a specific encoding to TEXT.", "SELECT convert_from(E'\\\\xC3\\\\xA9'::bytea, 'UTF8');", pg("functions-string.html"));
-  f!("convert_to",   "convert_to(text, dest_encoding text) -> bytea", "Encode TEXT into bytes in the requested encoding.", "SELECT convert_to('hi', 'UTF8');", pg("functions-string.html"));
-  f!("convert",      "convert(bytea, src text, dest text) -> bytea", "Recode bytes between encodings.", "SELECT convert('hi'::bytea, 'LATIN1', 'UTF8');", pg("functions-string.html"));
+  f!(
+    "convert_from",
+    "convert_from(bytea, src_encoding text) -> text",
+    "Decode bytes from a specific encoding to TEXT.",
+    "SELECT convert_from(E'\\\\xC3\\\\xA9'::bytea, 'UTF8');",
+    pg("functions-string.html")
+  );
+  f!(
+    "convert_to",
+    "convert_to(text, dest_encoding text) -> bytea",
+    "Encode TEXT into bytes in the requested encoding.",
+    "SELECT convert_to('hi', 'UTF8');",
+    pg("functions-string.html")
+  );
+  f!(
+    "convert",
+    "convert(bytea, src text, dest text) -> bytea",
+    "Recode bytes between encodings.",
+    "SELECT convert('hi'::bytea, 'LATIN1', 'UTF8');",
+    pg("functions-string.html")
+  );
   // pg_catalog admin helpers.
-  f!("pg_relation_filepath",     "pg_relation_filepath(regclass) -> text", "Path (relative to data directory) of the relation's main file.", "SELECT pg_relation_filepath('users');", pg("functions-admin.html"));
-  f!("pg_get_viewdef",            "pg_get_viewdef(regclass) -> text", "SELECT statement that defines a view.", "SELECT pg_get_viewdef('my_view'::regclass);", pg("functions-info.html"));
-  f!("pg_get_function_arguments", "pg_get_function_arguments(oid) -> text", "Argument signature of a function.", "SELECT pg_get_function_arguments(p.oid) FROM pg_proc p;", pg("functions-info.html"));
-  f!("pg_get_function_result",    "pg_get_function_result(oid) -> text", "Return-type signature of a function.", "SELECT pg_get_function_result(p.oid) FROM pg_proc p;", pg("functions-info.html"));
-  f!("pg_get_functiondef",        "pg_get_functiondef(oid) -> text", "Full CREATE FUNCTION text.", "SELECT pg_get_functiondef('public.fn'::regproc);", pg("functions-info.html"));
-  f!("pg_get_triggerdef",         "pg_get_triggerdef(oid) -> text", "CREATE TRIGGER text.", "SELECT pg_get_triggerdef(t.oid) FROM pg_trigger t LIMIT 1;", pg("functions-info.html"));
-  f!("pg_get_constraintdef",      "pg_get_constraintdef(oid) -> text", "Constraint definition text.", "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c LIMIT 1;", pg("functions-info.html"));
-  f!("pg_terminate_backend",      "pg_terminate_backend(pid int) -> boolean", "Terminate a backend by PID (needs pg_signal_backend role).", "SELECT pg_terminate_backend(12345);", pg("functions-admin.html"));
-  f!("pg_cancel_backend",         "pg_cancel_backend(pid int) -> boolean", "Cancel the current query on a backend by PID.", "SELECT pg_cancel_backend(12345);", pg("functions-admin.html"));
-  f!("pg_trigger_depth",          "pg_trigger_depth() -> integer", "Current nesting level of PG triggers (0 outside any trigger).", "SELECT pg_trigger_depth();", pg("functions-info.html"));
-  f!("array_ndims",               "array_ndims(anyarray) -> integer", "Number of dimensions of the array.", "SELECT array_ndims(ARRAY[[1,2],[3,4]]);", pg("functions-array.html"));
-  f!("array_upper",               "array_upper(anyarray, dim int) -> integer", "Upper bound of the requested dimension.", "SELECT array_upper(ARRAY[10,20,30], 1);", pg("functions-array.html"));
-  f!("array_lower",               "array_lower(anyarray, dim int) -> integer", "Lower bound of the requested dimension.", "SELECT array_lower(ARRAY[10,20,30], 1);", pg("functions-array.html"));
-  f!("array_dims",                "array_dims(anyarray) -> text", "Textual representation of the array dimensions.", "SELECT array_dims(ARRAY[[1,2],[3,4]]);", pg("functions-array.html"));
-  f!("array_prepend",             "array_prepend(elt anyelement, arr anyarray) -> anyarray", "Prepend an element.", "SELECT array_prepend(0, ARRAY[1,2,3]);", pg("functions-array.html"));
-  f!("array_append",              "array_append(arr anyarray, elt anyelement) -> anyarray", "Append an element (also operator `||`).", "SELECT array_append(ARRAY[1,2], 3);", pg("functions-array.html"));
-  f!("array_remove",              "array_remove(arr anyarray, elt anyelement) -> anyarray", "Remove all occurrences of elt from the array.", "SELECT array_remove(ARRAY[1,2,3,2], 2);", pg("functions-array.html"));
-  f!("array_replace",             "array_replace(arr anyarray, from anyelement, to anyelement) -> anyarray", "Replace every from with to.", "SELECT array_replace(ARRAY[1,2,3,2], 2, 99);", pg("functions-array.html"));
-  f!("array_cat",                 "array_cat(a anyarray, b anyarray) -> anyarray", "Concatenate two arrays.", "SELECT array_cat(ARRAY[1,2], ARRAY[3,4]);", pg("functions-array.html"));
-  f!("array_position",            "array_position(arr anyarray, elt anyelement) -> integer", "1-based index of elt, NULL if not present.", "SELECT array_position(ARRAY[10,20,30,40], 30);", pg("functions-array.html"));
-  f!("array_positions",           "array_positions(arr anyarray, elt anyelement) -> int[]", "All 1-based indexes of elt.", "SELECT array_positions(ARRAY[1,2,1,3], 1);", pg("functions-array.html"));
-  f!("array_to_string",           "array_to_string(arr anyarray, sep text [, null_str text]) -> text", "Join array elements with sep.", "SELECT array_to_string(ARRAY[1,2,3], ',', '*');", pg("functions-array.html"));
-  f!("string_to_array",           "string_to_array(text, sep text [, null_str text]) -> text[]", "Split text into a text[].", "SELECT string_to_array('a,b,,c', ',');", pg("functions-array.html"));
-  f!("cardinality",               "cardinality(anyarray) -> integer", "Total element count across all dimensions.", "SELECT cardinality(ARRAY[1,2,3]);", pg("functions-array.html"));
-  f!("trim_array",                "trim_array(anyarray, n int) -> anyarray", "Return all but the last n elements.", "SELECT trim_array(ARRAY[1,2,3,4], 1);", pg("functions-array.html"));
+  f!(
+    "pg_relation_filepath",
+    "pg_relation_filepath(regclass) -> text",
+    "Path (relative to data directory) of the relation's main file.",
+    "SELECT pg_relation_filepath('users');",
+    pg("functions-admin.html")
+  );
+  f!(
+    "pg_get_viewdef",
+    "pg_get_viewdef(regclass) -> text",
+    "SELECT statement that defines a view.",
+    "SELECT pg_get_viewdef('my_view'::regclass);",
+    pg("functions-info.html")
+  );
+  f!(
+    "pg_get_function_arguments",
+    "pg_get_function_arguments(oid) -> text",
+    "Argument signature of a function.",
+    "SELECT pg_get_function_arguments(p.oid) FROM pg_proc p;",
+    pg("functions-info.html")
+  );
+  f!(
+    "pg_get_function_result",
+    "pg_get_function_result(oid) -> text",
+    "Return-type signature of a function.",
+    "SELECT pg_get_function_result(p.oid) FROM pg_proc p;",
+    pg("functions-info.html")
+  );
+  f!(
+    "pg_get_functiondef",
+    "pg_get_functiondef(oid) -> text",
+    "Full CREATE FUNCTION text.",
+    "SELECT pg_get_functiondef('public.fn'::regproc);",
+    pg("functions-info.html")
+  );
+  f!(
+    "pg_get_triggerdef",
+    "pg_get_triggerdef(oid) -> text",
+    "CREATE TRIGGER text.",
+    "SELECT pg_get_triggerdef(t.oid) FROM pg_trigger t LIMIT 1;",
+    pg("functions-info.html")
+  );
+  f!(
+    "pg_get_constraintdef",
+    "pg_get_constraintdef(oid) -> text",
+    "Constraint definition text.",
+    "SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c LIMIT 1;",
+    pg("functions-info.html")
+  );
+  f!(
+    "pg_terminate_backend",
+    "pg_terminate_backend(pid int) -> boolean",
+    "Terminate a backend by PID (needs pg_signal_backend role).",
+    "SELECT pg_terminate_backend(12345);",
+    pg("functions-admin.html")
+  );
+  f!(
+    "pg_cancel_backend",
+    "pg_cancel_backend(pid int) -> boolean",
+    "Cancel the current query on a backend by PID.",
+    "SELECT pg_cancel_backend(12345);",
+    pg("functions-admin.html")
+  );
+  f!(
+    "pg_trigger_depth",
+    "pg_trigger_depth() -> integer",
+    "Current nesting level of PG triggers (0 outside any trigger).",
+    "SELECT pg_trigger_depth();",
+    pg("functions-info.html")
+  );
+  f!(
+    "array_ndims",
+    "array_ndims(anyarray) -> integer",
+    "Number of dimensions of the array.",
+    "SELECT array_ndims(ARRAY[[1,2],[3,4]]);",
+    pg("functions-array.html")
+  );
+  f!(
+    "array_upper",
+    "array_upper(anyarray, dim int) -> integer",
+    "Upper bound of the requested dimension.",
+    "SELECT array_upper(ARRAY[10,20,30], 1);",
+    pg("functions-array.html")
+  );
+  f!(
+    "array_lower",
+    "array_lower(anyarray, dim int) -> integer",
+    "Lower bound of the requested dimension.",
+    "SELECT array_lower(ARRAY[10,20,30], 1);",
+    pg("functions-array.html")
+  );
+  f!(
+    "array_dims",
+    "array_dims(anyarray) -> text",
+    "Textual representation of the array dimensions.",
+    "SELECT array_dims(ARRAY[[1,2],[3,4]]);",
+    pg("functions-array.html")
+  );
+  f!(
+    "array_prepend",
+    "array_prepend(elt anyelement, arr anyarray) -> anyarray",
+    "Prepend an element.",
+    "SELECT array_prepend(0, ARRAY[1,2,3]);",
+    pg("functions-array.html")
+  );
+  f!(
+    "array_append",
+    "array_append(arr anyarray, elt anyelement) -> anyarray",
+    "Append an element (also operator `||`).",
+    "SELECT array_append(ARRAY[1,2], 3);",
+    pg("functions-array.html")
+  );
+  f!(
+    "array_remove",
+    "array_remove(arr anyarray, elt anyelement) -> anyarray",
+    "Remove all occurrences of elt from the array.",
+    "SELECT array_remove(ARRAY[1,2,3,2], 2);",
+    pg("functions-array.html")
+  );
+  f!(
+    "array_replace",
+    "array_replace(arr anyarray, from anyelement, to anyelement) -> anyarray",
+    "Replace every from with to.",
+    "SELECT array_replace(ARRAY[1,2,3,2], 2, 99);",
+    pg("functions-array.html")
+  );
+  f!(
+    "array_cat",
+    "array_cat(a anyarray, b anyarray) -> anyarray",
+    "Concatenate two arrays.",
+    "SELECT array_cat(ARRAY[1,2], ARRAY[3,4]);",
+    pg("functions-array.html")
+  );
+  f!(
+    "array_position",
+    "array_position(arr anyarray, elt anyelement) -> integer",
+    "1-based index of elt, NULL if not present.",
+    "SELECT array_position(ARRAY[10,20,30,40], 30);",
+    pg("functions-array.html")
+  );
+  f!(
+    "array_positions",
+    "array_positions(arr anyarray, elt anyelement) -> int[]",
+    "All 1-based indexes of elt.",
+    "SELECT array_positions(ARRAY[1,2,1,3], 1);",
+    pg("functions-array.html")
+  );
+  f!(
+    "array_to_string",
+    "array_to_string(arr anyarray, sep text [, null_str text]) -> text",
+    "Join array elements with sep.",
+    "SELECT array_to_string(ARRAY[1,2,3], ',', '*');",
+    pg("functions-array.html")
+  );
+  f!(
+    "string_to_array",
+    "string_to_array(text, sep text [, null_str text]) -> text[]",
+    "Split text into a text[].",
+    "SELECT string_to_array('a,b,,c', ',');",
+    pg("functions-array.html")
+  );
+  f!(
+    "cardinality",
+    "cardinality(anyarray) -> integer",
+    "Total element count across all dimensions.",
+    "SELECT cardinality(ARRAY[1,2,3]);",
+    pg("functions-array.html")
+  );
+  f!(
+    "trim_array",
+    "trim_array(anyarray, n int) -> anyarray",
+    "Return all but the last n elements.",
+    "SELECT trim_array(ARRAY[1,2,3,4], 1);",
+    pg("functions-array.html")
+  );
   // current_* time/date are SQL-standard functions; they also work without parens.
-  f!("current_time",      "current_time [(p int)] -> time with time zone", "Current TIME WITH TIME ZONE (optional precision).", "SELECT current_time(3);", pg("functions-datetime.html"));
-  f!("current_timestamp", "current_timestamp [(p int)] -> timestamp with time zone", "Current TIMESTAMPTZ (optional precision).", "SELECT current_timestamp(0);", pg("functions-datetime.html"));
-  f!("current_date",      "current_date -> date", "Current DATE (no parens).", "SELECT current_date;", pg("functions-datetime.html"));
-  f!("clock_timestamp",   "clock_timestamp() -> timestamp with time zone", "Wall-clock TIMESTAMPTZ; changes within a transaction.", "SELECT clock_timestamp();", pg("functions-datetime.html"));
-  f!("statement_timestamp",   "statement_timestamp() -> timestamp with time zone", "TIMESTAMPTZ of statement start.", "SELECT statement_timestamp();", pg("functions-datetime.html"));
-  f!("transaction_timestamp", "transaction_timestamp() -> timestamp with time zone", "Alias for now(); TIMESTAMPTZ of transaction start.", "SELECT transaction_timestamp();", pg("functions-datetime.html"));
-  f!("timeofday",         "timeofday() -> text", "Wall-clock time as text (legacy).", "SELECT timeofday();", pg("functions-datetime.html"));
-  f!("substr",            "substr(text, start int [, len int]) -> text", "Positional substring (PG alias for SQL-standard substring(... FROM n FOR m)).", "SELECT substr('hello', 2, 3);", pg("functions-string.html"));
-  f!("trim",              "trim([LEADING|TRAILING|BOTH] [chars] FROM text) -> text | trim(text [, chars]) -> text", "Trim characters from both/leading/trailing.", "SELECT trim(BOTH 'x' FROM 'xxhixx');", pg("functions-string.html"));
-  f!("char_length",       "char_length(text) -> integer", "Character count of text.", "SELECT char_length('héllo');", pg("functions-string.html"));
-  f!("character_length",  "character_length(text) -> integer", "Character count of text (SQL-standard spelling).", "SELECT character_length('héllo');", pg("functions-string.html"));
-  f!("md5",               "md5(text|bytea) -> text", "MD5 hash hex digest.", "SELECT md5('hello');", pg("functions-string.html"));
-  f!("position",          "position(needle IN haystack) -> integer", "SQL-standard 1-based index of needle.", "SELECT position('world' IN 'hello world');", pg("functions-string.html"));
-  f!("cbrt",          "cbrt(double) -> double precision", "Cube root.", "SELECT cbrt(27);", pg("functions-math.html"));
-  f!("gcd",           "gcd(int, int) -> integer", "Greatest common divisor.", "SELECT gcd(12, 18);", pg("functions-math.html"));
-  f!("lcm",           "lcm(int, int) -> integer", "Least common multiple.", "SELECT lcm(4, 6);", pg("functions-math.html"));
-  f!("scale",         "scale(numeric) -> integer", "Scale of a numeric value (digits after decimal).", "SELECT scale(1.230);", pg("functions-math.html"));
-  f!("min_scale",     "min_scale(numeric) -> integer", "Minimum scale needed to represent value exactly.", "SELECT min_scale(1.230);", pg("functions-math.html"));
-  f!("trim_scale",    "trim_scale(numeric) -> numeric", "Strip trailing zeros after decimal point.", "SELECT trim_scale(1.2300);", pg("functions-math.html"));
-  f!("width_bucket",  "width_bucket(operand, b1, b2, count int) -> integer", "Histogram bucket number for operand in count equal-width buckets between b1 and b2.", "SELECT width_bucket(5.0, 0, 10, 4);", pg("functions-math.html"));
+  f!(
+    "current_time",
+    "current_time [(p int)] -> time with time zone",
+    "Current TIME WITH TIME ZONE (optional precision).",
+    "SELECT current_time(3);",
+    pg("functions-datetime.html")
+  );
+  f!(
+    "current_timestamp",
+    "current_timestamp [(p int)] -> timestamp with time zone",
+    "Current TIMESTAMPTZ (optional precision).",
+    "SELECT current_timestamp(0);",
+    pg("functions-datetime.html")
+  );
+  f!(
+    "current_date",
+    "current_date -> date",
+    "Current DATE (no parens).",
+    "SELECT current_date;",
+    pg("functions-datetime.html")
+  );
+  f!(
+    "clock_timestamp",
+    "clock_timestamp() -> timestamp with time zone",
+    "Wall-clock TIMESTAMPTZ; changes within a transaction.",
+    "SELECT clock_timestamp();",
+    pg("functions-datetime.html")
+  );
+  f!(
+    "statement_timestamp",
+    "statement_timestamp() -> timestamp with time zone",
+    "TIMESTAMPTZ of statement start.",
+    "SELECT statement_timestamp();",
+    pg("functions-datetime.html")
+  );
+  f!(
+    "transaction_timestamp",
+    "transaction_timestamp() -> timestamp with time zone",
+    "Alias for now(); TIMESTAMPTZ of transaction start.",
+    "SELECT transaction_timestamp();",
+    pg("functions-datetime.html")
+  );
+  f!(
+    "timeofday",
+    "timeofday() -> text",
+    "Wall-clock time as text (legacy).",
+    "SELECT timeofday();",
+    pg("functions-datetime.html")
+  );
+  f!(
+    "substr",
+    "substr(text, start int [, len int]) -> text",
+    "Positional substring (PG alias for SQL-standard substring(... FROM n FOR m)).",
+    "SELECT substr('hello', 2, 3);",
+    pg("functions-string.html")
+  );
+  f!(
+    "trim",
+    "trim([LEADING|TRAILING|BOTH] [chars] FROM text) -> text | trim(text [, chars]) -> text",
+    "Trim characters from both/leading/trailing.",
+    "SELECT trim(BOTH 'x' FROM 'xxhixx');",
+    pg("functions-string.html")
+  );
+  f!(
+    "char_length",
+    "char_length(text) -> integer",
+    "Character count of text.",
+    "SELECT char_length('héllo');",
+    pg("functions-string.html")
+  );
+  f!(
+    "character_length",
+    "character_length(text) -> integer",
+    "Character count of text (SQL-standard spelling).",
+    "SELECT character_length('héllo');",
+    pg("functions-string.html")
+  );
+  f!("md5", "md5(text|bytea) -> text", "MD5 hash hex digest.", "SELECT md5('hello');", pg("functions-string.html"));
+  f!(
+    "position",
+    "position(needle IN haystack) -> integer",
+    "SQL-standard 1-based index of needle.",
+    "SELECT position('world' IN 'hello world');",
+    pg("functions-string.html")
+  );
+  f!("cbrt", "cbrt(double) -> double precision", "Cube root.", "SELECT cbrt(27);", pg("functions-math.html"));
+  f!("gcd", "gcd(int, int) -> integer", "Greatest common divisor.", "SELECT gcd(12, 18);", pg("functions-math.html"));
+  f!("lcm", "lcm(int, int) -> integer", "Least common multiple.", "SELECT lcm(4, 6);", pg("functions-math.html"));
+  f!(
+    "scale",
+    "scale(numeric) -> integer",
+    "Scale of a numeric value (digits after decimal).",
+    "SELECT scale(1.230);",
+    pg("functions-math.html")
+  );
+  f!(
+    "min_scale",
+    "min_scale(numeric) -> integer",
+    "Minimum scale needed to represent value exactly.",
+    "SELECT min_scale(1.230);",
+    pg("functions-math.html")
+  );
+  f!(
+    "trim_scale",
+    "trim_scale(numeric) -> numeric",
+    "Strip trailing zeros after decimal point.",
+    "SELECT trim_scale(1.2300);",
+    pg("functions-math.html")
+  );
+  f!(
+    "width_bucket",
+    "width_bucket(operand, b1, b2, count int) -> integer",
+    "Histogram bucket number for operand in count equal-width buckets between b1 and b2.",
+    "SELECT width_bucket(5.0, 0, 10, 4);",
+    pg("functions-math.html")
+  );
   // Statistical / regression aggregates.
-  f!("regr_slope",     "regr_slope(y, x) -> double precision", "Slope of the linear regression line.", "SELECT regr_slope(price, qty) FROM items;", pg("functions-aggregate.html"));
-  f!("regr_intercept", "regr_intercept(y, x) -> double precision", "Intercept of the linear regression line.", "SELECT regr_intercept(price, qty) FROM items;", pg("functions-aggregate.html"));
-  f!("regr_r2",        "regr_r2(y, x) -> double precision", "Square of the correlation coefficient (R²).", "SELECT regr_r2(price, qty) FROM items;", pg("functions-aggregate.html"));
-  f!("regr_count",     "regr_count(y, x) -> bigint", "Count of input rows in which both inputs are non-null.", "SELECT regr_count(price, qty) FROM items;", pg("functions-aggregate.html"));
-  f!("regr_avgx",      "regr_avgx(y, x) -> double precision", "Average of the x values.", "SELECT regr_avgx(price, qty) FROM items;", pg("functions-aggregate.html"));
-  f!("regr_avgy",      "regr_avgy(y, x) -> double precision", "Average of the y values.", "SELECT regr_avgy(price, qty) FROM items;", pg("functions-aggregate.html"));
-  f!("regr_sxx",       "regr_sxx(y, x) -> double precision", "Sum of squares of the x values.", "SELECT regr_sxx(price, qty) FROM items;", pg("functions-aggregate.html"));
-  f!("regr_syy",       "regr_syy(y, x) -> double precision", "Sum of squares of the y values.", "SELECT regr_syy(price, qty) FROM items;", pg("functions-aggregate.html"));
-  f!("regr_sxy",       "regr_sxy(y, x) -> double precision", "Sum of products of x*y.", "SELECT regr_sxy(price, qty) FROM items;", pg("functions-aggregate.html"));
-  f!("array_to_json",  "array_to_json(anyarray [, pretty bool]) -> json", "Convert an array to a JSON array.", "SELECT array_to_json(ARRAY[1,2,3]);", pg("functions-json.html"));
-  f!("row_to_json",    "row_to_json(record [, pretty bool]) -> json", "Convert a row to a JSON object.", "SELECT row_to_json(t) FROM users t;", pg("functions-json.html"));
-  f!("date_bin",       "date_bin(interval, source ts, origin ts) -> timestamp(tz)", "Snap a timestamp to the nearest bucket of size `interval` aligned to `origin`.", "SELECT date_bin('15 minutes', now(), '2000-01-01');", pg("functions-datetime.html"));
-  f!("timezone",       "timezone(zone text, ts timestamp(tz)) -> timestamp(tz) | timezone(zone, time) -> time", "SQL-standard alternate to `AT TIME ZONE`.", "SELECT timezone('UTC', now());", pg("functions-datetime.html"));
-  f!("isfinite",       "isfinite(date|timestamp|interval) -> boolean", "True when value is not -infinity/+infinity.", "SELECT isfinite(now());", pg("functions-datetime.html"));
+  f!(
+    "regr_slope",
+    "regr_slope(y, x) -> double precision",
+    "Slope of the linear regression line.",
+    "SELECT regr_slope(price, qty) FROM items;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "regr_intercept",
+    "regr_intercept(y, x) -> double precision",
+    "Intercept of the linear regression line.",
+    "SELECT regr_intercept(price, qty) FROM items;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "regr_r2",
+    "regr_r2(y, x) -> double precision",
+    "Square of the correlation coefficient (R²).",
+    "SELECT regr_r2(price, qty) FROM items;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "regr_count",
+    "regr_count(y, x) -> bigint",
+    "Count of input rows in which both inputs are non-null.",
+    "SELECT regr_count(price, qty) FROM items;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "regr_avgx",
+    "regr_avgx(y, x) -> double precision",
+    "Average of the x values.",
+    "SELECT regr_avgx(price, qty) FROM items;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "regr_avgy",
+    "regr_avgy(y, x) -> double precision",
+    "Average of the y values.",
+    "SELECT regr_avgy(price, qty) FROM items;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "regr_sxx",
+    "regr_sxx(y, x) -> double precision",
+    "Sum of squares of the x values.",
+    "SELECT regr_sxx(price, qty) FROM items;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "regr_syy",
+    "regr_syy(y, x) -> double precision",
+    "Sum of squares of the y values.",
+    "SELECT regr_syy(price, qty) FROM items;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "regr_sxy",
+    "regr_sxy(y, x) -> double precision",
+    "Sum of products of x*y.",
+    "SELECT regr_sxy(price, qty) FROM items;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "array_to_json",
+    "array_to_json(anyarray [, pretty bool]) -> json",
+    "Convert an array to a JSON array.",
+    "SELECT array_to_json(ARRAY[1,2,3]);",
+    pg("functions-json.html")
+  );
+  f!(
+    "row_to_json",
+    "row_to_json(record [, pretty bool]) -> json",
+    "Convert a row to a JSON object.",
+    "SELECT row_to_json(t) FROM users t;",
+    pg("functions-json.html")
+  );
+  f!(
+    "date_bin",
+    "date_bin(interval, source ts, origin ts) -> timestamp(tz)",
+    "Snap a timestamp to the nearest bucket of size `interval` aligned to `origin`.",
+    "SELECT date_bin('15 minutes', now(), '2000-01-01');",
+    pg("functions-datetime.html")
+  );
+  f!(
+    "timezone",
+    "timezone(zone text, ts timestamp(tz)) -> timestamp(tz) | timezone(zone, time) -> time",
+    "SQL-standard alternate to `AT TIME ZONE`.",
+    "SELECT timezone('UTC', now());",
+    pg("functions-datetime.html")
+  );
+  f!(
+    "isfinite",
+    "isfinite(date|timestamp|interval) -> boolean",
+    "True when value is not -infinity/+infinity.",
+    "SELECT isfinite(now());",
+    pg("functions-datetime.html")
+  );
   // Text search internals.
-  f!("numnode",        "numnode(tsquery) -> integer", "Number of lexemes + operators in a tsquery.", "SELECT numnode(to_tsquery('a & b'));", pg("textsearch-features.html"));
-  f!("ts_lexize",      "ts_lexize(dict regdictionary, token text) -> text[]", "Apply a text-search dictionary to a token.", "SELECT ts_lexize('simple', 'hello');", pg("functions-textsearch.html"));
-  f!("ts_parse",       "ts_parse(parser_name text, text) -> SETOF (tokid int, token text)", "Tokenize text using a parser.", "SELECT * FROM ts_parse('default', 'hello world');", pg("functions-textsearch.html"));
-  f!("ts_token_type",  "ts_token_type(parser_name text) -> SETOF (tokid int, alias text, descr text)", "List token types a parser recognises.", "SELECT * FROM ts_token_type('default');", pg("functions-textsearch.html"));
-  f!("ts_debug",       "ts_debug(config_name text, doc text) -> SETOF (alias, descr, token, dictionaries, dictionary, lexemes)", "Diagnose tokenization of a string.", "SELECT * FROM ts_debug('english', 'hello world');", pg("functions-textsearch.html"));
-  f!("tsvector_to_array", "tsvector_to_array(tsvector) -> text[]", "Lexeme array from a tsvector.", "SELECT tsvector_to_array(to_tsvector('hello world'));", pg("functions-textsearch.html"));
-  f!("array_to_tsvector", "array_to_tsvector(text[]) -> tsvector", "Build a tsvector from an array of lexemes.", "SELECT array_to_tsvector(ARRAY['a', 'b']);", pg("functions-textsearch.html"));
-  f!("strip",          "strip(tsvector) -> tsvector", "Strip positions/weights from a tsvector.", "SELECT strip(to_tsvector('hello world'));", pg("functions-textsearch.html"));
-  f!("length",         "length(text|bit|tsvector|...) -> integer", "Length / lexeme count depending on argument.", "SELECT length(to_tsvector('hello world'));", pg("functions-string.html"));
+  f!(
+    "numnode",
+    "numnode(tsquery) -> integer",
+    "Number of lexemes + operators in a tsquery.",
+    "SELECT numnode(to_tsquery('a & b'));",
+    pg("textsearch-features.html")
+  );
+  f!(
+    "ts_lexize",
+    "ts_lexize(dict regdictionary, token text) -> text[]",
+    "Apply a text-search dictionary to a token.",
+    "SELECT ts_lexize('simple', 'hello');",
+    pg("functions-textsearch.html")
+  );
+  f!(
+    "ts_parse",
+    "ts_parse(parser_name text, text) -> SETOF (tokid int, token text)",
+    "Tokenize text using a parser.",
+    "SELECT * FROM ts_parse('default', 'hello world');",
+    pg("functions-textsearch.html")
+  );
+  f!(
+    "ts_token_type",
+    "ts_token_type(parser_name text) -> SETOF (tokid int, alias text, descr text)",
+    "List token types a parser recognises.",
+    "SELECT * FROM ts_token_type('default');",
+    pg("functions-textsearch.html")
+  );
+  f!(
+    "ts_debug",
+    "ts_debug(config_name text, doc text) -> SETOF (alias, descr, token, dictionaries, dictionary, lexemes)",
+    "Diagnose tokenization of a string.",
+    "SELECT * FROM ts_debug('english', 'hello world');",
+    pg("functions-textsearch.html")
+  );
+  f!(
+    "tsvector_to_array",
+    "tsvector_to_array(tsvector) -> text[]",
+    "Lexeme array from a tsvector.",
+    "SELECT tsvector_to_array(to_tsvector('hello world'));",
+    pg("functions-textsearch.html")
+  );
+  f!(
+    "array_to_tsvector",
+    "array_to_tsvector(text[]) -> tsvector",
+    "Build a tsvector from an array of lexemes.",
+    "SELECT array_to_tsvector(ARRAY['a', 'b']);",
+    pg("functions-textsearch.html")
+  );
+  f!(
+    "strip",
+    "strip(tsvector) -> tsvector",
+    "Strip positions/weights from a tsvector.",
+    "SELECT strip(to_tsvector('hello world'));",
+    pg("functions-textsearch.html")
+  );
+  f!(
+    "length",
+    "length(text|bit|tsvector|...) -> integer",
+    "Length / lexeme count depending on argument.",
+    "SELECT length(to_tsvector('hello world'));",
+    pg("functions-string.html")
+  );
 
   // ---- Trigonometric ----
-  f!("sin",   "sin(double precision) -> double precision", "Sine, radians.",   "SELECT sin(0);", pg("functions-math.html"));
-  f!("cos",   "cos(double precision) -> double precision", "Cosine, radians.", "SELECT cos(0);", pg("functions-math.html"));
-  f!("tan",   "tan(double precision) -> double precision", "Tangent, radians.", "SELECT tan(0);", pg("functions-math.html"));
-  f!("asin",  "asin(double precision) -> double precision", "Arc sine, radians.",   "SELECT asin(1);", pg("functions-math.html"));
-  f!("acos",  "acos(double precision) -> double precision", "Arc cosine, radians.", "SELECT acos(1);", pg("functions-math.html"));
-  f!("atan",  "atan(double precision) -> double precision", "Arc tangent, radians.","SELECT atan(1);", pg("functions-math.html"));
-  f!("atan2", "atan2(y double, x double) -> double precision", "Arc tangent of y/x, radians.", "SELECT atan2(1, 1);", pg("functions-math.html"));
+  f!("sin", "sin(double precision) -> double precision", "Sine, radians.", "SELECT sin(0);", pg("functions-math.html"));
+  f!(
+    "cos",
+    "cos(double precision) -> double precision",
+    "Cosine, radians.",
+    "SELECT cos(0);",
+    pg("functions-math.html")
+  );
+  f!(
+    "tan",
+    "tan(double precision) -> double precision",
+    "Tangent, radians.",
+    "SELECT tan(0);",
+    pg("functions-math.html")
+  );
+  f!(
+    "asin",
+    "asin(double precision) -> double precision",
+    "Arc sine, radians.",
+    "SELECT asin(1);",
+    pg("functions-math.html")
+  );
+  f!(
+    "acos",
+    "acos(double precision) -> double precision",
+    "Arc cosine, radians.",
+    "SELECT acos(1);",
+    pg("functions-math.html")
+  );
+  f!(
+    "atan",
+    "atan(double precision) -> double precision",
+    "Arc tangent, radians.",
+    "SELECT atan(1);",
+    pg("functions-math.html")
+  );
+  f!(
+    "atan2",
+    "atan2(y double, x double) -> double precision",
+    "Arc tangent of y/x, radians.",
+    "SELECT atan2(1, 1);",
+    pg("functions-math.html")
+  );
 
   // ---- Bit aggregates ----
-  f!("bit_and", "bit_and(integer) -> integer", "Bitwise AND of all non-null values.", "SELECT bit_and(flags) FROM perms;", pg("functions-aggregate.html"));
-  f!("bit_or",  "bit_or(integer) -> integer",  "Bitwise OR of all non-null values.",  "SELECT bit_or(flags) FROM perms;", pg("functions-aggregate.html"));
-  f!("bit_xor", "bit_xor(integer) -> integer", "Bitwise XOR of all non-null values (PG14+).", "SELECT bit_xor(checksum) FROM blocks;", pg("functions-aggregate.html"));
+  f!(
+    "bit_and",
+    "bit_and(integer) -> integer",
+    "Bitwise AND of all non-null values.",
+    "SELECT bit_and(flags) FROM perms;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "bit_or",
+    "bit_or(integer) -> integer",
+    "Bitwise OR of all non-null values.",
+    "SELECT bit_or(flags) FROM perms;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "bit_xor",
+    "bit_xor(integer) -> integer",
+    "Bitwise XOR of all non-null values (PG14+).",
+    "SELECT bit_xor(checksum) FROM blocks;",
+    pg("functions-aggregate.html")
+  );
 
   // ---- Stats aggregates ----
-  f!("corr",       "corr(y double, x double) -> double precision", "Correlation coefficient.", "SELECT corr(price, qty) FROM items;", pg("functions-aggregate.html"));
-  f!("covar_pop",  "covar_pop(y, x) -> double precision",  "Population covariance.", "SELECT covar_pop(price, qty) FROM items;", pg("functions-aggregate.html"));
-  f!("covar_samp", "covar_samp(y, x) -> double precision", "Sample covariance.",     "SELECT covar_samp(price, qty) FROM items;", pg("functions-aggregate.html"));
-  f!("stddev_pop", "stddev_pop(numeric) -> numeric", "Population standard deviation.", "SELECT stddev_pop(grade) FROM tests;", pg("functions-aggregate.html"));
-  f!("stddev_samp","stddev_samp(numeric) -> numeric", "Sample standard deviation.",     "SELECT stddev_samp(grade) FROM tests;", pg("functions-aggregate.html"));
-  f!("var_pop",    "var_pop(numeric) -> numeric", "Population variance.", "SELECT var_pop(grade) FROM tests;", pg("functions-aggregate.html"));
-  f!("var_samp",   "var_samp(numeric) -> numeric", "Sample variance.",     "SELECT var_samp(grade) FROM tests;", pg("functions-aggregate.html"));
+  f!(
+    "corr",
+    "corr(y double, x double) -> double precision",
+    "Correlation coefficient.",
+    "SELECT corr(price, qty) FROM items;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "covar_pop",
+    "covar_pop(y, x) -> double precision",
+    "Population covariance.",
+    "SELECT covar_pop(price, qty) FROM items;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "covar_samp",
+    "covar_samp(y, x) -> double precision",
+    "Sample covariance.",
+    "SELECT covar_samp(price, qty) FROM items;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "stddev_pop",
+    "stddev_pop(numeric) -> numeric",
+    "Population standard deviation.",
+    "SELECT stddev_pop(grade) FROM tests;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "stddev_samp",
+    "stddev_samp(numeric) -> numeric",
+    "Sample standard deviation.",
+    "SELECT stddev_samp(grade) FROM tests;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "var_pop",
+    "var_pop(numeric) -> numeric",
+    "Population variance.",
+    "SELECT var_pop(grade) FROM tests;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "var_samp",
+    "var_samp(numeric) -> numeric",
+    "Sample variance.",
+    "SELECT var_samp(grade) FROM tests;",
+    pg("functions-aggregate.html")
+  );
 
   // ---- Full-text search ----
-  f!("to_tsvector",        "to_tsvector([config regconfig,] text) -> tsvector", "Convert text to a tsvector.", "SELECT to_tsvector('english', 'duck typing');", pg("textsearch-controls.html"));
-  f!("to_tsquery",         "to_tsquery([config,] text) -> tsquery", "Convert query text to tsquery.",          "SELECT to_tsquery('english', 'duck & typing');", pg("textsearch-controls.html"));
-  f!("plainto_tsquery",    "plainto_tsquery([config,] text) -> tsquery", "Plain phrase -> tsquery (no operators).", "SELECT plainto_tsquery('duck typing');", pg("textsearch-controls.html"));
-  f!("phraseto_tsquery",   "phraseto_tsquery([config,] text) -> tsquery", "Phrase tsquery using `<->`.", "SELECT phraseto_tsquery('duck typing');", pg("textsearch-controls.html"));
-  f!("websearch_to_tsquery","websearch_to_tsquery([config,] text) -> tsquery", "Web-search-style tsquery (quotes, OR, -term).", "SELECT websearch_to_tsquery('\"duck typing\" OR rust');", pg("textsearch-controls.html"));
-  f!("ts_rank",            "ts_rank(tsvector, tsquery) -> real",    "Rank a document against a query.", "SELECT ts_rank(doc, q) FROM ...", pg("textsearch-controls.html"));
-  f!("ts_rank_cd",         "ts_rank_cd(tsvector, tsquery) -> real", "Cover density rank.",              "SELECT ts_rank_cd(doc, q) FROM ...", pg("textsearch-controls.html"));
-  f!("ts_headline",        "ts_headline([config,] text, tsquery) -> text", "Snippet with matched terms highlighted.", "SELECT ts_headline('the duck quacks', q);", pg("textsearch-controls.html"));
+  f!(
+    "to_tsvector",
+    "to_tsvector([config regconfig,] text) -> tsvector",
+    "Convert text to a tsvector.",
+    "SELECT to_tsvector('english', 'duck typing');",
+    pg("textsearch-controls.html")
+  );
+  f!(
+    "to_tsquery",
+    "to_tsquery([config,] text) -> tsquery",
+    "Convert query text to tsquery.",
+    "SELECT to_tsquery('english', 'duck & typing');",
+    pg("textsearch-controls.html")
+  );
+  f!(
+    "plainto_tsquery",
+    "plainto_tsquery([config,] text) -> tsquery",
+    "Plain phrase -> tsquery (no operators).",
+    "SELECT plainto_tsquery('duck typing');",
+    pg("textsearch-controls.html")
+  );
+  f!(
+    "phraseto_tsquery",
+    "phraseto_tsquery([config,] text) -> tsquery",
+    "Phrase tsquery using `<->`.",
+    "SELECT phraseto_tsquery('duck typing');",
+    pg("textsearch-controls.html")
+  );
+  f!(
+    "websearch_to_tsquery",
+    "websearch_to_tsquery([config,] text) -> tsquery",
+    "Web-search-style tsquery (quotes, OR, -term).",
+    "SELECT websearch_to_tsquery('\"duck typing\" OR rust');",
+    pg("textsearch-controls.html")
+  );
+  f!(
+    "ts_rank",
+    "ts_rank(tsvector, tsquery) -> real",
+    "Rank a document against a query.",
+    "SELECT ts_rank(doc, q) FROM ...",
+    pg("textsearch-controls.html")
+  );
+  f!(
+    "ts_rank_cd",
+    "ts_rank_cd(tsvector, tsquery) -> real",
+    "Cover density rank.",
+    "SELECT ts_rank_cd(doc, q) FROM ...",
+    pg("textsearch-controls.html")
+  );
+  f!(
+    "ts_headline",
+    "ts_headline([config,] text, tsquery) -> text",
+    "Snippet with matched terms highlighted.",
+    "SELECT ts_headline('the duck quacks', q);",
+    pg("textsearch-controls.html")
+  );
 
   // ---- JSONB path (SQL/JSON) ----
-  f!("jsonb_path_exists",       "jsonb_path_exists(jsonb, jsonpath) -> boolean", "True if any item matches the path.", "SELECT jsonb_path_exists(doc, '$.a.b ? (@ > 0)');", pg("functions-json.html"));
-  f!("jsonb_path_match",        "jsonb_path_match(jsonb, jsonpath) -> boolean",  "Match path returning a single boolean.", "SELECT jsonb_path_match(doc, 'exists($.x)');", pg("functions-json.html"));
-  f!("jsonb_path_query_first",  "jsonb_path_query_first(jsonb, jsonpath) -> jsonb", "First matching item or NULL.", "SELECT jsonb_path_query_first(doc, '$.items[0]');", pg("functions-json.html"));
-  f!("jsonb_path_query_array",  "jsonb_path_query_array(jsonb, jsonpath) -> jsonb", "All matches packed into a jsonb array.", "SELECT jsonb_path_query_array(doc, '$.items[*]');", pg("functions-json.html"));
-  f!("jsonb_insert", "jsonb_insert(target jsonb, path text[], new jsonb [, insert_after bool]) -> jsonb", "Insert a value at a jsonb path.", "SELECT jsonb_insert('{\"a\":[1]}'::jsonb, '{a,1}', '2');", pg("functions-json.html"));
+  f!(
+    "jsonb_path_exists",
+    "jsonb_path_exists(jsonb, jsonpath) -> boolean",
+    "True if any item matches the path.",
+    "SELECT jsonb_path_exists(doc, '$.a.b ? (@ > 0)');",
+    pg("functions-json.html")
+  );
+  f!(
+    "jsonb_path_match",
+    "jsonb_path_match(jsonb, jsonpath) -> boolean",
+    "Match path returning a single boolean.",
+    "SELECT jsonb_path_match(doc, 'exists($.x)');",
+    pg("functions-json.html")
+  );
+  f!(
+    "jsonb_path_query_first",
+    "jsonb_path_query_first(jsonb, jsonpath) -> jsonb",
+    "First matching item or NULL.",
+    "SELECT jsonb_path_query_first(doc, '$.items[0]');",
+    pg("functions-json.html")
+  );
+  f!(
+    "jsonb_path_query_array",
+    "jsonb_path_query_array(jsonb, jsonpath) -> jsonb",
+    "All matches packed into a jsonb array.",
+    "SELECT jsonb_path_query_array(doc, '$.items[*]');",
+    pg("functions-json.html")
+  );
+  f!(
+    "jsonb_insert",
+    "jsonb_insert(target jsonb, path text[], new jsonb [, insert_after bool]) -> jsonb",
+    "Insert a value at a jsonb path.",
+    "SELECT jsonb_insert('{\"a\":[1]}'::jsonb, '{a,1}', '2');",
+    pg("functions-json.html")
+  );
 
   // ---- Object lookups (regclass et al.) ----
-  f!("to_regclass",     "to_regclass(text) -> regclass", "OID lookup; NULL when missing (vs `::regclass` which errors).", "SELECT to_regclass('public.users');", pg("functions-info.html#FUNCTIONS-INFO-OBJECT"));
-  f!("to_regproc",      "to_regproc(text) -> regproc",   "OID lookup for a function name.", "SELECT to_regproc('lower');", pg("functions-info.html#FUNCTIONS-INFO-OBJECT"));
-  f!("to_regtype",      "to_regtype(text) -> regtype",   "OID lookup for a type name.",     "SELECT to_regtype('int4');", pg("functions-info.html#FUNCTIONS-INFO-OBJECT"));
-  f!("to_regnamespace", "to_regnamespace(text) -> regnamespace", "OID lookup for a schema.", "SELECT to_regnamespace('public');", pg("functions-info.html#FUNCTIONS-INFO-OBJECT"));
-  f!("to_regrole",      "to_regrole(text) -> regrole",   "OID lookup for a role.",          "SELECT to_regrole('postgres');", pg("functions-info.html#FUNCTIONS-INFO-OBJECT"));
-  f!("pg_get_userbyid", "pg_get_userbyid(oid) -> name",  "Role name for OID.",              "SELECT pg_get_userbyid(10);", pg("functions-info.html"));
-  f!("pg_get_serial_sequence", "pg_get_serial_sequence(table_name, column_name) -> text", "Sequence backing a SERIAL/IDENTITY column.", "SELECT pg_get_serial_sequence('users', 'id');", pg("functions-info.html"));
+  f!(
+    "to_regclass",
+    "to_regclass(text) -> regclass",
+    "OID lookup; NULL when missing (vs `::regclass` which errors).",
+    "SELECT to_regclass('public.users');",
+    pg("functions-info.html#FUNCTIONS-INFO-OBJECT")
+  );
+  f!(
+    "to_regproc",
+    "to_regproc(text) -> regproc",
+    "OID lookup for a function name.",
+    "SELECT to_regproc('lower');",
+    pg("functions-info.html#FUNCTIONS-INFO-OBJECT")
+  );
+  f!(
+    "to_regtype",
+    "to_regtype(text) -> regtype",
+    "OID lookup for a type name.",
+    "SELECT to_regtype('int4');",
+    pg("functions-info.html#FUNCTIONS-INFO-OBJECT")
+  );
+  f!(
+    "to_regnamespace",
+    "to_regnamespace(text) -> regnamespace",
+    "OID lookup for a schema.",
+    "SELECT to_regnamespace('public');",
+    pg("functions-info.html#FUNCTIONS-INFO-OBJECT")
+  );
+  f!(
+    "to_regrole",
+    "to_regrole(text) -> regrole",
+    "OID lookup for a role.",
+    "SELECT to_regrole('postgres');",
+    pg("functions-info.html#FUNCTIONS-INFO-OBJECT")
+  );
+  f!(
+    "pg_get_userbyid",
+    "pg_get_userbyid(oid) -> name",
+    "Role name for OID.",
+    "SELECT pg_get_userbyid(10);",
+    pg("functions-info.html")
+  );
+  f!(
+    "pg_get_serial_sequence",
+    "pg_get_serial_sequence(table_name, column_name) -> text",
+    "Sequence backing a SERIAL/IDENTITY column.",
+    "SELECT pg_get_serial_sequence('users', 'id');",
+    pg("functions-info.html")
+  );
 
   // ---- Size & stats ----
-  f!("pg_table_size",   "pg_table_size(regclass) -> bigint",  "On-disk size of a table (excluding indexes, TOAST sums separately).", "SELECT pg_size_pretty(pg_table_size('users'));", pg("functions-admin.html"));
-  f!("pg_indexes_size", "pg_indexes_size(regclass) -> bigint","Total size of all indexes attached to a relation.", "SELECT pg_size_pretty(pg_indexes_size('users'));", pg("functions-admin.html"));
-  f!("pg_relation_size","pg_relation_size(regclass [, fork]) -> bigint", "Size of one fork of a relation.", "SELECT pg_relation_size('users');", pg("functions-admin.html"));
-  f!("pg_total_relation_size", "pg_total_relation_size(regclass) -> bigint", "Total disk usage of a relation including indexes + TOAST.", "SELECT pg_size_pretty(pg_total_relation_size('users'));", pg("functions-admin.html"));
-  f!("pg_database_size","pg_database_size(name) -> bigint",   "Total disk usage of a database.", "SELECT pg_size_pretty(pg_database_size('app'));", pg("functions-admin.html"));
+  f!(
+    "pg_table_size",
+    "pg_table_size(regclass) -> bigint",
+    "On-disk size of a table (excluding indexes, TOAST sums separately).",
+    "SELECT pg_size_pretty(pg_table_size('users'));",
+    pg("functions-admin.html")
+  );
+  f!(
+    "pg_indexes_size",
+    "pg_indexes_size(regclass) -> bigint",
+    "Total size of all indexes attached to a relation.",
+    "SELECT pg_size_pretty(pg_indexes_size('users'));",
+    pg("functions-admin.html")
+  );
+  f!(
+    "pg_relation_size",
+    "pg_relation_size(regclass [, fork]) -> bigint",
+    "Size of one fork of a relation.",
+    "SELECT pg_relation_size('users');",
+    pg("functions-admin.html")
+  );
+  f!(
+    "pg_total_relation_size",
+    "pg_total_relation_size(regclass) -> bigint",
+    "Total disk usage of a relation including indexes + TOAST.",
+    "SELECT pg_size_pretty(pg_total_relation_size('users'));",
+    pg("functions-admin.html")
+  );
+  f!(
+    "pg_database_size",
+    "pg_database_size(name) -> bigint",
+    "Total disk usage of a database.",
+    "SELECT pg_size_pretty(pg_database_size('app'));",
+    pg("functions-admin.html")
+  );
 
   // ---- Enums / arrays ----
-  f!("enum_first", "enum_first(anyenum) -> anyenum", "First label of an enum.",  "SELECT enum_first(NULL::status);", pg("functions-enum.html"));
-  f!("enum_last",  "enum_last(anyenum) -> anyenum",  "Last label of an enum.",   "SELECT enum_last(NULL::status);", pg("functions-enum.html"));
-  f!("enum_range", "enum_range([anyenum [, anyenum]]) -> anyarray", "Array of enum labels in declared order.", "SELECT enum_range(NULL::status);", pg("functions-enum.html"));
-  f!("array_fill", "array_fill(anyelement, int[] [, int[]]) -> anyarray", "Create an array filled with copies of one value.", "SELECT array_fill(0, ARRAY[3]);", pg("functions-array.html"));
+  f!(
+    "enum_first",
+    "enum_first(anyenum) -> anyenum",
+    "First label of an enum.",
+    "SELECT enum_first(NULL::status);",
+    pg("functions-enum.html")
+  );
+  f!(
+    "enum_last",
+    "enum_last(anyenum) -> anyenum",
+    "Last label of an enum.",
+    "SELECT enum_last(NULL::status);",
+    pg("functions-enum.html")
+  );
+  f!(
+    "enum_range",
+    "enum_range([anyenum [, anyenum]]) -> anyarray",
+    "Array of enum labels in declared order.",
+    "SELECT enum_range(NULL::status);",
+    pg("functions-enum.html")
+  );
+  f!(
+    "array_fill",
+    "array_fill(anyelement, int[] [, int[]]) -> anyarray",
+    "Create an array filled with copies of one value.",
+    "SELECT array_fill(0, ARRAY[3]);",
+    pg("functions-array.html")
+  );
 
   // ---- Misc heavy traffic ----
-  f!("concat_ws", "concat_ws(sep text, args...) -> text", "Concatenate non-null args with separator.", "SELECT concat_ws(', ', first, middle, last);", pg("functions-string.html"));
-  f!("to_regoperator", "to_regoperator(text) -> regoperator", "OID lookup for an operator with operand types.", "SELECT to_regoperator('=(int,int)');", pg("functions-info.html#FUNCTIONS-INFO-OBJECT"));
-  f!("pg_current_xact_id", "pg_current_xact_id() -> xid8", "Current transaction's xid8 (read-write).", "SELECT pg_current_xact_id();", pg("functions-info.html"));
-  f!("pg_xact_status",     "pg_xact_status(xid8) -> text",  "Status of a transaction: committed / in progress / aborted.", "SELECT pg_xact_status(pg_current_xact_id());", pg("functions-info.html"));
+  f!(
+    "concat_ws",
+    "concat_ws(sep text, args...) -> text",
+    "Concatenate non-null args with separator.",
+    "SELECT concat_ws(', ', first, middle, last);",
+    pg("functions-string.html")
+  );
+  f!(
+    "to_regoperator",
+    "to_regoperator(text) -> regoperator",
+    "OID lookup for an operator with operand types.",
+    "SELECT to_regoperator('=(int,int)');",
+    pg("functions-info.html#FUNCTIONS-INFO-OBJECT")
+  );
+  f!(
+    "pg_current_xact_id",
+    "pg_current_xact_id() -> xid8",
+    "Current transaction's xid8 (read-write).",
+    "SELECT pg_current_xact_id();",
+    pg("functions-info.html")
+  );
+  f!(
+    "pg_xact_status",
+    "pg_xact_status(xid8) -> text",
+    "Status of a transaction: committed / in progress / aborted.",
+    "SELECT pg_xact_status(pg_current_xact_id());",
+    pg("functions-info.html")
+  );
 
   // ---- Comparison / NULL counting ----
   // Full-text search helpers.
-  f!("setweight",       "setweight(tsvector, weight char) -> tsvector",      "Tag every lexeme with a weight letter (A/B/C/D).", "SELECT setweight(to_tsvector('title'), 'A');",   pg("textsearch-features.html#TEXTSEARCH-MANIPULATE-TSVECTOR"));
-  f!("ts_headline",     "ts_headline([config], doc, query [, options]) -> text", "Highlight query matches in a document.",        "SELECT ts_headline('eng', body, query) FROM docs;", pg("textsearch-controls.html#TEXTSEARCH-HEADLINE"));
-  f!("plainto_tsquery", "plainto_tsquery([config], text) -> tsquery",        "Convert text to a tsquery with AND semantics.",    "SELECT plainto_tsquery('eng', 'hello world');",  pg("textsearch-controls.html"));
-  f!("similarity",      "similarity(text, text) -> real",                    "pg_trgm similarity score (0..1).",                  "SELECT similarity('foo', 'foobar');",            pg("pgtrgm.html"));
-  f!("word_similarity", "word_similarity(text, text) -> real",               "pg_trgm word-level similarity.",                    "SELECT word_similarity('rust', 'postgres rust');", pg("pgtrgm.html"));
-  f!("strict_word_similarity", "strict_word_similarity(text, text) -> real", "Strict word similarity (pg_trgm).",                 "SELECT strict_word_similarity('foo', 'foobar');", pg("pgtrgm.html"));
-  f!("show_trgm",       "show_trgm(text) -> text[]",                         "Return trigrams of a string.",                      "SELECT show_trgm('foobar');",                   pg("pgtrgm.html"));
+  f!(
+    "setweight",
+    "setweight(tsvector, weight char) -> tsvector",
+    "Tag every lexeme with a weight letter (A/B/C/D).",
+    "SELECT setweight(to_tsvector('title'), 'A');",
+    pg("textsearch-features.html#TEXTSEARCH-MANIPULATE-TSVECTOR")
+  );
+  f!(
+    "ts_headline",
+    "ts_headline([config], doc, query [, options]) -> text",
+    "Highlight query matches in a document.",
+    "SELECT ts_headline('eng', body, query) FROM docs;",
+    pg("textsearch-controls.html#TEXTSEARCH-HEADLINE")
+  );
+  f!(
+    "plainto_tsquery",
+    "plainto_tsquery([config], text) -> tsquery",
+    "Convert text to a tsquery with AND semantics.",
+    "SELECT plainto_tsquery('eng', 'hello world');",
+    pg("textsearch-controls.html")
+  );
+  f!(
+    "similarity",
+    "similarity(text, text) -> real",
+    "pg_trgm similarity score (0..1).",
+    "SELECT similarity('foo', 'foobar');",
+    pg("pgtrgm.html")
+  );
+  f!(
+    "word_similarity",
+    "word_similarity(text, text) -> real",
+    "pg_trgm word-level similarity.",
+    "SELECT word_similarity('rust', 'postgres rust');",
+    pg("pgtrgm.html")
+  );
+  f!(
+    "strict_word_similarity",
+    "strict_word_similarity(text, text) -> real",
+    "Strict word similarity (pg_trgm).",
+    "SELECT strict_word_similarity('foo', 'foobar');",
+    pg("pgtrgm.html")
+  );
+  f!(
+    "show_trgm",
+    "show_trgm(text) -> text[]",
+    "Return trigrams of a string.",
+    "SELECT show_trgm('foobar');",
+    pg("pgtrgm.html")
+  );
 
   // Additional jsonb fns.
-  f!("jsonb_build_array",          "jsonb_build_array(VARIADIC \"any\") -> jsonb", "Build a jsonb array from variadic args.",       "SELECT jsonb_build_array('a', 1, true);",                 pg("functions-json.html"));
-  f!("jsonb_object_agg",           "jsonb_object_agg(key, value) -> jsonb",        "Aggregate key/value pairs into a jsonb object.", "SELECT jsonb_object_agg(k, v) FROM kv;",                    pg("functions-aggregate.html"));
-  f!("jsonb_array_elements_text",  "jsonb_array_elements_text(jsonb) -> setof text", "Expand jsonb array into rows of text.",        "SELECT * FROM jsonb_array_elements_text('[\"a\",\"b\"]');", pg("functions-json.html"));
-  f!("jsonb_each_text",            "jsonb_each_text(jsonb) -> setof (text, text)", "Expand jsonb object into key/value text rows.",  "SELECT * FROM jsonb_each_text('{\"a\":1}');",               pg("functions-json.html"));
-  f!("json_build_array",           "json_build_array(VARIADIC \"any\") -> json",   "Build a json array.",                            "SELECT json_build_array(1, 2, 3);",                          pg("functions-json.html"));
-  f!("json_object_agg",            "json_object_agg(key, value) -> json",          "Aggregate key/value pairs into a json object.",  "SELECT json_object_agg(k, v) FROM kv;",                      pg("functions-aggregate.html"));
-  f!("json_array_elements_text",   "json_array_elements_text(json) -> setof text", "Expand json array as text rows.",                "SELECT * FROM json_array_elements_text('[\"a\"]');",         pg("functions-json.html"));
-  f!("json_each_text",             "json_each_text(json) -> setof (text, text)",   "Expand json object as text key/value rows.",     "SELECT * FROM json_each_text('{\"a\":\"b\"}');",             pg("functions-json.html"));
-  f!("jsonb_insert",               "jsonb_insert(target, path, new_value [, insert_after]) -> jsonb", "Insert into a jsonb structure.",            "SELECT jsonb_insert(data, '{0}', '\"x\"');",       pg("functions-json.html"));
-  f!("jsonb_object",               "jsonb_object(text[] [, text[]]) -> jsonb",     "Build a jsonb object from a key array (+ optional value array).", "SELECT jsonb_object('{a,b}', '{1,2}');", pg("functions-json.html"));
-  f!("json_object",                "json_object(text[] [, text[]]) -> json",       "Build a json object from key/value arrays.",     "SELECT json_object('{a,b}', '{1,2}');",                      pg("functions-json.html"));
+  f!(
+    "jsonb_build_array",
+    "jsonb_build_array(VARIADIC \"any\") -> jsonb",
+    "Build a jsonb array from variadic args.",
+    "SELECT jsonb_build_array('a', 1, true);",
+    pg("functions-json.html")
+  );
+  f!(
+    "jsonb_object_agg",
+    "jsonb_object_agg(key, value) -> jsonb",
+    "Aggregate key/value pairs into a jsonb object.",
+    "SELECT jsonb_object_agg(k, v) FROM kv;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "jsonb_array_elements_text",
+    "jsonb_array_elements_text(jsonb) -> setof text",
+    "Expand jsonb array into rows of text.",
+    "SELECT * FROM jsonb_array_elements_text('[\"a\",\"b\"]');",
+    pg("functions-json.html")
+  );
+  f!(
+    "jsonb_each_text",
+    "jsonb_each_text(jsonb) -> setof (text, text)",
+    "Expand jsonb object into key/value text rows.",
+    "SELECT * FROM jsonb_each_text('{\"a\":1}');",
+    pg("functions-json.html")
+  );
+  f!(
+    "json_build_array",
+    "json_build_array(VARIADIC \"any\") -> json",
+    "Build a json array.",
+    "SELECT json_build_array(1, 2, 3);",
+    pg("functions-json.html")
+  );
+  f!(
+    "json_object_agg",
+    "json_object_agg(key, value) -> json",
+    "Aggregate key/value pairs into a json object.",
+    "SELECT json_object_agg(k, v) FROM kv;",
+    pg("functions-aggregate.html")
+  );
+  f!(
+    "json_array_elements_text",
+    "json_array_elements_text(json) -> setof text",
+    "Expand json array as text rows.",
+    "SELECT * FROM json_array_elements_text('[\"a\"]');",
+    pg("functions-json.html")
+  );
+  f!(
+    "json_each_text",
+    "json_each_text(json) -> setof (text, text)",
+    "Expand json object as text key/value rows.",
+    "SELECT * FROM json_each_text('{\"a\":\"b\"}');",
+    pg("functions-json.html")
+  );
+  f!(
+    "jsonb_insert",
+    "jsonb_insert(target, path, new_value [, insert_after]) -> jsonb",
+    "Insert into a jsonb structure.",
+    "SELECT jsonb_insert(data, '{0}', '\"x\"');",
+    pg("functions-json.html")
+  );
+  f!(
+    "jsonb_object",
+    "jsonb_object(text[] [, text[]]) -> jsonb",
+    "Build a jsonb object from a key array (+ optional value array).",
+    "SELECT jsonb_object('{a,b}', '{1,2}');",
+    pg("functions-json.html")
+  );
+  f!(
+    "json_object",
+    "json_object(text[] [, text[]]) -> json",
+    "Build a json object from key/value arrays.",
+    "SELECT json_object('{a,b}', '{1,2}');",
+    pg("functions-json.html")
+  );
 
   // Geometric type constructors.
-  f!("point",   "point(x float8, y float8) -> point",  "Construct a geometric point.", "SELECT point(40.7, -74.0);", pg("functions-geometry.html"));
-  f!("box",     "box(point, point) -> box",            "Construct a rectangular box from two points.", "SELECT box(point(0,0), point(1,1));", pg("functions-geometry.html"));
-  f!("circle",  "circle(point, float8) -> circle",     "Construct a circle from center + radius.", "SELECT circle(point(0,0), 5);", pg("functions-geometry.html"));
-  f!("line",    "line(point, point) -> line",          "Construct a line from two points.", "SELECT line(point(0,0), point(1,1));", pg("functions-geometry.html"));
-  f!("lseg",    "lseg(point, point) -> lseg",          "Construct a line segment.", "SELECT lseg(point(0,0), point(1,1));", pg("functions-geometry.html"));
-  f!("path",    "path(polygon) -> path",               "Construct a path from a polygon.", "SELECT path('((0,0),(1,1),(2,2))'::polygon);", pg("functions-geometry.html"));
-  f!("polygon", "polygon(box) -> polygon",             "Construct a polygon from a box.", "SELECT polygon(box(point(0,0), point(1,1)));", pg("functions-geometry.html"));
+  f!(
+    "point",
+    "point(x float8, y float8) -> point",
+    "Construct a geometric point.",
+    "SELECT point(40.7, -74.0);",
+    pg("functions-geometry.html")
+  );
+  f!(
+    "box",
+    "box(point, point) -> box",
+    "Construct a rectangular box from two points.",
+    "SELECT box(point(0,0), point(1,1));",
+    pg("functions-geometry.html")
+  );
+  f!(
+    "circle",
+    "circle(point, float8) -> circle",
+    "Construct a circle from center + radius.",
+    "SELECT circle(point(0,0), 5);",
+    pg("functions-geometry.html")
+  );
+  f!(
+    "line",
+    "line(point, point) -> line",
+    "Construct a line from two points.",
+    "SELECT line(point(0,0), point(1,1));",
+    pg("functions-geometry.html")
+  );
+  f!(
+    "lseg",
+    "lseg(point, point) -> lseg",
+    "Construct a line segment.",
+    "SELECT lseg(point(0,0), point(1,1));",
+    pg("functions-geometry.html")
+  );
+  f!(
+    "path",
+    "path(polygon) -> path",
+    "Construct a path from a polygon.",
+    "SELECT path('((0,0),(1,1),(2,2))'::polygon);",
+    pg("functions-geometry.html")
+  );
+  f!(
+    "polygon",
+    "polygon(box) -> polygon",
+    "Construct a polygon from a box.",
+    "SELECT polygon(box(point(0,0), point(1,1)));",
+    pg("functions-geometry.html")
+  );
 
   // uuid-ossp extension fns (heavily used in real schemas).
-  f!("uuid_generate_v4", "uuid_generate_v4() -> uuid",      "Random UUID (v4). Requires the uuid-ossp extension.", "SELECT uuid_generate_v4();", pg("uuid-ossp.html"));
-  f!("uuid_generate_v1", "uuid_generate_v1() -> uuid",      "MAC-address + timestamp UUID (v1).",                  "SELECT uuid_generate_v1();", pg("uuid-ossp.html"));
-  f!("uuid_generate_v3", "uuid_generate_v3(namespace uuid, name text) -> uuid", "Name-based UUID (v3) using MD5.", "SELECT uuid_generate_v3(uuid_ns_dns(), 'example.com');", pg("uuid-ossp.html"));
-  f!("uuid_generate_v5", "uuid_generate_v5(namespace uuid, name text) -> uuid", "Name-based UUID (v5) using SHA-1.", "SELECT uuid_generate_v5(uuid_ns_dns(), 'example.com');", pg("uuid-ossp.html"));
-  f!("uuid_nil",         "uuid_nil() -> uuid",              "All-zero UUID.",                                       "SELECT uuid_nil();", pg("uuid-ossp.html"));
-  f!("uuid_ns_dns",      "uuid_ns_dns() -> uuid",           "DNS namespace UUID.",                                  "SELECT uuid_ns_dns();", pg("uuid-ossp.html"));
-  f!("uuid_ns_url",      "uuid_ns_url() -> uuid",           "URL namespace UUID.",                                  "SELECT uuid_ns_url();", pg("uuid-ossp.html"));
-  f!("gen_random_uuid",  "gen_random_uuid() -> uuid",       "Random UUID (built-in on PG13+, no extension).",       "SELECT gen_random_uuid();", pg("functions-uuid.html"));
+  f!(
+    "uuid_generate_v4",
+    "uuid_generate_v4() -> uuid",
+    "Random UUID (v4). Requires the uuid-ossp extension.",
+    "SELECT uuid_generate_v4();",
+    pg("uuid-ossp.html")
+  );
+  f!(
+    "uuid_generate_v1",
+    "uuid_generate_v1() -> uuid",
+    "MAC-address + timestamp UUID (v1).",
+    "SELECT uuid_generate_v1();",
+    pg("uuid-ossp.html")
+  );
+  f!(
+    "uuid_generate_v3",
+    "uuid_generate_v3(namespace uuid, name text) -> uuid",
+    "Name-based UUID (v3) using MD5.",
+    "SELECT uuid_generate_v3(uuid_ns_dns(), 'example.com');",
+    pg("uuid-ossp.html")
+  );
+  f!(
+    "uuid_generate_v5",
+    "uuid_generate_v5(namespace uuid, name text) -> uuid",
+    "Name-based UUID (v5) using SHA-1.",
+    "SELECT uuid_generate_v5(uuid_ns_dns(), 'example.com');",
+    pg("uuid-ossp.html")
+  );
+  f!("uuid_nil", "uuid_nil() -> uuid", "All-zero UUID.", "SELECT uuid_nil();", pg("uuid-ossp.html"));
+  f!("uuid_ns_dns", "uuid_ns_dns() -> uuid", "DNS namespace UUID.", "SELECT uuid_ns_dns();", pg("uuid-ossp.html"));
+  f!("uuid_ns_url", "uuid_ns_url() -> uuid", "URL namespace UUID.", "SELECT uuid_ns_url();", pg("uuid-ossp.html"));
+  f!(
+    "gen_random_uuid",
+    "gen_random_uuid() -> uuid",
+    "Random UUID (built-in on PG13+, no extension).",
+    "SELECT gen_random_uuid();",
+    pg("functions-uuid.html")
+  );
 
   // Common math + date helpers that were missing.
-  f!("ceil",  "ceil(numeric) -> numeric",   "Round up to integer.",   "SELECT ceil(3.2);", pg("functions-math.html"));
-  f!("div",   "div(y numeric, x numeric) -> numeric", "Integer quotient of y/x.", "SELECT div(10, 3);", pg("functions-math.html"));
-  f!("justify_days",  "justify_days(interval) -> interval",  "Adjust 30-day periods into months.", "SELECT justify_days(interval '60 days');", pg("functions-datetime.html"));
-  f!("justify_hours", "justify_hours(interval) -> interval", "Adjust 24-hour periods into days.",  "SELECT justify_hours(interval '50 hours');", pg("functions-datetime.html"));
-  f!("justify_interval", "justify_interval(interval) -> interval", "Adjust both days and hours.", "SELECT justify_interval(interval '60 days 50 hours');", pg("functions-datetime.html"));
-  f!("sha256", "sha256(bytea) -> bytea", "SHA-256 digest.", "SELECT encode(sha256('hello'::bytea), 'hex');", pg("functions-binarystring.html"));
-  f!("sha224", "sha224(bytea) -> bytea", "SHA-224 digest.", "SELECT sha224('hello'::bytea);", pg("functions-binarystring.html"));
-  f!("sha384", "sha384(bytea) -> bytea", "SHA-384 digest.", "SELECT sha384('hello'::bytea);", pg("functions-binarystring.html"));
-  f!("sha512", "sha512(bytea) -> bytea", "SHA-512 digest.", "SELECT sha512('hello'::bytea);", pg("functions-binarystring.html"));
+  f!("ceil", "ceil(numeric) -> numeric", "Round up to integer.", "SELECT ceil(3.2);", pg("functions-math.html"));
+  f!(
+    "div",
+    "div(y numeric, x numeric) -> numeric",
+    "Integer quotient of y/x.",
+    "SELECT div(10, 3);",
+    pg("functions-math.html")
+  );
+  f!(
+    "justify_days",
+    "justify_days(interval) -> interval",
+    "Adjust 30-day periods into months.",
+    "SELECT justify_days(interval '60 days');",
+    pg("functions-datetime.html")
+  );
+  f!(
+    "justify_hours",
+    "justify_hours(interval) -> interval",
+    "Adjust 24-hour periods into days.",
+    "SELECT justify_hours(interval '50 hours');",
+    pg("functions-datetime.html")
+  );
+  f!(
+    "justify_interval",
+    "justify_interval(interval) -> interval",
+    "Adjust both days and hours.",
+    "SELECT justify_interval(interval '60 days 50 hours');",
+    pg("functions-datetime.html")
+  );
+  f!(
+    "sha256",
+    "sha256(bytea) -> bytea",
+    "SHA-256 digest.",
+    "SELECT encode(sha256('hello'::bytea), 'hex');",
+    pg("functions-binarystring.html")
+  );
+  f!(
+    "sha224",
+    "sha224(bytea) -> bytea",
+    "SHA-224 digest.",
+    "SELECT sha224('hello'::bytea);",
+    pg("functions-binarystring.html")
+  );
+  f!(
+    "sha384",
+    "sha384(bytea) -> bytea",
+    "SHA-384 digest.",
+    "SELECT sha384('hello'::bytea);",
+    pg("functions-binarystring.html")
+  );
+  f!(
+    "sha512",
+    "sha512(bytea) -> bytea",
+    "SHA-512 digest.",
+    "SELECT sha512('hello'::bytea);",
+    pg("functions-binarystring.html")
+  );
 
   // Window-only rank functions (siblings of row_number / rank already
   // listed above).
-  f!("percent_rank", "percent_rank() -> double precision", "Relative rank of the current row (0..1), excluding the current row's peers.", "SELECT percent_rank() OVER (ORDER BY salary) FROM employees;", pg("functions-window.html"));
-  f!("cume_dist",    "cume_dist() -> double precision",    "Cumulative distribution of the current row -- fraction of partition rows with values <= current.", "SELECT cume_dist() OVER (ORDER BY salary) FROM employees;", pg("functions-window.html"));
+  f!(
+    "percent_rank",
+    "percent_rank() -> double precision",
+    "Relative rank of the current row (0..1), excluding the current row's peers.",
+    "SELECT percent_rank() OVER (ORDER BY salary) FROM employees;",
+    pg("functions-window.html")
+  );
+  f!(
+    "cume_dist",
+    "cume_dist() -> double precision",
+    "Cumulative distribution of the current row -- fraction of partition rows with values <= current.",
+    "SELECT cume_dist() OVER (ORDER BY salary) FROM employees;",
+    pg("functions-window.html")
+  );
 
-  f!("num_nonnulls", "num_nonnulls(VARIADIC \"any\") -> int", "Count of non-NULL arguments. Useful in CHECK constraints to require exactly one of N columns.", "CHECK (num_nonnulls(promo_id, voucher_id) = 1)", pg("functions-comparison.html#FUNCTIONS-COMPARISON-FUNC-TABLE"));
-  f!("num_nulls",    "num_nulls(VARIADIC \"any\") -> int",    "Count of NULL arguments. Inverse of num_nonnulls.",                                                                  "SELECT num_nulls(a, b, c);",                    pg("functions-comparison.html#FUNCTIONS-COMPARISON-FUNC-TABLE"));
+  f!(
+    "num_nonnulls",
+    "num_nonnulls(VARIADIC \"any\") -> int",
+    "Count of non-NULL arguments. Useful in CHECK constraints to require exactly one of N columns.",
+    "CHECK (num_nonnulls(promo_id, voucher_id) = 1)",
+    pg("functions-comparison.html#FUNCTIONS-COMPARISON-FUNC-TABLE")
+  );
+  f!(
+    "num_nulls",
+    "num_nulls(VARIADIC \"any\") -> int",
+    "Count of NULL arguments. Inverse of num_nonnulls.",
+    "SELECT num_nulls(a, b, c);",
+    pg("functions-comparison.html#FUNCTIONS-COMPARISON-FUNC-TABLE")
+  );
 
   // ---- Sequence helpers (commonly missing) ----
-  f!("nextval",  "nextval(regclass) -> bigint",   "Advance sequence and return next value.",   "SELECT nextval('users_id_seq');", pg("functions-sequence.html"));
-  f!("currval",  "currval(regclass) -> bigint",   "Last value returned by nextval in this session.", "SELECT currval('users_id_seq');", pg("functions-sequence.html"));
-  f!("setval",   "setval(regclass, bigint [, boolean]) -> bigint", "Set the sequence's current value.",        "SELECT setval('users_id_seq', 1000);", pg("functions-sequence.html"));
-  f!("lastval",  "lastval() -> bigint",           "Last value returned by nextval anywhere in the session, any sequence.", "SELECT lastval();", pg("functions-sequence.html"));
+  f!(
+    "nextval",
+    "nextval(regclass) -> bigint",
+    "Advance sequence and return next value.",
+    "SELECT nextval('users_id_seq');",
+    pg("functions-sequence.html")
+  );
+  f!(
+    "currval",
+    "currval(regclass) -> bigint",
+    "Last value returned by nextval in this session.",
+    "SELECT currval('users_id_seq');",
+    pg("functions-sequence.html")
+  );
+  f!(
+    "setval",
+    "setval(regclass, bigint [, boolean]) -> bigint",
+    "Set the sequence's current value.",
+    "SELECT setval('users_id_seq', 1000);",
+    pg("functions-sequence.html")
+  );
+  f!(
+    "lastval",
+    "lastval() -> bigint",
+    "Last value returned by nextval anywhere in the session, any sequence.",
+    "SELECT lastval();",
+    pg("functions-sequence.html")
+  );
 
   // ---- Range constructors ----
-  f!("int4range", "int4range(lower int, upper int [, bounds text]) -> int4range", "Construct an int4 range.",   "SELECT int4range(1, 10);", pg("rangetypes.html"));
-  f!("int8range", "int8range(lower bigint, upper bigint [, bounds text]) -> int8range", "Construct an int8 range.", "SELECT int8range(1, 10);", pg("rangetypes.html"));
-  f!("numrange",  "numrange(lower numeric, upper numeric [, bounds text]) -> numrange", "Construct a numeric range.", "SELECT numrange(0.5, 1.5);", pg("rangetypes.html"));
-  f!("tsrange",   "tsrange(lower timestamp, upper timestamp [, bounds text]) -> tsrange", "Construct a timestamp range.", "SELECT tsrange(now(), now() + interval '1 day');", pg("rangetypes.html"));
-  f!("tstzrange", "tstzrange(lower timestamptz, upper timestamptz [, bounds text]) -> tstzrange", "Construct a timestamptz range.", "SELECT tstzrange(now(), now() + interval '1 day');", pg("rangetypes.html"));
-  f!("daterange", "daterange(lower date, upper date [, bounds text]) -> daterange", "Construct a date range.", "SELECT daterange('2024-01-01', '2024-12-31');", pg("rangetypes.html"));
+  f!(
+    "int4range",
+    "int4range(lower int, upper int [, bounds text]) -> int4range",
+    "Construct an int4 range.",
+    "SELECT int4range(1, 10);",
+    pg("rangetypes.html")
+  );
+  f!(
+    "int8range",
+    "int8range(lower bigint, upper bigint [, bounds text]) -> int8range",
+    "Construct an int8 range.",
+    "SELECT int8range(1, 10);",
+    pg("rangetypes.html")
+  );
+  f!(
+    "numrange",
+    "numrange(lower numeric, upper numeric [, bounds text]) -> numrange",
+    "Construct a numeric range.",
+    "SELECT numrange(0.5, 1.5);",
+    pg("rangetypes.html")
+  );
+  f!(
+    "tsrange",
+    "tsrange(lower timestamp, upper timestamp [, bounds text]) -> tsrange",
+    "Construct a timestamp range.",
+    "SELECT tsrange(now(), now() + interval '1 day');",
+    pg("rangetypes.html")
+  );
+  f!(
+    "tstzrange",
+    "tstzrange(lower timestamptz, upper timestamptz [, bounds text]) -> tstzrange",
+    "Construct a timestamptz range.",
+    "SELECT tstzrange(now(), now() + interval '1 day');",
+    pg("rangetypes.html")
+  );
+  f!(
+    "daterange",
+    "daterange(lower date, upper date [, bounds text]) -> daterange",
+    "Construct a date range.",
+    "SELECT daterange('2024-01-01', '2024-12-31');",
+    pg("rangetypes.html")
+  );
 
   m
 }
