@@ -3,9 +3,9 @@
 use dsl_server::{
   documents::DocumentStore,
   handlers::{
-    call_hierarchy, code_action, completion, definition, document_highlight, document_symbol,
-    folding_range, hover, inlay_hints, linked_editing, on_type_formatting, references, rename,
-    selection_range, semantic_tokens, signature_help, type_definition, workspace_symbol,
+    call_hierarchy, code_action, completion, definition, document_highlight, document_symbol, folding_range, hover,
+    inlay_hints, linked_editing, on_type_formatting, references, rename, selection_range, semantic_tokens,
+    signature_help, type_definition, workspace_symbol,
   },
   state::ServerState,
 };
@@ -307,9 +307,8 @@ fn folding_range_emits_block_comment_fold() {
 #[test]
 fn call_hierarchy_finds_incoming_caller() {
   use tower_lsp::lsp_types::{
-    CallHierarchyIncomingCallsParams, CallHierarchyItem, CallHierarchyPrepareParams, SymbolKind,
-    TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams, PartialResultParams,
-    Range,
+    CallHierarchyIncomingCallsParams, CallHierarchyItem, CallHierarchyPrepareParams, PartialResultParams, Range,
+    SymbolKind, TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams,
   };
   let src = "\
 CREATE OR REPLACE FUNCTION audit_log() RETURNS void LANGUAGE plpgsql AS $$
@@ -332,16 +331,15 @@ $$;
     CallHierarchyPrepareParams {
       text_document_position_params: TextDocumentPositionParams {
         text_document: TextDocumentIdentifier { uri: url.clone() },
-        position: Position { line: 7, character: (cur - src.lines().take(7).map(|l| l.len() + 1).sum::<usize>()) as u32 },
+        position: Position {
+          line: 7,
+          character: (cur - src.lines().take(7).map(|l| l.len() + 1).sum::<usize>()) as u32,
+        },
       },
       work_done_progress_params: WorkDoneProgressParams::default(),
     },
   );
-  let item = items
-    .expect("prepare returns")
-    .into_iter()
-    .next()
-    .expect("at least one item");
+  let item = items.expect("prepare returns").into_iter().next().expect("at least one item");
   let incoming = call_hierarchy::incoming(
     &state,
     CallHierarchyIncomingCallsParams {
@@ -368,8 +366,7 @@ $$;
 #[test]
 fn linked_editing_returns_all_in_statement_occurrences() {
   use tower_lsp::lsp_types::{
-    LinkedEditingRangeParams, TextDocumentIdentifier, TextDocumentPositionParams,
-    WorkDoneProgressParams,
+    LinkedEditingRangeParams, TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams,
   };
   let src = "SELECT u.id FROM users u WHERE u.id = 1;";
   let (state, url) = state_with("file:///le.sql", src);
@@ -408,8 +405,8 @@ fn linked_editing_returns_all_in_statement_occurrences() {
 #[test]
 fn definition_jumps_to_create_role() {
   use tower_lsp::lsp_types::{
-    GotoDefinitionParams, GotoDefinitionResponse, TextDocumentIdentifier, TextDocumentPositionParams,
-    WorkDoneProgressParams, PartialResultParams,
+    GotoDefinitionParams, GotoDefinitionResponse, PartialResultParams, TextDocumentIdentifier,
+    TextDocumentPositionParams, WorkDoneProgressParams,
   };
   let src = "\
 CREATE ROLE app_owner;
@@ -428,7 +425,8 @@ ALTER TABLE users OWNER TO app_owner;
       work_done_progress_params: WorkDoneProgressParams::default(),
       partial_result_params: PartialResultParams::default(),
     },
-  ).expect("def");
+  )
+  .expect("def");
   let loc = match resp {
     GotoDefinitionResponse::Scalar(l) => l,
     _ => panic!("expected scalar"),
@@ -440,8 +438,8 @@ ALTER TABLE users OWNER TO app_owner;
 #[test]
 fn definition_jumps_across_open_buffers() {
   use tower_lsp::lsp_types::{
-    GotoDefinitionParams, GotoDefinitionResponse, TextDocumentIdentifier, TextDocumentPositionParams,
-    WorkDoneProgressParams, PartialResultParams,
+    GotoDefinitionParams, GotoDefinitionResponse, PartialResultParams, TextDocumentIdentifier,
+    TextDocumentPositionParams, WorkDoneProgressParams,
   };
   let state = ServerState::new();
   let schema: Url = "file:///migrations/001_schema.sql".parse().unwrap();
@@ -460,7 +458,8 @@ fn definition_jumps_across_open_buffers() {
       work_done_progress_params: WorkDoneProgressParams::default(),
       partial_result_params: PartialResultParams::default(),
     },
-  ).expect("def");
+  )
+  .expect("def");
   let loc = match resp {
     GotoDefinitionResponse::Scalar(l) => l,
     _ => panic!("expected scalar"),
@@ -471,8 +470,8 @@ fn definition_jumps_across_open_buffers() {
 #[test]
 fn definition_jumps_to_cte_binding() {
   use tower_lsp::lsp_types::{
-    GotoDefinitionParams, GotoDefinitionResponse, TextDocumentIdentifier, TextDocumentPositionParams,
-    WorkDoneProgressParams, PartialResultParams,
+    GotoDefinitionParams, GotoDefinitionResponse, PartialResultParams, TextDocumentIdentifier,
+    TextDocumentPositionParams, WorkDoneProgressParams,
   };
   let src = "WITH active AS (SELECT 1) SELECT * FROM active;";
   let (state, url) = state_with("file:///cte.sql", src);
@@ -487,7 +486,8 @@ fn definition_jumps_to_cte_binding() {
       work_done_progress_params: WorkDoneProgressParams::default(),
       partial_result_params: PartialResultParams::default(),
     },
-  ).expect("def");
+  )
+  .expect("def");
   let loc = match resp {
     GotoDefinitionResponse::Scalar(l) => l,
     _ => panic!("expected scalar"),
@@ -500,7 +500,7 @@ fn definition_jumps_to_cte_binding() {
 fn type_definition_jumps_to_create_type_for_cast_target() {
   use tower_lsp::lsp_types::request::{GotoTypeDefinitionParams, GotoTypeDefinitionResponse};
   use tower_lsp::lsp_types::{
-    TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams, PartialResultParams,
+    PartialResultParams, TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams,
   };
   let src = "\
 CREATE TYPE mood AS ENUM ('happy', 'sad');
@@ -534,7 +534,7 @@ SELECT 'happy'::mood;
 fn type_definition_returns_none_for_builtin_type() {
   use tower_lsp::lsp_types::request::GotoTypeDefinitionParams;
   use tower_lsp::lsp_types::{
-    TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams, PartialResultParams,
+    PartialResultParams, TextDocumentIdentifier, TextDocumentPositionParams, WorkDoneProgressParams,
   };
   let src = "SELECT '1'::INT;";
   let (state, url) = state_with("file:///tdb.sql", src);
@@ -744,15 +744,18 @@ INSERT INTO user_roles (user_id, role) VALUES ('id_1', 'admin');
   assert!(chips.contains(&"user_id"), "expected `user_id` chip; got: {chips:?}");
   assert!(chips.contains(&"role"), "expected `role` chip; got: {chips:?}");
   // Chip lands at the start of the value, not at end.
-  let user_id_chip = hints.iter().find(|h| {
-    matches!(&h.label, tower_lsp::lsp_types::InlayHintLabel::String(s) if s == "user_id")
-  }).unwrap();
+  let user_id_chip = hints
+    .iter()
+    .find(|h| matches!(&h.label, tower_lsp::lsp_types::InlayHintLabel::String(s) if s == "user_id"))
+    .unwrap();
   // The chip's character should sit at the column where `'id_1'` starts.
   let line1 = "INSERT INTO user_roles (user_id, role) VALUES ('id_1', 'admin');";
   let expected_col = line1.find("'id_1'").unwrap() as u32;
-  assert_eq!(user_id_chip.position.character, expected_col,
-             "chip should sit at start of literal, got {} expected {}",
-             user_id_chip.position.character, expected_col);
+  assert_eq!(
+    user_id_chip.position.character, expected_col,
+    "chip should sit at start of literal, got {} expected {}",
+    user_id_chip.position.character, expected_col
+  );
 }
 
 #[test]

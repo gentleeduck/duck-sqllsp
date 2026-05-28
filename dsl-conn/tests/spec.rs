@@ -2,10 +2,7 @@ use dsl_conn::ConnectionSpec;
 
 #[test]
 fn url_round_trips_unchanged() {
-  let s = ConnectionSpec {
-    name: "n".into(),
-    url: "postgres://u:p@h:5433/d".into(),
-  };
+  let s = ConnectionSpec { name: "n".into(), url: "postgres://u:p@h:5433/d".into() };
   assert_eq!(s.url(), "postgres://u:p@h:5433/d");
 }
 

@@ -68,7 +68,6 @@ fn hover_role_outside_role_slot_does_not_hijack_identifier() {
   // We just assert the role card didn't claim it: if hover IS Some,
   // it must not be the role card.
   if let Some(md) = hover(src, TextSize::from(cur as u32), &c) {
-    assert!(!md.contains("bootstrap superuser"),
-            "role card hijacked a plain identifier: {md}");
+    assert!(!md.contains("bootstrap superuser"), "role card hijacked a plain identifier: {md}");
   }
 }
