@@ -18,9 +18,8 @@ use crate::handlers::{perf, position};
 use crate::state::ServerState;
 use ropey::Rope;
 use tower_lsp::lsp_types::{
-  CallHierarchyIncomingCall, CallHierarchyIncomingCallsParams, CallHierarchyItem,
-  CallHierarchyOutgoingCall, CallHierarchyOutgoingCallsParams, CallHierarchyPrepareParams, Position,
-  Range, SymbolKind, Url,
+  CallHierarchyIncomingCall, CallHierarchyIncomingCallsParams, CallHierarchyItem, CallHierarchyOutgoingCall,
+  CallHierarchyOutgoingCallsParams, CallHierarchyPrepareParams, Position, Range, SymbolKind, Url,
 };
 
 pub fn prepare(state: &ServerState, params: CallHierarchyPrepareParams) -> Option<Vec<CallHierarchyItem>> {
@@ -47,7 +46,10 @@ pub fn prepare(state: &ServerState, params: CallHierarchyPrepareParams) -> Optio
   Some(items)
 }
 
-pub fn incoming(state: &ServerState, params: CallHierarchyIncomingCallsParams) -> Option<Vec<CallHierarchyIncomingCall>> {
+pub fn incoming(
+  state: &ServerState,
+  params: CallHierarchyIncomingCallsParams,
+) -> Option<Vec<CallHierarchyIncomingCall>> {
   let _g = perf::Guard::new("call_hierarchy_incoming");
   let target = params.item.name.clone();
   let mut out: Vec<CallHierarchyIncomingCall> = Vec::new();
@@ -61,12 +63,11 @@ pub fn incoming(state: &ServerState, params: CallHierarchyIncomingCallsParams) -
       for site in find_call_sites(body, &target) {
         let abs_s = body_start + site.0;
         let abs_e = body_start + site.1;
-        ranges.push(Range {
-          start: byte_to_position(&doc.rope, abs_s),
-          end: byte_to_position(&doc.rope, abs_e),
-        });
+        ranges.push(Range { start: byte_to_position(&doc.rope, abs_s), end: byte_to_position(&doc.rope, abs_e) });
       }
-      if ranges.is_empty() { continue; }
+      if ranges.is_empty() {
+        continue;
+      }
       out.push(CallHierarchyIncomingCall {
         from: item_for(&uri, &doc.rope, &caller.name, caller.name_start, caller.name_end, 0),
         from_ranges: ranges,
@@ -76,13 +77,18 @@ pub fn incoming(state: &ServerState, params: CallHierarchyIncomingCallsParams) -
   if out.is_empty() { None } else { Some(out) }
 }
 
-pub fn outgoing(state: &ServerState, params: CallHierarchyOutgoingCallsParams) -> Option<Vec<CallHierarchyOutgoingCall>> {
+pub fn outgoing(
+  state: &ServerState,
+  params: CallHierarchyOutgoingCallsParams,
+) -> Option<Vec<CallHierarchyOutgoingCall>> {
   let _g = perf::Guard::new("call_hierarchy_outgoing");
   let caller_name = params.item.name.clone();
   // Find the caller body in any open buffer.
   for (uri, doc) in state.documents.snapshot() {
     for caller in find_function_definitions(&doc.text) {
-      if !caller.name.eq_ignore_ascii_case(&caller_name) { continue; }
+      if !caller.name.eq_ignore_ascii_case(&caller_name) {
+        continue;
+      }
       let body = &doc.text[caller.body_start..caller.body_end];
       // Group call sites by callee name.
       let mut by_callee: std::collections::BTreeMap<String, Vec<Range>> = Default::default();
@@ -90,19 +96,18 @@ pub fn outgoing(state: &ServerState, params: CallHierarchyOutgoingCallsParams) -
         for site in find_call_sites(body, &callee) {
           let abs_s = caller.body_start + site.0;
           let abs_e = caller.body_start + site.1;
-          by_callee.entry(callee.clone()).or_default().push(Range {
-            start: byte_to_position(&doc.rope, abs_s),
-            end: byte_to_position(&doc.rope, abs_e),
-          });
+          by_callee
+            .entry(callee.clone())
+            .or_default()
+            .push(Range { start: byte_to_position(&doc.rope, abs_s), end: byte_to_position(&doc.rope, abs_e) });
         }
       }
-      if by_callee.is_empty() { return None; }
+      if by_callee.is_empty() {
+        return None;
+      }
       let mut out = Vec::with_capacity(by_callee.len());
       for (callee, ranges) in by_callee {
-        out.push(CallHierarchyOutgoingCall {
-          to: item_for(&uri, &doc.rope, &callee, 0, 0, 0),
-          from_ranges: ranges,
-        });
+        out.push(CallHierarchyOutgoingCall { to: item_for(&uri, &doc.rope, &callee, 0, 0, 0), from_ranges: ranges });
       }
       return Some(out);
     }
@@ -125,13 +130,16 @@ struct FunctionDef {
 fn find_function_definitions(src: &str) -> Vec<FunctionDef> {
   let mut out = Vec::new();
   let upper = src.to_ascii_uppercase();
-  for prefix in ["CREATE OR REPLACE FUNCTION ", "CREATE FUNCTION ", "CREATE OR REPLACE PROCEDURE ", "CREATE PROCEDURE "] {
+  for prefix in ["CREATE OR REPLACE FUNCTION ", "CREATE FUNCTION ", "CREATE OR REPLACE PROCEDURE ", "CREATE PROCEDURE "]
+  {
     let mut from = 0usize;
     while let Some(rel) = upper[from..].find(prefix) {
       let after = from + rel + prefix.len();
       let bytes = src.as_bytes();
       let mut k = after;
-      while k < bytes.len() && bytes[k].is_ascii_whitespace() { k += 1; }
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1;
+      }
       let id_start = k;
       while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.') {
         k += 1;
@@ -141,17 +149,11 @@ fn find_function_definitions(src: &str) -> Vec<FunctionDef> {
         let raw = &src[id_start..id_end];
         let name = raw.rsplit('.').next().unwrap_or(raw).to_string();
         // Body: between `$$` and next `$$`.
-        if let Some(body_start) = src[id_end..].find("$$").map(|i| id_end + i + 2) {
-          if let Some(rel_end) = src[body_start..].find("$$") {
-            let body_end = body_start + rel_end;
-            out.push(FunctionDef {
-              name,
-              name_start: id_start,
-              name_end: id_end,
-              body_start,
-              body_end,
-            });
-          }
+        if let Some(body_start) = src[id_end..].find("$$").map(|i| id_end + i + 2)
+          && let Some(rel_end) = src[body_start..].find("$$")
+        {
+          let body_end = body_start + rel_end;
+          out.push(FunctionDef { name, name_start: id_start, name_end: id_end, body_start, body_end });
         }
       }
       from = after;
@@ -185,27 +187,37 @@ fn find_call_sites(body: &str, name: &str) -> Vec<(usize, usize)> {
     let c = bytes[i] as char;
     if c == '\'' {
       i += 1;
-      while i < n && bytes[i] != b'\'' { i += 1; }
+      while i < n && bytes[i] != b'\'' {
+        i += 1;
+      }
       i = (i + 1).min(n);
       continue;
     }
     if c == '-' && i + 1 < n && bytes[i + 1] == b'-' {
-      while i < n && bytes[i] != b'\n' { i += 1; }
+      while i < n && bytes[i] != b'\n' {
+        i += 1;
+      }
       continue;
     }
     if c == '/' && i + 1 < n && bytes[i + 1] == b'*' {
       i += 2;
-      while i + 1 < n && !(bytes[i] == b'*' && bytes[i + 1] == b'/') { i += 1; }
+      while i + 1 < n && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+        i += 1;
+      }
       i = (i + 2).min(n);
       continue;
     }
     if c.is_alphabetic() || c == '_' {
       let start = i;
-      while i < n && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') { i += 1; }
+      while i < n && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+        i += 1;
+      }
       if i - start == nlen && body[start..i].eq_ignore_ascii_case(&needle_lower) {
         // Next non-space char must be `(` for it to be a call.
         let mut k = i;
-        while k < n && bytes[k].is_ascii_whitespace() { k += 1; }
+        while k < n && bytes[k].is_ascii_whitespace() {
+          k += 1;
+        }
         if k < n && bytes[k] == b'(' {
           out.push((start, i));
         }
@@ -228,19 +240,27 @@ fn extract_called_names(body: &str) -> std::collections::BTreeSet<String> {
     let c = bytes[i] as char;
     if c == '\'' {
       i += 1;
-      while i < n && bytes[i] != b'\'' { i += 1; }
+      while i < n && bytes[i] != b'\'' {
+        i += 1;
+      }
       i = (i + 1).min(n);
       continue;
     }
     if c == '-' && i + 1 < n && bytes[i + 1] == b'-' {
-      while i < n && bytes[i] != b'\n' { i += 1; }
+      while i < n && bytes[i] != b'\n' {
+        i += 1;
+      }
       continue;
     }
     if c.is_alphabetic() || c == '_' {
       let start = i;
-      while i < n && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') { i += 1; }
+      while i < n && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+        i += 1;
+      }
       let mut k = i;
-      while k < n && bytes[k].is_ascii_whitespace() { k += 1; }
+      while k < n && bytes[k].is_ascii_whitespace() {
+        k += 1;
+      }
       if k < n && bytes[k] == b'(' {
         let name = body[start..i].to_string();
         // Skip flow keywords that look like calls but aren't.
@@ -258,10 +278,37 @@ fn extract_called_names(body: &str) -> std::collections::BTreeSet<String> {
 fn is_flow_keyword(s: &str) -> bool {
   matches!(
     s.to_ascii_uppercase().as_str(),
-    "IF" | "WHILE" | "FOR" | "CASE" | "WHEN" | "RETURN" | "RAISE" | "SELECT" | "VALUES" | "INSERT"
-      | "UPDATE" | "DELETE" | "PERFORM" | "EXECUTE" | "DECLARE" | "BEGIN" | "EXCEPTION" | "LOOP"
-      | "EXIT" | "CONTINUE" | "ALL" | "ANY" | "OR" | "AND" | "NOT" | "IN" | "NULLIF" | "COALESCE"
-      | "GREATEST" | "LEAST" | "CAST"
+    "IF"
+      | "WHILE"
+      | "FOR"
+      | "CASE"
+      | "WHEN"
+      | "RETURN"
+      | "RAISE"
+      | "SELECT"
+      | "VALUES"
+      | "INSERT"
+      | "UPDATE"
+      | "DELETE"
+      | "PERFORM"
+      | "EXECUTE"
+      | "DECLARE"
+      | "BEGIN"
+      | "EXCEPTION"
+      | "LOOP"
+      | "EXIT"
+      | "CONTINUE"
+      | "ALL"
+      | "ANY"
+      | "OR"
+      | "AND"
+      | "NOT"
+      | "IN"
+      | "NULLIF"
+      | "COALESCE"
+      | "GREATEST"
+      | "LEAST"
+      | "CAST"
   )
 }
 
@@ -269,20 +316,25 @@ fn token_at(src: &str, pos: usize) -> Option<String> {
   let bytes = src.as_bytes();
   let pos = pos.min(src.len());
   let mut start = pos;
-  while start > 0 && is_word(bytes[start - 1] as char) { start -= 1; }
+  while start > 0 && is_word(bytes[start - 1] as char) {
+    start -= 1;
+  }
   let mut end = pos;
-  while end < bytes.len() && is_word(bytes[end] as char) { end += 1; }
-  if start == end { return None; }
+  while end < bytes.len() && is_word(bytes[end] as char) {
+    end += 1;
+  }
+  if start == end {
+    return None;
+  }
   Some(src[start..end].to_string())
 }
 
-fn is_word(c: char) -> bool { c.is_alphanumeric() || c == '_' }
+fn is_word(c: char) -> bool {
+  c.is_alphanumeric() || c == '_'
+}
 
 fn item_for(uri: &Url, rope: &Rope, name: &str, s: usize, e: usize, _line: u32) -> CallHierarchyItem {
-  let range = Range {
-    start: byte_to_position(rope, s),
-    end: byte_to_position(rope, e.max(s + 1)),
-  };
+  let range = Range { start: byte_to_position(rope, s), end: byte_to_position(rope, e.max(s + 1)) };
   CallHierarchyItem {
     name: name.to_string(),
     kind: SymbolKind::FUNCTION,
@@ -304,7 +356,9 @@ fn byte_to_position(rope: &Rope, byte: usize) -> Position {
   let mut bytes_seen = 0usize;
   let bytes_in_line = byte.saturating_sub(line_start_byte);
   for c in line_slice.chars() {
-    if bytes_seen >= bytes_in_line { break; }
+    if bytes_seen >= bytes_in_line {
+      break;
+    }
     utf16 += c.len_utf16() as u32;
     bytes_seen += c.len_utf8();
   }

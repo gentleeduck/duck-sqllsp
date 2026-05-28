@@ -18,7 +18,7 @@
 //! returns None and the editor handles indentation itself.
 
 use crate::state::ServerState;
-use tower_lsp::lsp_types::{DocumentOnTypeFormattingParams, Position, Range, TextEdit};
+use tower_lsp::lsp_types::{DocumentOnTypeFormattingParams, Range, TextEdit};
 
 pub fn run(state: &ServerState, params: DocumentOnTypeFormattingParams) -> Option<Vec<TextEdit>> {
   let uri = &params.text_document_position.text_document.uri;
@@ -49,13 +49,12 @@ pub fn run(state: &ServerState, params: DocumentOnTypeFormattingParams) -> Optio
 
   // Newline after `(` at end of line -> increase indent by one unit.
   let trimmed = prev_line.trim_end();
-  let new_indent = if trimmed.ends_with('(') {
-    format!("{current_indent}{indent_unit}")
-  } else if ends_with_word_ci(trimmed, "BEGIN")
+  let increase_indent = trimmed.ends_with('(')
+    || ends_with_word_ci(trimmed, "BEGIN")
     || ends_with_word_ci(trimmed, "LOOP")
     || ends_with_word_ci(trimmed, "THEN")
-    || ends_with_word_ci(trimmed, "ELSE")
-  {
+    || ends_with_word_ci(trimmed, "ELSE");
+  let new_indent = if increase_indent {
     format!("{current_indent}{indent_unit}")
   } else {
     // Plain wrap -- keep the same indent as the previous line.

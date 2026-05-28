@@ -16,7 +16,9 @@ pub fn byte_to_lsp(rope: &Rope, byte: usize) -> Position {
   let mut bytes_seen = 0usize;
   let bytes_in_line = byte.saturating_sub(line_start_byte);
   for c in line_slice.chars() {
-    if bytes_seen >= bytes_in_line { break; }
+    if bytes_seen >= bytes_in_line {
+      break;
+    }
     utf16 += c.len_utf16() as u32;
     bytes_seen += c.len_utf8();
   }

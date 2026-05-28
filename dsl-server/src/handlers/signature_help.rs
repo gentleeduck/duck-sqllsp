@@ -39,18 +39,18 @@ pub fn run(state: &ServerState, params: SignatureHelpParams) -> Option<Signature
   // INSERT INTO t (a, b, c) VALUES (|...) -- when the enclosing `(`
   // belongs to a VALUES tuple, treat each declared column as a
   // signature parameter. Active index = comma count from VALUES `(`.
-  if name.eq_ignore_ascii_case("VALUES") {
-    if let Some(sig) = insert_values_signature(&doc.text, &state.catalog.read(), open_paren, arg_index) {
-      return Some(sig);
-    }
+  if name.eq_ignore_ascii_case("VALUES")
+    && let Some(sig) = insert_values_signature(&doc.text, &state.catalog.read(), open_paren, arg_index)
+  {
+    return Some(sig);
   }
 
   // Knowledge base first.
   let kb = dsl_knowledge::functions();
-  if let Some(entry) = kb.get(name.to_ascii_lowercase().as_str()) {
-    if let Some(sig) = entry.signature {
-      return Some(build(sig, &name, entry.doc, arg_index));
-    }
+  if let Some(entry) = kb.get(name.to_ascii_lowercase().as_str())
+    && let Some(sig) = entry.signature
+  {
+    return Some(build(sig, &name, entry.doc, arg_index));
   }
   // Catalog (live DB) fallback.
   let cat = state.catalog.read();
@@ -59,12 +59,12 @@ pub fn run(state: &ServerState, params: SignatureHelpParams) -> Option<Signature
       .arguments
       .iter()
       .map(|a| match &a.name {
-        Some(n) => format!("{n} {}", a.data_type),
-        None => a.data_type.clone(),
+        Some(n) => format!("{n} {}", dsl_catalog::display_type(&a.data_type)),
+        None => dsl_catalog::display_type(&a.data_type).to_string(),
       })
       .collect::<Vec<_>>()
       .join(", ");
-    let sig = format!("{}({args}) -> {}", f.name, f.return_type);
+    let sig = format!("{}({args}) -> {}", f.name, dsl_catalog::display_type(&f.return_type));
     let doc = f.comment.clone().unwrap_or_default();
     return Some(build_owned(sig, &name, doc, arg_index));
   }
@@ -199,13 +199,9 @@ fn insert_values_signature(
   let after_table_start = after_offset + table.len();
   let rest = &after_kw[after_table_start..];
   let rest_trim = rest.trim_start();
-  let explicit_cols: Option<Vec<String>> = if rest_trim.starts_with('(') {
-    rest_trim[1..].find(')').map(|close_rel| {
-      rest_trim[1..1 + close_rel]
-        .split(',')
-        .map(|c| c.trim().trim_matches('"').to_string())
-        .filter(|c| !c.is_empty())
-        .collect()
+  let explicit_cols: Option<Vec<String>> = if let Some(inside) = rest_trim.strip_prefix('(') {
+    inside.find(')').map(|close_rel| {
+      inside[..close_rel].split(',').map(|c| c.trim().trim_matches('"').to_string()).filter(|c| !c.is_empty()).collect()
     })
   } else {
     None
@@ -218,13 +214,13 @@ fn insert_values_signature(
       .into_iter()
       .map(|name| {
         let ty = t
-          .and_then(|t| t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(&name)).map(|c| c.data_type.clone()))
+          .and_then(|t| t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(&name)).map(|c| dsl_catalog::display_type(&c.data_type).to_string()))
           .unwrap_or_default();
         (name, ty)
       })
       .collect()
   } else if let Some(t) = t {
-    t.columns.iter().map(|c| (c.name.clone(), c.data_type.clone())).collect()
+    t.columns.iter().map(|c| (c.name.clone(), dsl_catalog::display_type(&c.data_type).to_string())).collect()
   } else {
     return None;
   };
@@ -316,7 +312,7 @@ fn update_set_tuple_signature(
     .iter()
     .map(|n| {
       let ty = t
-        .and_then(|t| t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(n)).map(|c| c.data_type.clone()))
+        .and_then(|t| t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(n)).map(|c| dsl_catalog::display_type(&c.data_type).to_string()))
         .unwrap_or_default();
       if ty.is_empty() { n.clone() } else { format!("{n} {ty}") }
     })

@@ -23,10 +23,7 @@ pub fn run(state: &ServerState, params: HoverParams) -> Option<Hover> {
   let cache = doc.parsed();
   let derived = dsl_completion::source_tables::from_source(&cache.file, &doc.text);
   let ws_offline = state.workspace_offline_snapshot();
-  let cat = dsl_completion::source_tables::merge(
-    &dsl_completion::source_tables::merge(&live, &derived),
-    &ws_offline,
-  );
+  let cat = dsl_completion::source_tables::merge(&dsl_completion::source_tables::merge(&live, &derived), &ws_offline);
   let case = match state.config_snapshot().style.keyword {
     Case::Upper => KeywordCase::Upper,
     Case::Lower => KeywordCase::Lower,
@@ -40,10 +37,16 @@ pub fn run(state: &ServerState, params: HoverParams) -> Option<Hover> {
 /// Compute the hover-target range so the editor highlights the
 /// whole token / literal under the cursor. Without this the client
 /// underlines only the cursor's position.
-fn hover_range_for(source: &str, rope: &ropey::Rope, offset: text_size::TextSize) -> Option<tower_lsp::lsp_types::Range> {
+fn hover_range_for(
+  source: &str,
+  rope: &ropey::Rope,
+  offset: text_size::TextSize,
+) -> Option<tower_lsp::lsp_types::Range> {
   let pos: usize = u32::from(offset) as usize;
   let bytes = source.as_bytes();
-  if pos > bytes.len() { return None; }
+  if pos > bytes.len() {
+    return None;
+  }
   // String literal: walk back to opening `'`, forward to closing `'`.
   if let Some(span) = enclosing_string(bytes, pos) {
     return Some(tower_lsp::lsp_types::Range {
@@ -60,14 +63,15 @@ fn hover_range_for(source: &str, rope: &ropey::Rope, offset: text_size::TextSize
   while e < bytes.len() && is_word(bytes[e]) {
     e += 1;
   }
-  if s == e { return None; }
-  Some(tower_lsp::lsp_types::Range {
-    start: position::byte_to_lsp(rope, s),
-    end: position::byte_to_lsp(rope, e),
-  })
+  if s == e {
+    return None;
+  }
+  Some(tower_lsp::lsp_types::Range { start: position::byte_to_lsp(rope, s), end: position::byte_to_lsp(rope, e) })
 }
 
-fn is_word(b: u8) -> bool { b.is_ascii_alphanumeric() || b == b'_' }
+fn is_word(b: u8) -> bool {
+  b.is_ascii_alphanumeric() || b == b'_'
+}
 
 /// Span of the single-quoted string literal containing `pos` (inclusive
 /// of both quotes). None when pos isn't inside one.
@@ -80,9 +84,14 @@ fn enclosing_string(bytes: &[u8], pos: usize) -> Option<(usize, usize)> {
       i += 1;
       while i < n {
         if bytes[i] == b'\'' {
-          if i + 1 < n && bytes[i + 1] == b'\'' { i += 2; continue; }
+          if i + 1 < n && bytes[i + 1] == b'\'' {
+            i += 2;
+            continue;
+          }
           let end = i + 1;
-          if pos >= start && pos <= end { return Some((start, end)); }
+          if pos >= start && pos <= end {
+            return Some((start, end));
+          }
           i = end;
           break;
         }
@@ -137,10 +146,10 @@ fn wrap(chunks: Vec<MarkedString>) -> HoverContents {
   if chunks.is_empty() {
     return HoverContents::Markup(MarkupContent { kind: MarkupKind::Markdown, value: String::new() });
   }
-  if chunks.len() == 1 {
-    if let Some(MarkedString::String(s)) = chunks.first() {
-      return HoverContents::Markup(MarkupContent { kind: MarkupKind::Markdown, value: s.clone() });
-    }
+  if chunks.len() == 1
+    && let Some(MarkedString::String(s)) = chunks.first()
+  {
+    return HoverContents::Markup(MarkupContent { kind: MarkupKind::Markdown, value: s.clone() });
   }
   HoverContents::Array(chunks)
 }

@@ -43,7 +43,9 @@ pub fn run(state: &ServerState, params: ReferenceParams) -> Option<Vec<Location>
     let mut count = 0usize;
     walk_sql_files(&root, 5000, &mut count, &mut |path| {
       let Ok(uri) = tower_lsp::lsp_types::Url::from_file_path(path) else { return };
-      if seen_uris.contains(&uri) { return; }
+      if seen_uris.contains(&uri) {
+        return;
+      }
       let Ok(text) = std::fs::read_to_string(path) else { return };
       let rope = Rope::from_str(&text);
       for (start, end) in find_word_occurrences(&text, &token) {
@@ -58,23 +60,27 @@ pub fn run(state: &ServerState, params: ReferenceParams) -> Option<Vec<Location>
 }
 
 fn walk_sql_files(root: &std::path::Path, cap: usize, count: &mut usize, f: &mut impl FnMut(&std::path::Path)) {
-  if *count >= cap { return; }
+  if *count >= cap {
+    return;
+  }
   let Ok(rd) = std::fs::read_dir(root) else { return };
   for entry in rd.flatten() {
-    if *count >= cap { return; }
+    if *count >= cap {
+      return;
+    }
     let path = entry.path();
-    if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-      if name.starts_with('.') || matches!(name, "node_modules" | "target" | "dist" | "build" | "vendor" | "out") {
-        continue;
-      }
+    if let Some(name) = path.file_name().and_then(|s| s.to_str())
+      && (name.starts_with('.') || matches!(name, "node_modules" | "target" | "dist" | "build" | "vendor" | "out"))
+    {
+      continue;
     }
     if path.is_dir() {
       walk_sql_files(&path, cap, count, f);
-    } else if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-      if matches!(ext.to_ascii_lowercase().as_str(), "sql" | "pgsql" | "psql") {
-        *count += 1;
-        f(&path);
-      }
+    } else if let Some(ext) = path.extension().and_then(|s| s.to_str())
+      && matches!(ext.to_ascii_lowercase().as_str(), "sql" | "pgsql" | "psql")
+    {
+      *count += 1;
+      f(&path);
     }
   }
 }
@@ -148,19 +154,19 @@ pub fn find_word_occurrences(src: &str, needle: &str) -> Vec<(usize, usize)> {
       continue;
     }
     // Dollar-quoted body: $$ ... $$ or $tag$ ... $tag$.
-    if c == '$' {
-      if let Some((tag_end, close_match)) = dollar_open(bytes, i) {
-        let mut j = tag_end;
-        while j + close_match.len() <= n {
-          if &bytes[j..j + close_match.len()] == close_match.as_bytes() {
-            j += close_match.len();
-            break;
-          }
-          j += 1;
+    if c == '$'
+      && let Some((tag_end, close_match)) = dollar_open(bytes, i)
+    {
+      let mut j = tag_end;
+      while j + close_match.len() <= n {
+        if &bytes[j..j + close_match.len()] == close_match.as_bytes() {
+          j += close_match.len();
+          break;
         }
-        i = j.min(n);
-        continue;
+        j += 1;
       }
+      i = j.min(n);
+      continue;
     }
     // Double-quoted identifier "x" -- still searchable as the inner text.
     if c == '"' {

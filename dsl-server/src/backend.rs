@@ -24,6 +24,10 @@ impl Backend {
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
   async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
+    // Stash the client identity so per-feature code can gate on it
+    // (`Run` / `EXPLAIN` CodeLens needs a VS Code-only client handler).
+    self.state.set_client_name(params.client_info.as_ref().map(|c| c.name.clone()));
+
     // Layer 1: initializationOptions from the editor.
     let mut effective = if let Some(opts) = params.initialization_options.clone() {
       config::parse(opts).duck_sqllsp
@@ -62,10 +66,28 @@ impl LanguageServer for Backend {
 
   async fn initialized(&self, _: InitializedParams) {
     self.client.log_message(MessageType::INFO, "duck-sqllsp initialized").await;
+    // Startup progress: nvim's stock LSP client surfaces `$/progress` via
+    // `vim.lsp.status()` and most statusline plugins. Without a Begin/End
+    // pair the user sees no "loading" indicator at all, even though the
+    // server is doing real work (workspace .sql scan, optional DB
+    // introspect). Emit a single startup-progress token here that closes
+    // once the workspace scan + first refresh both settle.
     let state = self.state.clone();
     let client = self.client.clone();
     tokio::spawn(async move {
-      refresh::refresh_catalog(state, client).await;
+      let has_active = state.config_snapshot().active().is_some();
+      let msg = if has_active { "loading workspace + DB schema..." } else { "loading workspace..." };
+      let progress_token = refresh::send_startup_progress(&client, msg).await;
+      // Re-run the workspace scan here so the progress widget covers it
+      // (initialize already kicked off one in the background; running
+      // again is idempotent and gives a deterministic end-of-load point).
+      let scan_state = state.clone();
+      let scan = tokio::task::spawn_blocking(move || scan_state.rescan_workspace_offline());
+      let _ = scan.await;
+      if has_active {
+        refresh::refresh_catalog(state, client.clone()).await;
+      }
+      refresh::end_startup_progress(&client, &progress_token, Some("ready".into())).await;
     });
   }
 
@@ -119,7 +141,7 @@ impl LanguageServer for Backend {
       config::Dialect::Postgresql => dsl_parse::Dialect::Postgres,
       config::Dialect::Mysql => dsl_parse::Dialect::MySql,
       config::Dialect::Sqlite => dsl_parse::Dialect::SQLite,
-          config::Dialect::Mssql => dsl_parse::Dialect::MsSql,
+      config::Dialect::Mssql => dsl_parse::Dialect::MsSql,
     };
     self.state.documents.open_with_dialect(td.uri, td.text, td.version, dialect);
     crate::diagnostics::publish_for(&self.client, &self.state, &uri).await;
@@ -136,10 +158,7 @@ impl LanguageServer for Backend {
     // around after the user edits the projection.
     let _ = self.client.send_request::<tower_lsp::lsp_types::request::InlayHintRefreshRequest>(()).await;
     let _ = self.client.send_request::<tower_lsp::lsp_types::request::CodeLensRefresh>(()).await;
-    let _ = self
-      .client
-      .send_request::<tower_lsp::lsp_types::request::SemanticTokensRefresh>(())
-      .await;
+    let _ = self.client.send_request::<tower_lsp::lsp_types::request::SemanticTokensRefresh>(()).await;
   }
 
   async fn did_close(&self, params: DidCloseTextDocumentParams) {
@@ -204,17 +223,11 @@ impl LanguageServer for Backend {
     Ok(handlers::type_definition::run(&self.state, params))
   }
 
-  async fn linked_editing_range(
-    &self,
-    params: LinkedEditingRangeParams,
-  ) -> Result<Option<LinkedEditingRanges>> {
+  async fn linked_editing_range(&self, params: LinkedEditingRangeParams) -> Result<Option<LinkedEditingRanges>> {
     Ok(handlers::linked_editing::run(&self.state, params))
   }
 
-  async fn prepare_call_hierarchy(
-    &self,
-    params: CallHierarchyPrepareParams,
-  ) -> Result<Option<Vec<CallHierarchyItem>>> {
+  async fn prepare_call_hierarchy(&self, params: CallHierarchyPrepareParams) -> Result<Option<Vec<CallHierarchyItem>>> {
     Ok(handlers::call_hierarchy::prepare(&self.state, params))
   }
 
@@ -232,10 +245,7 @@ impl LanguageServer for Backend {
     Ok(handlers::call_hierarchy::outgoing(&self.state, params))
   }
 
-  async fn execute_command(
-    &self,
-    params: ExecuteCommandParams,
-  ) -> Result<Option<serde_json::Value>> {
+  async fn execute_command(&self, params: ExecuteCommandParams) -> Result<Option<serde_json::Value>> {
     Ok(handlers::execute_command::run(&self.state, params).await)
   }
 
@@ -278,7 +288,7 @@ impl LanguageServer for Backend {
       config::Dialect::Postgresql => dsl_parse::Dialect::Postgres,
       config::Dialect::Mysql => dsl_parse::Dialect::MySql,
       config::Dialect::Sqlite => dsl_parse::Dialect::SQLite,
-          config::Dialect::Mssql => dsl_parse::Dialect::MsSql,
+      config::Dialect::Mssql => dsl_parse::Dialect::MsSql,
     };
     self.state.documents.set_dialect_all(dialect);
     let state = self.state.clone();
@@ -294,18 +304,18 @@ impl LanguageServer for Backend {
     for change in &params.changes {
       let Ok(path) = change.uri.to_file_path() else { continue };
       let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
-      if name == ".duck-sqllsp.toml" || name == ".duck-sqllsp.json" {
-        if let Some(proj) = config::load_project_config(&path) {
-          let mut cfg = self.state.config_snapshot();
-          cfg.merge_from(proj);
-          self.state.set_config(cfg);
-          config_changed = true;
-        }
+      if (name == ".duck-sqllsp.toml" || name == ".duck-sqllsp.json")
+        && let Some(proj) = config::load_project_config(&path)
+      {
+        let mut cfg = self.state.config_snapshot();
+        cfg.merge_from(proj);
+        self.state.set_config(cfg);
+        config_changed = true;
       }
-      if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-        if matches!(ext.to_ascii_lowercase().as_str(), "sql" | "pgsql" | "psql") {
-          sql_changed = true;
-        }
+      if let Some(ext) = path.extension().and_then(|s| s.to_str())
+        && matches!(ext.to_ascii_lowercase().as_str(), "sql" | "pgsql" | "psql")
+      {
+        sql_changed = true;
       }
     }
     if config_changed {
@@ -333,8 +343,7 @@ impl LanguageServer for Backend {
 /// none found, return the immediate parent. Used as a fallback for
 /// clients that didn't pass rootUri at initialize time.
 fn derive_workspace_root(start: &std::path::Path) -> Option<PathBuf> {
-  let mut dir: PathBuf =
-    if start.is_dir() { start.to_path_buf() } else { start.parent()?.to_path_buf() };
+  let mut dir: PathBuf = if start.is_dir() { start.to_path_buf() } else { start.parent()?.to_path_buf() };
   let immediate = dir.clone();
   loop {
     for marker in [".duck-sqllsp.toml", ".duck-sqllsp.json", ".git", "Cargo.toml", "package.json"] {
@@ -357,10 +366,10 @@ fn workspace_root(params: &InitializeParams) -> Option<PathBuf> {
     }
   }
   #[allow(deprecated)]
-  if let Some(uri) = &params.root_uri {
-    if let Ok(p) = uri.to_file_path() {
-      return Some(p);
-    }
+  if let Some(uri) = &params.root_uri
+    && let Ok(p) = uri.to_file_path()
+  {
+    return Some(p);
   }
   None
 }

@@ -26,10 +26,7 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
   // TABLE in the project, not just the open files.
   let derived = dsl_completion::source_tables::from_source(parsed, &doc.text);
   let ws_offline = state.workspace_offline_snapshot();
-  let cat = dsl_completion::source_tables::merge(
-    &dsl_completion::source_tables::merge(&live, &derived),
-    &ws_offline,
-  );
+  let cat = dsl_completion::source_tables::merge(&dsl_completion::source_tables::merge(&live, &derived), &ws_offline);
 
   // Also resolve against buffer-defined tables so a fresh `CREATE TABLE`
   // expands its columns immediately without needing a DB round-trip.
@@ -55,7 +52,7 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
     let StatementKind::Insert(ins) = &stmt.kind else { continue };
     let target = &ins.table;
     let cols: Vec<(String, String)> = if let Some(t) = cat.find_table(target.schema.as_deref(), &target.name) {
-      t.columns.iter().map(|c| (c.name.clone(), c.data_type.clone())).collect()
+      t.columns.iter().map(|c| (c.name.clone(), dsl_catalog::display_type(&c.data_type).to_string())).collect()
     } else if let Some((_, cs)) = buffer_tables.iter().find(|(n, _)| n.eq_ignore_ascii_case(&target.name)) {
       cs.iter().map(|n| (n.clone(), String::new())).collect()
     } else {
@@ -86,11 +83,17 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
         .collect()
     };
     let positional = ins.columns.is_empty();
+    let width = ordered.len();
+    if width == 0 {
+      continue;
+    }
     if positional {
       // No explicit column list -> hint the column name AFTER each
-      // value (mirrors the legacy behaviour).
+      // value (mirrors the legacy behaviour). Multi-tuple INSERTs cycle
+      // the column index by tuple width so every row's literals get
+      // their matching column name.
       for (idx, lit_byte) in find_values_literals(&doc.text, stmt.range).into_iter().enumerate() {
-        let Some((col_name, _)) = ordered.get(idx) else { break };
+        let (col_name, _) = &ordered[idx % width];
         let pos = byte_to_position(&doc.rope, lit_byte);
         hints.push(InlayHint {
           position: pos,
@@ -106,8 +109,10 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
     } else {
       // Explicit column list -> drop a column-name chip BEFORE each
       // value, integrated inline with the literal (DataGrip-style).
+      // Multi-tuple INSERTs cycle by tuple width: every row gets a chip
+      // per value rather than only the first tuple.
       for (idx, lit_start) in find_values_literal_starts(&doc.text, stmt.range).into_iter().enumerate() {
-        let Some((col_name, _)) = ordered.get(idx) else { break };
+        let (col_name, _) = &ordered[idx % width];
         let pos = byte_to_position(&doc.rope, lit_start);
         hints.push(InlayHint {
           position: pos,
@@ -123,13 +128,13 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
     }
   }
 
+  // SELECT * column-name expansion chip. Stays only for `SELECT *` over
+  // a single-table FROM (anywhere else `*` is ambiguous or `(*)` etc).
   for stmt in &parsed.statements {
     let StatementKind::Select(sel) = &stmt.kind else { continue };
-    // Only emit when SELECT *.
     if !sel.projections.iter().any(|p| matches!(p, Projection::Star)) {
       continue;
     }
-    // Single table in FROM.
     if sel.from.len() != 1 || !sel.joins.is_empty() {
       continue;
     }
@@ -144,7 +149,6 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
     if cols.is_empty() {
       continue;
     }
-
     if let Some(star_byte) = find_star(&doc.text, stmt.range) {
       let pos = byte_to_position(&doc.rope, star_byte + 1);
       let joined = cols.join(", ");
@@ -160,6 +164,11 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
       });
     }
   }
+
+  // End-of-statement row-count chip moved to the CodeLens at the top of
+  // each statement (see handlers/code_lens.rs `find_row_estimates`).
+  // Trailing `-- ~N rows` chips made multi-statement files busy and
+  // visually competed with the column-name inlays on INSERT.
 
   // JOIN with missing / minimal ON-clause: surface a guessed ` -- ON
   // t.user_id = u.id` next to each JOIN that has no ON/USING. Text-
@@ -189,11 +198,15 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
   //   * the column resolves and its catalog type differs from text
   for stmt in &parsed.statements {
     let StatementKind::Select(sel) = &stmt.kind else { continue };
-    if sel.from.len() != 1 { continue }
+    if sel.from.len() != 1 {
+      continue;
+    }
     let target = &sel.from[0];
     let cols: Vec<(String, String)> = if let Some(t) = cat.find_table(target.schema.as_deref(), &target.name) {
-      t.columns.iter().map(|c| (c.name.clone(), c.data_type.clone())).collect()
-    } else { continue };
+      t.columns.iter().map(|c| (c.name.clone(), dsl_catalog::display_type(&c.data_type).to_string())).collect()
+    } else {
+      continue;
+    };
     let s: u32 = stmt.range.start().into();
     let e: u32 = stmt.range.end().into();
     let body = &doc.text[(s as usize).min(doc.text.len())..(e as usize).min(doc.text.len())];
@@ -203,30 +216,56 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
     let mut i = where_at + "WHERE".len();
     while i < bytes.len() {
       // Find an identifier.
-      while i < bytes.len() && !(bytes[i].is_ascii_alphabetic() || bytes[i] == b'_') { i += 1 }
+      while i < bytes.len() && !(bytes[i].is_ascii_alphabetic() || bytes[i] == b'_') {
+        i += 1
+      }
       let id_start = i;
-      while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') { i += 1 }
+      while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+        i += 1
+      }
       let ident = &body[id_start..i];
-      if ident.is_empty() { break }
-      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
+      if ident.is_empty() {
+        break;
+      }
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1
+      }
       let op_start = i;
-      while i < bytes.len() && matches!(bytes[i], b'=' | b'<' | b'>' | b'!') { i += 1 }
-      if i == op_start { continue }
-      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
-      if i >= bytes.len() || bytes[i] != b'\'' { continue }
+      while i < bytes.len() && matches!(bytes[i], b'=' | b'<' | b'>' | b'!') {
+        i += 1
+      }
+      if i == op_start {
+        continue;
+      }
+      while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1
+      }
+      if i >= bytes.len() || bytes[i] != b'\'' {
+        continue;
+      }
       // Found col OP 'lit'. Resolve col, check type.
       let Some((_, ty)) = cols.iter().find(|(n, _)| n.eq_ignore_ascii_case(ident)) else { continue };
       let ty_lc = ty.to_ascii_lowercase();
-      let target_type = if ty_lc.starts_with("int") || ty_lc == "bigint" || ty_lc == "smallint" { Some("int") }
-        else if ty_lc.starts_with("numeric") || ty_lc.starts_with("decimal") { Some("numeric") }
-        else if ty_lc.starts_with("uuid") { Some("uuid") }
-        else if ty_lc.starts_with("bool") { Some("bool") }
-        else { None };
+      let target_type = if ty_lc.starts_with("int") || ty_lc == "bigint" || ty_lc == "smallint" {
+        Some("int")
+      } else if ty_lc.starts_with("numeric") || ty_lc.starts_with("decimal") {
+        Some("numeric")
+      } else if ty_lc.starts_with("uuid") {
+        Some("uuid")
+      } else if ty_lc.starts_with("bool") {
+        Some("bool")
+      } else {
+        None
+      };
       let Some(target_type) = target_type else { continue };
       // Skip closing '.
       i += 1;
-      while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      if i < bytes.len() { i += 1 }
+      while i < bytes.len() && bytes[i] != b'\'' {
+        i += 1
+      }
+      if i < bytes.len() {
+        i += 1
+      }
       let abs_after_lit = s as usize + i;
       let pos = byte_to_position(&doc.rope, abs_after_lit);
       hints.push(InlayHint {
@@ -253,7 +292,9 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
     let upper = body.to_ascii_uppercase();
     for src in sel.from.iter().chain(sel.joins.iter().map(|j| &j.table)) {
       let Some(alias) = &src.alias else { continue };
-      if alias.eq_ignore_ascii_case(&src.name) { continue }
+      if alias.eq_ignore_ascii_case(&src.name) {
+        continue;
+      }
       let name_up = src.name.to_ascii_uppercase();
       let mut from = 0usize;
       while let Some(rel) = upper[from..].find(&name_up) {
@@ -261,24 +302,42 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
         let after = at + name_up.len();
         if at > 0 {
           let prev = body.as_bytes()[at - 1] as char;
-          if prev.is_ascii_alphanumeric() || prev == '_' { from = after; continue }
+          if prev.is_ascii_alphanumeric() || prev == '_' {
+            from = after;
+            continue;
+          }
         }
         if after < body.len() {
           let nx = body.as_bytes()[after] as char;
-          if nx.is_ascii_alphanumeric() || nx == '_' { from = after; continue }
+          if nx.is_ascii_alphanumeric() || nx == '_' {
+            from = after;
+            continue;
+          }
         }
         let mut k = after;
-        while k < body.len() && body.as_bytes()[k].is_ascii_whitespace() { k += 1 }
+        while k < body.len() && body.as_bytes()[k].is_ascii_whitespace() {
+          k += 1
+        }
         let kupper = upper[k..].to_string();
         if kupper.starts_with("AS ") || kupper.starts_with("AS\t") || kupper.starts_with("AS\n") {
           k += 2;
-          while k < body.len() && body.as_bytes()[k].is_ascii_whitespace() { k += 1 }
+          while k < body.len() && body.as_bytes()[k].is_ascii_whitespace() {
+            k += 1
+          }
         }
         let alias_start = k;
-        while k < body.len() && (body.as_bytes()[k].is_ascii_alphanumeric() || body.as_bytes()[k] == b'_') { k += 1 }
-        if k == alias_start { from = after; continue }
+        while k < body.len() && (body.as_bytes()[k].is_ascii_alphanumeric() || body.as_bytes()[k] == b'_') {
+          k += 1
+        }
+        if k == alias_start {
+          from = after;
+          continue;
+        }
         let typed_alias = &body[alias_start..k];
-        if !typed_alias.eq_ignore_ascii_case(alias) { from = after; continue }
+        if !typed_alias.eq_ignore_ascii_case(alias) {
+          from = after;
+          continue;
+        }
         let abs_after_alias = s as usize + k;
         let pos = byte_to_position(&doc.rope, abs_after_alias);
         hints.push(InlayHint {
@@ -296,69 +355,9 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
     }
   }
 
-  // INSERT VALUES row-count -- after the closing `)` of the last
-  // tuple, append ` -- 3 rows` (skipped when only one tuple).
-  for stmt in &parsed.statements {
-    let StatementKind::Insert(_) = &stmt.kind else { continue };
-    let s: u32 = stmt.range.start().into();
-    let e: u32 = stmt.range.end().into();
-    let body = &doc.text[(s as usize).min(doc.text.len())..(e as usize).min(doc.text.len())];
-    let upper = body.to_ascii_uppercase();
-    let Some(v_at) = upper.find("VALUES") else { continue };
-    let after = v_at + "VALUES".len();
-    let bytes = body.as_bytes();
-    let mut i = after;
-    let mut tuples = 0usize;
-    let mut last_close = after;
-    while i < bytes.len() {
-      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
-      if i >= bytes.len() || bytes[i] != b'(' { break }
-      let open = i;
-      let close = match_paren_count(body, open);
-      let Some(close) = close else { break };
-      tuples += 1;
-      last_close = close;
-      i = close + 1;
-      while i < bytes.len() && bytes[i].is_ascii_whitespace() { i += 1 }
-      if i < bytes.len() && bytes[i] == b',' { i += 1 } else { break }
-    }
-    if tuples >= 2 {
-      let abs = s as usize + last_close + 1;
-      let pos = byte_to_position(&doc.rope, abs);
-      hints.push(InlayHint {
-        position: pos,
-        label: InlayHintLabel::String(format!("  -- {tuples} rows")),
-        kind: Some(InlayHintKind::TYPE),
-        text_edits: None,
-        tooltip: None,
-        padding_left: Some(false),
-        padding_right: Some(false),
-        data: None,
-      });
-    }
-  }
-
   if hints.is_empty() { None } else { Some(hints) }
 }
 
-fn match_paren_count(s: &str, open: usize) -> Option<usize> {
-  let bytes = s.as_bytes();
-  let mut depth = 0i32;
-  let mut i = open;
-  while i < bytes.len() {
-    match bytes[i] {
-      b'(' => depth += 1,
-      b')' => { depth -= 1; if depth == 0 { return Some(i); } }
-      b'\'' => {
-        i += 1;
-        while i < bytes.len() && bytes[i] != b'\'' { i += 1 }
-      }
-      _ => {}
-    }
-    i += 1;
-  }
-  None
-}
 
 /// A JOIN clause located in the buffer text that lacks an ON / USING
 /// predicate. Carries both sides' table names + aliases, plus the byte
@@ -413,7 +412,6 @@ fn scan_joins_missing_on(src: &str) -> Vec<MissingOnJoin> {
       }
       let (join_name, join_alias, after_join) = read_table_decl(src, join_at);
       if join_name.is_empty() {
-        k = join_at;
         break;
       }
       // What comes after the join table decl?
@@ -635,47 +633,76 @@ fn find_values_literal_starts(source: &str, range: TextRange) -> Vec<usize> {
   let Some(values_at) = upper.find("VALUES") else { return Vec::new() };
   let bytes = slice.as_bytes();
   let n = bytes.len();
-  let mut k = values_at + 6;
-  while k < n && bytes[k].is_ascii_whitespace() {
-    k += 1;
-  }
-  if k >= n || bytes[k] != b'(' {
-    return Vec::new();
-  }
+  let mut i = values_at + 6;
   let mut out: Vec<usize> = Vec::new();
-  let mut depth = 1i32;
-  let mut item_start: Option<usize> = None;
-  let mut i = k + 1;
-  while i < n && depth > 0 {
-    match bytes[i] {
-      b'(' => {
-        depth += 1;
-        if item_start.is_none() { item_start = Some(i); }
-      }
-      b')' => {
-        depth -= 1;
-        if depth == 0 {
-          if let Some(s) = item_start.take() { out.push(start + s); }
-          break;
-        }
-      }
-      b'\'' => {
-        if item_start.is_none() { item_start = Some(i); }
-        i += 1;
-        while i < n && bytes[i] != b'\'' { i += 1; }
-        if i < n { i += 1; continue; }
-      }
-      b',' if depth == 1 => {
-        if let Some(s) = item_start.take() { out.push(start + s); }
-        i += 1;
-        continue;
-      }
-      c if c.is_ascii_whitespace() => {}
-      _ => {
-        if item_start.is_none() { item_start = Some(i); }
-      }
+  // Walk every tuple in the VALUES list. Per-tuple: collect each item's
+  // start byte. Stops at end-of-statement or after the last `)`.
+  loop {
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
     }
+    if i >= n || bytes[i] != b'(' {
+      break;
+    }
+    let mut depth = 1i32;
+    let mut item_start: Option<usize> = None;
     i += 1;
+    while i < n && depth > 0 {
+      match bytes[i] {
+        b'(' => {
+          depth += 1;
+          if item_start.is_none() {
+            item_start = Some(i);
+          }
+        },
+        b')' => {
+          depth -= 1;
+          if depth == 0 {
+            if let Some(s) = item_start.take() {
+              out.push(start + s);
+            }
+            i += 1;
+            break;
+          }
+        },
+        b'\'' => {
+          if item_start.is_none() {
+            item_start = Some(i);
+          }
+          i += 1;
+          while i < n && bytes[i] != b'\'' {
+            i += 1;
+          }
+          if i < n {
+            i += 1;
+            continue;
+          }
+        },
+        b',' if depth == 1 => {
+          if let Some(s) = item_start.take() {
+            out.push(start + s);
+          }
+          i += 1;
+          continue;
+        },
+        c if c.is_ascii_whitespace() => {},
+        _ => {
+          if item_start.is_none() {
+            item_start = Some(i);
+          }
+        },
+      }
+      i += 1;
+    }
+    // Skip the comma between tuples (if any) then continue with the next.
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
+    }
+    if i < n && bytes[i] == b',' {
+      i += 1;
+      continue;
+    }
+    break;
   }
   out
 }
@@ -692,63 +719,77 @@ fn find_values_literals(source: &str, range: TextRange) -> Vec<usize> {
   let Some(values_at) = upper.find("VALUES") else { return Vec::new() };
   let bytes = slice.as_bytes();
   let n = bytes.len();
-  let mut k = values_at + 6;
-  while k < n && bytes[k].is_ascii_whitespace() {
-    k += 1;
-  }
-  if k >= n || bytes[k] != b'(' {
-    return Vec::new();
-  }
   let mut out = Vec::new();
-  let mut depth = 1i32;
-  let mut item_end = k + 1; // running end-of-current-item byte position
-  let mut had_content = false;
-  let mut i = k + 1;
-  while i < n && depth > 0 {
-    match bytes[i] {
-      b'(' => {
-        depth += 1;
-        had_content = true;
-      },
-      b')' => {
-        depth -= 1;
-        if depth == 0 {
+  let mut i = values_at + 6;
+  // Walk every tuple in the VALUES list, recording each item's end byte
+  // position (where the column-name chip is dropped, right after the
+  // literal). Multiple tuples each get their own row of chips.
+  loop {
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
+    }
+    if i >= n || bytes[i] != b'(' {
+      break;
+    }
+    let mut depth = 1i32;
+    let mut item_end = i + 1; // running end-of-current-item byte position
+    let mut had_content = false;
+    i += 1;
+    while i < n && depth > 0 {
+      match bytes[i] {
+        b'(' => {
+          depth += 1;
+          had_content = true;
+        },
+        b')' => {
+          depth -= 1;
+          if depth == 0 {
+            if had_content {
+              out.push(start + item_end);
+            }
+            i += 1;
+            break;
+          }
+        },
+        b'\'' => {
+          i += 1;
+          while i < n && bytes[i] != b'\'' {
+            i += 1;
+          }
+          had_content = true;
+          if i < n {
+            i += 1;
+            item_end = i;
+            continue;
+          }
+        },
+        b',' if depth == 1 => {
           if had_content {
             out.push(start + item_end);
           }
-          break;
-        }
-      },
-      b'\'' => {
-        i += 1;
-        while i < n && bytes[i] != b'\'' {
+          had_content = false;
           i += 1;
-        }
-        had_content = true;
-        if i < n {
-          i += 1;
-          item_end = i;
           continue;
-        }
-      },
-      b',' if depth == 1 => {
-        if had_content {
-          out.push(start + item_end);
-        }
-        had_content = false;
-        i += 1;
-        continue;
-      },
-      c if c.is_ascii_whitespace() => {},
-      _ => {
-        had_content = true;
+        },
+        c if c.is_ascii_whitespace() => {},
+        _ => {
+          had_content = true;
+          item_end = i + 1;
+        },
+      }
+      if !bytes[i].is_ascii_whitespace() {
         item_end = i + 1;
-      },
+      }
+      i += 1;
     }
-    if !bytes[i].is_ascii_whitespace() {
-      item_end = i + 1;
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
     }
-    i += 1;
+    if i < n && bytes[i] == b',' {
+      i += 1;
+      continue;
+    }
+    break;
   }
   out
 }
@@ -795,3 +836,4 @@ fn byte_to_position(rope: &Rope, byte: usize) -> Position {
 fn _unused(_p: Position) {
   let _ = position::to_offset;
 }
+

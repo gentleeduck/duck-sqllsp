@@ -33,10 +33,7 @@ pub fn run(state: &ServerState, params: LinkedEditingRangeParams) -> Option<Link
   for (s, e) in references::find_word_occurrences(stmt, &token) {
     let abs_s = stmt_start + s;
     let abs_e = stmt_start + e;
-    ranges.push(Range {
-      start: byte_to_position(&doc.rope, abs_s),
-      end: byte_to_position(&doc.rope, abs_e),
-    });
+    ranges.push(Range { start: byte_to_position(&doc.rope, abs_s), end: byte_to_position(&doc.rope, abs_e) });
   }
   // Less than 2 occurrences -> nothing to link.
   if ranges.len() < 2 {

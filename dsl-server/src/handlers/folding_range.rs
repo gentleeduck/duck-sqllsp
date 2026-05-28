@@ -58,28 +58,28 @@ fn push_paren_blocks(src: &str, rope: &Rope, out: &mut Vec<FoldingRange>) {
       i = skip_block_comment(bytes, i);
       continue;
     }
-    if c == '$' {
-      if let Some(end) = skip_dollar_quoted(bytes, i) {
-        i = end;
-        continue;
-      }
+    if c == '$'
+      && let Some(end) = skip_dollar_quoted(bytes, i)
+    {
+      i = end;
+      continue;
     }
     if c == '(' {
       stack.push(i);
-    } else if c == ')' {
-      if let Some(open) = stack.pop() {
-        let open_line = byte_line(rope, open);
-        let close_line = byte_line(rope, i);
-        if close_line > open_line {
-          out.push(FoldingRange {
-            start_line: open_line,
-            start_character: None,
-            end_line: close_line.saturating_sub(1),
-            end_character: None,
-            kind: Some(FoldingRangeKind::Region),
-            collapsed_text: None,
-          });
-        }
+    } else if c == ')'
+      && let Some(open) = stack.pop()
+    {
+      let open_line = byte_line(rope, open);
+      let close_line = byte_line(rope, i);
+      if close_line > open_line {
+        out.push(FoldingRange {
+          start_line: open_line,
+          start_character: None,
+          end_line: close_line.saturating_sub(1),
+          end_character: None,
+          kind: Some(FoldingRangeKind::Region),
+          collapsed_text: None,
+        });
       }
     }
     i += 1;
@@ -102,11 +102,11 @@ fn push_block_comments(src: &str, rope: &Rope, out: &mut Vec<FoldingRange>) {
       i = skip_double_quoted(bytes, i);
       continue;
     }
-    if c == '$' {
-      if let Some(end) = skip_dollar_quoted(bytes, i) {
-        i = end;
-        continue;
-      }
+    if c == '$'
+      && let Some(end) = skip_dollar_quoted(bytes, i)
+    {
+      i = end;
+      continue;
     }
     if c == '/' && bytes[i + 1] == b'*' {
       let start = i;
@@ -214,11 +214,11 @@ fn push_statement_blocks(src: &str, rope: &Rope, out: &mut Vec<FoldingRange>) {
       i = skip_double_quoted(bytes, i);
       continue;
     }
-    if c == '$' {
-      if let Some(end) = skip_dollar_quoted(bytes, i) {
-        i = end;
-        continue;
-      }
+    if c == '$'
+      && let Some(end) = skip_dollar_quoted(bytes, i)
+    {
+      i = end;
+      continue;
     }
     if c == ';' {
       let start = first_nonws(src, stmt_start);

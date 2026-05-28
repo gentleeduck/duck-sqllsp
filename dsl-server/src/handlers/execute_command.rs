@@ -6,13 +6,12 @@
 //!
 //! Commands:
 //!
-//!   * `duck-sqllsp.testConnection [name?]`
-//!       Tries to introspect the named connection (defaults to the
-//!       currently-active one) and returns
-//!       `{ ok: bool, name: string, message: string, tables: number }`.
+//! - `duck-sqllsp.testConnection [name?]` -- tries to introspect the named
+//!   connection (defaults to the currently-active one) and returns
+//!   `{ ok: bool, name: string, message: string, tables: number }`.
 
 use crate::state::ServerState;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tower_lsp::lsp_types::ExecuteCommandParams;
 
 pub const SUPPORTED: &[&str] = &["duck-sqllsp.testConnection", "duck-sqllsp.getCatalog"];
@@ -103,7 +102,7 @@ async fn test_connection(state: &ServerState, args: &[Value]) -> Value {
         "message": format!("driver build failed: {e}"),
         "tables": 0,
       });
-    }
+    },
   };
   match driver.introspect().await {
     Ok(cat) => {
@@ -114,7 +113,7 @@ async fn test_connection(state: &ServerState, args: &[Value]) -> Value {
         "message": format!("connected; introspected {tables} table(s)"),
         "tables": tables,
       })
-    }
+    },
     Err(e) => json!({
       "ok": false,
       "name": label,

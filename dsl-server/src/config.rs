@@ -51,17 +51,17 @@ pub struct DuckSqllspConfig {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum Dialect {
+  #[default]
+  #[serde(alias = "postgres", alias = "pg")]
   Postgresql,
+  #[serde(alias = "mariadb")]
   Mysql,
+  #[serde(alias = "sqlite3")]
   Sqlite,
+  #[serde(alias = "sqlserver", alias = "tsql", alias = "transactsql")]
   Mssql,
-}
-
-impl Default for Dialect {
-  fn default() -> Self {
-    Dialect::Postgresql
-  }
 }
 
 impl DuckSqllspConfig {
@@ -211,13 +211,12 @@ impl DuckSqllspConfig {
 /// Parse JSON values from initialize / didChangeConfiguration / project file.
 /// Accepts both wrapped (`duckSqllsp: { ... }`) and bare root forms.
 pub fn parse(value: serde_json::Value) -> RootConfig {
-  if let Ok(cfg) = serde_json::from_value::<RootConfig>(value.clone()) {
-    if !cfg.duck_sqllsp.connections.is_empty()
+  if let Ok(cfg) = serde_json::from_value::<RootConfig>(value.clone())
+    && (!cfg.duck_sqllsp.connections.is_empty()
       || cfg.duck_sqllsp.active_connection.is_some()
-      || cfg.duck_sqllsp.scope.is_some()
-    {
-      return cfg;
-    }
+      || cfg.duck_sqllsp.scope.is_some())
+  {
+    return cfg;
   }
   let inner: DuckSqllspConfig = serde_json::from_value(value).unwrap_or_default();
   RootConfig { duck_sqllsp: inner }
@@ -229,14 +228,14 @@ pub fn load_project_config(start: &Path) -> Option<DuckSqllspConfig> {
   let mut dir: PathBuf = if start.is_dir() { start.to_path_buf() } else { start.parent()?.to_path_buf() };
   loop {
     let toml_path = dir.join(".duck-sqllsp.toml");
-    if toml_path.is_file() {
-      if let Ok(text) = std::fs::read_to_string(&toml_path) {
-        if let Ok(parsed) = toml::from_str::<RootConfig>(&text) {
-          return Some(parsed.duck_sqllsp);
-        }
-        if let Ok(inner) = toml::from_str::<DuckSqllspConfig>(&text) {
-          return Some(inner);
-        }
+    if toml_path.is_file()
+      && let Ok(text) = std::fs::read_to_string(&toml_path)
+    {
+      if let Ok(parsed) = toml::from_str::<RootConfig>(&text) {
+        return Some(parsed.duck_sqllsp);
+      }
+      if let Ok(inner) = toml::from_str::<DuckSqllspConfig>(&text) {
+        return Some(inner);
       }
     }
     let json_path = dir.join(".duck-sqllsp.json");

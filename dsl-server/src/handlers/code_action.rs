@@ -184,9 +184,10 @@ fn extract_subquery_to_cte_action(uri: &Url, range: &Range, text: &str, out: &mu
   // Build edits: insert `WITH _tmp AS (...) ` before stmt_start, and
   // replace `(<subquery>)` (the inclusive parens) with `_tmp`.
   let cte_decl = format!("WITH _tmp AS (\n{}\n)\n", inner);
-  let mut edits = Vec::new();
-  edits.push(TextEdit { range: byte_range_to_lsp(text, stmt_start, stmt_start), new_text: cte_decl });
-  edits.push(TextEdit { range: byte_range_to_lsp(text, paren_open - 1, close + 1), new_text: "_tmp".into() });
+  let edits = vec![
+    TextEdit { range: byte_range_to_lsp(text, stmt_start, stmt_start), new_text: cte_decl },
+    TextEdit { range: byte_range_to_lsp(text, paren_open - 1, close + 1), new_text: "_tmp".into() },
+  ];
   let mut changes = HashMap::new();
   changes.insert(uri.clone(), edits);
   out.push(CodeActionOrCommand::CodeAction(CodeAction {
@@ -201,9 +202,9 @@ fn extract_subquery_to_cte_action(uri: &Url, range: &Range, text: &str, out: &mu
   }));
 }
 
-/// `WHERE EXISTS (SELECT ... FROM t WHERE t.fk = outer.pk)` ->
+/// Rewrites `WHERE EXISTS (SELECT ... FROM t WHERE t.fk = outer.pk)` into
 /// `... CROSS JOIN LATERAL (SELECT ... FROM t WHERE t.fk = outer.pk) ex_lat`
-/// + replace the `EXISTS (...)` predicate with `TRUE` so the join's
+/// and replaces the `EXISTS (...)` predicate with `TRUE` so the join's
 /// row-multiplying behaviour gives the same set semantics as EXISTS.
 ///
 /// LATERAL lets the subquery reference outer columns, so correlated
@@ -284,12 +285,12 @@ fn exists_to_lateral_action(uri: &Url, range: &Range, text: &str, out: &mut Vec<
   let alias = pick_lateral_alias(text);
   let join_text = format!(" CROSS JOIN LATERAL ({}) {}", inner.trim(), alias);
 
-  let mut edits = Vec::new();
-  // 1. Replace `EXISTS (...)` (inclusive parens) with `TRUE`.
-  edits
-    .push(TextEdit { range: byte_range_to_lsp(text, stmt_start + exists_start, close + 1), new_text: "TRUE".into() });
-  // 2. Inject the LATERAL join at the end of the FROM table list.
-  edits.push(TextEdit { range: byte_range_to_lsp(text, from_end, from_end), new_text: join_text });
+  let edits = vec![
+    // 1. Replace `EXISTS (...)` (inclusive parens) with `TRUE`.
+    TextEdit { range: byte_range_to_lsp(text, stmt_start + exists_start, close + 1), new_text: "TRUE".into() },
+    // 2. Inject the LATERAL join at the end of the FROM table list.
+    TextEdit { range: byte_range_to_lsp(text, from_end, from_end), new_text: join_text },
+  ];
 
   let mut changes = HashMap::new();
   changes.insert(uri.clone(), edits);
@@ -413,7 +414,7 @@ fn split_values_rows_action(uri: &Url, range: &Range, text: &str, out: &mut Vec<
 }
 
 /// `SELECT *` over a single FROM table whose schema is in the catalog
-/// → `SELECT col1, col2, ...`. Schema-aware refactor that protects
+/// -> `SELECT col1, col2, ...`. Schema-aware refactor that protects
 /// against the silent-rename / silent-add hazard.
 fn expand_select_star_action(
   uri: &Url,
@@ -453,7 +454,7 @@ fn expand_select_star_action(
       search = after;
       continue;
     }
-    let from_at = k;
+    let _from_at = k;
     let after_from = k + 4;
     // Find the statement end (next `;` or EOF).
     let stmt_end = text[after_from..].find(';').map(|p| after_from + p).unwrap_or(text.len());
@@ -510,9 +511,13 @@ fn add_returning_star_action(uri: &Url, range: &Range, text: &str, out: &mut Vec
   // Locate the enclosing statement bounds (prior `;` to next `;`).
   let stmt_start = text[..sel].rfind(';').map(|i| i + 1).unwrap_or(0);
   let mut k = sel;
-  while k < n && bytes[k] != b';' { k += 1; }
+  while k < n && bytes[k] != b';' {
+    k += 1;
+  }
   let stmt_end = k;
-  if stmt_end <= stmt_start { return; }
+  if stmt_end <= stmt_start {
+    return;
+  }
   let stmt = &text[stmt_start..stmt_end];
   let upper = stmt.to_ascii_uppercase();
   let trimmed_upper = upper.trim_start();
@@ -525,13 +530,12 @@ fn add_returning_star_action(uri: &Url, range: &Range, text: &str, out: &mut Vec
   } else {
     return;
   };
-  if upper.contains("RETURNING") { return; }
+  if upper.contains("RETURNING") {
+    return;
+  }
   // Insert before the trailing `;` (or at end if statement has none).
   let insert_at = stmt_end;
-  let edit = TextEdit {
-    range: byte_range_to_lsp(text, insert_at, insert_at),
-    new_text: "\nRETURNING *".into(),
-  };
+  let edit = TextEdit { range: byte_range_to_lsp(text, insert_at, insert_at), new_text: "\nRETURNING *".into() };
   let mut changes = HashMap::new();
   changes.insert(uri.clone(), vec![edit]);
   out.push(CodeActionOrCommand::CodeAction(CodeAction {
@@ -566,10 +570,7 @@ fn is_distinct_from_null_action(uri: &Url, range: &Range, text: &str, out: &mut 
       // the predicate's left side).
       if sel >= start_at.saturating_sub(20) && sel <= end_at {
         let replacement = if needle.contains("NOT") { "IS NOT NULL" } else { "IS NULL" };
-        let edit = TextEdit {
-          range: byte_range_to_lsp(text, start_at, end_at),
-          new_text: replacement.into(),
-        };
+        let edit = TextEdit { range: byte_range_to_lsp(text, start_at, end_at), new_text: replacement.into() };
         let mut changes = HashMap::new();
         changes.insert(uri.clone(), vec![edit]);
         out.push(CodeActionOrCommand::CodeAction(CodeAction {
@@ -740,8 +741,10 @@ fn quote_toggle_action(uri: &Url, range: &Range, text: &str, out: &mut Vec<CodeA
     return;
   }
   // Skip when cursor is past a `--` line comment.
-  if let Some(c) = line.find("--") {
-    if start_col >= c { return }
+  if let Some(c) = line.find("--")
+    && start_col >= c
+  {
+    return;
   }
 
   // Expand selection backwards/forwards to the surrounding token.
@@ -820,7 +823,10 @@ fn inside_string_literal(line: &str, col: usize) -> bool {
     }
     if bytes[i] == b'\'' {
       // Doubled apostrophe escape `''` inside a string stays inside.
-      if in_str && i + 1 < bytes.len() && bytes[i + 1] == b'\'' { i += 2; continue }
+      if in_str && i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
+        i += 2;
+        continue;
+      }
       in_str = !in_str;
     }
     i += 1;
@@ -834,35 +840,201 @@ fn inside_string_literal(line: &str, col: usize) -> bool {
 /// purpose is to quote *user-defined* identifiers; keep this list
 /// generous so we err on the side of leaving keywords alone.
 const IDENT_KEYWORD_BLOCKLIST: &[&str] = &[
-  "SELECT", "FROM", "WHERE", "GROUP", "ORDER", "BY", "HAVING", "LIMIT",
-  "OFFSET", "FETCH", "INNER", "OUTER", "LEFT", "RIGHT", "FULL", "CROSS",
-  "JOIN", "ON", "USING", "AS", "AND", "OR", "NOT", "IS", "NULL", "TRUE",
-  "FALSE", "IN", "BETWEEN", "LIKE", "ILIKE", "SIMILAR", "EXISTS", "ANY",
-  "ALL", "SOME", "CASE", "WHEN", "THEN", "ELSE", "END", "DISTINCT",
-  "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE", "RETURNING",
-  "WITH", "RECURSIVE", "MERGE", "MATCHED", "UNION", "INTERSECT", "EXCEPT",
-  "CREATE", "ALTER", "DROP", "RENAME", "TRUNCATE", "TABLE", "VIEW",
-  "INDEX", "TRIGGER", "FUNCTION", "PROCEDURE", "TYPE", "DOMAIN", "SCHEMA",
-  "EXTENSION", "SEQUENCE", "ROLE", "USER", "DATABASE", "POLICY", "COLUMN",
-  "CONSTRAINT", "PRIMARY", "FOREIGN", "KEY", "UNIQUE", "CHECK",
-  "REFERENCES", "CASCADE", "RESTRICT", "DEFAULT", "DEFERRABLE",
-  "INITIALLY", "DEFERRED", "IMMEDIATE",
-  "BEFORE", "AFTER", "INSTEAD", "OF", "ROW", "EACH", "STATEMENT",
-  "EXECUTE", "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "RELEASE",
-  "DECLARE", "CURSOR", "OPEN", "CLOSE", "FETCH", "MOVE",
-  "GRANT", "REVOKE", "TO", "PUBLIC", "ANALYZE", "VACUUM", "REINDEX",
-  "EXPLAIN", "COPY", "LOCK", "LISTEN", "NOTIFY", "RAISE",
-  "IF", "ELSIF", "LOOP", "WHILE", "FOR", "FOREACH", "EXIT", "CONTINUE",
-  "RETURN", "PERFORM", "ASSERT", "GET", "DIAGNOSTICS",
-  "LANGUAGE", "STRICT", "IMMUTABLE", "STABLE", "VOLATILE", "PARALLEL",
-  "SECURITY", "DEFINER", "INVOKER", "COST", "ROWS", "WINDOW", "FILTER",
-  "OVER", "PARTITION", "PRECEDING", "FOLLOWING", "UNBOUNDED", "CURRENT",
-  "RANGE", "GROUPS", "NULLS", "FIRST", "LAST", "ASC", "DESC",
-  "INT", "INTEGER", "BIGINT", "SMALLINT", "NUMERIC", "DECIMAL", "REAL",
-  "FLOAT", "DOUBLE", "PRECISION", "BOOLEAN", "BOOL", "TEXT", "VARCHAR",
-  "CHAR", "CHARACTER", "VARYING", "UUID", "DATE", "TIME", "TIMESTAMP",
-  "TIMESTAMPTZ", "INTERVAL", "BYTEA", "JSON", "JSONB", "ARRAY", "SERIAL",
-  "BIGSERIAL", "SMALLSERIAL", "GENERATED", "ALWAYS", "IDENTITY",
+  "SELECT",
+  "FROM",
+  "WHERE",
+  "GROUP",
+  "ORDER",
+  "BY",
+  "HAVING",
+  "LIMIT",
+  "OFFSET",
+  "FETCH",
+  "INNER",
+  "OUTER",
+  "LEFT",
+  "RIGHT",
+  "FULL",
+  "CROSS",
+  "JOIN",
+  "ON",
+  "USING",
+  "AS",
+  "AND",
+  "OR",
+  "NOT",
+  "IS",
+  "NULL",
+  "TRUE",
+  "FALSE",
+  "IN",
+  "BETWEEN",
+  "LIKE",
+  "ILIKE",
+  "SIMILAR",
+  "EXISTS",
+  "ANY",
+  "ALL",
+  "SOME",
+  "CASE",
+  "WHEN",
+  "THEN",
+  "ELSE",
+  "END",
+  "DISTINCT",
+  "INSERT",
+  "INTO",
+  "VALUES",
+  "UPDATE",
+  "SET",
+  "DELETE",
+  "RETURNING",
+  "WITH",
+  "RECURSIVE",
+  "MERGE",
+  "MATCHED",
+  "UNION",
+  "INTERSECT",
+  "EXCEPT",
+  "CREATE",
+  "ALTER",
+  "DROP",
+  "RENAME",
+  "TRUNCATE",
+  "TABLE",
+  "VIEW",
+  "INDEX",
+  "TRIGGER",
+  "FUNCTION",
+  "PROCEDURE",
+  "TYPE",
+  "DOMAIN",
+  "SCHEMA",
+  "EXTENSION",
+  "SEQUENCE",
+  "ROLE",
+  "USER",
+  "DATABASE",
+  "POLICY",
+  "COLUMN",
+  "CONSTRAINT",
+  "PRIMARY",
+  "FOREIGN",
+  "KEY",
+  "UNIQUE",
+  "CHECK",
+  "REFERENCES",
+  "CASCADE",
+  "RESTRICT",
+  "DEFAULT",
+  "DEFERRABLE",
+  "INITIALLY",
+  "DEFERRED",
+  "IMMEDIATE",
+  "BEFORE",
+  "AFTER",
+  "INSTEAD",
+  "OF",
+  "ROW",
+  "EACH",
+  "STATEMENT",
+  "EXECUTE",
+  "BEGIN",
+  "COMMIT",
+  "ROLLBACK",
+  "SAVEPOINT",
+  "RELEASE",
+  "DECLARE",
+  "CURSOR",
+  "OPEN",
+  "CLOSE",
+  "FETCH",
+  "MOVE",
+  "GRANT",
+  "REVOKE",
+  "TO",
+  "PUBLIC",
+  "ANALYZE",
+  "VACUUM",
+  "REINDEX",
+  "EXPLAIN",
+  "COPY",
+  "LOCK",
+  "LISTEN",
+  "NOTIFY",
+  "RAISE",
+  "IF",
+  "ELSIF",
+  "LOOP",
+  "WHILE",
+  "FOR",
+  "FOREACH",
+  "EXIT",
+  "CONTINUE",
+  "RETURN",
+  "PERFORM",
+  "ASSERT",
+  "GET",
+  "DIAGNOSTICS",
+  "LANGUAGE",
+  "STRICT",
+  "IMMUTABLE",
+  "STABLE",
+  "VOLATILE",
+  "PARALLEL",
+  "SECURITY",
+  "DEFINER",
+  "INVOKER",
+  "COST",
+  "ROWS",
+  "WINDOW",
+  "FILTER",
+  "OVER",
+  "PARTITION",
+  "PRECEDING",
+  "FOLLOWING",
+  "UNBOUNDED",
+  "CURRENT",
+  "RANGE",
+  "GROUPS",
+  "NULLS",
+  "FIRST",
+  "LAST",
+  "ASC",
+  "DESC",
+  "INT",
+  "INTEGER",
+  "BIGINT",
+  "SMALLINT",
+  "NUMERIC",
+  "DECIMAL",
+  "REAL",
+  "FLOAT",
+  "DOUBLE",
+  "PRECISION",
+  "BOOLEAN",
+  "BOOL",
+  "TEXT",
+  "VARCHAR",
+  "CHAR",
+  "CHARACTER",
+  "VARYING",
+  "UUID",
+  "DATE",
+  "TIME",
+  "TIMESTAMP",
+  "TIMESTAMPTZ",
+  "INTERVAL",
+  "BYTEA",
+  "JSON",
+  "JSONB",
+  "ARRAY",
+  "SERIAL",
+  "BIGSERIAL",
+  "SMALLSERIAL",
+  "GENERATED",
+  "ALWAYS",
+  "IDENTITY",
 ];
 
 fn code_str(c: &Option<NumberOrString>) -> Option<String> {
@@ -881,6 +1053,7 @@ fn sql015_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeAct
   let end_line = diag.range.end.line as usize;
   let lines: Vec<&str> = text.lines().collect();
 
+  #[allow(clippy::needless_range_loop)]
   for line_idx in start_line..=end_line.min(lines.len().saturating_sub(1)) {
     let line = lines[line_idx];
     let upper = line.to_ascii_uppercase();
@@ -1026,7 +1199,7 @@ fn whole_word_replace(text: &str, from: &str, to: &str) -> Option<Vec<TextEdit>>
     }
     if text[byte..].starts_with(from)
       && (byte == 0 || !is_word(bytes[byte - 1] as char))
-      && bytes.get(byte + from.len()).map_or(true, |b| !is_word(*b as char))
+      && bytes.get(byte + from.len()).is_none_or(|b| !is_word(*b as char))
     {
       edits.push(TextEdit {
         range: Range {
@@ -1078,10 +1251,7 @@ fn levenshtein(a: &str, b: &str) -> usize {
 /// substitutes the SQL-standard form.
 fn sql314_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeActionOrCommand>) {
   let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
-  changes.insert(
-    uri.clone(),
-    vec![TextEdit { range: diag.range, new_text: "GENERATED ALWAYS AS IDENTITY".into() }],
-  );
+  changes.insert(uri.clone(), vec![TextEdit { range: diag.range, new_text: "GENERATED ALWAYS AS IDENTITY".into() }]);
   out.push(CodeActionOrCommand::CodeAction(CodeAction {
     title: "Replace `AUTO_INCREMENT` with `GENERATED ALWAYS AS IDENTITY`".into(),
     kind: Some(CodeActionKind::QUICKFIX),
@@ -1099,10 +1269,7 @@ fn sql314_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeAct
 /// so the replacement is a simple TextEdit on that span.
 fn sql319_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeActionOrCommand>) {
   let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
-  changes.insert(
-    uri.clone(),
-    vec![TextEdit { range: diag.range, new_text: "COALESCE".into() }],
-  );
+  changes.insert(uri.clone(), vec![TextEdit { range: diag.range, new_text: "COALESCE".into() }]);
   out.push(CodeActionOrCommand::CodeAction(CodeAction {
     title: "Replace with `COALESCE` (SQL standard)".into(),
     kind: Some(CodeActionKind::QUICKFIX),
@@ -1122,13 +1289,23 @@ fn sql302_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeAct
   // Walk the diag range's start line; find DROP + verb.
   let line_idx = diag.range.start.line as usize;
   let lines: Vec<&str> = text.lines().collect();
-  if line_idx >= lines.len() { return }
+  if line_idx >= lines.len() {
+    return;
+  }
   let line = lines[line_idx];
   let upper = line.to_ascii_uppercase();
   let verbs = [
-    "DROP TABLE ", "DROP INDEX ", "DROP VIEW ", "DROP MATERIALIZED VIEW ",
-    "DROP TRIGGER ", "DROP TYPE ", "DROP DOMAIN ", "DROP SEQUENCE ",
-    "DROP FUNCTION ", "DROP PROCEDURE ", "DROP SCHEMA ",
+    "DROP TABLE ",
+    "DROP INDEX ",
+    "DROP VIEW ",
+    "DROP MATERIALIZED VIEW ",
+    "DROP TRIGGER ",
+    "DROP TYPE ",
+    "DROP DOMAIN ",
+    "DROP SEQUENCE ",
+    "DROP FUNCTION ",
+    "DROP PROCEDURE ",
+    "DROP SCHEMA ",
   ];
   for v in verbs {
     if let Some(at) = upper.find(v) {
@@ -1163,7 +1340,9 @@ fn sql302_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeAct
 fn sql323_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeActionOrCommand>) {
   let line_idx = diag.range.start.line as usize;
   let lines: Vec<&str> = text.lines().collect();
-  if line_idx >= lines.len() { return }
+  if line_idx >= lines.len() {
+    return;
+  }
   let line = lines[line_idx];
   let upper = line.to_ascii_uppercase();
   let Some(from_at) = upper.find(" FROM DUAL") else { return };
@@ -1207,7 +1386,9 @@ fn sql084_action(uri: &Url, diag: &Diagnostic, out: &mut Vec<CodeActionOrCommand
 /// span covers.
 fn sql069_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeActionOrCommand>) {
   let (start_off, end_off) = lsp_range_to_offsets(text, diag.range);
-  if start_off >= end_off || end_off > text.len() { return }
+  if start_off >= end_off || end_off > text.len() {
+    return;
+  }
   let snippet = &text[start_off..end_off];
   let upper = snippet.to_ascii_uppercase();
   let Some(at) = upper.find("DEFAULT NULL") else { return };
@@ -1216,9 +1397,13 @@ fn sql069_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeAct
   // Eat the preceding whitespace too so we don't leave a double space.
   let bytes = text.as_bytes();
   let mut s = abs_s;
-  while s > start_off && bytes[s - 1].is_ascii_whitespace() { s -= 1 }
+  while s > start_off && bytes[s - 1].is_ascii_whitespace() {
+    s -= 1
+  }
   // Eat trailing whitespace if any.
-  while abs_e < end_off && bytes[abs_e].is_ascii_whitespace() { abs_e += 1 }
+  while abs_e < end_off && bytes[abs_e].is_ascii_whitespace() {
+    abs_e += 1
+  }
   let lsp_range = offsets_to_lsp_range(text, s, abs_e);
   let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
   changes.insert(uri.clone(), vec![TextEdit { range: lsp_range, new_text: " ".into() }]);
@@ -1236,15 +1421,25 @@ fn sql069_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeAct
 /// span the diag covers.
 fn sql091_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeActionOrCommand>) {
   let (start_off, end_off) = lsp_range_to_offsets(text, diag.range);
-  if start_off >= end_off || end_off > text.len() { return }
+  if start_off >= end_off || end_off > text.len() {
+    return;
+  }
   // Extend forward to swallow a trailing semicolon + newline so the
   // file stays tidy.
   let bytes = text.as_bytes();
   let mut e = end_off;
-  while e < bytes.len() && bytes[e].is_ascii_whitespace() { e += 1 }
-  if e < bytes.len() && bytes[e] == b';' { e += 1 }
-  while e < bytes.len() && (bytes[e] == b' ' || bytes[e] == b'\t') { e += 1 }
-  if e < bytes.len() && bytes[e] == b'\n' { e += 1 }
+  while e < bytes.len() && bytes[e].is_ascii_whitespace() {
+    e += 1
+  }
+  if e < bytes.len() && bytes[e] == b';' {
+    e += 1
+  }
+  while e < bytes.len() && (bytes[e] == b' ' || bytes[e] == b'\t') {
+    e += 1
+  }
+  if e < bytes.len() && bytes[e] == b'\n' {
+    e += 1
+  }
   let lsp_range = offsets_to_lsp_range(text, start_off, e);
   let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
   changes.insert(uri.clone(), vec![TextEdit { range: lsp_range, new_text: String::new() }]);
@@ -1263,12 +1458,16 @@ fn sql091_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeAct
 /// `INTERVAL ... UNIT` fragment.
 fn sql276_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeActionOrCommand>) {
   let (s, e) = lsp_range_to_offsets(text, diag.range);
-  if s >= e || e > text.len() { return }
+  if s >= e || e > text.len() {
+    return;
+  }
   let raw = &text[s..e];
   let upper = raw.to_ascii_uppercase();
   let Some(after_kw) = upper.strip_prefix("INTERVAL") else { return };
   let body = after_kw.trim();
-  if body.is_empty() || body.starts_with('\'') { return }
+  if body.is_empty() || body.starts_with('\'') {
+    return;
+  }
   let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
   changes.insert(uri.clone(), vec![TextEdit { range: diag.range, new_text: format!("INTERVAL '{body}'") }]);
   out.push(CodeActionOrCommand::CodeAction(CodeAction {
@@ -1314,9 +1513,13 @@ fn sql315_action(uri: &Url, diag: &Diagnostic, out: &mut Vec<CodeActionOrCommand
 /// quotes. Diag range covers the bracketed token exactly.
 fn sql317_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeActionOrCommand>) {
   let (s, e) = lsp_range_to_offsets(text, diag.range);
-  if s >= e || e > text.len() { return }
+  if s >= e || e > text.len() {
+    return;
+  }
   let raw = &text[s..e];
-  if !raw.starts_with('[') || !raw.ends_with(']') { return }
+  if !raw.starts_with('[') || !raw.ends_with(']') {
+    return;
+  }
   let inner = &raw[1..raw.len() - 1];
   let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
   changes.insert(uri.clone(), vec![TextEdit { range: diag.range, new_text: format!("\"{inner}\"") }]);
@@ -1347,12 +1550,12 @@ fn sql321_action(uri: &Url, diag: &Diagnostic, out: &mut Vec<CodeActionOrCommand
 /// Quickfix for sql322 (`BEGIN TRAN`) -- replace with `BEGIN`.
 fn sql322_action(uri: &Url, diag: &Diagnostic, text: &str, out: &mut Vec<CodeActionOrCommand>) {
   let (s, e) = lsp_range_to_offsets(text, diag.range);
-  if s >= e || e > text.len() { return }
+  if s >= e || e > text.len() {
+    return;
+  }
   let raw = &text[s..e];
   let upper = raw.to_ascii_uppercase();
-  let new_text = if upper.starts_with("BEGIN TRANSACTION") {
-    "BEGIN".to_string()
-  } else if upper.starts_with("BEGIN TRAN") {
+  let new_text = if upper.starts_with("BEGIN TRANSACTION") || upper.starts_with("BEGIN TRAN") {
     "BEGIN".to_string()
   } else {
     return;
@@ -1383,24 +1586,45 @@ fn split_multi_unique_action(uri: &Url, range: &Range, text: &str, out: &mut Vec
     let unique_at = search + rel;
     let prev_ok = unique_at == 0 || !is_id_char(bytes[unique_at - 1] as char);
     let next_ok = unique_at + 6 == bytes.len() || !is_id_char(bytes[unique_at + 6] as char);
-    if !(prev_ok && next_ok) { search = unique_at + 6; continue }
-    // Skip `CONSTRAINT <n> UNIQUE` — would lose the constraint name.
-    let look_back_start = upper[..unique_at].rfind(|c: char| c == ',' || c == '(' || c == ';' || c == '\n').map(|p| p + 1).unwrap_or(0);
+    if !(prev_ok && next_ok) {
+      search = unique_at + 6;
+      continue;
+    }
+    // Skip `CONSTRAINT <n> UNIQUE` -- would lose the constraint name.
+    let look_back_start = upper[..unique_at].rfind([',', '(', ';', '\n']).map(|p| p + 1).unwrap_or(0);
     let lead = upper[look_back_start..unique_at].trim_start();
-    if lead.to_ascii_uppercase().starts_with("CONSTRAINT") { search = unique_at + 6; continue }
+    if lead.to_ascii_uppercase().starts_with("CONSTRAINT") {
+      search = unique_at + 6;
+      continue;
+    }
     // Find `(` after UNIQUE.
     let mut j = unique_at + 6;
-    while j < bytes.len() && bytes[j].is_ascii_whitespace() { j += 1 }
-    if j >= bytes.len() || bytes[j] != b'(' { search = unique_at + 6; continue }
-    let Some(close) = matched_close(bytes, j) else { search = j + 1; continue };
-    if sel < unique_at || sel > close + 1 { search = close + 1; continue }
+    while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+      j += 1
+    }
+    if j >= bytes.len() || bytes[j] != b'(' {
+      search = unique_at + 6;
+      continue;
+    }
+    let Some(close) = matched_close(bytes, j) else {
+      search = j + 1;
+      continue;
+    };
+    if sel < unique_at || sel > close + 1 {
+      search = close + 1;
+      continue;
+    }
     let inside = &text[j + 1..close];
     let parts: Vec<&str> = top_level_comma_split(inside);
-    if parts.len() < 2 { return }
+    if parts.len() < 2 {
+      return;
+    }
     // Build the replacement: one UNIQUE (col) per part, comma-joined.
     let mut new_text = String::new();
     for (idx, p) in parts.iter().enumerate() {
-      if idx > 0 { new_text.push_str(", "); }
+      if idx > 0 {
+        new_text.push_str(", ");
+      }
       new_text.push_str("UNIQUE (");
       new_text.push_str(p.trim());
       new_text.push(')');
@@ -1430,9 +1654,17 @@ fn top_level_comma_split(s: &str) -> Vec<&str> {
     match bytes[i] {
       b'(' => depth += 1,
       b')' => depth -= 1,
-      b'\'' => { i += 1; while i < bytes.len() && bytes[i] != b'\'' { i += 1 } }
-      b',' if depth == 0 => { out.push(&s[start..i]); start = i + 1 }
-      _ => {}
+      b'\'' => {
+        i += 1;
+        while i < bytes.len() && bytes[i] != b'\'' {
+          i += 1
+        }
+      },
+      b',' if depth == 0 => {
+        out.push(&s[start..i]);
+        start = i + 1
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -1448,8 +1680,15 @@ fn lsp_pos_to_offset(text: &str, pos: Position) -> usize {
   let mut line = 0u32;
   let mut col = 0u32;
   for (i, ch) in text.char_indices() {
-    if line == pos.line && col == pos.character { return i }
-    if ch == '\n' { line += 1; col = 0 } else { col += ch.len_utf16() as u32 }
+    if line == pos.line && col == pos.character {
+      return i;
+    }
+    if ch == '\n' {
+      line += 1;
+      col = 0
+    } else {
+      col += ch.len_utf16() as u32
+    }
   }
   text.len()
 }
@@ -1462,8 +1701,15 @@ fn offset_to_lsp_pos(text: &str, off: usize) -> Position {
   let mut line = 0u32;
   let mut col = 0u32;
   for (i, ch) in text.char_indices() {
-    if i >= off { break }
-    if ch == '\n' { line += 1; col = 0 } else { col += ch.len_utf16() as u32 }
+    if i >= off {
+      break;
+    }
+    if ch == '\n' {
+      line += 1;
+      col = 0
+    } else {
+      col += ch.len_utf16() as u32
+    }
   }
   Position { line, character: col }
 }

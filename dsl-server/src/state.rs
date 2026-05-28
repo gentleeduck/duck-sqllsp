@@ -25,6 +25,11 @@ pub struct ServerState {
   /// for .sql files. Indexed by file path so partial updates skip
   /// re-parsing unchanged files.
   pub workspace_offline: Arc<RwLock<Catalog>>,
+  /// Lowercased `clientInfo.name` from the `initialize` request. Used
+  /// to gate features that require client-side wiring -- the Run /
+  /// EXPLAIN CodeLens commands need a corresponding handler in the
+  /// editor, which only the VS Code extension currently ships.
+  pub client_name: Arc<RwLock<Option<String>>>,
 }
 
 impl ServerState {
@@ -42,6 +47,29 @@ impl ServerState {
 
   pub fn set_workspace_root(&self, root: PathBuf) {
     *self.workspace_root.write() = Some(root);
+  }
+
+  pub fn set_client_name(&self, name: Option<String>) {
+    *self.client_name.write() = name.map(|s| s.to_lowercase());
+  }
+
+  /// True when the connected editor is the VS Code extension (or one of
+  /// its forks). These are the clients that ship a handler for the
+  /// `duck-sqllsp.runQuery` / `.explainQuery` / `.addLimit` CodeLens
+  /// commands. Other clients (nvim, helix, ...) would just see a
+  /// "command not found" toast on click, so we suppress the runnable
+  /// lenses for them.
+  pub fn client_supports_runnable_codelens(&self) -> bool {
+    match self.client_name.read().as_deref() {
+      Some(name) => {
+        name.contains("visual studio code")
+          || name.contains("code - oss")
+          || name.contains("vscode")
+          || name.contains("cursor")
+          || name.contains("windsurf")
+      },
+      None => false,
+    }
   }
 
   /// Walk the workspace root for .sql files (capped for safety) and
@@ -63,7 +91,9 @@ impl ServerState {
     let mut count = 0usize;
     walk_sql_files(&root, MAX_FILES, &mut count, &mut |path| {
       let Ok(meta) = std::fs::metadata(path) else { return };
-      if meta.len() > MAX_FILE_BYTES { return; }
+      if meta.len() > MAX_FILE_BYTES {
+        return;
+      }
       let Ok(text) = std::fs::read_to_string(path) else { return };
       let file = dsl_parse::parse(&text, dsl_parse::Dialect::Postgres);
       let derived = dsl_completion::source_tables::from_source(&file, &text);
@@ -83,25 +113,27 @@ impl ServerState {
 /// hidden dirs (`.git`, `.svn`, `node_modules`, `target`, etc) to
 /// keep the scan from drowning in noise.
 fn walk_sql_files(root: &Path, cap: usize, count: &mut usize, f: &mut impl FnMut(&Path)) {
-  if *count >= cap { return; }
+  if *count >= cap {
+    return;
+  }
   let Ok(rd) = std::fs::read_dir(root) else { return };
   for entry in rd.flatten() {
-    if *count >= cap { return; }
+    if *count >= cap {
+      return;
+    }
     let path = entry.path();
-    if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-      if name.starts_with('.')
-        || matches!(name, "node_modules" | "target" | "dist" | "build" | "vendor" | "out")
-      {
-        continue;
-      }
+    if let Some(name) = path.file_name().and_then(|s| s.to_str())
+      && (name.starts_with('.') || matches!(name, "node_modules" | "target" | "dist" | "build" | "vendor" | "out"))
+    {
+      continue;
     }
     if path.is_dir() {
       walk_sql_files(&path, cap, count, f);
-    } else if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-      if matches!(ext.to_ascii_lowercase().as_str(), "sql" | "pgsql" | "psql") {
-        *count += 1;
-        f(&path);
-      }
+    } else if let Some(ext) = path.extension().and_then(|s| s.to_str())
+      && matches!(ext.to_ascii_lowercase().as_str(), "sql" | "pgsql" | "psql")
+    {
+      *count += 1;
+      f(&path);
     }
   }
 }

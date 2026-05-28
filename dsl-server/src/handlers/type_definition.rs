@@ -114,10 +114,7 @@ fn find_type_definition(src: &str, name: &str) -> Option<(usize, usize)> {
 }
 
 fn byte_range_to_lsp(rope: &Rope, range: (usize, usize)) -> Range {
-  Range {
-    start: byte_to_position(rope, range.0),
-    end: byte_to_position(rope, range.1),
-  }
+  Range { start: byte_to_position(rope, range.0), end: byte_to_position(rope, range.1) }
 }
 
 fn byte_to_position(rope: &Rope, byte: usize) -> Position {

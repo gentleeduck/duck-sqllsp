@@ -28,10 +28,7 @@ pub async fn publish_for(client: &Client, state: &ServerState, uri: &Url) {
   let live = state.catalog.read().clone();
   let derived = dsl_completion::source_tables::from_source(&cache.file, &text);
   let ws_offline = state.workspace_offline_snapshot();
-  let cat = dsl_completion::source_tables::merge(
-    &dsl_completion::source_tables::merge(&live, &derived),
-    &ws_offline,
-  );
+  let cat = dsl_completion::source_tables::merge(&dsl_completion::source_tables::merge(&live, &derived), &ws_offline);
   let doc_dialect = state.documents.get(uri).map(|d| d.dialect).unwrap_or(dsl_parse::Dialect::Postgres);
   let raw = dsl_analysis::run_with_dialect(&text, &cache.file, &cache.scopes, &cat, doc_dialect);
 

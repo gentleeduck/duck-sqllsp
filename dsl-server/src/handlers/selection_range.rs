@@ -294,14 +294,14 @@ fn string_with_quotes(bytes: &[u8], offset: usize) -> Option<(usize, usize)> {
   let mut i = 0;
   while i < offset {
     if bytes[i] == b'\'' {
-      if quotes % 2 == 0 {
+      if quotes.is_multiple_of(2) {
         last_open = Some(i);
       }
       quotes += 1;
     }
     i += 1;
   }
-  if quotes % 2 == 0 {
+  if quotes.is_multiple_of(2) {
     return None;
   }
   let open = last_open?;

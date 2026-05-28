@@ -87,21 +87,21 @@ pub fn run(state: &ServerState, params: SemanticTokensParams) -> Option<Semantic
       continue;
     }
     // dollar-quoted: highlight the body as a string
-    if c == '$' {
-      if let Some((after, tag)) = dollar_open(bytes, i) {
-        let start = i;
-        let mut j = after;
-        while j + tag.len() <= n {
-          if &bytes[j..j + tag.len()] == tag.as_bytes() {
-            j += tag.len();
-            break;
-          }
-          j += 1;
+    if c == '$'
+      && let Some((after, tag)) = dollar_open(bytes, i)
+    {
+      let start = i;
+      let mut j = after;
+      while j + tag.len() <= n {
+        if &bytes[j..j + tag.len()] == tag.as_bytes() {
+          j += tag.len();
+          break;
         }
-        i = j.min(n);
-        raw.push((start, i, Tok::String));
-        continue;
+        j += 1;
       }
+      i = j.min(n);
+      raw.push((start, i, Tok::String));
+      continue;
     }
     // numbers (simple)
     if c.is_ascii_digit() {

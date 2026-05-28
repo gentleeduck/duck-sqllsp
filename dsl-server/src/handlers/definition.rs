@@ -34,10 +34,10 @@ pub fn run(state: &ServerState, params: GotoDefinitionParams) -> Option<GotoDefi
 
   // Right side wins when on a column reference -- jump to its column
   // declaration inside the qualified table's CREATE TABLE body.
-  if let (Some(l), Some(r)) = (left.as_ref(), right.as_ref()) {
-    if let Some(range) = column_def_in_create_table(text, l, r) {
-      return Some(scalar(uri.clone(), &doc.rope, range));
-    }
+  if let (Some(l), Some(r)) = (left.as_ref(), right.as_ref())
+    && let Some(range) = column_def_in_create_table(text, l, r)
+  {
+    return Some(scalar(uri.clone(), &doc.rope, range));
   }
 
   let token = right.clone().or_else(|| left.clone())?;
@@ -102,7 +102,9 @@ pub fn run(state: &ServerState, params: GotoDefinitionParams) -> Option<GotoDefi
 
   // Workspace-wide DDL lookup: scan every other open buffer.
   for (other_uri, other_doc) in state.documents.snapshot() {
-    if other_uri == uri { continue; }
+    if other_uri == uri {
+      continue;
+    }
     let other_upper = other_doc.text.to_ascii_uppercase();
     for needle in DDL_NAMES {
       if let Some(r) = find_def_name(&other_upper, &other_doc.text, needle, &token) {
@@ -113,10 +115,10 @@ pub fn run(state: &ServerState, params: GotoDefinitionParams) -> Option<GotoDefi
 
   // Disk fallback: walk every .sql file in the workspace root so
   // go-def resolves into files the user hasn't opened yet.
-  if let Some(root) = state.workspace_root.read().clone() {
-    if let Some(loc) = find_in_workspace_files(&root, &token) {
-      return Some(GotoDefinitionResponse::Scalar(loc));
-    }
+  if let Some(root) = state.workspace_root.read().clone()
+    && let Some(loc) = find_in_workspace_files(&root, &token)
+  {
+    return Some(GotoDefinitionResponse::Scalar(loc));
   }
 
   None
@@ -124,22 +126,38 @@ pub fn run(state: &ServerState, params: GotoDefinitionParams) -> Option<GotoDefi
 
 fn find_in_workspace_files(root: &std::path::Path, name: &str) -> Option<tower_lsp::lsp_types::Location> {
   const DDL_NAMES: &[&str] = &[
-    "CREATE OR REPLACE FUNCTION", "CREATE FUNCTION",
-    "CREATE OR REPLACE PROCEDURE", "CREATE PROCEDURE",
-    "CREATE OR REPLACE TRIGGER", "CREATE TRIGGER",
-    "CREATE OR REPLACE VIEW", "CREATE VIEW",
+    "CREATE OR REPLACE FUNCTION",
+    "CREATE FUNCTION",
+    "CREATE OR REPLACE PROCEDURE",
+    "CREATE PROCEDURE",
+    "CREATE OR REPLACE TRIGGER",
+    "CREATE TRIGGER",
+    "CREATE OR REPLACE VIEW",
+    "CREATE VIEW",
     "CREATE MATERIALIZED VIEW",
-    "CREATE UNIQUE INDEX IF NOT EXISTS", "CREATE UNIQUE INDEX",
-    "CREATE INDEX IF NOT EXISTS", "CREATE INDEX",
-    "CREATE TABLE IF NOT EXISTS", "CREATE TEMPORARY TABLE",
-    "CREATE TEMP TABLE", "CREATE TABLE",
-    "CREATE SEQUENCE IF NOT EXISTS", "CREATE SEQUENCE",
-    "CREATE TYPE", "CREATE DOMAIN",
-    "CREATE SCHEMA IF NOT EXISTS", "CREATE SCHEMA",
-    "CREATE EXTENSION IF NOT EXISTS", "CREATE EXTENSION",
-    "CREATE OR REPLACE POLICY", "CREATE POLICY",
-    "CREATE OR REPLACE AGGREGATE", "CREATE AGGREGATE",
-    "CREATE ROLE", "CREATE USER", "CREATE GROUP",
+    "CREATE UNIQUE INDEX IF NOT EXISTS",
+    "CREATE UNIQUE INDEX",
+    "CREATE INDEX IF NOT EXISTS",
+    "CREATE INDEX",
+    "CREATE TABLE IF NOT EXISTS",
+    "CREATE TEMPORARY TABLE",
+    "CREATE TEMP TABLE",
+    "CREATE TABLE",
+    "CREATE SEQUENCE IF NOT EXISTS",
+    "CREATE SEQUENCE",
+    "CREATE TYPE",
+    "CREATE DOMAIN",
+    "CREATE SCHEMA IF NOT EXISTS",
+    "CREATE SCHEMA",
+    "CREATE EXTENSION IF NOT EXISTS",
+    "CREATE EXTENSION",
+    "CREATE OR REPLACE POLICY",
+    "CREATE POLICY",
+    "CREATE OR REPLACE AGGREGATE",
+    "CREATE AGGREGATE",
+    "CREATE ROLE",
+    "CREATE USER",
+    "CREATE GROUP",
   ];
   let mut count = 0usize;
   let result = std::sync::Arc::new(std::sync::Mutex::new(None::<tower_lsp::lsp_types::Location>));
@@ -155,7 +173,9 @@ fn find_in_workspace_files(root: &std::path::Path, name: &str) -> Option<tower_l
         let rope = ropey::Rope::from_str(&text);
         let Ok(uri) = tower_lsp::lsp_types::Url::from_file_path(path) else { return };
         let loc = tower_lsp::lsp_types::Location { uri, range: to_lsp_range(&rope, r) };
-        if let Ok(mut g) = res2.lock() { *g = Some(loc); }
+        if let Ok(mut g) = res2.lock() {
+          *g = Some(loc);
+        }
         return;
       }
     }
@@ -164,23 +184,27 @@ fn find_in_workspace_files(root: &std::path::Path, name: &str) -> Option<tower_l
 }
 
 fn walk_sql(root: &std::path::Path, cap: usize, count: &mut usize, f: &mut impl FnMut(&std::path::Path)) {
-  if *count >= cap { return; }
+  if *count >= cap {
+    return;
+  }
   let Ok(rd) = std::fs::read_dir(root) else { return };
   for entry in rd.flatten() {
-    if *count >= cap { return; }
+    if *count >= cap {
+      return;
+    }
     let path = entry.path();
-    if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-      if name.starts_with('.') || matches!(name, "node_modules" | "target" | "dist" | "build" | "vendor" | "out") {
-        continue;
-      }
+    if let Some(name) = path.file_name().and_then(|s| s.to_str())
+      && (name.starts_with('.') || matches!(name, "node_modules" | "target" | "dist" | "build" | "vendor" | "out"))
+    {
+      continue;
     }
     if path.is_dir() {
       walk_sql(&path, cap, count, f);
-    } else if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-      if matches!(ext.to_ascii_lowercase().as_str(), "sql" | "pgsql" | "psql") {
-        *count += 1;
-        f(&path);
-      }
+    } else if let Some(ext) = path.extension().and_then(|s| s.to_str())
+      && matches!(ext.to_ascii_lowercase().as_str(), "sql" | "pgsql" | "psql")
+    {
+      *count += 1;
+      f(&path);
     }
   }
 }
@@ -199,7 +223,7 @@ fn find_def_name(upper: &str, text: &str, needle: &str, name: &str) -> Option<Te
     // Must be at a word boundary so `CREATE TABLE` doesn't match
     // inside `CREATE TABLES_PARTITION` etc.
     let prev_ok = rel == 0 || !is_word_char(upper.as_bytes()[from + rel - 1] as char);
-    let next_ok = upper.as_bytes().get(after).map_or(true, |b| !is_word_char(*b as char));
+    let next_ok = upper.as_bytes().get(after).is_none_or(|b| !is_word_char(*b as char));
     if !prev_ok || !next_ok {
       from = after;
       continue;
@@ -247,10 +271,7 @@ fn find_declare_site(text: &str, name: &str, cursor_pos: usize) -> Option<TextRa
   // those two anchors.
   let dollar = upper[..cursor_pos].rfind("$$")?;
   // Slice from dollar to cursor (or to a closing $$).
-  let win_end = upper[dollar + 2..]
-    .find("$$")
-    .map(|i| dollar + 2 + i)
-    .unwrap_or(text.len());
+  let win_end = upper[dollar + 2..].find("$$").map(|i| dollar + 2 + i).unwrap_or(text.len());
   let win = &text[dollar + 2..win_end];
   let win_upper = upper[dollar + 2..win_end].to_string();
   let decl_at = win_upper.find("DECLARE")?;
@@ -264,7 +285,9 @@ fn find_declare_site(text: &str, name: &str, cursor_pos: usize) -> Option<TextRa
     let s = stmt.trim_start();
     let lead_ws = stmt.len() - s.len();
     let id_end = s.chars().take_while(|c| is_word_char(*c)).count();
-    if id_end == 0 { continue; }
+    if id_end == 0 {
+      continue;
+    }
     let candidate = &s[..id_end];
     if candidate.eq_ignore_ascii_case(name) {
       let rel = stmt.as_ptr() as usize - body.as_ptr() as usize;
@@ -287,7 +310,9 @@ fn find_cte_site(text: &str, name: &str, cursor_pos: usize) -> Option<TextRange>
   while let Some(rel) = upper[from..cursor_pos].find("WITH ") {
     let at = from + rel;
     let prev_ok = at == 0 || !is_word_char(upper.as_bytes()[at - 1] as char);
-    if prev_ok { last_with = Some(at); }
+    if prev_ok {
+      last_with = Some(at);
+    }
     from = at + 5;
   }
   let with_at = last_with?;
@@ -309,7 +334,9 @@ fn find_cte_site(text: &str, name: &str, cursor_pos: usize) -> Option<TextRange>
       k += 1;
     }
     let id_end = k;
-    if id_end == id_start { return None; }
+    if id_end == id_start {
+      return None;
+    }
     if text[id_start..id_end].eq_ignore_ascii_case(name) {
       return Some(TextRange::new((id_start as u32).into(), (id_end as u32).into()));
     }
@@ -317,21 +344,25 @@ fn find_cte_site(text: &str, name: &str, cursor_pos: usize) -> Option<TextRange>
     while k < bytes.len() && bytes[k] != b'(' {
       k += 1;
     }
-    if k >= bytes.len() { return None; }
+    if k >= bytes.len() {
+      return None;
+    }
     let mut depth = 1i32;
     k += 1;
     while k < bytes.len() && depth > 0 {
       match bytes[k] {
         b'(' => depth += 1,
         b')' => depth -= 1,
-        _ => {}
+        _ => {},
       }
       k += 1;
     }
     while k < bytes.len() && bytes[k].is_ascii_whitespace() {
       k += 1;
     }
-    if k >= bytes.len() || bytes[k] != b',' { return None; }
+    if k >= bytes.len() || bytes[k] != b',' {
+      return None;
+    }
     k += 1;
   }
 }

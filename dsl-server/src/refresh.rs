@@ -8,9 +8,40 @@
 use crate::state::ServerState;
 use tower_lsp::Client;
 use tower_lsp::lsp_types::{
-  MessageType, NumberOrString, ProgressParams, ProgressParamsValue, WorkDoneProgress,
-  WorkDoneProgressBegin, WorkDoneProgressEnd, WorkDoneProgressReport,
+  MessageType, NumberOrString, ProgressParams, ProgressParamsValue, WorkDoneProgress, WorkDoneProgressBegin,
+  WorkDoneProgressCreateParams, WorkDoneProgressEnd, WorkDoneProgressReport,
 };
+
+/// Send a `$/progress Begin` to the editor (after registering the token
+/// via `window/workDoneProgress/create` so nvim's stock LSP client picks
+/// it up). Used at startup so the user sees a "duck-sqllsp loading..."
+/// indicator until the workspace .sql scan + optional DB introspect
+/// settle.
+pub async fn send_startup_progress(client: &Client, message: &str) -> NumberOrString {
+  let token = NumberOrString::String(format!("duck-sqllsp-startup-{}", std::process::id()));
+  let _ = client
+    .send_request::<tower_lsp::lsp_types::request::WorkDoneProgressCreate>(WorkDoneProgressCreateParams {
+      token: token.clone(),
+    })
+    .await;
+  send_progress(
+    client,
+    &token,
+    ProgressParamsValue::WorkDone(WorkDoneProgress::Begin(WorkDoneProgressBegin {
+      title: "duck-sqllsp".into(),
+      cancellable: Some(false),
+      message: Some(message.into()),
+      percentage: None,
+    })),
+  )
+  .await;
+  token
+}
+
+/// Finalise a startup progress token started by `send_startup_progress`.
+pub async fn end_startup_progress(client: &Client, token: &NumberOrString, message: Option<String>) {
+  end_progress(client, token, message).await;
+}
 
 pub async fn refresh_catalog(state: ServerState, client: Client) {
   let cfg = state.config_snapshot();
@@ -30,6 +61,11 @@ pub async fn refresh_catalog(state: ServerState, client: Client) {
 
   // Progress widget: editor shows a spinner while introspect runs.
   let token = NumberOrString::String(format!("duck-sqllsp-refresh-{}", active.name));
+  let _ = client
+    .send_request::<tower_lsp::lsp_types::request::WorkDoneProgressCreate>(WorkDoneProgressCreateParams {
+      token: token.clone(),
+    })
+    .await;
   send_progress(
     &client,
     &token,
@@ -95,18 +131,11 @@ pub async fn refresh_catalog(state: ServerState, client: Client) {
 
 async fn send_progress(client: &Client, token: &NumberOrString, value: ProgressParamsValue) {
   let _ = client
-    .send_notification::<tower_lsp::lsp_types::notification::Progress>(ProgressParams {
-      token: token.clone(),
-      value,
-    })
+    .send_notification::<tower_lsp::lsp_types::notification::Progress>(ProgressParams { token: token.clone(), value })
     .await;
 }
 
 async fn end_progress(client: &Client, token: &NumberOrString, message: Option<String>) {
-  send_progress(
-    client,
-    token,
-    ProgressParamsValue::WorkDone(WorkDoneProgress::End(WorkDoneProgressEnd { message })),
-  )
-  .await;
+  send_progress(client, token, ProgressParamsValue::WorkDone(WorkDoneProgress::End(WorkDoneProgressEnd { message })))
+    .await;
 }

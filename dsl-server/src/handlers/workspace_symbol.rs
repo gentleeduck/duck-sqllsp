@@ -35,7 +35,7 @@ pub fn run(state: &ServerState, params: WorkspaceSymbolParams) -> Option<Vec<Sym
   let cat = dsl_completion::source_tables::merge(&open_merged, &ws_offline);
   // Score every candidate so the best match floats to the top.
   // (score, SymbolInformation) -- sort descending by score.
-  let mut scored: Vec<(i32, SymbolInformation)> = Vec::new();
+  let _scored: Vec<(i32, SymbolInformation)> = Vec::new();
   let mut out: Vec<SymbolInformation> = Vec::new();
 
   let synthetic: Url = "duck-sqllsp://catalog".parse().ok()?;
@@ -47,7 +47,7 @@ pub fn run(state: &ServerState, params: WorkspaceSymbolParams) -> Option<Vec<Sym
   let function_locs = collect_function_locations(state);
 
   for t in cat.tables() {
-    let Some(score) = score_match(&t.name, &query) else { continue };
+    let Some(_score) = score_match(&t.name, &query) else { continue };
     let loc = table_locs
       .iter()
       .find(|(name, _)| name.eq_ignore_ascii_case(&t.name))
@@ -331,15 +331,7 @@ fn score_match(name: &str, query: &str) -> Option<i32> {
   let camel_initials: String = name
     .chars()
     .enumerate()
-    .filter_map(|(i, c)| {
-      if i == 0 {
-        Some(c.to_ascii_lowercase())
-      } else if c.is_ascii_uppercase() {
-        Some(c.to_ascii_lowercase())
-      } else {
-        None
-      }
-    })
+    .filter_map(|(i, c)| if i == 0 || c.is_ascii_uppercase() { Some(c.to_ascii_lowercase()) } else { None })
     .collect();
   if camel_initials.starts_with(query) {
     return Some(70);
