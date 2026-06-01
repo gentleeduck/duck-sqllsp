@@ -5,15 +5,14 @@
 <h1 align="center">duck-sqllsp</h1>
 
 <p align="center">
-  Persistent SQL Language Server for PostgreSQL. tower-lsp + libpg_query. Built as a small set of focused crates so each piece is reusable on its own.
+  Persistent multi-dialect SQL Language Server. PostgreSQL is the deepest target; MySQL / MariaDB, SQLite, and SQL Server are first-class for syntax, completion, hover, formatting, and connection-backed introspection. Built on tower-lsp + libpg_query.
 </p>
 
 <p align="center">
   <a href="./LICENSE">MIT</a> -
   <a href="./CHANGELOG.md">Changelog</a> -
   <a href="./CONTRIBUTING.md">Contributing</a> -
-  <a href="./dsl-cli">Crate docs</a> -
-  <a href="./examples">Examples</a>
+  <a href="./dsl-cli">Crate docs</a>
 </p>
 
 <p align="center">
@@ -24,13 +23,25 @@
 
 ---
 
+## What you get
+
+- **300+ lint rules** (PG-first, dialect-aware) covering schema correctness, transaction safety, query smells, migration footguns, vendor mismatches (MySQL `ENGINE=`, Oracle `DUAL`/`CONNECT BY`, SQL Server `BEGIN TRANSACTION`, ...).
+- **Context-aware completion** across ~50 phases: `CREATE INDEX ... USING` + opclass slot, `CREATE TRIGGER ... EXECUTE FUNCTION`, `CREATE POLICY ... FOR / TO`, `ALTER COLUMN TYPE`, `CALL <proc>`, PL/pgSQL local-variable scope, JOIN target resolution, etc.
+- **Rich hover cards** for tables (compact `CREATE TABLE` + indexes + triggers + policies + comment + `ALTER TABLE OWNER TO`), columns, functions, keywords, types, NULL three-valued logic notes.
+- **Offline mode** built in: walks the workspace for `*.sql` files (`migrations/`, `db/`, `sql/`, `schema/`) and derives a synthetic catalog so completion + hover + diagnostics work without a live DB. Live introspect (PG / MySQL / SQLite) overrides.
+- **Code lenses**: `Run` above every statement + `EXPLAIN` for DML; `+ LIMIT 100`, `EXPLAIN ANALYZE` for slow SELECTs. VS Code wires them through to the active connection's CLI in a terminal; other clients see no broken-command popups.
+- **Inlay hints**: column-name chip per INSERT VALUES tuple (DataGrip-style), `SELECT *` expansion, `JOIN ... ON ...` predicate suggestion, `-- ~N rows` at end of SELECT, literal-cast `::int` hint in WHERE.
+- **Formatter**: external `sql-formatter` v15+ reflow + DataGrip-style `CREATE TABLE` alignment + PL/pgSQL block indenter. Optional `singleLine` post-pass collapses DML statements onto one line while leaving DDL intact.
+- **Refactors / code actions**: `= NULL` -> `IS NULL`, `EXISTS (...)` -> `CROSS JOIN LATERAL`, `BEGIN TRANSACTION` -> `BEGIN`, extract subquery to `WITH _tmp AS (...) CTE`, 30+ more.
+- **Editor integrations**: VS Code extension with connections + schema tree view, neovim setup that works with stock `vim.lsp` + `nvim-cmp`.
+
 ## Install
 
 ```sh
 cargo install duck-sqllsp
 ```
 
-Or as a library:
+Library use:
 
 ```sh
 cargo add dsl-analysis
@@ -39,81 +50,107 @@ cargo add dsl-analysis
 ## Quick start
 
 ```lua
--- nvim
-vim.lsp.start({
-  name = "duck-sqllsp",
-  cmd = { "duck-sqllsp" },
-  root_dir = vim.fn.getcwd(),
-  filetypes = { "sql" },
-  settings = {
-    sql = {
-      connection = "postgresql://user:pass@localhost:5432/mydb",
-      diagnostics = { enabled = true },
-      format = { align_columns = true, group_indexes = true },
-    },
-  },
+-- neovim
+vim.lsp.config('duck_sqllsp', {
+  cmd = { 'duck-sqllsp', 'server' },
+  filetypes = { 'sql', 'mysql', 'plsql' },
+  root_markers = { '.duck-sqllsp.toml', '.duck-sqllsp.json', '.git' },
 })
+vim.lsp.enable('duck_sqllsp')
 ```
 
 ```sh
-duck-sqllsp run
+duck-sqllsp --help
+duck-sqllsp version
+duck-sqllsp rules
+duck-sqllsp lint file.sql
+duck-sqllsp format file.sql --stdout
+duck-sqllsp introspect file.sql        # offline catalog from CREATE TABLE/FUNCTION/TYPE
+duck-sqllsp introspect --url postgres://user:pass@host/db
+```
+
+Project config example (`.duck-sqllsp.toml`):
+
+```toml
+[duck_sqllsp]
+active_connection = "local"
+dialect           = "postgres"      # postgres / mysql / sqlite / mssql (aliases accepted)
+require_connection = false
+
+[duck_sqllsp.style]
+keyword    = "upper"
+function   = "lower"
+type       = "upper"
+identifier = "preserve"
+
+[duck_sqllsp.style.createTable]
+alignColumns       = true
+openParenOnNewLine = true
+constraintsAtEnd   = true
+
+[duck_sqllsp.style.formatter]
+language       = "postgresql"
+expressionWidth = 9999
+singleLine      = true              # collapse DML to one line; leaves DDL untouched
+denseOperators  = true
+
+[[duck_sqllsp.connections]]
+name = "local"
+url  = "postgres://user:pass@localhost:5432/mydb"
 ```
 
 ## Workspace
 
 | Crate | Role |
 | --- | --- |
-| [`dsl-parse`](dsl-parse) | SQL parser - libpg_query primary, sqlparser fallback |
-| [`dsl-catalog`](dsl-catalog) | Schema catalog model - tables, columns, types, constraints, indexes |
-| [`dsl-knowledge`](dsl-knowledge) | Static PG keyword / type / function reference with docs links |
-| [`dsl-resolve`](dsl-resolve) | Name resolution, FROM/JOIN scope, CTE columns |
-| [`dsl-format`](dsl-format) | SQL formatter - sql-formatter reflow + DataGrip-style alignment + PL/pgSQL body indent |
-| [`dsl-analysis`](dsl-analysis) | Lint rule engine - 150+ PG-specific diagnostics with narrow ranges |
-| [`dsl-completion`](dsl-completion) | Context-aware completion across 12 expression phases, alias + scope aware |
-| [`dsl-hover`](dsl-hover) | Hover provider with cursor-side narrowing for dotted refs |
-| [`dsl-conn`](dsl-conn) | Live PG connection layer for catalog introspection |
-| [`dsl-server`](dsl-server) | tower-lsp server - definitions, diagnostics, format, semantic tokens |
-| [`dsl-cli`](dsl-cli) | `duck-sqllsp` binary - stdio LSP, signal + parent-death handling |
+| [`dsl-parse`](dsl-parse) | SQL parser - libpg_query primary, sqlparser fallback for MySQL/SQLite/MSSQL |
+| [`dsl-catalog`](dsl-catalog) | Schema model - tables (incl. owner), columns, constraints (inline + table-level), indexes, triggers, policies, sequences, types, functions |
+| [`dsl-knowledge`](dsl-knowledge) | Static keyword / type / function reference with PG-doc links |
+| [`dsl-resolve`](dsl-resolve) | Name resolution, FROM / JOIN / LATERAL scope, CTE columns, alias chains |
+| [`dsl-format`](dsl-format) | Formatter - sql-formatter reflow + DataGrip alignment + PL/pgSQL indent + optional one-line DML pass |
+| [`dsl-analysis`](dsl-analysis) | Lint rule engine - 300+ diagnostics with narrow ranges |
+| [`dsl-completion`](dsl-completion) | Context-aware completion engine, ~50 phases, alias + scope aware |
+| [`dsl-hover`](dsl-hover) | Hover cards with cursor-side narrowing, schema-qualified resolution |
+| [`dsl-conn`](dsl-conn) | Live PG / MySQL / SQLite catalog introspection (sqlx) |
+| [`dsl-server`](dsl-server) | tower-lsp server - all 17 LSP request handlers + startup progress |
+| [`dsl-cli`](dsl-cli) | `duck-sqllsp` binary - subcommands + stdio LSP + signal handling |
 
-## Examples
+## Editor integrations
 
-| Path | What it shows |
-| --- | --- |
-| [`examples/minimal`](examples/minimal) | Single buffer, no DB, diagnostics + completion + hover |
-| [`examples/with-catalog`](examples/with-catalog) | Live PG connection - catalog introspection, FK-aware diagnostics |
-| [`examples/format`](examples/format) | Round-trip CREATE TABLE / FUNCTION / TRIGGER / INDEX through the formatter |
+- **VS Code**: install `wildduck.duck-sqllsp-vscode`. Sidebar tree views for connections + schema. Commands: Add Connection, Set Active, Test Connection, Refresh Schema, Restart Server, Show Logs. Run / EXPLAIN / EXPLAIN ANALYZE / + LIMIT 100 code lenses wire through to a `duck-sqllsp` terminal running `psql` / `mysql` / `sqlite3` against the active connection.
+- **neovim**: stock `vim.lsp` + `nvim-cmp`. duck-sqllsp emits `$/progress` so statusline plugins surface "loading workspace..." while the .sql scan + DB introspect settle.
 
 ## Build
 
 ```sh
 cargo build --release
-cargo test  --workspace
-cargo clippy --workspace --all-targets -- -D warnings
+cargo test  --workspace --release
+cargo clippy --workspace --all-features --release -- -D warnings
 ```
+
+2500+ tests (rules, idioms, completion phases, hover resolver, formatter, parsers).
 
 ## Performance targets
 
 | Metric | Target |
 | --- | --- |
-| Completion p50 latency | < 5 ms |
-| Diagnostics p50 latency | < 20 ms |
-| Hover p50 latency | < 3 ms |
-| Format p50 latency | < 30 ms |
+| Completion p50 | < 5 ms |
+| Diagnostics p50 | < 20 ms |
+| Hover p50 | < 3 ms |
+| Format p50 | < 30 ms |
 | Memory idle | < 30 MB |
 | Memory @ 4 MiB file | < 150 MB |
 | Cold start | < 50 ms |
-| Document update | incremental, zero re-parse on cached handlers |
+| Document update | incremental, no re-parse on cached handlers |
 
 ## Design
 
-- **libpg_query** primary parser, **sqlparser** fallback. Statement-range tracked so every diagnostic has a precise byte range.
-- **tower-lsp** for the protocol. Each handler is a thin shim over a pure-function crate.
-- **Per-document parse cache** on a `OnceLock` - the first heavy handler after `didChange` pays the parse cost, the rest reuse it.
-- **Space-preserving strip pattern** keeps 1:1 byte offsets when stripping strings/comments so diagnostic narrowing maps back to source exactly.
-- **Catalog snapshots** are `parking_lot::RwLock` reads cloned before any `.await` - no guard crosses an await point.
+- **libpg_query** primary parser, **sqlparser** fallback so MySQL backticks, MSSQL bracketed idents, SQLite quirks all parse.
+- **tower-lsp** protocol layer. Every handler is a thin shim over a pure-function crate; the LSP transport is the only place tokio touches.
+- **Per-document parse cache** on `OnceLock` - first heavy handler after `didChange` pays the parse cost, the rest reuse it.
+- **Space-preserving strip** keeps 1:1 byte offsets when stripping strings / comments / dollar-quoted bodies, so diagnostic ranges map back to source byte-exact.
+- **Catalog snapshots** are `parking_lot::RwLock` reads cloned before any `.await` - no guard ever crosses an await point.
 - **`PR_SET_PDEATHSIG`** + SIGTERM / SIGINT / SIGHUP handling - the binary always dies with its editor.
-
-JS / WASM plugin hooks are not in this workspace yet; they ship as separate crates once the core stabilises.
 
 ## Sibling repos
 

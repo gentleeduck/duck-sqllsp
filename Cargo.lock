@@ -550,6 +550,7 @@ dependencies = [
  "dsl-analysis",
  "dsl-catalog",
  "dsl-completion",
+ "dsl-conn",
  "dsl-format",
  "dsl-parse",
  "dsl-resolve",
