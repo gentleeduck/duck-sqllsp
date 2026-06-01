@@ -279,8 +279,13 @@ fn main() -> anyhow::Result<()> {
       Ok(())
     },
     Cmd::Format { files, stdout, language } => {
-      let style = dsl_format::FormatterStyle { language, ..Default::default() };
-      let ct_style = dsl_format::CreateTableStyle::default();
+      let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+      let proj = dsl_server::config::load_project_config(&cwd).unwrap_or_default();
+      let mut style = proj.style.formatter.clone();
+      if language != "postgresql" || style.language.is_empty() {
+        style.language = language;
+      }
+      let ct_style = proj.style.create_table.clone();
       let inputs: Vec<String> = if files.is_empty() { vec!["-".to_string()] } else { files };
       for path in &inputs {
         let original = if path == "-" {
@@ -310,11 +315,30 @@ fn main() -> anyhow::Result<()> {
       Ok(())
     },
     Cmd::Introspect { files, url } => {
-      if url.is_some() {
-        eprintln!(
-          "error: live DB introspect requires a tokio runtime and dsl-conn drivers; not wired in CLI yet. Use `--files`."
-        );
-        std::process::exit(2);
+      if let Some(url) = url {
+        // Live DB introspection: build driver, introspect, JSON-dump.
+        let spec = dsl_conn::ConnectionSpec { name: "cli".into(), url };
+        let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
+          Ok(rt) => rt,
+          Err(e) => {
+            eprintln!("error: failed to build tokio runtime: {e}");
+            std::process::exit(2);
+          },
+        };
+        let cat = rt.block_on(async move {
+          let driver = dsl_conn::build(&spec).map_err(|e| format!("build driver: {e}"))?;
+          driver.introspect().await.map_err(|e| format!("introspect: {e}"))
+        });
+        match cat {
+          Ok(c) => {
+            println!("{}", serde_json::to_string_pretty(&c).map_err(|e| anyhow::anyhow!("json: {e}"))?);
+            return Ok(());
+          },
+          Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(2);
+          },
+        }
       }
       // Offline catalog: parse every file + merge derived catalogs.
       let mut acc = dsl_catalog::Catalog {

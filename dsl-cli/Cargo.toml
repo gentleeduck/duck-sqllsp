@@ -25,6 +25,7 @@ dsl-resolve        = { workspace = true }
 dsl-completion     = { workspace = true }
 dsl-format         = { workspace = true }
 dsl-catalog        = { workspace = true }
+dsl-conn           = { workspace = true }
 serde_json         = { workspace = true }
 clap               = { workspace = true }
 tokio              = { workspace = true }
