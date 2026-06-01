@@ -307,6 +307,20 @@
           "description": "Named connection to use for live catalog introspection. Leave blank for offline-only mode (buffer-derived catalog still works)."
         }
       }
+    },
+    "configurationDefaults": {
+      "[sql]": {
+        "editor.defaultFormatter": "wildduck.duck-sqllsp-vscode"
+      },
+      "[mysql]": {
+        "editor.defaultFormatter": "wildduck.duck-sqllsp-vscode"
+      },
+      "[plpgsql]": {
+        "editor.defaultFormatter": "wildduck.duck-sqllsp-vscode"
+      },
+      "[postgres]": {
+        "editor.defaultFormatter": "wildduck.duck-sqllsp-vscode"
+      }
     }
   },
   "scripts": {
