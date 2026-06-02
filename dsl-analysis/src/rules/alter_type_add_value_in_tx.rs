@@ -2,6 +2,7 @@
 //! transaction block -- PG aborts the statement.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -17,10 +18,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, _body, upper) = crate::stmt_body_upper(stmt, source);
     let trimmed = upper.trim_start();
     if !trimmed.starts_with("ALTER TYPE") {
       return;
@@ -48,7 +46,7 @@ impl LintRule for Rule {
       severity: Severity::Error,
       message: "ALTER TYPE ... ADD VALUE cannot run inside an explicit transaction -- run it outside BEGIN..COMMIT"
         .into(),
-      range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+      range: crate::range_at(abs_start, abs_end),
     });
   }
 }
@@ -74,9 +72,6 @@ fn count_word(haystack: &str, needle: &str) -> usize {
   c
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}
 
 fn count_with_prev_exclude(haystack: &str, needle: &str, excluded_prev: &[&str], excluded_next: &[&str]) -> usize {
   let h = haystack.as_bytes();
