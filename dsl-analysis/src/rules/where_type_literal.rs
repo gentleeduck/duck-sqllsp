@@ -42,10 +42,7 @@ impl LintRule for Rule {
     };
     let Some(from_table) = from_table_opt else { return };
 
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     // Extract WHERE / HAVING / ON clauses.
     let mut clauses: Vec<(usize, &str)> = Vec::new();
     for kw in [" WHERE ", " HAVING ", " ON "] {
@@ -87,7 +84,7 @@ impl LintRule for Rule {
               op,
               rhs.chars().take(30).collect::<String>()
             ),
-            range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+            range: crate::range_at(abs_s, abs_e),
           });
           let _ = rel_lhs_s;
         }

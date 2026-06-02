@@ -8,6 +8,7 @@
 //! review.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -23,10 +24,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     // Walk for word-bounded WHERE.
     let bytes = upper.as_bytes();
     let n = bytes.len();
@@ -51,7 +49,7 @@ impl LintRule for Rule {
             code: "sql407",
             severity: Severity::Warning,
             message: format!("WHERE predicate `{pred}` is trivially false -- query returns zero rows regardless of data"),
-            range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+            range: crate::range_at(abs_s, abs_e),
           });
         }
         i = pred_end;
@@ -106,6 +104,3 @@ fn is_always_false_literal(pred: &str) -> bool {
   )
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}

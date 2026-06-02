@@ -19,10 +19,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let Some(where_at) = upper.find("WHERE ") else { return };
     let after = where_at + "WHERE ".len();
     let tail = body[after..].trim_start();
@@ -47,7 +44,7 @@ impl LintRule for Rule {
       code: "sql282",
       severity: Severity::Hint,
       message: "WHERE clause starts with tautology placeholder (`1=1` / `TRUE`) -- harmless but adds noise in static SQL; drop it".into(),
-      range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+      range: crate::range_at(abs_s, abs_e),
     });
   }
 }
