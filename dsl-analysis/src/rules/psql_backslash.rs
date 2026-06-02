@@ -19,9 +19,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (start, body) = crate::stmt_body(stmt, source);
     let trimmed = body.trim_start();
     if !trimmed.starts_with('\\') {
       return;
@@ -42,7 +40,7 @@ impl LintRule for Rule {
       message: format!(
         "`{cmd}` is a psql meta-command, not SQL -- only the psql client interprets it; remove from the buffer or run in psql"
       ),
-      range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+      range: crate::range_at(abs_s, abs_e),
     });
   }
 }

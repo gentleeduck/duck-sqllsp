@@ -21,8 +21,7 @@ impl LintRule for Rule {
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let StatementKind::CreateTable(ct) = &stmt.kind else { return };
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let _ = source;
+    let (start, _) = crate::stmt_bounds(stmt, source);
     for col in &ct.columns {
       let ty = col.type_name.to_ascii_lowercase();
       if !(ty == "timestamp" || ty == "timestamp without time zone") {
@@ -47,7 +46,7 @@ impl LintRule for Rule {
           "Column `{}` is TIMESTAMP without TZ but DEFAULT calls `now()` (which returns timestamptz) -- TZ silently dropped; use TIMESTAMPTZ or wrap default in `(now() AT TIME ZONE 'UTC')`",
           col.name,
         ),
-        range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+        range: crate::range_at(abs_s, abs_e),
       });
     }
   }

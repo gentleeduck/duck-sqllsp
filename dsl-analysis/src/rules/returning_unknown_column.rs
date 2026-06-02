@@ -24,11 +24,9 @@ impl LintRule for Rule {
       _ => return,
     };
     let Some(t) = catalog.find_table(table_ref.schema.as_deref(), &table_ref.name) else { return };
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let raw_body = &source[start..end];
+    let (start, raw_body) = crate::stmt_body(stmt, source);
     // Strip line comments so `-- RETURNING bogus col` doesn't match.
-    let body_owned = strip_line_comments(raw_body);
+    let body_owned = crate::textutil::strip_comments_only(raw_body);
     let body = body_owned.as_str();
     let _upper = body.to_ascii_uppercase();
     // Find the OUTERMOST RETURNING (depth=0). A CTE body like
@@ -71,7 +69,7 @@ impl LintRule for Rule {
         code: "sql350",
         severity: Severity::Error,
         message: format!("RETURNING references unknown column `{token}` on `{}`", table_ref.name),
-        range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+        range: crate::range_at(abs_s, abs_e),
       });
     }
   }
@@ -153,25 +151,3 @@ fn split_top_level_commas(s: &str) -> Vec<&str> {
   out
 }
 
-/// Replace `-- comment` runs with spaces so offsets stay 1:1.
-fn strip_line_comments(s: &str) -> String {
-  let mut out = String::with_capacity(s.len());
-  let bytes = s.as_bytes();
-  let n = bytes.len();
-  let mut i = 0usize;
-  while i < n {
-    if i + 1 < n && bytes[i] == b'-' && bytes[i + 1] == b'-' {
-      while i < n && bytes[i] != b'\n' {
-        out.push(' ');
-        i += 1;
-      }
-    } else if bytes[i].is_ascii() {
-      out.push(bytes[i] as char);
-      i += 1;
-    } else {
-      out.push(' ');
-      i += 1;
-    }
-  }
-  out
-}

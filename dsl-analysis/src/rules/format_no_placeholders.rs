@@ -18,9 +18,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (start, body) = crate::stmt_body(stmt, source);
     let lower = body.to_ascii_lowercase();
     let mut from = 0usize;
     while let Some(rel) = lower[from..].find("format(") {
@@ -45,7 +43,7 @@ impl LintRule for Rule {
           message: format!(
             "format('{lit}') has no `%` placeholders -- result equals the input, drop the format() call"
           ),
-          range: text_size::TextRange::new(((start + at) as u32).into(), ((start + close + 1) as u32).into()),
+          range: crate::range_at(start + at, start + close + 1),
         });
       }
       from = close + 1;

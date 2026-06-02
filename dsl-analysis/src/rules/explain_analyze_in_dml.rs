@@ -18,10 +18,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, _body, upper) = crate::stmt_body_upper(stmt, source);
     let trimmed = upper.trim_start();
     if !trimmed.starts_with("EXPLAIN") {
       return;
@@ -47,7 +44,7 @@ impl LintRule for Rule {
       severity: Severity::Hint,
       message: "EXPLAIN ANALYZE on DML executes the statement -- wrap in BEGIN ... ROLLBACK if you only want the plan"
         .into(),
-      range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+      range: crate::range_at(abs_start, abs_end),
     });
   }
 }

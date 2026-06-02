@@ -2,6 +2,7 @@
 //! beyond the single statement -- usually a bug.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -17,10 +18,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, _body, upper) = crate::stmt_body_upper(stmt, source);
     let trimmed = upper.trim_start();
     if !trimmed.starts_with("LOCK") {
       return;
@@ -42,7 +40,7 @@ impl LintRule for Rule {
       code: "sql111",
       severity: Severity::Error,
       message: "LOCK TABLE outside a transaction -- the lock releases as soon as the statement finishes".into(),
-      range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+      range: crate::range_at(abs_start, abs_end),
     });
   }
 }
@@ -68,6 +66,3 @@ fn count_word(haystack: &str, needle: &str) -> usize {
   c
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}

@@ -20,10 +20,7 @@ impl LintRule for Rule {
     if !matches!(stmt.kind, StatementKind::Select(_)) {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, _body, upper) = crate::stmt_body_upper(stmt, source);
     // Skip when FROM present (whole-word match -- ` FROM ` failed on
     // `\nFROM\n` / `\tFROM` because the surrounding chars were newlines
     // or tabs not spaces; user-formatted SQL routinely indents FROM
@@ -154,7 +151,7 @@ impl LintRule for Rule {
       code: "sql097",
       severity: Severity::Hint,
       message: "SELECT without FROM and without a built-in -- did you mean to add a FROM clause?".into(),
-      range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+      range: crate::range_at(abs_start, abs_end),
     });
   }
 }

@@ -3,6 +3,7 @@
 //! at parse time.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -18,10 +19,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     // Skip PL/pgSQL function/procedure bodies + DO blocks -- multiple
     // top-level WHEREs there belong to different sub-statements.
     if upper.contains("$$") || upper.contains("LANGUAGE PLPGSQL") || upper.contains("LANGUAGE SQL") {
@@ -92,7 +90,7 @@ impl LintRule for Rule {
               // WHERE and this one means we're in separate set-op
               // branches -- each branch gets its own WHERE.
               let between = &upper[prev_where..i];
-              if has_word_kw(between, "UNION") || has_word_kw(between, "INTERSECT") || has_word_kw(between, "EXCEPT") {
+              if crate::textutil::contains_word(between, "UNION") || crate::textutil::contains_word(between, "INTERSECT") || crate::textutil::contains_word(between, "EXCEPT") {
                 first = Some(i);
                 i += 5;
                 continue;
@@ -103,7 +101,7 @@ impl LintRule for Rule {
                 code: "sql098",
                 severity: Severity::Error,
                 message: "duplicate top-level WHERE clause -- did you mean AND/OR?".into(),
-                range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+                range: crate::range_at(abs_start, abs_end),
               });
               return;
             },
@@ -115,28 +113,4 @@ impl LintRule for Rule {
       i += 1;
     }
   }
-}
-
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}
-
-fn has_word_kw(haystack: &str, needle: &str) -> bool {
-  let h = haystack.as_bytes();
-  let n = needle.as_bytes();
-  if n.is_empty() {
-    return false;
-  }
-  let mut i = 0;
-  while i + n.len() <= h.len() {
-    if h[i..i + n.len()] == *n {
-      let prev_ok = i == 0 || !is_word(h[i - 1] as char);
-      let next_ok = i + n.len() == h.len() || !is_word(h[i + n.len()] as char);
-      if prev_ok && next_ok {
-        return true;
-      }
-    }
-    i += 1;
-  }
-  false
 }

@@ -23,9 +23,7 @@ impl LintRule for Rule {
     if !matches!(stmt.kind, StatementKind::Unknown { .. }) {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (_start, body) = crate::stmt_body(stmt, source);
     let upper = body.to_ascii_uppercase();
     if !upper.contains("CREATE") || !upper.contains("FUNCTION") {
       return;

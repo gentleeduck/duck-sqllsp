@@ -21,10 +21,7 @@ impl LintRule for Rule {
     if !matches!(stmt.kind, StatementKind::Unknown { .. }) {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let trimmed = upper.trim_start();
     if !trimmed.starts_with("CREATE UNIQUE INDEX") {
       return;
@@ -39,6 +36,17 @@ impl LintRule for Rule {
     let Some(open) = body.find('(') else { return };
     let Some(close) = body[open + 1..].find(')') else { return };
     let list = &body[open + 1..open + 1 + close];
+    // Partial index (WHERE clause) covers only a subset of rows so it
+    // is NOT redundant with an existing full UNIQUE/PK constraint.
+    // Same for expression-only indexes (the col list may not match any
+    // constraint anyway, but the WHERE clause is the canonical signal).
+    let after_index_paren_upper = upper[open + 1 + close..].to_ascii_uppercase();
+    if after_index_paren_upper
+      .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+      .any(|w| w == "WHERE")
+    {
+      return;
+    }
     let idx_cols: Vec<String> = list.split(',').map(|s| s.trim().trim_matches('"').to_ascii_lowercase()).collect();
     let Some(t) = catalog.find_table(None, &bare_tbl) else { return };
     // Find any UNIQUE / PK constraint with the exact same col set.
@@ -61,10 +69,7 @@ impl LintRule for Rule {
                     code: "sql168",
                     severity: Severity::Hint,
                     message: format!("CREATE UNIQUE INDEX on `{bare_tbl}({})` -- the existing {kind_name} constraint already creates a unique index on the same columns", list.trim()),
-                    range: text_size::TextRange::new(
-                        (abs_start as u32).into(),
-                        (abs_end as u32).into(),
-                    ),
+                    range: crate::range_at(abs_start, abs_end),
                 });
         return;
       }

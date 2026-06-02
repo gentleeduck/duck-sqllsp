@@ -18,10 +18,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, _body, upper) = crate::stmt_body_upper(stmt, source);
     let trimmed = upper.trim_start();
     let (kw, kw_len) = if trimmed.starts_with("ROLLBACK") {
       ("ROLLBACK", "ROLLBACK".len())
@@ -37,7 +34,7 @@ impl LintRule for Rule {
     // Walk source up to this stmt start, look for unclosed BEGIN/START
     // TRANSACTION. Strip comments / strings so commented-out
     // `-- BEGIN` doesn't count.
-    let prelude_clean = strip_noise(&source[..start]);
+    let prelude_clean = crate::textutil::strip_comments_only(&source[..start]);
     let prelude = prelude_clean.to_ascii_uppercase();
     let begins = count_occurrences(&prelude, "BEGIN") + count_occurrences(&prelude, "START TRANSACTION");
     // `ROLLBACK TO [SAVEPOINT]` / `COMMIT PREPARED` don't end the active tx.
@@ -55,7 +52,7 @@ impl LintRule for Rule {
       code: "sql211",
       severity: Severity::Warning,
       message: format!("`{kw}` with no open transaction -- PG emits warning + no-op"),
-      range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+      range: crate::range_at(abs_s, abs_e),
     });
   }
 }
@@ -135,61 +132,6 @@ fn count_excluding_followups(haystack: &str, needle: &str, excluded: &[&str]) ->
   }
   count
 }
-
-fn strip_noise(s: &str) -> String {
-  let mut out = String::with_capacity(s.len());
-  let bytes = s.as_bytes();
-  let n = bytes.len();
-  let mut i = 0usize;
-  while i < n {
-    if i + 1 < n && bytes[i] == b'-' && bytes[i + 1] == b'-' {
-      while i < n && bytes[i] != b'\n' {
-        out.push(' ');
-        i += 1
-      }
-    } else if i + 1 < n && bytes[i] == b'/' && bytes[i + 1] == b'*' {
-      let mut depth = 1u32;
-      out.push(' ');
-      out.push(' ');
-      i += 2;
-      while i + 1 < n && depth > 0 {
-        if bytes[i] == b'/' && bytes[i + 1] == b'*' {
-          depth += 1;
-          out.push(' ');
-          out.push(' ');
-          i += 2;
-        } else if bytes[i] == b'*' && bytes[i + 1] == b'/' {
-          depth -= 1;
-          out.push(' ');
-          out.push(' ');
-          i += 2;
-        } else {
-          out.push(' ');
-          i += 1;
-        }
-      }
-    } else if bytes[i] == b'\'' {
-      out.push(' ');
-      i += 1;
-      while i < n && bytes[i] != b'\'' {
-        out.push(' ');
-        i += 1
-      }
-      if i < n {
-        out.push(' ');
-        i += 1
-      }
-    } else if bytes[i].is_ascii() {
-      out.push(bytes[i] as char);
-      i += 1;
-    } else {
-      out.push(' ');
-      i += 1;
-    }
-  }
-  out
-}
-
 fn count_occurrences(s: &str, needle: &str) -> usize {
   let bytes = s.as_bytes();
   let mut from = 0usize;

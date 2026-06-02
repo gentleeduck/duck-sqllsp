@@ -19,10 +19,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     if !upper.contains("DO $$") && !upper.contains("DO LANGUAGE") {
       return;
     }
@@ -77,7 +74,7 @@ impl LintRule for Rule {
         code: "sql257",
         severity: Severity::Warning,
         message: "Bare `SELECT` in DO block discards result -- use `PERFORM expr` (side effects only) or `RAISE NOTICE '%' , expr` to print".into(),
-        range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+        range: crate::range_at(abs_s, abs_e),
       });
       i = at + stmt_end + 1;
     }

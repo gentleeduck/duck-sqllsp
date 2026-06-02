@@ -21,10 +21,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     if !upper.contains("CREATE INDEX") && !upper.contains("CREATE UNIQUE INDEX") {
       return;
     }
@@ -54,7 +51,7 @@ impl LintRule for Rule {
         "BRIN index on `{}` (~{:.0} rows) -- BRIN is for >100k row append-only tables; planner will seq-scan anyway",
         table, est
       ),
-      range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+      range: crate::range_at(abs_s, abs_e),
     });
   }
 }

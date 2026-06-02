@@ -3,6 +3,8 @@
 //! New rules: add the module, then push an instance into [`all`].
 
 pub mod add_column_notnull_no_default;
+pub mod function_arg_validation;
+pub mod empty_expression_paren;
 pub mod advisory_lock_literal_key;
 pub mod advisory_lock_no_unlock;
 pub mod after_trigger_return_row;
@@ -202,6 +204,7 @@ pub mod explain_analyze_in_dml;
 pub mod extension_no_if_not_exists;
 pub mod extract_on_indexable;
 pub mod extract_unknown_field;
+pub mod constraint_unknown_column;
 pub mod fk_target_not_unique;
 pub mod fk_unknown_column;
 pub mod for_update_aggregate;
@@ -668,6 +671,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(using_clause_columns::Rule),
     Box::new(int_range::Rule),
     Box::new(fk_unknown_column::Rule),
+    Box::new(constraint_unknown_column::Rule),
     Box::new(drop_column_fk::Rule),
     Box::new(comment_on_unknown::Rule),
     Box::new(alter_column_type::Rule),
@@ -832,5 +836,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(insert_unknown_column::Rule),
     Box::new(returning_unknown_column::Rule),
     Box::new(dml_where_unknown_column::Rule),
+    Box::new(function_arg_validation::Rule),
+    Box::new(empty_expression_paren::Rule),
   ]
 }

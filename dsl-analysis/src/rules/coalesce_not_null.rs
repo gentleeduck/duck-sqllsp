@@ -40,9 +40,7 @@ impl LintRule for Rule {
     let alias_lc = target.alias.as_deref().map(|s| s.to_ascii_lowercase());
     let table_name_lc = target.name.to_ascii_lowercase();
 
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let raw = &source[start..end];
+    let (start, raw) = crate::stmt_body(stmt, source);
     let cleaned = crate::textutil::strip_noise_full(raw);
     let lower = cleaned.to_ascii_lowercase();
     let lb = lower.as_bytes();

@@ -19,10 +19,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     for kw in ["ROLLUP", "CUBE"] {
       let needle = format!("{kw}(");
       let mut from = 0usize;
@@ -46,7 +43,7 @@ impl LintRule for Rule {
             code: "sql215",
             severity: Severity::Hint,
             message: format!("`{kw}({})` with single grouping element -- emits one extra all-null row only; prefer GROUPING SETS or plain GROUP BY", inner.trim()),
-            range: text_size::TextRange::new(((start + at) as u32).into(), ((start + close + 1) as u32).into()),
+            range: crate::range_at(start + at, start + close + 1),
           });
         }
         from = close + 1;

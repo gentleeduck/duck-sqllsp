@@ -18,9 +18,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (start, body) = crate::stmt_body(stmt, source);
     let bytes = body.as_bytes();
     // Look for "tok1 = tok2 = tok3" pattern at top paren depth.
     let mut i = 0usize;
@@ -85,7 +83,7 @@ impl LintRule for Rule {
               message:
                 "Chained `=` -- SQL doesn't chain comparisons; this parses as `(a=b)=c` -- rewrite as `a = b AND b = c`"
                   .into(),
-              range: text_size::TextRange::new(((start + s) as u32).into(), ((start + e) as u32).into()),
+              range: crate::range_at(start + s, start + e),
             });
             i = e;
             continue;

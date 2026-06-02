@@ -18,10 +18,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let bytes = body.as_bytes();
     let mut from = 0usize;
     while let Some(rel) = upper[from..].find(" IN ") {
@@ -40,7 +37,7 @@ impl LintRule for Rule {
           severity: Severity::Error,
           message: "Empty `IN ()` list -- PG 42601 at parse; guard for empty arrays or use `IN (NULL)` placeholder"
             .into(),
-          range: text_size::TextRange::new(((start + open) as u32).into(), ((start + close + 1) as u32).into()),
+          range: crate::range_at(start + open, start + close + 1),
         });
       }
       from = close + 1;

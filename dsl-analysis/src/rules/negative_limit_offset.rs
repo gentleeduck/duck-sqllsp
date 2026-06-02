@@ -16,12 +16,9 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     for kw in &["LIMIT", "OFFSET"] {
-      if let Some(idx) = find_word(&upper, kw) {
+      if let Some(idx) = crate::textutil::find_word(&upper, kw) {
         let after = idx + kw.len();
         let ws = body[after..].len() - body[after..].trim_start().len();
         let num_start = after + ws;
@@ -39,31 +36,11 @@ impl LintRule for Rule {
             code: "sql076",
             severity: Severity::Error,
             message: format!("{kw} cannot be negative"),
-            range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+            range: crate::range_at(abs_start, abs_end),
           });
           return;
         }
       }
     }
   }
-}
-
-fn find_word(haystack: &str, needle: &str) -> Option<usize> {
-  let bytes = haystack.as_bytes();
-  let nb = needle.as_bytes();
-  let mut i = 0;
-  while i + nb.len() <= bytes.len() {
-    if &bytes[i..i + nb.len()] == nb {
-      let prev_ok = i == 0 || !is_word(bytes[i - 1] as char);
-      let next_ok = i + nb.len() == bytes.len() || !is_word(bytes[i + nb.len()] as char);
-      if prev_ok && next_ok {
-        return Some(i);
-      }
-    }
-    i += 1;
-  }
-  None
-}
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
 }

@@ -9,6 +9,7 @@
 //! doesn't fight users who deliberately spelled the table name.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -35,9 +36,7 @@ impl LintRule for Rule {
     // Limit the search to the statement body so we don't false-fire
     // on neighbouring statements that legitimately use the bare
     // name.
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (_start, body) = crate::stmt_body(stmt, source);
 
     // Skip non-DML statements; CREATE/ALTER reference the bare name
     // on purpose.
@@ -83,14 +82,8 @@ fn find_qualified_uses(body: &str, table: &str) -> Vec<(usize, usize)> {
   out
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}
 
 fn shift_range(stmt: text_size::TextRange, rel_start: usize, rel_end: usize) -> text_size::TextRange {
-  let base: u32 = stmt.start().into();
-  text_size::TextRange::new(
-    text_size::TextSize::from(base + rel_start as u32),
-    text_size::TextSize::from(base + rel_end as u32),
-  )
+  let base: usize = u32::from(stmt.start()) as usize;
+  crate::range_at(base + rel_start, base + rel_end)
 }

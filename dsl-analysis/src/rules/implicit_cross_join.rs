@@ -34,8 +34,7 @@ impl LintRule for Rule {
     }
     // Skip LATERAL forms explicitly -- they're correlated joins, not
     // cross joins.
-    let stmt_start: usize = u32::from(stmt.range.start()) as usize;
-    let stmt_end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
+    let (stmt_start, stmt_end) = crate::stmt_bounds(stmt, source);
     let stmt_upper_for_lateral = source[stmt_start..stmt_end].to_ascii_uppercase();
     if stmt_upper_for_lateral.contains("LATERAL") {
       return;
@@ -74,15 +73,14 @@ impl LintRule for Rule {
     if covered < s.from.len() {
       let _ = names; // kept for future richer message
       // Narrow to the FROM keyword in the source.
-      let stmt_start: usize = u32::from(stmt.range.start()) as usize;
-      let stmt_end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
+      let (stmt_start, stmt_end) = crate::stmt_bounds(stmt, source);
       let upper = source[stmt_start..stmt_end].to_ascii_uppercase();
       let range = upper
         .find(" FROM ")
         .map(|r| {
           let abs_start = stmt_start + r + 1;
           let abs_end = abs_start + 4;
-          text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into())
+          crate::range_at(abs_start, abs_end)
         })
         .unwrap_or(stmt.range);
       out.push(Diagnostic {

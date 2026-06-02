@@ -23,10 +23,7 @@ impl LintRule for Rule {
     let StatementKind::CreateTable(ct) = &stmt.kind else {
       return;
     };
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     if upper.contains("PRIMARY KEY") {
       return;
     }
@@ -68,10 +65,7 @@ fn find_table_name_range(body: &str, body_offset: usize, name: &str) -> Option<t
         e += 1;
       }
       if body[n_start..e].eq_ignore_ascii_case(name) {
-        return Some(text_size::TextRange::new(
-          ((body_offset + n_start) as u32).into(),
-          ((body_offset + e) as u32).into(),
-        ));
+        return Some(crate::range_at(body_offset + n_start, body_offset + e));
       }
     }
   }

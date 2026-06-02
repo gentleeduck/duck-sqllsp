@@ -17,8 +17,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
+    let (start, end) = crate::stmt_bounds(stmt, source);
     // Don't strip noise here: the rule's job is to inspect the
     // string literal AFTER `IS`, and our stripper turns `''` into
     // spaces (which then look like a missing-empty-string).
@@ -55,7 +54,7 @@ impl LintRule for Rule {
         code: "sql091",
         severity: Severity::Hint,
         message: "empty COMMENT -- either delete the statement or fill in the description".into(),
-        range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+        range: crate::range_at(abs_start, abs_end),
       });
     }
   }

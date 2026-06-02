@@ -33,9 +33,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (start, body) = crate::stmt_body(stmt, source);
     let lower = body.to_ascii_lowercase();
     let upper = body.to_ascii_uppercase();
     for &fn_name in ORDER_DEPENDENT {
@@ -81,7 +79,7 @@ impl LintRule for Rule {
             "`{}` OVER () without ORDER BY -- result is non-deterministic, depends on plan choice",
             fn_name.trim_end_matches('('),
           ),
-          range: text_size::TextRange::new(((start + at) as u32).into(), ((start + win_close + 1) as u32).into()),
+          range: crate::range_at(start + at, start + win_close + 1),
         });
         from = win_close + 1;
       }

@@ -20,10 +20,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let Some(v_at) = upper.find("VALUES") else { return };
     // boundary
     if v_at > 0 {
@@ -72,7 +69,7 @@ impl LintRule for Rule {
           code: "sql216",
           severity: Severity::Error,
           message: format!("VALUES row has {w} columns; first row has {first_w} -- all VALUES rows must match width"),
-          range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+          range: crate::range_at(abs_s, abs_e),
         });
       }
     }

@@ -21,8 +21,7 @@ impl LintRule for Rule {
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let StatementKind::CreateTable(ct) = &stmt.kind else { return };
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let _ = source;
+    let (start, _) = crate::stmt_bounds(stmt, source);
     for col in &ct.columns {
       let ty = col.type_name.to_ascii_uppercase();
       let is_serial = matches!(ty.as_str(), "SERIAL" | "BIGSERIAL" | "SMALLSERIAL" | "SERIAL2" | "SERIAL4" | "SERIAL8");
@@ -43,7 +42,7 @@ impl LintRule for Rule {
             _ => "INTEGER",
           },
         ),
-        range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+        range: crate::range_at(abs_s, abs_e),
       });
     }
   }

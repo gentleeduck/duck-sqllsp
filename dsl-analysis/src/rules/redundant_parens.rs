@@ -5,6 +5,7 @@
 //! grouping; this rule only flags the single-condition case.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -23,10 +24,7 @@ impl LintRule for Rule {
     if !matches!(stmt.kind, StatementKind::Select(_) | StatementKind::Update(_) | StatementKind::Delete(_)) {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (_start, body, upper) = crate::stmt_body_upper(stmt, source);
     let bytes = body.as_bytes();
     let n = bytes.len();
 
@@ -150,6 +148,3 @@ fn has_top_level_and_or(s: &str) -> bool {
   false
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}

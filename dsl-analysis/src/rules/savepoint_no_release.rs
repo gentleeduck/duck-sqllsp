@@ -6,6 +6,7 @@
 //! name`. Inter-file flows are out of scope.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -21,13 +22,11 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let raw = &source[start..end];
+    let (start, raw) = crate::stmt_body(stmt, source);
     let body_owned = strip_line_comments_keep_offsets(raw);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
-    if !contains_word(&upper, "SAVEPOINT") {
+    if !crate::textutil::contains_word(&upper, "SAVEPOINT") {
       return;
     }
 
@@ -64,7 +63,7 @@ impl LintRule for Rule {
               code: "sql062",
               severity: Severity::Hint,
               message: format!("SAVEPOINT `{name}` is never released or rolled back to in this buffer"),
-              range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+              range: crate::range_at(abs_start, abs_end),
             });
             return;
           }
@@ -75,9 +74,6 @@ impl LintRule for Rule {
   }
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}
 
 fn savepoint_name(upper: &str, original: &str) -> Option<String> {
   let idx = upper.find("SAVEPOINT")?;
@@ -109,24 +105,6 @@ fn matches_rollback_to(upper: &str, name: &str) -> bool {
   let needle2 = format!("ROLLBACK TO {}", name.to_ascii_uppercase());
   upper.contains(&needle1) || upper.contains(&needle2)
 }
-
-fn contains_word(haystack: &str, needle: &str) -> bool {
-  let bytes = haystack.as_bytes();
-  let n_bytes = needle.as_bytes();
-  let mut i = 0;
-  while i + n_bytes.len() <= bytes.len() {
-    if &bytes[i..i + n_bytes.len()] == n_bytes {
-      let prev_ok = i == 0 || !is_word(bytes[i - 1] as char);
-      let next_ok = i + n_bytes.len() == bytes.len() || !is_word(bytes[i + n_bytes.len()] as char);
-      if prev_ok && next_ok {
-        return true;
-      }
-    }
-    i += 1;
-  }
-  false
-}
-
 fn strip_line_comments_keep_offsets(s: &str) -> String {
   let mut out = String::with_capacity(s.len());
   let bytes = s.as_bytes();

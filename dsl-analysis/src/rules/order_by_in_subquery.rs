@@ -19,9 +19,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (start, body) = crate::stmt_body(stmt, source);
     let bytes = body.as_bytes();
     let mut i = 0usize;
     while i < bytes.len() {
@@ -56,7 +54,7 @@ impl LintRule for Rule {
             code: "sql252",
             severity: Severity::Hint,
             message: "ORDER BY in subquery without LIMIT/OFFSET -- outer query may reorder, sort is wasted; move ORDER BY to outer or add LIMIT".into(),
-            range: text_size::TextRange::new(((start + open) as u32).into(), ((start + close + 1) as u32).into()),
+            range: crate::range_at(start + open, start + close + 1),
           });
         }
       }

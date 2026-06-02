@@ -104,8 +104,7 @@ impl LintRule for Rule {
     let StatementKind::CreateTable(ct) = &stmt.kind else {
       return;
     };
-    let stmt_start: usize = u32::from(stmt.range.start()) as usize;
-    let stmt_end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
+    let (stmt_start, stmt_end) = crate::stmt_bounds(stmt, source);
     let body = &source[stmt_start..stmt_end];
     if RESERVED.contains(&ct.table.name.to_ascii_uppercase().as_str()) {
       let range = if u32::from(ct.table.range.len()) > 0 {
@@ -156,7 +155,7 @@ fn find_after(prefix: &str, body: &str, body_offset: usize, name: &str) -> Optio
     e += 1;
   }
   if body[n_start..e].eq_ignore_ascii_case(name) {
-    Some(text_size::TextRange::new(((body_offset + n_start) as u32).into(), ((body_offset + e) as u32).into()))
+    Some(crate::range_at(body_offset + n_start, body_offset + e))
   } else {
     None
   }
@@ -198,7 +197,7 @@ fn find_column_name(body: &str, body_offset: usize, name: &str) -> Option<text_s
     }
     let word = &body[s..i];
     if word.eq_ignore_ascii_case(name) {
-      return Some(text_size::TextRange::new(((body_offset + s) as u32).into(), ((body_offset + i) as u32).into()));
+      return Some(crate::range_at(body_offset + s, body_offset + i));
     }
     // Skip to next top-level `,`.
     let mut depth = 0i32;

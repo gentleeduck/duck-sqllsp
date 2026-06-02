@@ -23,10 +23,7 @@ impl LintRule for Rule {
     if !matches!(&stmt.kind, StatementKind::Select(_) | StatementKind::Unknown { .. }) {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let Some(into_at) = upper.find(" INTO ") else { return };
     let after = into_at + " INTO ".len();
     let rest = body[after..].trim_start();
@@ -58,7 +55,7 @@ impl LintRule for Rule {
       message: format!(
         "SELECT INTO TEMP `{bare}` shadows the real catalog table for this session -- subsequent queries on `{bare}` will hit the temp; rename the temp"
       ),
-      range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+      range: crate::range_at(abs_s, abs_e),
     });
   }
 }

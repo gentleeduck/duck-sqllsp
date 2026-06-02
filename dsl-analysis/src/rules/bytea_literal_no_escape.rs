@@ -19,9 +19,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (start, body) = crate::stmt_body(stmt, source);
     let bytes = body.as_bytes();
     let mut i = 0usize;
     while i + 4 <= bytes.len() {
@@ -59,7 +57,7 @@ impl LintRule for Rule {
             code: "sql336",
             severity: Severity::Warning,
             message: "bytea hex literal needs the `E''` escape prefix (or `::bytea` cast) -- standard strings treat `\\` as literal".into(),
-            range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+            range: crate::range_at(abs_s, abs_e),
           });
         }
         i = s_end + 1;

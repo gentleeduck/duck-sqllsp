@@ -6,6 +6,7 @@
 //! edit time.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -24,10 +25,7 @@ impl LintRule for Rule {
     if !matches!(stmt.kind, StatementKind::Unknown { .. }) {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     if !upper.contains("CREATE") || !upper.contains("FUNCTION") {
       return;
     }
@@ -58,7 +56,7 @@ impl LintRule for Rule {
             code: "sql036",
             severity: Severity::Warning,
             message: format!("RAISE format has {placeholders} `%` placeholder(s) but {args} argument(s)"),
-            range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+            range: crate::range_at(abs_start, abs_end),
           });
         }
       }
@@ -169,6 +167,3 @@ fn dollar_body(text: &str) -> Option<&str> {
   Some(&text[after..after + end_rel])
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}

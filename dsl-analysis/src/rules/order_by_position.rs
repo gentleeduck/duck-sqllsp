@@ -2,6 +2,7 @@
 //! changing the SELECT list silently changes the sort.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -17,9 +18,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let raw = &source[start..end];
+    let (start, raw) = crate::stmt_body(stmt, source);
     let body_owned = crate::textutil::strip_noise_full(raw);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
@@ -45,7 +44,7 @@ impl LintRule for Rule {
               code: "sql099",
               severity: Severity::Hint,
               message: "positional ORDER BY -- use column names so the sort survives SELECT-list changes".into(),
-              range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+              range: crate::range_at(abs_start, abs_end),
             });
             return;
           }
@@ -56,6 +55,3 @@ impl LintRule for Rule {
   }
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}

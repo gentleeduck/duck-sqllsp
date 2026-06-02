@@ -52,10 +52,7 @@ impl LintRule for Rule {
     if !matches!(&stmt.kind, StatementKind::CreateTable(_)) {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let mut from = 0usize;
     while let Some(rel) = upper[from..].find("GENERATED ALWAYS AS") {
       let at = from + rel;
@@ -86,10 +83,7 @@ impl LintRule for Rule {
             message: format!(
               "GENERATED ALWAYS AS (...) STORED calls volatile `{v}()` -- PG raises 42P17, expression must be IMMUTABLE"
             ),
-            range: text_size::TextRange::new(
-              (start as u32 + at as u32).into(),
-              (start as u32 + close as u32 + 1).into(),
-            ),
+            range: crate::range_at(start + at, start + close + 1),
           });
           break;
         }

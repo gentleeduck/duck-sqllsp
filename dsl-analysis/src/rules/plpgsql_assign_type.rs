@@ -32,9 +32,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (start, body) = crate::stmt_body(stmt, source);
     // Only fire inside a dollar-quoted body (PL/pgSQL or SQL fn).
     let dollar_start = match body.find("$$") {
       Some(at) => at + 2,
@@ -93,7 +91,7 @@ impl LintRule for Rule {
                 name,
                 decl_type
               ),
-              range: text_size::TextRange::new((abs_lit_s as u32).into(), (abs_lit_e as u32).into()),
+              range: crate::range_at(abs_lit_s, abs_lit_e),
             });
             let _ = abs_s;
           }

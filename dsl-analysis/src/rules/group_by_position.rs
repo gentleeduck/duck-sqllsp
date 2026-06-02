@@ -3,6 +3,7 @@
 //! the column expression (or its alias) instead.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -21,9 +22,7 @@ impl LintRule for Rule {
     if !matches!(stmt.kind, StatementKind::Select(_)) {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (start, body) = crate::stmt_body(stmt, source);
     let stripped = strip_quoted_and_comments(body);
     let upper = stripped.to_ascii_uppercase();
     let bytes = upper.as_bytes();
@@ -58,7 +57,7 @@ impl LintRule for Rule {
           message: format!(
             "GROUP BY position `{t}` -- prefer the column name/expression so projection edits stay safe"
           ),
-          range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+          range: crate::range_at(abs_start, abs_end),
         });
         return;
       }
@@ -190,6 +189,3 @@ fn strip_quoted_and_comments(s: &str) -> String {
   out
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}

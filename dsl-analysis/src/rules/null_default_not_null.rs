@@ -22,10 +22,7 @@ impl LintRule for Rule {
     let StatementKind::CreateTable(_) = &stmt.kind else {
       return;
     };
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, _body, upper) = crate::stmt_body_upper(stmt, source);
     // Walk each `(` paren-list entry. Look for both `NOT NULL` and
     // `DEFAULT NULL` on the same entry.
     let bytes = upper.as_bytes();
@@ -34,10 +31,10 @@ impl LintRule for Rule {
     let Some(close) = match_paren(bytes, open) else { return };
     let body_text = &upper[open + 1..close];
     for (entry_off, entry) in split_top_level_commas_with_pos(body_text) {
-      let has_not_null = contains_word(entry, "NOT NULL");
+      let has_not_null = crate::textutil::contains_word(entry, "NOT NULL");
       // Also catch `DEFAULT CAST(NULL AS ...)` and `DEFAULT (NULL)`
       // -- both behave the same as `DEFAULT NULL`.
-      let has_default_null = contains_word(entry, "DEFAULT NULL")
+      let has_default_null = crate::textutil::contains_word(entry, "DEFAULT NULL")
         || contains_substring_ci(entry, "DEFAULT CAST(NULL")
         || contains_substring_ci(entry, "DEFAULT (NULL)")
         || contains_substring_ci(entry, "DEFAULT (NULL ");
@@ -52,7 +49,7 @@ impl LintRule for Rule {
           code: "sql069",
           severity: Severity::Error,
           message: "column is NOT NULL but DEFAULT NULL -- the default would always violate the constraint".into(),
-          range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+          range: crate::range_at(abs_start, abs_end),
         });
         return;
       }
@@ -114,28 +111,6 @@ fn match_paren(bytes: &[u8], open: usize) -> Option<usize> {
   }
   None
 }
-
-fn contains_word(haystack: &str, needle: &str) -> bool {
-  let h = haystack.as_bytes();
-  let n = needle.as_bytes();
-  let mut i = 0;
-  while i + n.len() <= h.len() {
-    if h[i..i + n.len()].eq_ignore_ascii_case(n) {
-      let prev_ok = i == 0 || !is_word(h[i - 1] as char);
-      let next_ok = i + n.len() == h.len() || !is_word(h[i + n.len()] as char);
-      if prev_ok && next_ok {
-        return true;
-      }
-    }
-    i += 1;
-  }
-  false
-}
-
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}
-
 /// Case-insensitive substring search (no word-boundary requirement,
 /// since the haystack is already uppercased by the caller).
 fn contains_substring_ci(haystack: &str, needle: &str) -> bool {

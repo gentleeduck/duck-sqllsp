@@ -26,10 +26,7 @@ impl LintRule for Rule {
     if !matches!(&stmt.kind, StatementKind::Select(_) | StatementKind::Unknown { .. }) {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let Some(into_at) = upper.find(" INTO ") else { return };
     // Only fire when the INTO is owned by a SELECT, not an INSERT or
     // MERGE. For an Unknown stmt that wraps a CREATE FUNCTION body,
@@ -78,13 +75,13 @@ impl LintRule for Rule {
       message: format!(
         "SELECT INTO `{bare}` -- DDL form creates a NEW table; `{bare}` already exists in catalog, PG raises 42P07"
       ),
-      range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+      range: crate::range_at(abs_s, abs_e),
     });
   }
 }
 
 fn inside_dollar_block(source: &str, stmt: &Statement) -> bool {
-  let start: usize = u32::from(stmt.range.start()) as usize;
+  let (start, _) = crate::stmt_bounds(stmt, source);
   let prelude = &source[..start];
   let cnt = prelude.matches("$$").count();
   cnt % 2 == 1

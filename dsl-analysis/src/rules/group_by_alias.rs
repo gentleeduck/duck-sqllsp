@@ -4,6 +4,7 @@
 //! reject it. Hint to use the underlying column expression.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -19,10 +20,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let Some(sel_at) = upper.find("SELECT ") else { return };
     let select_start = sel_at + 7;
     // Find the FROM keyword at top-level paren depth so we don't pick
@@ -75,7 +73,7 @@ impl LintRule for Rule {
           code: "sql337",
           severity: Severity::Hint,
           message: format!("GROUP BY references SELECT-list alias `{tok}` -- SQL-standard portable code groups by the underlying expression"),
-          range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+          range: crate::range_at(abs_s, abs_e),
         });
         return;
       }
@@ -113,9 +111,6 @@ fn find_kw_top_level(s: &str, kw: &str) -> Option<usize> {
   None
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}
 
 fn split_top_level_commas(s: &str) -> Vec<&str> {
   let bytes = s.as_bytes();

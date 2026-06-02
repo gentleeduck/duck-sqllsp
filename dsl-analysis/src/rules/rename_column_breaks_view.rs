@@ -6,6 +6,7 @@
 //! next pg_dump / DEFINITION refresh.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -21,10 +22,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let Some(at) = upper.find("RENAME COLUMN ") else { return };
     // Need: ALTER TABLE <t> RENAME COLUMN <old> TO <new>
     let Some(alter_at) = upper.find("ALTER TABLE") else { return };
@@ -64,7 +62,7 @@ impl LintRule for Rule {
         old_col,
         affected.join(", ")
       ),
-      range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+      range: crate::range_at(abs_s, abs_e),
     });
   }
 }
@@ -125,6 +123,3 @@ fn word_contains(haystack: &str, needle: &str) -> bool {
   false
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}

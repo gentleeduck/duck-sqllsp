@@ -20,10 +20,7 @@ impl LintRule for Rule {
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let StatementKind::CreateTable(ct) = &stmt.kind else { return };
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let needle = format!("REFERENCES {}", ct.table.name.to_ascii_uppercase());
     let alt = format!("REFERENCES \"{}\"", ct.table.name);
     let mut from = 0usize;
@@ -41,7 +38,7 @@ impl LintRule for Rule {
           "Self-referential FK to `{}` without DEFERRABLE -- parent rows must exist before children; add `DEFERRABLE INITIALLY DEFERRED` to insert chains in any order",
           ct.table.name,
         ),
-        range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+        range: crate::range_at(abs_s, abs_e),
       });
       from = at + needle.len();
     }

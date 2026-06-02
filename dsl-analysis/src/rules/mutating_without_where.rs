@@ -17,8 +17,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let stmt_start: usize = u32::from(stmt.range.start()) as usize;
-    let stmt_end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
+    let (stmt_start, stmt_end) = crate::stmt_bounds(stmt, source);
     let body = &source[stmt_start..stmt_end];
     let upper = body.to_ascii_uppercase();
     match &stmt.kind {
@@ -49,5 +48,5 @@ fn first_word_range(stmt_start: usize, upper: &str, needle: &str) -> Option<text
   let rel = upper.find(needle)?;
   let abs_start = stmt_start + rel;
   let abs_end = abs_start + needle.len();
-  Some(text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()))
+  Some(crate::range_at(abs_start, abs_end))
 }

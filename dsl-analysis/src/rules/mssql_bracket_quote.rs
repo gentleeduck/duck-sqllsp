@@ -19,9 +19,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let raw = &source[start..end];
+    let (start, raw) = crate::stmt_body(stmt, source);
     let body_owned = strip_comments(raw);
     let body = body_owned.as_str();
     let bytes = body.as_bytes();
@@ -71,7 +69,7 @@ impl LintRule for Rule {
         code: "sql317",
         severity: Severity::Error,
         message: format!("`[{inside}]` is MSSQL/T-SQL identifier quoting -- PG uses `\"{inside}\"`"),
-        range: text_size::TextRange::new(((start + open) as u32).into(), ((start + k + 1) as u32).into()),
+        range: crate::range_at(start + open, start + k + 1),
       });
       i = k + 1;
     }

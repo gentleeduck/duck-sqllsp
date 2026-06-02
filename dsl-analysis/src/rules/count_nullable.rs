@@ -26,10 +26,7 @@ impl LintRule for Rule {
     let target = &sel.from[0];
     let Some(t) = catalog.find_table(target.schema.as_deref(), &target.name) else { return };
 
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let mut from = 0usize;
     while let Some(rel) = upper[from..].find("COUNT(") {
       let after = from + rel + "COUNT(".len();
@@ -72,7 +69,7 @@ impl LintRule for Rule {
           "COUNT(`{}`) skips NULL rows -- column is nullable. Use COUNT(*) or COUNT(`{}`) FILTER (WHERE `{}` IS NOT NULL)",
           col.name, col.name, col.name
         ),
-        range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+        range: crate::range_at(abs_s, abs_e),
       });
     }
   }

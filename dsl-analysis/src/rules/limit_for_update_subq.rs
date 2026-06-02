@@ -21,10 +21,7 @@ impl LintRule for Rule {
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let StatementKind::Select(_) = &stmt.kind else { return };
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     if !upper.contains("FOR UPDATE") && !upper.contains("FOR SHARE") {
       return;
     }
@@ -44,7 +41,7 @@ impl LintRule for Rule {
               code: "sql222",
               severity: Severity::Warning,
               message: "Outer FOR UPDATE locks every row of inner subquery (not just LIMIT N) -- move FOR UPDATE inside subquery for correct row-locking".into(),
-              range: text_size::TextRange::new(((start + open) as u32).into(), ((start + close + 1) as u32).into()),
+              range: crate::range_at(start + open, start + close + 1),
             });
           }
         }

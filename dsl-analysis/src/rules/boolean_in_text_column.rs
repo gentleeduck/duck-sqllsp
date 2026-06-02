@@ -24,10 +24,7 @@ impl LintRule for Rule {
     if ins.columns.is_empty() {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     // Find `VALUES (` and split the first tuple by top-level commas.
     let Some(values_at) = upper.find("VALUES") else { return };
     let bytes = body.as_bytes();
@@ -89,7 +86,7 @@ impl LintRule for Rule {
           "`{}` is text being inserted into boolean column `{}` -- drop the quotes or add `::boolean`",
           v, col.name
         ),
-        range: text_size::TextRange::new((lit_start as u32).into(), (lit_end as u32).into()),
+        range: crate::range_at(lit_start, lit_end),
       });
       return;
     }

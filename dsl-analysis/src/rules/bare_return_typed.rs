@@ -6,6 +6,7 @@
 //! procedures or void functions; everywhere else it's a runtime trap.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -24,10 +25,7 @@ impl LintRule for Rule {
     if !matches!(stmt.kind, StatementKind::Unknown { .. }) {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
 
     if !upper.contains("CREATE") || !upper.contains("FUNCTION") {
       return;
@@ -68,7 +66,7 @@ impl LintRule for Rule {
               code: "sql032",
               severity: Severity::Error,
               message: "bare `RETURN;` in non-void function -- supply a return value".into(),
-              range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+              range: crate::range_at(abs_start, abs_end),
             });
             return;
           }
@@ -110,6 +108,3 @@ fn strip_comments(s: &str) -> String {
   out
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}

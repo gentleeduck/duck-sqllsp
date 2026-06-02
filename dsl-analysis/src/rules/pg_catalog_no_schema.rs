@@ -37,9 +37,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (start, body) = crate::stmt_body(stmt, source);
     let lower = body.to_ascii_lowercase();
     let bytes = lower.as_bytes();
     for rel in SYS_REL {
@@ -75,7 +73,7 @@ impl LintRule for Rule {
           message: format!(
             "`{rel}` referenced without `pg_catalog.` prefix -- search_path can shadow system catalogs (CVE-2018-1058)"
           ),
-          range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+          range: crate::range_at(abs_s, abs_e),
         });
         from = after;
       }

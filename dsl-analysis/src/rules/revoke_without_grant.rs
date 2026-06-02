@@ -21,8 +21,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
+    let (start, end) = crate::stmt_bounds(stmt, source);
     let body = source[start..end].trim_start();
     let upper = body.to_ascii_uppercase();
     if !upper.starts_with("REVOKE") {
@@ -38,7 +37,7 @@ impl LintRule for Rule {
       code: "sql328",
       severity: Severity::Hint,
       message: "REVOKE with no matching GRANT in this buffer -- the prior state may not hold".into(),
-      range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+      range: crate::range_at(abs_s, abs_e),
     });
   }
 }

@@ -2,6 +2,7 @@
 //! ends up named `generate_series` which makes queries hard to read.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -17,9 +18,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let raw = &source[start..end];
+    let (start, raw) = crate::stmt_body(stmt, source);
     // Strip line+block comments so a leading `-- header` comment
     // doesn't mask the real CREATE/ALTER TABLE anchor.
     let raw_clean_owned = strip_dollar_and_noise(raw);
@@ -142,7 +141,7 @@ impl LintRule for Rule {
               code: "sql112",
               severity: Severity::Hint,
               message: "generate_series in FROM without alias -- queries are clearer with `AS series(n)`".into(),
-              range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+              range: crate::range_at(abs_start, abs_end),
             });
             return;
           }
@@ -155,9 +154,6 @@ impl LintRule for Rule {
   }
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}
 
 fn strip_dollar_and_noise(s: &str) -> String {
   let mut out: Vec<u8> = s.as_bytes().to_vec();

@@ -25,10 +25,7 @@ impl LintRule for Rule {
     }
     let Some(t) = catalog.find_table(ins.table.schema.as_deref(), &ins.table.name) else { return };
 
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let Some(values_at) = upper.find("VALUES") else { return };
     let bytes = body.as_bytes();
     let n = bytes.len();
@@ -68,7 +65,7 @@ impl LintRule for Rule {
           "string literal exceeds `{}` declared length {} (PG raises 22001 in strict mode)",
           col.name, max
         ),
-        range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+        range: crate::range_at(abs_s, abs_e),
       });
     }
   }

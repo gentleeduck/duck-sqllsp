@@ -3,6 +3,7 @@
 //! variable assignment (which only works inside `$$ ... $$`).
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -24,9 +25,7 @@ impl LintRule for Rule {
     if !matches!(stmt.kind, StatementKind::Select(_)) {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let raw = &source[start..end];
+    let (start, raw) = crate::stmt_body(stmt, source);
     let body_owned = crate::textutil::strip_noise_full(raw);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
@@ -77,10 +76,7 @@ impl LintRule for Rule {
             code: "sql118",
             severity: Severity::Hint,
             message: "top-level `SELECT INTO` creates a new table -- inside PL/pgSQL it assigns variables, but at the top level it's DDL".into(),
-            range: text_size::TextRange::new(
-                (abs_start as u32).into(),
-                (abs_end as u32).into(),
-            ),
+            range: crate::range_at(abs_start, abs_end),
         });
   }
 }
@@ -98,9 +94,6 @@ fn is_keyword_at(upper: &str, bytes: &[u8], i: usize, word: &str) -> bool {
   prev_ok && next_ok
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}
 
 /// Count `BEGIN` minus `END` word tokens. Positive means we're inside
 /// an unmatched BEGIN ... END block (PL/pgSQL function body or a

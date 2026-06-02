@@ -39,10 +39,7 @@ impl LintRule for Rule {
     if !matches!(stmt.kind, StatementKind::Unknown { .. }) {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     if !upper.contains("CREATE") || !upper.contains("FUNCTION") {
       return;
     }
@@ -81,7 +78,7 @@ impl LintRule for Rule {
               "IMMUTABLE function calls VOLATILE builtin `{}` -- mark function VOLATILE or pick a pure alternative",
               tok.to_ascii_lowercase()
             ),
-            range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+            range: crate::range_at(abs_start, abs_end),
           });
         }
       } else {

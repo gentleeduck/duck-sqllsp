@@ -2,6 +2,7 @@
 //! lacks the `RECURSIVE` keyword. PG will refuse to execute it.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -17,10 +18,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let bytes = body.as_bytes();
     let n = bytes.len();
     // Need `WITH ` at start (modulo whitespace) and NO `RECURSIVE`
@@ -88,7 +86,7 @@ impl LintRule for Rule {
     let inner = &body[open + 1..j];
     let inner_up = inner.to_ascii_uppercase();
     // Look for `<name>` as a standalone word in the body.
-    if !contains_word(&inner_up, &name.to_ascii_uppercase()) {
+    if !crate::textutil::contains_word(&inner_up, &name.to_ascii_uppercase()) {
       return;
     }
     let abs_start = start + leading_ws;
@@ -99,29 +97,7 @@ impl LintRule for Rule {
       message: format!(
         "CTE `{name}` self-references inside its body but `WITH` lacks `RECURSIVE` -- PG will reject the query"
       ),
-      range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+      range: crate::range_at(abs_start, abs_end),
     });
   }
-}
-
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}
-
-fn contains_word(haystack: &str, needle: &str) -> bool {
-  let h = haystack.as_bytes();
-  let n = h.len();
-  let w = needle.len();
-  let mut i = 0;
-  while i + w <= n {
-    if &haystack[i..i + w] == needle {
-      let prev_ok = i == 0 || !is_word(h[i - 1] as char);
-      let next_ok = i + w == n || !is_word(h[i + w] as char);
-      if prev_ok && next_ok {
-        return true;
-      }
-    }
-    i += 1;
-  }
-  false
 }

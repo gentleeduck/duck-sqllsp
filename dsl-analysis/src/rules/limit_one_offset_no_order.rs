@@ -6,6 +6,7 @@
 //! position-sensitive so the missing ORDER BY is the bug.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -24,9 +25,7 @@ impl LintRule for Rule {
     let StatementKind::Select(_) = &stmt.kind else {
       return;
     };
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let raw = &source[start..end];
+    let (start, raw) = crate::stmt_body(stmt, source);
     let body_owned = crate::textutil::strip_noise_full(raw);
     let upper = body_owned.to_ascii_uppercase();
     if !upper.contains("LIMIT") || !upper.contains("OFFSET") {
@@ -70,7 +69,7 @@ impl LintRule for Rule {
       message: format!(
         "LIMIT with OFFSET {n} but no ORDER BY -- the skipped/returned row is non-deterministic; add ORDER BY or use ROW_NUMBER() OVER (ORDER BY ...)"
       ),
-      range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+      range: crate::range_at(abs_start, abs_end),
     });
   }
 }
@@ -98,6 +97,3 @@ fn find_word(hay: &str, needle: &str) -> Option<usize> {
   None
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}

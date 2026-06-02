@@ -3,6 +3,7 @@
 //! implicit transaction. Hint.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -21,7 +22,7 @@ impl LintRule for Rule {
     // Fire only when this stmt is the FIRST statement in the source
     // -- avoids emitting the same diagnostic for every nested
     // statement inside the txn block.
-    let start: usize = u32::from(stmt.range.start()) as usize;
+    let (start, _) = crate::stmt_bounds(stmt, source);
     let prefix = &source[..start];
     if !prefix.trim().is_empty() {
       return;
@@ -78,7 +79,7 @@ impl LintRule for Rule {
               severity: Severity::Hint,
               message: "transaction wraps a single statement -- per-statement implicit txn already handles atomicity"
                 .into(),
-              range: text_size::TextRange::new((begin_off as u32).into(), ((begin_off + 5) as u32).into()),
+              range: crate::range_at(begin_off, begin_off + 5),
             });
           }
           return;
@@ -122,6 +123,3 @@ fn strip_quoted_and_comments(s: &str) -> String {
   out
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}

@@ -19,10 +19,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let trim = upper.trim_start();
     let is_begin = trim.starts_with("BEGIN") && !trim.starts_with("BEGIN ATOMIC");
     let is_start = trim.starts_with("START TRANSACTION");
@@ -51,7 +48,7 @@ impl LintRule for Rule {
       message:
         "Nested BEGIN -- a transaction is already open; PG warns and ignores. For a rollback-only unit use SAVEPOINT"
           .into(),
-      range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+      range: crate::range_at(abs_s, abs_e),
     });
   }
 }

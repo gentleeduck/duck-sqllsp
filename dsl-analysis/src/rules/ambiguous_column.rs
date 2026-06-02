@@ -83,7 +83,7 @@ impl LintRule for Rule {
         }
         seen_tables.push(key);
         if let Some(t) = catalog.find_table(b.table.schema.as_deref(), &b.table.name)
-          && t.columns.iter().any(|c| c.name == name)
+          && t.columns.iter().any(|c| c.name.eq_ignore_ascii_case(&name))
         {
           hits.push(b.alias.clone());
         }
@@ -113,8 +113,7 @@ impl LintRule for Rule {
 
 /// Slice of `source` covered by `stmt.range`, clamped to source length.
 fn stmt_source<'a>(source: &'a str, stmt: &Statement) -> &'a str {
-  let start: usize = u32::from(stmt.range.start()) as usize;
-  let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
+  let (start, end) = crate::stmt_bounds(stmt, source);
   if start >= end || start >= source.len() {
     return "";
   }

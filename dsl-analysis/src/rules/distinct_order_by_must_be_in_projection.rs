@@ -29,9 +29,7 @@ impl LintRule for Rule {
     if s.projections.iter().any(|p| matches!(p, Projection::Star)) {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let raw = &source[start..end];
+    let (_start, raw) = crate::stmt_body(stmt, source);
     let cleaned = crate::textutil::strip_noise_full(raw);
     let upper = cleaned.to_ascii_uppercase();
     let ub = upper.as_bytes();

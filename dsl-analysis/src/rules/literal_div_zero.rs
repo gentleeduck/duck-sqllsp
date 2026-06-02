@@ -17,9 +17,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (start, body) = crate::stmt_body(stmt, source);
     let bytes = body.as_bytes();
     let mut i = 0usize;
     while i < bytes.len() {
@@ -56,7 +54,7 @@ impl LintRule for Rule {
               code: "sql278",
               severity: Severity::Error,
               message: format!("Literal {label} by zero `{op_char} {lit}` -- PG raises 22012 at runtime"),
-              range: text_size::TextRange::new(((start + i) as u32).into(), ((start + k) as u32).into()),
+              range: crate::range_at(start + i, start + k),
             });
           }
         }

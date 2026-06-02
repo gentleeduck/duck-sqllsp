@@ -30,7 +30,7 @@ impl LintRule for Rule {
     let raw_slice = &source[start as usize..end.min(source.len() as u32) as usize];
     // Strip comments + strings so a header comment like
     // `-- INSERT ... SELECT * FROM ...` doesn't fire.
-    let slice_owned = strip_noise(raw_slice);
+    let slice_owned = crate::textutil::strip_comments_only(raw_slice);
     let slice = slice_owned.as_str();
     let upper = slice.to_ascii_uppercase();
 
@@ -51,62 +51,9 @@ impl LintRule for Rule {
           message: "INSERT ... SELECT * is fragile -- a column added to the source silently \
                          misaligns the destination. List the source columns explicitly."
             .into(),
-          range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+          range: crate::range_at(abs_start, abs_end),
         });
       }
     }
   }
-}
-
-fn strip_noise(s: &str) -> String {
-  let mut out: Vec<u8> = s.as_bytes().to_vec();
-  let n = out.len();
-  let mut i = 0usize;
-  while i < n {
-    if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
-      while i < n && out[i] != b'\n' {
-        out[i] = b' ';
-        i += 1
-      }
-      continue;
-    }
-    if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
-      let mut depth = 1u32;
-      out[i] = b' ';
-      out[i + 1] = b' ';
-      i += 2;
-      while i + 1 < n && depth > 0 {
-        if out[i] == b'/' && out[i + 1] == b'*' {
-          depth += 1;
-          out[i] = b' ';
-          out[i + 1] = b' ';
-          i += 2;
-        } else if out[i] == b'*' && out[i + 1] == b'/' {
-          depth -= 1;
-          out[i] = b' ';
-          out[i + 1] = b' ';
-          i += 2;
-        } else {
-          out[i] = b' ';
-          i += 1;
-        }
-      }
-      continue;
-    }
-    if out[i] == b'\'' {
-      out[i] = b' ';
-      i += 1;
-      while i < n && out[i] != b'\'' {
-        out[i] = b' ';
-        i += 1
-      }
-      if i < n {
-        out[i] = b' ';
-        i += 1
-      }
-      continue;
-    }
-    i += 1;
-  }
-  String::from_utf8(out).unwrap_or_else(|_| s.to_string())
 }

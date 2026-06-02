@@ -26,9 +26,7 @@ impl LintRule for Rule {
     }
     let Some(t) = catalog.find_table(ins.table.schema.as_deref(), &ins.table.name) else { return };
 
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let raw = &source[start..end];
+    let (start, raw) = crate::stmt_body(stmt, source);
     let body_owned = crate::textutil::strip_noise_full(raw);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
@@ -75,7 +73,7 @@ impl LintRule for Rule {
           "literal `'{}'` not a valid UUID -- PG raises 22P02 at exec",
           lit.chars().take(60).collect::<String>(),
         ),
-        range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+        range: crate::range_at(abs_s, abs_e),
       });
     }
   }

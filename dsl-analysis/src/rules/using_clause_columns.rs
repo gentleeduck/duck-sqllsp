@@ -25,10 +25,7 @@ impl LintRule for Rule {
     }
     let Some(left_first) = catalog.find_table(sel.from[0].schema.as_deref(), &sel.from[0].name) else { return };
 
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
 
     // Build a cumulative set of column names visible on the LEFT side
     // of each JOIN: start with the first FROM table + every other FROM
@@ -99,7 +96,7 @@ impl LintRule for Rule {
           code: "sql187",
           severity: Severity::Error,
           message: format!("USING clause invalid: {detail}"),
-          range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+          range: crate::range_at(abs_s, abs_e),
         });
       }
       // After processing this JOIN, merge its right-side columns into

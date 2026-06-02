@@ -6,6 +6,7 @@
 //! boolean expressions in predicate position.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -23,9 +24,7 @@ impl LintRule for Rule {
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     // Scan original body bytes case-insensitively. We skip over
     // single-quoted strings so `'true'` doesn't trip the rule.
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (start, body) = crate::stmt_body(stmt, source);
     // Skip SET statements + DDL with key=value option lists (PROVIDER /
     // LOCALE / DETERMINISTIC for COLLATION; storage parameters for
     // tables; FDW OPTIONS etc). Strip comments first so a leading
@@ -121,7 +120,7 @@ impl LintRule for Rule {
           code: "sql054",
           severity: Severity::Hint,
           message: format!("redundant boolean comparison -- {}", advice),
-          range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+          range: crate::range_at(abs_start, abs_end),
         });
         return;
       }
@@ -162,9 +161,6 @@ fn strip_quoted_and_comments(s: &str) -> String {
   out
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}
 
 /// True if `s` contains `WITH (` or `OPTIONS (` as a whole keyword
 /// (i.e. preceded by whitespace / start, optionally with whitespace

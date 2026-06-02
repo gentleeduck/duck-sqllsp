@@ -22,10 +22,7 @@ impl LintRule for Rule {
     if !matches!(stmt.kind, StatementKind::Select(_)) {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, _body, upper) = crate::stmt_body_upper(stmt, source);
     // Only check the OUTERMOST SELECT projection. The previous text
     // scan over the whole body wrongly combined DISTINCT in one
     // subquery with an aggregate in another.
@@ -103,7 +100,7 @@ impl LintRule for Rule {
       code: "sql093",
       severity: Severity::Warning,
       message: "SELECT DISTINCT with an aggregate but no GROUP BY -- DISTINCT is redundant on collapsed rows".into(),
-      range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+      range: crate::range_at(abs_start, abs_end),
     });
   }
 }

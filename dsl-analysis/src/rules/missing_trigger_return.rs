@@ -10,6 +10,7 @@
 //! analysis (every IF/ELSE arm has a RETURN) comes in a follow-up.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -32,10 +33,7 @@ impl LintRule for Rule {
     if !matches!(stmt.kind, StatementKind::Unknown { .. }) {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
 
     if !upper.contains("CREATE") {
       return;
@@ -63,10 +61,10 @@ impl LintRule for Rule {
     // lands on the block that should have returned. Fall back to
     // the `$$` opener, then the whole stmt.
     let body_offset = source.find(body_text).unwrap_or(start);
-    let range = if let Some(begin_pos) = find_word(&body_upper, "BEGIN") {
+    let range = if let Some(begin_pos) = crate::textutil::find_word(&body_upper, "BEGIN") {
       let abs_start = body_offset + begin_pos;
       let abs_end = abs_start + 5;
-      text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into())
+      crate::range_at(abs_start, abs_end)
     } else {
       stmt.range
     };
@@ -79,24 +77,6 @@ impl LintRule for Rule {
     });
   }
 }
-
-fn find_word(haystack: &str, needle: &str) -> Option<usize> {
-  let bytes = haystack.as_bytes();
-  let nb = needle.as_bytes();
-  let mut i = 0;
-  while i + nb.len() <= bytes.len() {
-    if &bytes[i..i + nb.len()] == nb {
-      let prev_ok = i == 0 || !is_word(bytes[i - 1] as char);
-      let next_ok = i + nb.len() == bytes.len() || !is_word(bytes[i + nb.len()] as char);
-      if prev_ok && next_ok {
-        return Some(i);
-      }
-    }
-    i += 1;
-  }
-  None
-}
-
 fn dollar_body(text: &str) -> Option<&str> {
   let start = text.find("$$")?;
   let after = start + 2;
@@ -147,6 +127,3 @@ fn has_return(upper: &str) -> bool {
   false
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}

@@ -28,10 +28,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     // Only inspect CREATE FUNCTION ... AS $$ ... $$ bodies.
     if !upper.contains("CREATE") || !upper.contains("FUNCTION") {
       return;
@@ -59,7 +56,7 @@ impl LintRule for Rule {
         code: "sql202",
         severity: Severity::Error,
         message: "INSERT-only trigger references `OLD` -- OLD undefined on INSERT".into(),
-        range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+        range: crate::range_at(abs_s, abs_e),
       });
     }
     if forbid_new && let Some(at) = first_token(&fbody_upper, "NEW.") {
@@ -69,7 +66,7 @@ impl LintRule for Rule {
         code: "sql202",
         severity: Severity::Error,
         message: "DELETE-only trigger references `NEW` -- NEW undefined on DELETE".into(),
-        range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+        range: crate::range_at(abs_s, abs_e),
       });
     }
     let _ = HashMap::<(), ()>::new();

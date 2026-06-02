@@ -3,6 +3,7 @@
 //! Use `TIMESTAMP WITH TIME ZONE` (`TIMESTAMPTZ`) instead. Hint.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -21,10 +22,7 @@ impl LintRule for Rule {
     if !matches!(stmt.kind, StatementKind::CreateTable(_) | StatementKind::AlterTable(_)) {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, _body, upper) = crate::stmt_body_upper(stmt, source);
 
     let (token_start, token_len) = if let Some(p) = upper.find("TIME WITH TIME ZONE") {
       (p, "TIME WITH TIME ZONE".len())
@@ -39,7 +37,7 @@ impl LintRule for Rule {
       code: "sql075",
       severity: Severity::Hint,
       message: "TIME WITH TIME ZONE (TIMETZ) is rarely what you want -- prefer TIMESTAMPTZ".into(),
-      range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+      range: crate::range_at(abs_start, abs_end),
     });
   }
 }
@@ -61,6 +59,3 @@ fn find_word_pos(haystack: &str, needle: &str) -> Option<usize> {
   None
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}

@@ -24,16 +24,14 @@ impl LintRule for Rule {
     let StatementKind::Select(_) = &stmt.kind else {
       return;
     };
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let raw = &source[start..end];
+    let (start, raw) = crate::stmt_body(stmt, source);
     let body_owned = crate::textutil::strip_noise_full(raw);
     let body = body_owned.as_str();
     let upper = body.to_ascii_uppercase();
-    if !contains_word(&upper, "LIMIT") {
+    if !crate::textutil::contains_word(&upper, "LIMIT") {
       return;
     }
-    if contains_word(&upper, "ORDER BY") {
+    if crate::textutil::contains_word(&upper, "ORDER BY") {
       return;
     }
     // Single-row LIMIT 1 with a UNIQUE-ish predicate is often
@@ -50,27 +48,7 @@ impl LintRule for Rule {
       code: "sql051",
       severity: Severity::Warning,
       message: "LIMIT without ORDER BY -- row selection is non-deterministic".into(),
-      range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+      range: crate::range_at(abs_start, abs_end),
     });
   }
-}
-
-fn contains_word(haystack: &str, needle: &str) -> bool {
-  let bytes = haystack.as_bytes();
-  let n_bytes = needle.as_bytes();
-  let mut i = 0;
-  while i + n_bytes.len() <= bytes.len() {
-    if &bytes[i..i + n_bytes.len()] == n_bytes {
-      let prev_ok = i == 0 || !is_word(bytes[i - 1] as char);
-      let next_ok = i + n_bytes.len() == bytes.len() || !is_word(bytes[i + n_bytes.len()] as char);
-      if prev_ok && next_ok {
-        return true;
-      }
-    }
-    i += 1;
-  }
-  false
-}
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
 }

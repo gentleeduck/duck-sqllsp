@@ -17,10 +17,8 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
+    let end = start + body.len();
     let trimmed = upper.trim_start();
     if !trimmed.starts_with("LISTEN ") {
       return;
@@ -46,10 +44,7 @@ impl LintRule for Rule {
             code: "sql137",
             severity: Severity::Warning,
             message: format!("LISTEN `{chan_clean}` without a matching UNLISTEN -- queued notifications accumulate for the lifetime of the session"),
-            range: text_size::TextRange::new(
-                (abs_start as u32).into(),
-                (abs_end as u32).into(),
-            ),
+            range: crate::range_at(abs_start, abs_end),
         });
   }
 }

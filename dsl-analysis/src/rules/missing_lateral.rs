@@ -3,6 +3,7 @@
 //! "missing FROM-clause entry for table t".
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -18,10 +19,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     // Need `FROM <tbl> [<alias>] , <fn>(<dotted ref>)`.
     let Some(from_at) = upper.find(" FROM ") else { return };
     let after = &body[from_at + 6..];
@@ -97,10 +95,7 @@ impl LintRule for Rule {
                                 code: "sql151",
                                 severity: Severity::Warning,
                                 message: format!("`{}(...)` in FROM references an outer-table column without LATERAL -- PG rejects with 'missing FROM-clause entry'", id_up),
-                                range: text_size::TextRange::new(
-                                    (abs_start as u32).into(),
-                                    (abs_end as u32).into(),
-                                ),
+                                range: crate::range_at(abs_start, abs_end),
                             });
               return;
             }
@@ -115,6 +110,3 @@ impl LintRule for Rule {
   }
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}

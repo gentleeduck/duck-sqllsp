@@ -5,6 +5,7 @@
 //! `coalesce(part, '')` when that's actually what you want.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -21,9 +22,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let raw = &source[start..end];
+    let (start, raw) = crate::stmt_body(stmt, source);
     let cleaned = crate::textutil::strip_noise_full(raw);
     let upper = cleaned.to_ascii_uppercase();
     let bytes = upper.as_bytes();
@@ -83,6 +82,3 @@ fn ends_with_null_keyword(bytes: &[u8], end: usize) -> bool {
     && (end == bytes.len() || !is_word(bytes[end] as char))
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}

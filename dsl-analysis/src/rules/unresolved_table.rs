@@ -2,6 +2,7 @@
 //! does not exist in the catalog.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind, TableRef};
 use dsl_resolve::Scope;
@@ -29,7 +30,7 @@ impl LintRule for Rule {
     // Strip line/block comments + strings before CTE walk so a
     // leading header comment like `-- WITH RECURSIVE foo` doesn't
     // hijack the "WITH" anchor and make the rule see zero CTEs.
-    let slice_owned = strip_noise(raw_slice);
+    let slice_owned = crate::textutil::strip_comments_only(raw_slice);
     let slice = slice_owned.as_str();
     let ctes = collect_cte_names(slice);
     // Views declared anywhere in the buffer count as resolvable
@@ -172,15 +173,12 @@ fn collect_cte_names(src: &str) -> Vec<String> {
   out
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}
 
 /// Collect names of views (regular + materialized) declared anywhere
 /// in `source`. Returns both the bare and schema-qualified lower-cased
 /// names so the caller can match either form. Lenient text scan.
 fn collect_view_names(source: &str) -> Vec<String> {
-  let cleaned = strip_noise(source);
+  let cleaned = crate::textutil::strip_comments_only(source);
   let upper = cleaned.to_ascii_uppercase();
   let mut out: Vec<String> = Vec::new();
   for pat in [
@@ -230,60 +228,6 @@ fn collect_view_names(source: &str) -> Vec<String> {
   }
   out
 }
-
-fn strip_noise(s: &str) -> String {
-  let mut out: Vec<u8> = s.as_bytes().to_vec();
-  let n = out.len();
-  let mut i = 0usize;
-  while i < n {
-    if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
-      while i < n && out[i] != b'\n' {
-        out[i] = b' ';
-        i += 1
-      }
-      continue;
-    }
-    if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
-      let mut depth = 1u32;
-      out[i] = b' ';
-      out[i + 1] = b' ';
-      i += 2;
-      while i + 1 < n && depth > 0 {
-        if out[i] == b'/' && out[i + 1] == b'*' {
-          depth += 1;
-          out[i] = b' ';
-          out[i + 1] = b' ';
-          i += 2;
-        } else if out[i] == b'*' && out[i + 1] == b'/' {
-          depth -= 1;
-          out[i] = b' ';
-          out[i + 1] = b' ';
-          i += 2;
-        } else {
-          out[i] = b' ';
-          i += 1;
-        }
-      }
-      continue;
-    }
-    if out[i] == b'\'' {
-      out[i] = b' ';
-      i += 1;
-      while i < n && out[i] != b'\'' {
-        out[i] = b' ';
-        i += 1
-      }
-      if i < n {
-        out[i] = b' ';
-        i += 1
-      }
-      continue;
-    }
-    i += 1;
-  }
-  String::from_utf8(out).unwrap_or_else(|_| s.to_string())
-}
-
 fn skip_parens(bytes: &[u8], i: usize) -> usize {
   if i >= bytes.len() || bytes[i] != b'(' {
     return i;
@@ -374,11 +318,28 @@ fn collect_tables(kind: &StatementKind) -> Vec<TableRef> {
         out.push(j.table.clone());
       }
     },
-    StatementKind::Update(u) if !is_synthetic(&u.table) => {
-      out.push(u.table.clone());
+    StatementKind::Update(u) => {
+      if !is_synthetic(&u.table) {
+        out.push(u.table.clone());
+      }
+      // `UPDATE t SET ... FROM <list>` -- additional tables to
+      // resolve. A missing FROM-list table is still a real bug.
+      for t in &u.from_tables {
+        if !is_synthetic(t) {
+          out.push(t.clone());
+        }
+      }
     },
-    StatementKind::Delete(d) if !is_synthetic(&d.table) => {
-      out.push(d.table.clone());
+    StatementKind::Delete(d) => {
+      if !is_synthetic(&d.table) {
+        out.push(d.table.clone());
+      }
+      // `DELETE FROM t USING <list>` -- additional tables to resolve.
+      for t in &d.using_tables {
+        if !is_synthetic(t) {
+          out.push(t.clone());
+        }
+      }
     },
     StatementKind::Insert(i) if !is_synthetic(&i.table) => {
       out.push(i.table.clone());

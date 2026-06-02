@@ -19,10 +19,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     for kw in ["= ANY (", "<> ANY (", "= ALL (", "<> ALL (", " IN ("] {
       let mut from = 0usize;
       while let Some(rel) = upper[from..].find(kw) {
@@ -53,7 +50,7 @@ impl LintRule for Rule {
             code: "sql228",
             severity: Severity::Error,
             message: msg,
-            range: text_size::TextRange::new(((start + open) as u32).into(), ((start + close + 1) as u32).into()),
+            range: crate::range_at(start + open, start + close + 1),
           });
         }
         from = close + 1;

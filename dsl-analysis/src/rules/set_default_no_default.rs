@@ -28,10 +28,7 @@ impl LintRule for Rule {
     let StatementKind::Update(upd) = &stmt.kind else { return };
     let Some(t) = catalog.find_table(upd.table.schema.as_deref(), &upd.table.name) else { return };
 
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let ub = upper.as_bytes();
     let n = ub.len();
     // Find SET clause start (whole-word).
@@ -104,7 +101,7 @@ impl LintRule for Rule {
         code: "sql496",
         severity,
         message: msg,
-        range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+        range: crate::range_at(abs_s, abs_e),
       });
       i = rel + 7;
     }

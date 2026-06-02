@@ -18,10 +18,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     if !upper.contains("CREATE TABLE") {
       return;
     }
@@ -39,7 +36,7 @@ impl LintRule for Rule {
       code: "sql313",
       severity: Severity::Error,
       message: "Inline COMMENT in CREATE TABLE is MySQL syntax -- PG needs `COMMENT ON TABLE <name> IS '<msg>'` as a separate statement".into(),
-      range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+      range: crate::range_at(abs_s, abs_e),
     });
   }
 }

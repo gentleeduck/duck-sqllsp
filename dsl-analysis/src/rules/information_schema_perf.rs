@@ -20,9 +20,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (start, body) = crate::stmt_body(stmt, source);
     let lower = body.to_ascii_lowercase();
     let Some(at) = lower.find("information_schema.") else { return };
     let abs_s = start + at;
@@ -31,7 +29,7 @@ impl LintRule for Rule {
       code: "sql305",
       severity: Severity::Hint,
       message: "information_schema views are slow vs pg_catalog (cross-schema joins) -- if portability isn't a concern, query pg_catalog (e.g. pg_class / pg_attribute) directly".into(),
-      range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+      range: crate::range_at(abs_s, abs_e),
     });
   }
 }

@@ -5,6 +5,7 @@
 
 use crate::typing::column_nullable;
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -20,10 +21,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, scope: &Scope, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     for needle in ["BOOL_AND(", "BOOL_OR(", "EVERY("] {
       let mut from = 0usize;
       while let Some(rel) = upper[from..].find(needle) {
@@ -56,7 +54,7 @@ impl LintRule for Rule {
               col,
               arg
             ),
-            range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+            range: crate::range_at(abs_s, abs_e),
           });
           return;
         }
@@ -66,9 +64,6 @@ impl LintRule for Rule {
   }
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}
 
 fn split_dotted(s: &str) -> (Option<String>, String) {
   let s = s.trim().trim_matches('"');

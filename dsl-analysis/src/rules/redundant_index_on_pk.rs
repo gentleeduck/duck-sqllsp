@@ -21,10 +21,7 @@ impl LintRule for Rule {
     if !matches!(stmt.kind, StatementKind::Unknown { .. }) {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let trimmed = upper.trim_start();
     let is_index = trimmed.starts_with("CREATE INDEX") || trimmed.starts_with("CREATE UNIQUE INDEX");
     if !is_index {
@@ -64,10 +61,7 @@ impl LintRule for Rule {
             code: "sql167",
             severity: Severity::Hint,
             message: format!("CREATE INDEX on `{bare_tbl}({idx_col})` -- the PRIMARY KEY already maintains a unique B-tree index on this column; the explicit one duplicates storage"),
-            range: text_size::TextRange::new(
-                (abs_start as u32).into(),
-                (abs_end as u32).into(),
-            ),
+            range: crate::range_at(abs_start, abs_end),
         });
   }
 }

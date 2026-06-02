@@ -293,9 +293,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (start, body) = crate::stmt_body(stmt, source);
     let known = build_known_set(source, catalog);
     // Build a set of byte offsets that sit inside table/column/constraint
     // definition syntax. Identifiers landing in those positions are
@@ -400,7 +398,7 @@ impl LintRule for Rule {
         code: "sql348",
         severity: Severity::Error,
         message: format!("unknown function `{bare}` -- not in catalog, dsl-knowledge, or this buffer"),
-        range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+        range: crate::range_at(abs_s, abs_e),
       });
     }
   }
@@ -509,29 +507,74 @@ fn build_known_set(body: &str, catalog: &Catalog) -> HashSet<String> {
     }
     from = k.max(from + rel + 4);
   }
-  for needle in ["CREATE OR REPLACE FUNCTION ", "CREATE FUNCTION ", "CREATE OR REPLACE PROCEDURE ", "CREATE PROCEDURE "]
-  {
-    let mut from = 0usize;
-    while let Some(rel) = upper_body[from..].find(needle) {
-      let at = from + rel + needle.len();
-      let mut k = at;
+  // Loose scan: any `CREATE [OR REPLACE] [TEMP|TEMPORARY] <class> <name>`
+  // where class is FUNCTION / PROCEDURE / TRIGGER / AGGREGATE. Whitespace
+  // is permissive (handles `CREATE\nFUNCTION` etc) and quoted /
+  // schema-qualified names land as bare-name entries.
+  let mut from = 0usize;
+  while let Some(rel) = upper_body[from..].find("CREATE") {
+    let at = from + rel;
+    let mut k = at + 6; // past "CREATE"
+    // boundary check
+    if at > 0 && (bytes[at - 1].is_ascii_alphanumeric() || bytes[at - 1] == b'_') {
+      from = k;
+      continue;
+    }
+    // Skip optional modifiers: OR REPLACE / TEMP / TEMPORARY / GLOBAL / LOCAL.
+    loop {
       while k < bytes.len() && bytes[k].is_ascii_whitespace() {
-        k += 1
-      }
-      let name_start = k;
-      while k < bytes.len()
-        && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"')
-      {
         k += 1;
       }
-      let name = body[name_start..k].rsplit('.').next().unwrap_or(&body[name_start..k]).trim_matches('"');
-      if !name.is_empty() {
-        set.insert(name.to_ascii_uppercase());
+      let kw_end = take_word(bytes, k);
+      let w = upper_body[k..kw_end].to_string();
+      if matches!(w.as_str(), "OR" | "REPLACE" | "TEMP" | "TEMPORARY" | "GLOBAL" | "LOCAL" | "CONSTRAINT") {
+        k = kw_end;
+        continue;
       }
-      from = k;
+      break;
     }
+    while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+      k += 1;
+    }
+    let class_end = take_word(bytes, k);
+    let class = upper_body[k..class_end].to_string();
+    if !matches!(class.as_str(), "FUNCTION" | "PROCEDURE" | "TRIGGER" | "AGGREGATE") {
+      from = class_end.max(at + 6);
+      continue;
+    }
+    k = class_end;
+    while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+      k += 1;
+    }
+    // Optional IF NOT EXISTS for trigger replacement.
+    if upper_body[k..].starts_with("IF NOT EXISTS") {
+      k += "IF NOT EXISTS".len();
+      while k < bytes.len() && bytes[k].is_ascii_whitespace() {
+        k += 1;
+      }
+    }
+    let name_start = k;
+    while k < bytes.len()
+      && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"')
+    {
+      k += 1;
+    }
+    let raw = &body[name_start..k];
+    let bare = raw.rsplit('.').next().unwrap_or(raw).trim_matches('"');
+    if !bare.is_empty() {
+      set.insert(bare.to_ascii_uppercase());
+    }
+    from = k.max(at + 6);
   }
   set
+}
+
+fn take_word(bytes: &[u8], from: usize) -> usize {
+  let mut k = from;
+  while k < bytes.len() && (bytes[k].is_ascii_alphabetic() || bytes[k] == b'_') {
+    k += 1;
+  }
+  k
 }
 
 /// Words that put the NEXT identifier into a name slot rather than a

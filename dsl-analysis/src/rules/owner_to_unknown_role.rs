@@ -24,10 +24,7 @@ impl LintRule for Rule {
     if catalog.roles.is_empty() {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     // Look for `OWNER TO <ident>`.
     let Some(rel) = upper.find("OWNER TO") else { return };
     let bytes = body.as_bytes();
@@ -80,7 +77,7 @@ impl LintRule for Rule {
       code: "sql169",
       severity: Severity::Error,
       message: format!("unknown role `{role}` -- not found in pg_roles; ALTER TABLE will fail at execution"),
-      range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+      range: crate::range_at(abs_start, abs_end),
     });
   }
 }

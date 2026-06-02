@@ -23,9 +23,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let raw = &source[start..end];
+    let (start, raw) = crate::stmt_body(stmt, source);
     // Strip line comments + string literals so `-- INSERT ... ON CONFLICT`
     // doesn't trick find('(') into picking the wrong paren.
     let body_owned = strip_comments_and_strings(raw);
@@ -102,7 +100,7 @@ impl LintRule for Rule {
         cols.join(", "),
         table,
       ),
-      range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+      range: crate::range_at(abs_s, abs_e),
     });
   }
 }

@@ -20,9 +20,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let raw = &source[start..end];
+    let (start, raw) = crate::stmt_body(stmt, source);
     let body = strip_comments(raw);
     let upper = body.to_ascii_uppercase();
     let Some(rel) = upper.find("SAVEPOINT") else { return };
@@ -56,7 +54,7 @@ impl LintRule for Rule {
       code: "sql179",
       severity: Severity::Error,
       message: "SAVEPOINT outside a transaction -- PG raises 25P01".into(),
-      range: text_size::TextRange::new((kw_at as u32).into(), (after as u32).into()),
+      range: crate::range_at(kw_at, after),
     });
   }
 }

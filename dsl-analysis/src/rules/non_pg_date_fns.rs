@@ -20,10 +20,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, _body, upper) = crate::stmt_body_upper(stmt, source);
     let bytes = upper.as_bytes();
     for (fname, dialect) in FNS {
       let mut from = 0usize;
@@ -50,7 +47,7 @@ impl LintRule for Rule {
           code: "sql320",
           severity: Severity::Error,
           message: format!("`{fname}` is {dialect} -- PG uses `now()` (or `CURRENT_TIMESTAMP`)"),
-          range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+          range: crate::range_at(abs_s, abs_e),
         });
         from = after;
       }
