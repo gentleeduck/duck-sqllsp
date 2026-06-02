@@ -181,7 +181,7 @@ pub(crate) fn column_exists(scope: &Scope, catalog: &Catalog, qualifier: Option<
         return cte_cols.iter().any(|c| c == name);
       }
       if let Some(t) = catalog.find_table(b.table.schema.as_deref(), &b.table.name) {
-        return t.columns.iter().any(|c| c.name == name);
+        return t.columns.iter().any(|c| c.name.eq_ignore_ascii_case(name));
       }
     }
     // Unknown qualifier: most likely an outer-scope binding from a
@@ -212,7 +212,7 @@ pub(crate) fn column_exists(scope: &Scope, catalog: &Catalog, qualifier: Option<
   }
   for b in scope.tables() {
     if let Some(t) = catalog.find_table(b.table.schema.as_deref(), &b.table.name)
-      && t.columns.iter().any(|c| c.name == name)
+      && t.columns.iter().any(|c| c.name.eq_ignore_ascii_case(name))
     {
       return true;
     }
