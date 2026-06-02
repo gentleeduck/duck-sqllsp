@@ -44,9 +44,7 @@ impl LintRule for Rule {
     for (_old, new) in alter_renamed_columns(source, &u.table.name) {
       valid.insert(new);
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (start, body) = crate::stmt_body(stmt, source);
     for (target, _expr) in &u.assignments {
       // Strip qualifier if present: `t.col` -> `col`.
       let col = target.rsplit('.').next().unwrap_or(target);
@@ -61,7 +59,7 @@ impl LintRule for Rule {
           .map(|r| {
             let abs_start = start + set_at + r;
             let abs_end = abs_start + target_lower.len();
-            text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into())
+            crate::range_at(abs_start, abs_end)
           })
           .unwrap_or(stmt.range);
         out.push(Diagnostic {
@@ -84,7 +82,7 @@ fn alter_added_columns(source: &str, table: &str) -> Vec<String> {
   // Strip comments + strings so a `-- multi-clause ALTER TABLE`
   // header doesn't get matched and then advance `from` past the
   // real ALTER TABLE statement on the next line.
-  let cleaned = strip_noise(source);
+  let cleaned = crate::textutil::strip_comments_only(source);
   let source = cleaned.as_str();
   let upper = source.to_ascii_uppercase();
   let bytes = source.as_bytes();
@@ -152,7 +150,7 @@ fn alter_added_columns(source: &str, table: &str) -> Vec<String> {
 /// Scan for `ALTER TABLE <table_name> RENAME COLUMN <old> TO <new>`
 /// and return (old, new) pairs.
 fn alter_renamed_columns(source: &str, table: &str) -> Vec<(String, String)> {
-  let cleaned = strip_noise(source);
+  let cleaned = crate::textutil::strip_comments_only(source);
   let source = cleaned.as_str();
   let upper = source.to_ascii_uppercase();
   let bytes = source.as_bytes();
@@ -221,57 +219,4 @@ fn alter_renamed_columns(source: &str, table: &str) -> Vec<(String, String)> {
     }
   }
   out
-}
-
-fn strip_noise(s: &str) -> String {
-  let mut out: Vec<u8> = s.as_bytes().to_vec();
-  let n = out.len();
-  let mut i = 0usize;
-  while i < n {
-    if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
-      while i < n && out[i] != b'\n' {
-        out[i] = b' ';
-        i += 1
-      }
-      continue;
-    }
-    if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
-      let mut depth = 1u32;
-      out[i] = b' ';
-      out[i + 1] = b' ';
-      i += 2;
-      while i + 1 < n && depth > 0 {
-        if out[i] == b'/' && out[i + 1] == b'*' {
-          depth += 1;
-          out[i] = b' ';
-          out[i + 1] = b' ';
-          i += 2;
-        } else if out[i] == b'*' && out[i + 1] == b'/' {
-          depth -= 1;
-          out[i] = b' ';
-          out[i + 1] = b' ';
-          i += 2;
-        } else {
-          out[i] = b' ';
-          i += 1;
-        }
-      }
-      continue;
-    }
-    if out[i] == b'\'' {
-      out[i] = b' ';
-      i += 1;
-      while i < n && out[i] != b'\'' {
-        out[i] = b' ';
-        i += 1
-      }
-      if i < n {
-        out[i] = b' ';
-        i += 1
-      }
-      continue;
-    }
-    i += 1;
-  }
-  String::from_utf8(out).unwrap_or_else(|_| s.to_string())
 }

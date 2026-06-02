@@ -35,10 +35,7 @@ impl LintRule for Rule {
     let StatementKind::Update(u) = &stmt.kind else { return };
     let Some(t) = catalog.find_table(u.table.schema.as_deref(), &u.table.name) else { return };
 
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let Some(set_at) = upper.find(" SET ") else { return };
     let set_start = set_at + 5;
     let set_end = ["WHERE", "RETURNING", "FROM"]
@@ -82,7 +79,7 @@ impl LintRule for Rule {
             col.name,
             col.data_type
           ),
-          range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+          range: crate::range_at(abs_s, abs_e),
         });
       }
     }

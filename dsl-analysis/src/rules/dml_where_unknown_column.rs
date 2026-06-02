@@ -33,19 +33,17 @@ impl LintRule for Rule {
     for col in alter_added_or_renamed(source, &table_ref.name) {
       valid_cols.insert(col);
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (start, body) = crate::stmt_body(stmt, source);
     // Strip line comments so `-- WHERE col` doesn't pollute the
     // predicate walk (was matching `col` inside the comment text).
-    let cleaned = strip_line_comments(body);
+    let cleaned = crate::textutil::strip_comments_only(body);
     let upper = cleaned.to_ascii_uppercase();
     // CTE / subquery in the body -- columns from `WITH t AS (...)`
     // and aliases from `FROM (SELECT ...) sub` aren't in this
     // statement's resolver scope; bail rather than false-flag.
     // Match SELECT word-boundary so `FROM (SELECT ...)` triggers too
     // (the earlier ` SELECT ` substring missed it -- no space before).
-    if upper.contains("WITH ") || contains_word(&upper, "SELECT") {
+    if upper.contains("WITH ") || crate::textutil::contains_word(&upper, "SELECT") {
       return;
     }
     let body = cleaned.as_str();
@@ -164,35 +162,13 @@ impl LintRule for Rule {
         code: "sql351",
         severity: Severity::Error,
         message: format!("unknown column `{token}` in WHERE on `{}`", table_ref.name),
-        range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+        range: crate::range_at(abs_s, abs_e),
       });
       return;
     }
   }
 }
 
-/// Replace `-- comment` runs with spaces so byte offsets stay 1:1.
-fn strip_line_comments(s: &str) -> String {
-  let mut out = String::with_capacity(s.len());
-  let bytes = s.as_bytes();
-  let n = bytes.len();
-  let mut i = 0usize;
-  while i < n {
-    if i + 1 < n && bytes[i] == b'-' && bytes[i + 1] == b'-' {
-      while i < n && bytes[i] != b'\n' {
-        out.push(' ');
-        i += 1;
-      }
-    } else if bytes[i].is_ascii() {
-      out.push(bytes[i] as char);
-      i += 1;
-    } else {
-      out.push(' ');
-      i += 1;
-    }
-  }
-  out
-}
 
 /// First position where `needle` appears as a whole word in `haystack`,
 /// at depth 0 with respect to parens (so `(SELECT ... ORDER BY x)` in
@@ -246,7 +222,7 @@ fn find_word_pos(haystack_upper: &str, needle_upper: &str) -> Option<usize> {
 /// Collect all column names added or renamed-to by ALTER TABLE
 /// statements in source for `table`. Lenient text scan.
 fn alter_added_or_renamed(source: &str, table: &str) -> Vec<String> {
-  let cleaned = strip_noise_full(source);
+  let cleaned = crate::textutil::strip_noise_full(source);
   let source = cleaned.as_str();
   let upper = source.to_ascii_uppercase();
   let bytes = source.as_bytes();
@@ -338,80 +314,6 @@ fn alter_added_or_renamed(source: &str, table: &str) -> Vec<String> {
   }
   out
 }
-
-fn strip_noise_full(s: &str) -> String {
-  let mut out: Vec<u8> = s.as_bytes().to_vec();
-  let n = out.len();
-  let mut i = 0usize;
-  while i < n {
-    if i + 1 < n && out[i] == b'-' && out[i + 1] == b'-' {
-      while i < n && out[i] != b'\n' {
-        out[i] = b' ';
-        i += 1
-      }
-      continue;
-    }
-    if i + 1 < n && out[i] == b'/' && out[i + 1] == b'*' {
-      let mut depth = 1u32;
-      out[i] = b' ';
-      out[i + 1] = b' ';
-      i += 2;
-      while i + 1 < n && depth > 0 {
-        if out[i] == b'/' && out[i + 1] == b'*' {
-          depth += 1;
-          out[i] = b' ';
-          out[i + 1] = b' ';
-          i += 2;
-        } else if out[i] == b'*' && out[i + 1] == b'/' {
-          depth -= 1;
-          out[i] = b' ';
-          out[i + 1] = b' ';
-          i += 2;
-        } else {
-          out[i] = b' ';
-          i += 1;
-        }
-      }
-      continue;
-    }
-    if out[i] == b'\'' {
-      out[i] = b' ';
-      i += 1;
-      while i < n && out[i] != b'\'' {
-        out[i] = b' ';
-        i += 1
-      }
-      if i < n {
-        out[i] = b' ';
-        i += 1
-      }
-      continue;
-    }
-    i += 1;
-  }
-  String::from_utf8(out).unwrap_or_else(|_| s.to_string())
-}
-
-fn contains_word(haystack: &str, needle: &str) -> bool {
-  let h = haystack.as_bytes();
-  let n = needle.as_bytes();
-  if n.is_empty() {
-    return false;
-  }
-  let mut i = 0;
-  while i + n.len() <= h.len() {
-    if h[i..i + n.len()] == *n {
-      let prev_ok = i == 0 || !(h[i - 1].is_ascii_alphanumeric() || h[i - 1] == b'_');
-      let next_ok = i + n.len() == h.len() || !(h[i + n.len()].is_ascii_alphanumeric() || h[i + n.len()] == b'_');
-      if prev_ok && next_ok {
-        return true;
-      }
-    }
-    i += 1;
-  }
-  false
-}
-
 fn is_keyword(t: &str) -> bool {
   matches!(
     t,

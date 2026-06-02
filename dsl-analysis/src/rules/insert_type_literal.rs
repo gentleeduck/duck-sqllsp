@@ -39,10 +39,7 @@ impl LintRule for Rule {
     }
     let Some(t) = catalog.find_table(i.table.schema.as_deref(), &i.table.name) else { return };
 
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let Some(values_at) = upper.find("VALUES") else { return };
     let bytes = body.as_bytes();
     let n = bytes.len();
@@ -107,7 +104,7 @@ fn literal_range(body: &str, lit: &str, stmt_start: usize) -> Option<text_size::
   let trail_ws = lit.len() - lit.trim_end().len();
   let abs_s = stmt_start + rel + lead_ws;
   let abs_e = stmt_start + rel + lit.len() - trail_ws;
-  Some(text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()))
+  Some(crate::range_at(abs_s, abs_e))
 }
 
 fn classify_literal(s: &str) -> LitKind {

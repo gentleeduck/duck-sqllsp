@@ -19,10 +19,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     if !upper.contains("CREATE") || !upper.contains("FUNCTION") {
       return;
     }
@@ -36,7 +33,7 @@ impl LintRule for Rule {
     let body_up = body_text.to_ascii_uppercase();
     // Look for any DDL token at the start of a statement-ish chunk.
     for kw in ["CREATE ", "ALTER ", "DROP ", "TRUNCATE ", "GRANT ", "REVOKE "] {
-      if let Some(rel) = find_word(&body_up, kw.trim()) {
+      if let Some(rel) = crate::textutil::find_word(&body_up, kw.trim()) {
         let abs_start = start + open + 2 + rel;
         let abs_end = abs_start + kw.trim().len();
         out.push(Diagnostic {
@@ -46,28 +43,10 @@ impl LintRule for Rule {
             "IMMUTABLE function body issues DDL (`{}`) -- IMMUTABLE promises pure determinism; PG plan caches results",
             kw.trim()
           ),
-          range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+          range: crate::range_at(abs_start, abs_end),
         });
         return;
       }
     }
   }
-}
-
-fn find_word(haystack: &str, needle: &str) -> Option<usize> {
-  let h = haystack.as_bytes();
-  let n = h.len();
-  let w = needle.len();
-  let mut i = 0;
-  while i + w <= n {
-    if &haystack[i..i + w] == needle {
-      let prev_ok = i == 0 || !(h[i - 1].is_ascii_alphanumeric() || h[i - 1] == b'_');
-      let next_ok = i + w == n || !(h[i + w].is_ascii_alphanumeric() || h[i + w] == b'_');
-      if prev_ok && next_ok {
-        return Some(i);
-      }
-    }
-    i += 1;
-  }
-  None
 }

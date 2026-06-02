@@ -53,9 +53,7 @@ impl LintRule for Rule {
         }
         let Some(t) = catalog.find_table(ins.table.schema.as_deref(), &ins.table.name) else { return };
 
-        let start: usize = u32::from(stmt.range.start()) as usize;
-        let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-        let body = &source[start..end];
+        let (start, body) = crate::stmt_body(stmt, source);
         let has_override = body.to_ascii_uppercase().contains("OVERRIDING SYSTEM VALUE");
 
         for col_name in &ins.columns {
@@ -83,7 +81,7 @@ impl LintRule for Rule {
             code: "sql178",
             severity: Severity::Error,
             message,
-            range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+            range: crate::range_at(abs_s, abs_e),
           });
         }
       },
@@ -93,9 +91,7 @@ impl LintRule for Rule {
         }
         let Some(t) = catalog.find_table(upd.table.schema.as_deref(), &upd.table.name) else { return };
 
-        let start: usize = u32::from(stmt.range.start()) as usize;
-        let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-        let body = &source[start..end];
+        let (start, body) = crate::stmt_body(stmt, source);
 
         for (col_name, _) in &upd.assignments {
           let Some(col) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(col_name)) else { continue };
@@ -117,7 +113,7 @@ impl LintRule for Rule {
             code: "sql178",
             severity: Severity::Error,
             message,
-            range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+            range: crate::range_at(abs_s, abs_e),
           });
         }
       },

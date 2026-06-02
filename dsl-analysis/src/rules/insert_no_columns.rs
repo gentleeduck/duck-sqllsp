@@ -27,10 +27,7 @@ impl LintRule for Rule {
     if !i.columns.is_empty() {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, _body, upper) = crate::stmt_body_upper(stmt, source);
     // Narrow to `INSERT INTO`.
     let (abs_start, abs_end) =
       upper.find("INSERT INTO").map(|r| (start + r, start + r + 11)).unwrap_or((start, start + 6));
@@ -41,7 +38,7 @@ impl LintRule for Rule {
         "INSERT INTO `{}` without column list -- positional VALUES break silently when the table schema changes",
         i.table.name,
       ),
-      range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+      range: crate::range_at(abs_start, abs_end),
     });
   }
 }

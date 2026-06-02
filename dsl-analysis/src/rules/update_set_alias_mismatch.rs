@@ -21,10 +21,7 @@ impl LintRule for Rule {
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let StatementKind::Update(u) = &stmt.kind else { return };
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     let Some(set_at) = upper.find(" SET ") else { return };
     let after_set = set_at + " SET ".len();
     let from_pos = upper[after_set..].find(" FROM ").map(|p| after_set + p).unwrap_or(body.len());
@@ -77,7 +74,7 @@ impl LintRule for Rule {
           "UPDATE SET target `{lhs}` -- qualifier `{qual}` is not the updated table; only `{}` is in scope on the SET left-hand side",
           allowed.join("` / `"),
         ),
-        range: text_size::TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+        range: crate::range_at(abs_s, abs_e),
       });
     }
   }

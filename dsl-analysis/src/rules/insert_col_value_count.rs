@@ -27,10 +27,7 @@ impl LintRule for Rule {
     if i.columns.is_empty() {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
 
     // Only check INSERT ... VALUES (...) form -- not INSERT ... SELECT.
     // If the body contains SELECT at depth 0 between the column list
@@ -70,7 +67,7 @@ impl LintRule for Rule {
         code: "sql038",
         severity: Severity::Error,
         message: format!("INSERT has {col_count} target column(s) but {value_count} value(s) in VALUES"),
-        range: text_size::TextRange::new((abs_open as u32).into(), (abs_close as u32).into()),
+        range: crate::range_at(abs_open, abs_close),
       });
     }
   }
