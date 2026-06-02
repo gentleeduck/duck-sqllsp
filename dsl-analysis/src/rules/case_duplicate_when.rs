@@ -6,6 +6,7 @@
 //! WHEN value is duplicated.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -22,9 +23,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let raw = &source[start..end];
+    let (start, raw) = crate::stmt_body(stmt, source);
     let cleaned = crate::textutil::strip_noise_full(raw);
     let raw_bytes = raw.as_bytes();
     let bytes = cleaned.as_bytes();
@@ -162,6 +161,3 @@ fn norm(s: &str) -> String {
   s.split_whitespace().collect::<Vec<_>>().join(" ").to_ascii_lowercase()
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}

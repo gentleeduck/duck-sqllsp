@@ -24,9 +24,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let raw = &source[start..end];
+    let (start, raw) = crate::stmt_body(stmt, source);
     let body_owned = crate::textutil::strip_noise_full(raw);
     let body = body_owned.as_str();
     let bytes = body.as_bytes();
@@ -78,7 +76,7 @@ impl LintRule for Rule {
               code: "sql195",
               severity: Severity::Error,
               message: format!("CAST '{lit}'::{ty} -- {reason} (PG 22P02 at runtime)"),
-              range: text_size::TextRange::new(((start + lit_start - 1) as u32).into(), ((start + k) as u32).into()),
+              range: crate::range_at(start + lit_start - 1, start + k),
             });
           }
         }
@@ -108,10 +106,7 @@ impl LintRule for Rule {
           code: "sql195",
           severity: Severity::Error,
           message: format!("CAST('{lit}' AS {ty_part}) -- {reason} (PG 22P02 at runtime)"),
-          range: text_size::TextRange::new(
-            ((start + at) as u32).into(),
-            ((start + inner_start + close + 1) as u32).into(),
-          ),
+          range: crate::range_at(start + at, start + inner_start + close + 1),
         });
       }
       from = inner_start + close + 1;

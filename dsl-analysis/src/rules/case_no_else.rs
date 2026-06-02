@@ -3,6 +3,7 @@
 //! so the author's intent is on the page.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -18,10 +19,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, _body, upper) = crate::stmt_body_upper(stmt, source);
     let bytes = upper.as_bytes();
     let n = bytes.len();
     let mut i = 0;
@@ -84,10 +82,7 @@ impl LintRule for Rule {
                         code: "sql150",
                         severity: Severity::Hint,
                         message: "CASE without an ELSE branch -- unmatched rows return NULL silently; add `ELSE NULL` to make intent explicit".into(),
-                        range: text_size::TextRange::new(
-                            (abs_start as u32).into(),
-                            (abs_end as u32).into(),
-                        ),
+                        range: crate::range_at(abs_start, abs_end),
                     });
           return;
         }
@@ -99,6 +94,3 @@ impl LintRule for Rule {
   }
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}

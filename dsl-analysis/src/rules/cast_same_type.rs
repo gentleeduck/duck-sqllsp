@@ -3,6 +3,7 @@
 //! (and sometimes hides the wrong type from review). Drop the cast.
 
 use crate::{Diagnostic, LintRule, Severity};
+use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -22,9 +23,7 @@ impl LintRule for Rule {
     if scope.is_empty() || catalog.tables().next().is_none() {
       return;
     }
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let raw = &source[start..end];
+    let (start, raw) = crate::stmt_body(stmt, source);
     let cleaned = crate::textutil::strip_noise_full(raw);
     let bytes = cleaned.as_bytes();
     let n = bytes.len();
@@ -245,6 +244,3 @@ fn is_ident_byte(b: u8) -> bool {
   b.is_ascii_alphanumeric() || b == b'_'
 }
 
-fn is_word(c: char) -> bool {
-  c.is_alphanumeric() || c == '_'
-}
