@@ -19,9 +19,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (start, body) = crate::stmt_body(stmt, source);
     for op in ["@>", "<@"] {
       let mut from = 0usize;
       while let Some(rel) = body[from..].find(op) {
@@ -48,7 +46,7 @@ impl LintRule for Rule {
           message: format!(
             "`{op}` text literal -- PG implicitly casts; add `::jsonb` for clarity + planner determinism"
           ),
-          range: text_size::TextRange::new((lit_abs_s as u32).into(), (lit_abs_e as u32).into()),
+          range: crate::range_at(lit_abs_s, lit_abs_e),
         });
         from = after + after_lit;
       }

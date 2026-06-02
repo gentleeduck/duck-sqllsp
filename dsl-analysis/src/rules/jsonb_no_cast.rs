@@ -18,10 +18,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
-    let upper = body.to_ascii_uppercase();
+    let (start, body, upper) = crate::stmt_body_upper(stmt, source);
     // Look for jsonb path operator `->>` followed by `=` then a
     // string literal -- common pattern that needs an explicit cast
     // when the user wants a text compare. Pattern: `... ->> 'k' = 'v'`.
@@ -56,7 +53,7 @@ impl LintRule for Rule {
       code: "sql107",
       severity: Severity::Hint,
       message: "jsonb expression compared to literal -- add `::text` or `::jsonb` cast to make intent explicit".into(),
-      range: text_size::TextRange::new((abs_start as u32).into(), (abs_end as u32).into()),
+      range: crate::range_at(abs_start, abs_end),
     });
   }
 }

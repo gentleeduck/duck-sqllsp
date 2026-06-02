@@ -18,9 +18,7 @@ impl LintRule for Rule {
   }
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
-    let start: usize = u32::from(stmt.range.start()) as usize;
-    let end: usize = (u32::from(stmt.range.end()) as usize).min(source.len());
-    let body = &source[start..end];
+    let (start, body) = crate::stmt_body(stmt, source);
     let lower = body.to_ascii_lowercase();
     let mut from = 0usize;
     while let Some(rel) = lower[from..].find("jsonb_set(") {
@@ -55,10 +53,7 @@ impl LintRule for Rule {
               "jsonb_set path `{p}` must be a `text[]` literal -- use `'{{{}}}'` or `ARRAY['{}']` (PG 22P02)",
               p, p,
             ),
-            range: text_size::TextRange::new(
-              ((start + open + off) as u32).into(),
-              ((start + open + off + path.len()) as u32).into(),
-            ),
+            range: crate::range_at(start + open + off, start + open + off + path.len()),
           });
         }
       }
