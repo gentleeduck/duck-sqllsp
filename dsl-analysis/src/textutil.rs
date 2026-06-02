@@ -189,3 +189,58 @@ pub fn strip_comments_only(s: &str) -> String {
   }
   String::from_utf8(out).unwrap_or_else(|_| s.to_string())
 }
+
+/// True when `c` can be part of a SQL identifier (alphanumeric +
+/// underscore). Recurs in dozens of rules; this helper dedupes them.
+#[inline]
+pub fn is_word(c: char) -> bool {
+  c.is_alphanumeric() || c == '_'
+}
+
+/// True when `needle` appears in `haystack` as a whole word (alphanumeric/
+/// underscore boundary). Case-sensitive -- callers that need case-insensitive
+/// matching should pre-uppercase both inputs. Replaces dozens of local
+/// `contains_word` / `has_word_kw` copies.
+pub fn contains_word(haystack: &str, needle: &str) -> bool {
+  let h = haystack.as_bytes();
+  let n = needle.as_bytes();
+  if n.is_empty() {
+    return false;
+  }
+  let mut i = 0;
+  while i + n.len() <= h.len() {
+    if &h[i..i + n.len()] == n {
+      let prev_ok = i == 0 || !is_word(h[i - 1] as char);
+      let next_ok = i + n.len() == h.len() || !is_word(h[i + n.len()] as char);
+      if prev_ok && next_ok {
+        return true;
+      }
+    }
+    i += 1;
+  }
+  false
+}
+
+/// First byte offset where `needle` occurs in `haystack` as a whole
+/// word (alphanumeric/underscore boundary). Case-sensitive. Returns
+/// None when not found or `needle` is empty. Sibling of
+/// [`contains_word`] -- this one returns the position.
+pub fn find_word(haystack: &str, needle: &str) -> Option<usize> {
+  let h = haystack.as_bytes();
+  let n = needle.as_bytes();
+  if n.is_empty() {
+    return None;
+  }
+  let mut i = 0usize;
+  while i + n.len() <= h.len() {
+    if &h[i..i + n.len()] == n {
+      let prev_ok = i == 0 || !is_word(h[i - 1] as char);
+      let next_ok = i + n.len() == h.len() || !is_word(h[i + n.len()] as char);
+      if prev_ok && next_ok {
+        return Some(i);
+      }
+    }
+    i += 1;
+  }
+  None
+}

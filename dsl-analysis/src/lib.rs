@@ -12,7 +12,63 @@ pub mod rules;
 pub mod textutil;
 pub mod typing;
 
-pub use diagnostic::{Diagnostic, Severity};
+pub use diagnostic::{range_at, Diagnostic, Severity};
+
+/// Return the `(start, end_clamped)` byte offsets of a statement
+/// within `source`. `end` is clamped to `source.len()` because the
+/// parser sometimes reports a range that extends past EOF on
+/// recovered statements.
+#[inline]
+pub fn stmt_bounds(stmt: &Statement, source: &str) -> (usize, usize) {
+  let start = u32::from(stmt.range.start()) as usize;
+  let end = (u32::from(stmt.range.end()) as usize).min(source.len());
+  (start, end)
+}
+
+/// Return `(start, body_slice)` for a statement. Convenience wrapper
+/// around [`stmt_bounds`] for rules that only need the body slice and
+/// the start offset (the end offset is implied by `body.len()`).
+#[inline]
+pub fn stmt_body<'a>(stmt: &Statement, source: &'a str) -> (usize, &'a str) {
+  let (start, end) = stmt_bounds(stmt, source);
+  (start, &source[start..end])
+}
+
+/// Return `(start, body_slice, body_uppercase)` for a statement. Most
+/// rules want all three -- factoring this saves a separate
+/// `to_ascii_uppercase` line per rule.
+///
+/// Uses a thread-local cache keyed by `(start, end)` -- many rules call
+/// this on the same statement during a single `run()`, and the cache
+/// turns a per-rule O(body_len) uppercase into a single allocation per
+/// statement. The cache is reset between statements by `run()`.
+#[inline]
+pub fn stmt_body_upper<'a>(stmt: &Statement, source: &'a str) -> (usize, &'a str, String) {
+  let (start, body) = stmt_body(stmt, source);
+  let end = start + body.len();
+  let upper = STMT_UPPER_CACHE.with(|c| {
+    let mut slot = c.borrow_mut();
+    if let Some((s, e, ref up)) = *slot
+      && s == start
+      && e == end
+    {
+      return up.clone();
+    }
+    let up = body.to_ascii_uppercase();
+    *slot = Some((start, end, up.clone()));
+    up
+  });
+  (start, body, upper)
+}
+
+thread_local! {
+  static STMT_UPPER_CACHE: std::cell::RefCell<Option<(usize, usize, String)>> =
+    const { std::cell::RefCell::new(None) };
+}
+
+fn reset_stmt_upper_cache() {
+  STMT_UPPER_CACHE.with(|c| *c.borrow_mut() = None);
+}
 
 use dsl_catalog::Catalog;
 use dsl_parse::{Dialect, ParseError, ParsedFile, Statement};
@@ -59,13 +115,91 @@ fn parser_diags(source: &str, errors: &[ParseError]) -> Vec<Diagnostic> {
   errors
     .iter()
     .filter(|e| !error_is_psql_meta(source, e))
-    .map(|e| Diagnostic {
-      code: "sql000",
-      severity: Severity::Error,
-      message: format!("syntax error: {}", e.message),
-      range: e.range,
+    .map(|e| {
+      // pg_query messages embed the rejected token as `at or near "<tok>"`.
+      // The default range covers the entire failing statement, which is
+      // a poor pointer for editor squiggles. When we can recover the
+      // offending token, narrow the range to the LAST occurrence of it
+      // inside the chunk (last because the same token often appears in
+      // legal context earlier -- e.g. the `(` for the column list, and
+      // the `(` that actually broke the parse is the last one before
+      // pg_query gave up).
+      let s: usize = u32::from(e.range.start()) as usize;
+      let chunk_end: usize = (u32::from(e.range.end()) as usize).min(source.len());
+      let mut narrowed = e.range;
+      if let Some(tok) = extract_at_or_near(&e.message) {
+        let chunk = source.get(s..chunk_end).unwrap_or("");
+        if let Some(rel) = chunk.rfind(tok.as_str()) {
+          let abs_start = s + rel;
+          let abs_end = abs_start + tok.len();
+          narrowed = text_size::TextRange::new(
+            (abs_start as u32).into(),
+            (abs_end as u32).into(),
+          );
+        }
+      }
+      // Strip our own `pg_query: Invalid statement:` prefix that the
+      // backend wraps around libpg_query's terse message -- the
+      // important part is the trailing "syntax error at or near \"<tok>\"".
+      let cleaned = e
+        .message
+        .strip_prefix("pg_query: Invalid statement: ")
+        .unwrap_or(&e.message)
+        .to_string();
+      // Drizzle pattern: `jsonb DEFAULT {} ...` -- the bare `{}` is
+      // invalid PG syntax (needs `'{}'::jsonb`), but drizzle emits it
+      // for empty-object defaults. Downgrade error to hint with a
+      // pointer to the fix so the migration doesn't show as red while
+      // the user decides whether to patch drizzle's emit.
+      let (severity, final_message) = if drizzle_jsonb_default_braces(source, s, chunk_end) {
+        (
+          Severity::Hint,
+          "drizzle emit: `DEFAULT {}` is not valid PG syntax -- replace with `DEFAULT '{}'::jsonb` (PG parses bare `{}` as array literal terminator and rejects it)".to_string(),
+        )
+      } else {
+        (Severity::Error, cleaned)
+      };
+      Diagnostic {
+        code: "sql000",
+        severity,
+        message: final_message,
+        range: narrowed,
+      }
     })
     .collect()
+}
+
+/// True when the failing chunk contains `jsonb DEFAULT {` -- the exact
+/// drizzle migration emit for an empty-object jsonb default. Case
+/// insensitive on the keywords; tolerates arbitrary whitespace.
+fn drizzle_jsonb_default_braces(source: &str, chunk_start: usize, chunk_end: usize) -> bool {
+  let chunk = source.get(chunk_start..chunk_end).unwrap_or("");
+  let upper = chunk.to_ascii_uppercase();
+  let mut from = 0usize;
+  while let Some(at) = upper[from..].find("JSONB") {
+    let pos = from + at;
+    let after = upper[pos + "JSONB".len()..].trim_start();
+    if let Some(rest) = after.strip_prefix("DEFAULT") {
+      let after_def = rest.trim_start();
+      if after_def.starts_with('{') {
+        return true;
+      }
+    }
+    from = pos + "JSONB".len();
+  }
+  false
+}
+
+/// Pull `<tok>` out of pg_query's `... at or near "<tok>" ...` error
+/// shape. Returns None when the message is in a different form.
+fn extract_at_or_near(msg: &str) -> Option<String> {
+  let at = msg.find("at or near \"")?;
+  let after = &msg[at + "at or near \"".len()..];
+  let end = after.find('"')?;
+  if end == 0 {
+    return None;
+  }
+  Some(after[..end].to_string())
 }
 
 /// True when ANY line in the chunk spanned by the error starts with
@@ -108,28 +242,41 @@ pub fn run_with_dialect(
   std::panic::set_hook(Box::new(|_| {}));
   let mut out = parser_diags(source, &file.errors);
   let registered = rules::all();
+  // Pre-filter dialect-skipped rules once instead of per-statement.
+  let active: Vec<&Box<dyn LintRule>> =
+    registered.iter().filter(|r| !skip_for_dialect(dialect, r.code())).collect();
   for (stmt, scope) in file.statements.iter().zip(scopes.iter()) {
+    reset_stmt_upper_cache();
     let trimmed = trim_stmt_range(stmt, source);
-    for rule in &registered {
-      if skip_for_dialect(dialect, rule.code()) {
-        continue;
-      }
-      // Defensive: a rule that panics (e.g. byte-indexing a multi-byte
-      // codepoint) shouldn't kill diagnostics for the whole buffer.
-      // catch_unwind isolates the failure; the offending rule simply
-      // produces no diagnostic for this statement and the rest of the
-      // analysis continues.
-      let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let mut local: Vec<Diagnostic> = Vec::new();
+    // Defensive: a rule that panics (e.g. byte-indexing a multi-byte
+    // codepoint) shouldn't kill diagnostics for the whole buffer. To
+    // keep panic-isolation cheap, wrap the whole rule loop for each
+    // statement in a single catch_unwind. Trade-off: a panic in one
+    // rule loses diagnostics from rules that hadn't run yet for the
+    // SAME statement -- but every subsequent statement still runs all
+    // rules cleanly. Per-rule wrapping was ~600x more catch_unwind
+    // frames per statement, dominating runtime on large buffers.
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+      let mut local: Vec<Diagnostic> = Vec::new();
+      for rule in &active {
         rule.check(source, &trimmed, scope, catalog, &mut local);
-        local
-      }));
-      match result {
-        Ok(local) => out.extend(local),
-        Err(_) => {
-          // Silent on panic; rule simply doesn't contribute diagnostics
-          // for this statement. Add tracing later if needed.
-        },
+      }
+      local
+    }));
+    if let Ok(mut local) = result {
+      out.append(&mut local);
+    } else {
+      // One rule panicked. Fall back to per-rule isolation for THIS
+      // statement so the remaining rules still contribute.
+      for rule in &active {
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+          let mut local: Vec<Diagnostic> = Vec::new();
+          rule.check(source, &trimmed, scope, catalog, &mut local);
+          local
+        }));
+        if let Ok(mut l) = r {
+          out.append(&mut l);
+        }
       }
     }
   }
