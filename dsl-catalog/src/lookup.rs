@@ -18,16 +18,21 @@ impl Catalog {
   }
 
   pub fn find_table(&self, schema: Option<&str>, name: &str) -> Option<&Table> {
-    self.tables().find(|t| t.name == name && schema.is_none_or(|s| t.schema == s))
+    // Case-insensitive: PG folds unquoted identifiers to lowercase,
+    // so `USERS` must match the catalog's `users` entry.
+    self
+      .tables()
+      .find(|t| t.name.eq_ignore_ascii_case(name) && schema.is_none_or(|s| t.schema.eq_ignore_ascii_case(s)))
   }
 
   /// Find every (table, column) pair where the column has the given name.
-  /// Multiple results indicate ambiguity (rule sql003).
+  /// Multiple results indicate ambiguity (rule sql003). Case-insensitive
+  /// (PG folds unquoted identifiers to lowercase).
   pub fn columns_named(&self, name: &str) -> Vec<(&Table, &Column)> {
     let mut out = Vec::new();
     for t in self.tables() {
       for c in &t.columns {
-        if c.name == name {
+        if c.name.eq_ignore_ascii_case(name) {
           out.push((t, c));
         }
       }
@@ -37,40 +42,41 @@ impl Catalog {
 
   pub fn column_in(&self, schema: Option<&str>, table: &str, column: &str) -> Option<&Column> {
     let t = self.find_table(schema, table)?;
-    t.columns.iter().find(|c| c.name == column)
+    t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(column))
   }
 
   /// Look up a user-defined type by name (enum / domain / composite).
+  /// Case-insensitive.
   pub fn find_type(&self, schema: Option<&str>, name: &str) -> Option<&Type> {
-    self.types().find(|t| t.name == name && schema.is_none_or(|s| t.schema == s))
+    self.types().find(|t| t.name.eq_ignore_ascii_case(name) && schema.is_none_or(|s| t.schema.eq_ignore_ascii_case(s)))
   }
 
   /// Find a row-level security policy by name, plus its target table.
   /// Policies live on tables in the model, so the lookup scans every
-  /// table's policy list.
+  /// table's policy list. Case-insensitive.
   pub fn find_policy(&self, name: &str) -> Option<(&Table, &Policy)> {
     for t in self.tables() {
-      if let Some(p) = t.policies.iter().find(|p| p.name == name) {
+      if let Some(p) = t.policies.iter().find(|p| p.name.eq_ignore_ascii_case(name)) {
         return Some((t, p));
       }
     }
     None
   }
 
-  /// Find a trigger by name, plus its target table.
+  /// Find a trigger by name, plus its target table. Case-insensitive.
   pub fn find_trigger(&self, name: &str) -> Option<(&Table, &Trigger)> {
     for t in self.tables() {
-      if let Some(tr) = t.triggers.iter().find(|tr| tr.name == name) {
+      if let Some(tr) = t.triggers.iter().find(|tr| tr.name.eq_ignore_ascii_case(name)) {
         return Some((t, tr));
       }
     }
     None
   }
 
-  /// Find an index by name, plus its target table.
+  /// Find an index by name, plus its target table. Case-insensitive.
   pub fn find_index(&self, name: &str) -> Option<(&Table, &IndexDef)> {
     for t in self.tables() {
-      if let Some(i) = t.indexes.iter().find(|i| i.name == name) {
+      if let Some(i) = t.indexes.iter().find(|i| i.name.eq_ignore_ascii_case(name)) {
         return Some((t, i));
       }
     }
@@ -92,9 +98,9 @@ impl Catalog {
     self.sequences.iter()
   }
 
-  /// Find a sequence by name (and optional schema).
+  /// Find a sequence by name (and optional schema). Case-insensitive.
   pub fn find_sequence(&self, schema: Option<&str>, name: &str) -> Option<&Sequence> {
-    self.sequences().find(|s| s.name == name && schema.is_none_or(|sch| s.schema == sch))
+    self.sequences().find(|s| s.name.eq_ignore_ascii_case(name) && schema.is_none_or(|sch| s.schema.eq_ignore_ascii_case(sch)))
   }
 
   /// All installed extensions.
