@@ -357,7 +357,7 @@ fn iter_table_bindings(src: &str) -> Vec<(Option<String>, String, String)> {
   let chars: Vec<char> = src.chars().collect();
   let mut i = 0;
   while i < chars.len() {
-    if let Some(consumed) = match_keyword(&chars, i, &["FROM", "JOIN", "UPDATE", "INTO"]) {
+    if let Some(consumed) = match_keyword(&chars, i, &["FROM", "JOIN", "UPDATE", "INTO", "USING"]) {
       i += consumed;
       // Read the first table, then any comma-continuations.
       loop {
