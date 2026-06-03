@@ -239,5 +239,76 @@ pub fn build() -> HashMap<&'static str, Entry> {
   t!("REGROLE", "OID alias for roles.", "r REGROLE", pg("datatype-oid.html"));
   t!("REGNAMESPACE", "OID alias for schemas.", "ns REGNAMESPACE", pg("datatype-oid.html"));
 
+  // ---- pseudo + REG + standard-spelling sweep ---------------
+  t!("ANY", "Polymorphic pseudo-type accepted by functions; bound to a concrete type at call time.", "x ANY", pg("extend-type-system.html#EXTEND-TYPES-POLYMORPHIC"));
+  t!("ANYARRAY", "Polymorphic pseudo-type accepted by functions; bound to a concrete type at call time.", "x ANYARRAY", pg("extend-type-system.html#EXTEND-TYPES-POLYMORPHIC"));
+  t!("ANYCOMPATIBLE", "Polymorphic pseudo-type accepted by functions; bound to a concrete type at call time.", "x ANYCOMPATIBLE", pg("extend-type-system.html#EXTEND-TYPES-POLYMORPHIC"));
+  t!("ANYCOMPATIBLEARRAY", "Polymorphic pseudo-type accepted by functions; bound to a concrete type at call time.", "x ANYCOMPATIBLEARRAY", pg("extend-type-system.html#EXTEND-TYPES-POLYMORPHIC"));
+  t!("ANYCOMPATIBLEMULTIRANGE", "Polymorphic pseudo-type accepted by functions; bound to a concrete type at call time.", "x ANYCOMPATIBLEMULTIRANGE", pg("extend-type-system.html#EXTEND-TYPES-POLYMORPHIC"));
+  t!("ANYCOMPATIBLENONARRAY", "Polymorphic pseudo-type accepted by functions; bound to a concrete type at call time.", "x ANYCOMPATIBLENONARRAY", pg("extend-type-system.html#EXTEND-TYPES-POLYMORPHIC"));
+  t!("ANYCOMPATIBLERANGE", "Polymorphic pseudo-type accepted by functions; bound to a concrete type at call time.", "x ANYCOMPATIBLERANGE", pg("extend-type-system.html#EXTEND-TYPES-POLYMORPHIC"));
+  t!("ANYELEMENT", "Polymorphic pseudo-type accepted by functions; bound to a concrete type at call time.", "x ANYELEMENT", pg("extend-type-system.html#EXTEND-TYPES-POLYMORPHIC"));
+  t!("ANYENUM", "Polymorphic pseudo-type accepted by functions; bound to a concrete type at call time.", "x ANYENUM", pg("extend-type-system.html#EXTEND-TYPES-POLYMORPHIC"));
+  t!("ANYMULTIRANGE", "Polymorphic pseudo-type accepted by functions; bound to a concrete type at call time.", "x ANYMULTIRANGE", pg("extend-type-system.html#EXTEND-TYPES-POLYMORPHIC"));
+  t!("ANYNONARRAY", "Polymorphic pseudo-type accepted by functions; bound to a concrete type at call time.", "x ANYNONARRAY", pg("extend-type-system.html#EXTEND-TYPES-POLYMORPHIC"));
+  t!("ANYRANGE", "Polymorphic pseudo-type accepted by functions; bound to a concrete type at call time.", "x ANYRANGE", pg("extend-type-system.html#EXTEND-TYPES-POLYMORPHIC"));
+  t!("CSTRING", "Pseudo-type internal to PG -- not usable in user table columns.", "x CSTRING", pg("datatype-pseudo.html"));
+  t!("DEC", "SQL standard alias for NUMERIC / DECIMAL.", "price DEC(10,2)", pg("datatype-numeric.html"));
+  t!("EVENT_TRIGGER", "Pseudo-type internal to PG -- not usable in user table columns.", "x EVENT_TRIGGER", pg("datatype-pseudo.html"));
+  t!("FDW_HANDLER", "Pseudo-type for the entry point of a feature handler. Cannot appear in user SQL.", "x FDW_HANDLER", pg("extend-type-system.html"));
+  t!("INDEX_AM_HANDLER", "Pseudo-type for the entry point of a feature handler. Cannot appear in user SQL.", "x INDEX_AM_HANDLER", pg("extend-type-system.html"));
+  t!("INTERNAL", "Pseudo-type internal to PG -- not usable in user table columns.", "x INTERNAL", pg("datatype-pseudo.html"));
+  t!("JSONPATH", "JSONPath expression value -- used by jsonb_path_* functions.", "p JSONPATH", pg("datatype-json.html#DATATYPE-JSONPATH"));
+  t!("LANGUAGE_HANDLER", "Pseudo-type for the entry point of a feature handler. Cannot appear in user SQL.", "x LANGUAGE_HANDLER", pg("extend-type-system.html"));
+  t!("NAME", "63-byte identifier -- internal PG type used in pg_catalog rows.", "-- pg_catalog only", pg("datatype-character.html"));
+  t!("NATIONAL CHAR", "SQL standard alias for CHARACTER (NCHAR = national char). PG treats them as plain text.", "c NATIONAL CHAR(20)", pg("datatype-character.html"));
+  t!("NATIONAL CHARACTER", "SQL standard alias for CHARACTER (NCHAR = national char). PG treats them as plain text.", "c NATIONAL CHARACTER(20)", pg("datatype-character.html"));
+  t!("NCHAR", "SQL standard alias for CHARACTER (NCHAR = national char). PG treats them as plain text.", "c NCHAR(20)", pg("datatype-character.html"));
+  t!("OPAQUE", "Pseudo-type internal to PG -- not usable in user table columns.", "x OPAQUE", pg("datatype-pseudo.html"));
+  t!("PG_DDL_COMMAND", "Pseudo-type internal to PG -- not usable in user table columns.", "x PG_DDL_COMMAND", pg("datatype-pseudo.html"));
+  t!("PG_SNAPSHOT", "Visibility snapshot -- replaces deprecated txid_snapshot.", "snap PG_SNAPSHOT", pg("datatype-pg-lsn.html"));
+  t!("RECORD", "Pseudo-type internal to PG -- not usable in user table columns.", "x RECORD", pg("datatype-pseudo.html"));
+  t!("REGCOLLATION", "Object-identifier alias type -- accepts a name + resolves to OID. Useful in queries against pg_catalog.", "t REGCOLLATION", pg("datatype-oid.html"));
+  t!("REGCONFIG", "Object-identifier alias type -- accepts a name + resolves to OID. Useful in queries against pg_catalog.", "t REGCONFIG", pg("datatype-oid.html"));
+  t!("REGDICTIONARY", "Object-identifier alias type -- accepts a name + resolves to OID. Useful in queries against pg_catalog.", "t REGDICTIONARY", pg("datatype-oid.html"));
+  t!("REGOPER", "Object-identifier alias type -- accepts a name + resolves to OID. Useful in queries against pg_catalog.", "t REGOPER", pg("datatype-oid.html"));
+  t!("REGOPERATOR", "Object-identifier alias type -- accepts a name + resolves to OID. Useful in queries against pg_catalog.", "t REGOPERATOR", pg("datatype-oid.html"));
+  t!("REGPROCEDURE", "Object-identifier alias type -- accepts a name + resolves to OID. Useful in queries against pg_catalog.", "t REGPROCEDURE", pg("datatype-oid.html"));
+  t!("TABLE_AM_HANDLER", "Pseudo-type for the entry point of a feature handler. Cannot appear in user SQL.", "x TABLE_AM_HANDLER", pg("extend-type-system.html"));
+  t!("TIMESTAMP WITHOUT TIME ZONE", "SQL standard spelling for the time/timestamp variants (with/without time zone).", "x TIMESTAMP WITHOUT TIME ZONE", pg("datatype-datetime.html"));
+  t!("TIMESTAMP WITH TIME ZONE", "SQL standard spelling for the time/timestamp variants (with/without time zone).", "x TIMESTAMP WITH TIME ZONE", pg("datatype-datetime.html"));
+  t!("TIME WITHOUT TIME ZONE", "SQL standard spelling for the time/timestamp variants (with/without time zone).", "x TIME WITHOUT TIME ZONE", pg("datatype-datetime.html"));
+  t!("TIME WITH TIME ZONE", "SQL standard spelling for the time/timestamp variants (with/without time zone).", "x TIME WITH TIME ZONE", pg("datatype-datetime.html"));
+  t!("TRIGGER", "Pseudo-type internal to PG -- not usable in user table columns.", "x TRIGGER", pg("datatype-pseudo.html"));
+  t!("TSM_HANDLER", "Pseudo-type for the entry point of a feature handler. Cannot appear in user SQL.", "x TSM_HANDLER", pg("extend-type-system.html"));
+  t!("TXID_SNAPSHOT", "Deprecated -- use PG_SNAPSHOT in PG13+.", "snap TXID_SNAPSHOT", pg("datatype-pg-lsn.html"));
+  t!("UNKNOWN", "Pseudo-type internal to PG -- not usable in user table columns.", "x UNKNOWN", pg("datatype-pseudo.html"));
+  t!("VOID", "Pseudo-type internal to PG -- not usable in user table columns.", "x VOID", pg("datatype-pseudo.html"));
+  t!("XID", "4-byte transaction id. Wraps around -- compare with `txid_*` fns or convert to `xid8` (PG13+) for full ordering.", "id XID", pg("datatype-oid.html"));
+  t!("XID8", "8-byte transaction id (PG13+) -- no wraparound concerns. Pair with `pg_snapshot`.", "id XID8", pg("datatype-oid.html"));
+  t!("ACLITEM", "Single ACL entry stored inside an aclitem[] (used by pg_class.relacl etc). Read via `aclexplode()` / `pg_get_userbyid()`.", "x ACLITEM", pg("ddl-priv.html"));
+
+  // ---- Extension types ----
+  t!("HSTORE", "Key/value text map (hstore extension). Use jsonb instead in new code.", "tags HSTORE", "https://www.postgresql.org/docs/current/hstore.html");
+  t!("VECTOR", "Dense float vector (pgvector extension). Specify dimensions: VECTOR(1536).", "embedding VECTOR(1536)", "https://github.com/pgvector/pgvector");
+  t!("HALFVEC", "Half-precision (float2) vector (pgvector 0.7+). Half the storage of VECTOR.", "embedding HALFVEC(1536)", "https://github.com/pgvector/pgvector");
+  t!("BIT_VEC", "Binary vector (pgvector 0.7+). Bit-packed for hamming/jaccard distance.", "fp BIT_VEC(64)", "https://github.com/pgvector/pgvector");
+  t!("SPARSEVEC", "Sparse vector (pgvector 0.7+). Only stores nonzero indices.", "v SPARSEVEC(10000)", "https://github.com/pgvector/pgvector");
+  t!("LTREE", "Hierarchical label tree (ltree extension). Use ~ and @> for ancestor queries.", "path LTREE", "https://www.postgresql.org/docs/current/ltree.html");
+  t!("LQUERY", "ltree label path query.", "q LQUERY", "https://www.postgresql.org/docs/current/ltree.html");
+  t!("LTXTQUERY", "ltree full-text query.", "q LTXTQUERY", "https://www.postgresql.org/docs/current/ltree.html");
+  t!("CITEXT", "Case-insensitive text (citext extension). UNIQUE/= compare folded.", "email CITEXT", "https://www.postgresql.org/docs/current/citext.html");
+  t!("ISBN", "ISBN identifier (isn extension).", "x ISBN", "https://www.postgresql.org/docs/current/isn.html");
+  t!("ISSN", "ISSN identifier (isn extension).", "x ISSN", "https://www.postgresql.org/docs/current/isn.html");
+  t!("CUBE", "Multi-dim cube (cube extension). Used by earthdistance.", "c CUBE", "https://www.postgresql.org/docs/current/cube.html");
+  t!("EARTH", "earth-distance type (earthdistance extension).", "e EARTH", "https://www.postgresql.org/docs/current/earthdistance.html");
+  t!("SEG", "Floating point intervals (seg extension).", "x SEG", "https://www.postgresql.org/docs/current/seg.html");
+  // ---- PostGIS ----
+  t!("GEOMETRY", "PostGIS geometry. Specify subtype/SRID: GEOMETRY(Point, 4326).", "geom GEOMETRY(Point, 4326)", "https://postgis.net/docs/geometry.html");
+  t!("GEOGRAPHY", "PostGIS geography (spherical, computations in meters).", "loc GEOGRAPHY(Point, 4326)", "https://postgis.net/docs/geography.html");
+  t!("RASTER", "PostGIS raster type.", "tile RASTER", "https://postgis.net/docs/raster.html");
+  // ---- TimescaleDB ----
+  t!("HYPERTABLE", "TimescaleDB virtual table -- not a real column type; created via create_hypertable().", "-- see create_hypertable()", "https://docs.timescale.com/");
+
   m
 }
