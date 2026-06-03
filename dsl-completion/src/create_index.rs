@@ -80,7 +80,28 @@ pub fn detect(source: &str, offset: TextSize) -> Option<Phase> {
     }
     return None;
   }
-  // Cursor sits inside the index expression list. Columns of the table.
+  // Walk the paren body. When it closes BEFORE the cursor the user is in
+  // the trailing-clause slot (INCLUDE / WHERE / WITH / ...), which is
+  // handled by the engine-level keyword fallback -- return None here so
+  // that path can fire.
+  let body_bytes = after.as_bytes();
+  let mut depth: i32 = 0;
+  let mut k = 0usize;
+  while k < body_bytes.len() {
+    match body_bytes[k] {
+      b'(' => depth += 1,
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          // Cursor sits past the closing paren -> trailing-clause slot.
+          return None;
+        }
+      },
+      _ => {},
+    }
+    k += 1;
+  }
+  // Paren still open -> cursor sits inside the index expression list.
   let name = table.rsplit('.').next().unwrap_or(&table).to_string();
   Some(Phase::CtlExpectFkColumn { table: name })
 }

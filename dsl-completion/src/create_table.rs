@@ -186,6 +186,31 @@ fn current_entry<'a>(source: &'a str, body_start: usize, cursor: usize) -> Entry
   let mut i = body_start;
   while i < end {
     let c = bytes[i] as char;
+    // Skip line + block comments so a `-- foo` between columns doesn't
+    // fake-extend the previous entry; without this the token count
+    // includes comment words and misclassifies the column phase.
+    if c == '-' && i + 1 < end && bytes[i + 1] == b'-' {
+      while i < end && bytes[i] != b'\n' {
+        i += 1;
+      }
+      continue;
+    }
+    if c == '/' && i + 1 < end && bytes[i + 1] == b'*' {
+      i += 2;
+      while i + 1 < end && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+        i += 1;
+      }
+      i = (i + 2).min(end);
+      continue;
+    }
+    if c == '\'' {
+      i += 1;
+      while i < end && !(bytes[i] == b'\'' && bytes[i - 1] != b'\\') {
+        i += 1;
+      }
+      i = (i + 1).min(end);
+      continue;
+    }
     if c == '(' {
       depth += 1;
     } else if c == ')' {
@@ -195,7 +220,24 @@ fn current_entry<'a>(source: &'a str, body_start: usize, cursor: usize) -> Entry
     }
     i += 1;
   }
-  Entry { text: &source[last_split..end] }
+  Entry { text: strip_entry_comments(&source[last_split..end]) }
+}
+
+/// Remove `-- ...` and `/* ... */` runs from a snippet so the token
+/// counter in classify_entry only sees real SQL identifiers.
+fn strip_entry_comments(s: &str) -> &str {
+  // For simplicity, only strip when comments don't sit before non-ws:
+  // common case is `id int -- pk` where the comment is at end. The
+  // body-walk above already skipped fully-consumed comments; this is
+  // a safety net for trailing-comment tails on the active entry. We
+  // return the slice up to the first `--` or `/*` if found.
+  if let Some(idx) = s.find("--") {
+    return &s[..idx];
+  }
+  if let Some(idx) = s.find("/*") {
+    return &s[..idx];
+  }
+  s
 }
 
 fn classify_entry(_source: &str, entry: &Entry<'_>, enclosing: Option<&str>) -> Phase {
@@ -380,7 +422,15 @@ fn fk_phase_after_references(after_upper: &str) -> Phase {
   if table_tok.is_empty() {
     return Phase::CtlExpectFkTable {};
   }
-  if after_upper[table_tok.len()..].trim_start().starts_with('(') {
+  let rest = after_upper[table_tok.len()..].trim_start();
+  if let Some(body) = rest.strip_prefix('(') {
+    // Only stay in column-suggest mode while the paren remains open.
+    // Once `)` appears, the cursor sits past the column list (in an
+    // ON DELETE / DEFERRABLE / ... trailing slot) -- let the phase
+    // keyword detectors handle it.
+    if body.contains(')') {
+      return Phase::Unknown;
+    }
     return Phase::CtlExpectFkColumn { table: table_tok.to_ascii_lowercase() };
   }
   Phase::CtlExpectFkTable {}

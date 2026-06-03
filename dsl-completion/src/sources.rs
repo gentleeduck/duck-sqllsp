@@ -65,7 +65,23 @@ pub fn db_functions(cat: &Catalog, out: &mut Vec<Item>) {
       .collect::<Vec<_>>()
       .join(", ");
     let signature = format!("{}({}) -> {}", f.name, args, display_type(&f.return_type));
-    let doc = format!("**DB function** `{}.{}`\n\n```sql\n{}\n```\n", f.schema, f.name, signature);
+    // Include the full DDL body when we have it (CREATE FUNCTION ...).
+    // Without the fenced code block, editors render the body as plain
+    // monospace text -- with it, treesitter/markdown highlighters
+    // color the SQL.
+    let body_block = f
+      .comment
+      .as_ref()
+      .filter(|c| !c.trim().is_empty())
+      .map(|c| {
+        let t = c.trim();
+        if t.starts_with("```") { format!("\n\n{t}") } else { format!("\n\n```sql\n{t}\n```") }
+      })
+      .unwrap_or_default();
+    let doc = format!(
+      "**DB function** `{}.{}`\n\n```sql\n{}\n```{}\n",
+      f.schema, f.name, signature, body_block
+    );
     let insert_text = if f.arguments.is_empty() { format!("{}()", f.name) } else { format!("{}($0)", f.name) };
     out.push(Item {
       label: f.name.clone(),
@@ -490,6 +506,7 @@ pub fn grant_privileges(out: &mut Vec<Item>) {
     ("CREATE", "create objects in the database/schema"),
     ("CONNECT", "connect to the database"),
     ("TEMPORARY", "create temporary tables in the database"),
+    ("MAINTAIN", "PG17+ -- VACUUM/ANALYZE/REINDEX/REFRESH MV/CLUSTER/LOCK TABLE without owning the table"),
   ];
   for (label, doc) in PRIVS {
     out.push(Item {
@@ -634,6 +651,24 @@ pub fn alter_table_actions(out: &mut Vec<Item>) {
     ("SET TABLESPACE", "move table to tablespace", "SET TABLESPACE ${1:tablespace}"),
     ("CLUSTER ON", "set CLUSTER index", "CLUSTER ON ${1:index_name}"),
     ("SET WITHOUT CLUSTER", "remove CLUSTER", "SET WITHOUT CLUSTER"),
+    ("ENABLE TRIGGER", "enable a trigger by name (or ALL / USER)", "ENABLE TRIGGER ${1:name}"),
+    ("DISABLE TRIGGER", "disable a trigger by name (or ALL / USER)", "DISABLE TRIGGER ${1:name}"),
+    ("ENABLE ROW LEVEL SECURITY", "turn RLS on for the table", "ENABLE ROW LEVEL SECURITY"),
+    ("DISABLE ROW LEVEL SECURITY", "turn RLS off for the table", "DISABLE ROW LEVEL SECURITY"),
+    ("FORCE ROW LEVEL SECURITY", "apply RLS even to the table owner", "FORCE ROW LEVEL SECURITY"),
+    ("NO FORCE ROW LEVEL SECURITY", "revert FORCE RLS (default)", "NO FORCE ROW LEVEL SECURITY"),
+    ("ENABLE REPLICA TRIGGER", "ENABLE REPLICA TRIGGER -- fire only when in replica role", "ENABLE REPLICA TRIGGER ${1:name}"),
+    ("ENABLE ALWAYS TRIGGER", "ENABLE ALWAYS TRIGGER -- fire even in replica role", "ENABLE ALWAYS TRIGGER ${1:name}"),
+    ("REPLICA IDENTITY", "REPLICA IDENTITY {DEFAULT|FULL|USING INDEX <ix>|NOTHING}", "REPLICA IDENTITY ${1|DEFAULT,FULL,NOTHING|}"),
+    ("RESET", "RESET (<storage_param>[, ...])", "RESET (${1:storage_param})"),
+    ("SET", "SET (<storage_param> = <value>[, ...])", "SET (${1:storage_param} = ${2:value})"),
+    ("OF", "OF <type> -- bind table to a composite type", "OF ${1:type_name}"),
+    ("NOT OF", "NOT OF -- detach composite type binding", "NOT OF"),
+    ("VALIDATE CONSTRAINT", "validate a previously NOT VALID constraint", "VALIDATE CONSTRAINT ${1:name}"),
+    ("OPTIONS", "FOREIGN TABLE OPTIONS only -- key/value list edit", "OPTIONS (${1:key} '${2:value}')"),
+    ("SET ACCESS METHOD", "switch table access method (PG12+)", "SET ACCESS METHOD ${1:method}"),
+    ("SET LOGGED", "make an UNLOGGED table logged", "SET LOGGED"),
+    ("SET UNLOGGED", "make a table UNLOGGED", "SET UNLOGGED"),
   ];
   for (label, detail, snippet) in actions {
     out.push(Item {
@@ -779,6 +814,45 @@ pub fn tables_in_schema(cat: &Catalog, schema_name: &str, out: &mut Vec<Item>) -
       for t in &s.tables {
         out.push(table_item(t));
       }
+    }
+  }
+  out.len() - start
+}
+
+/// Emit every function declared in the given schema. Mirror of
+/// [`tables_in_schema`] but for the function namespace: invoked when
+/// the user types `schema.<cursor>` and the dot handler wants to
+/// surface `schema.fn(...)` candidates alongside `schema.table` ones.
+pub fn functions_in_schema(cat: &Catalog, schema_name: &str, out: &mut Vec<Item>) -> usize {
+  let start = out.len();
+  for f in &cat.functions {
+    if f.schema.eq_ignore_ascii_case(schema_name) {
+      let detail = if f.return_type.is_empty() {
+        "function".to_string()
+      } else {
+        format!("function -> {}", f.return_type)
+      };
+      // Wrap the raw DDL in a fenced sql code block so the editor's
+      // markdown renderer picks it up for syntax-highlighted display.
+      // Without the fence the body shows as plain monospace text.
+      let documentation_md = f.comment.as_ref().map(|c| {
+        let trimmed = c.trim();
+        if trimmed.starts_with("```") {
+          c.clone()
+        } else {
+          format!("```sql\n{trimmed}\n```")
+        }
+      });
+      out.push(Item {
+        label: f.name.clone(),
+        kind: ItemKind::Function,
+        detail: Some(detail),
+        description: if f.return_type.is_empty() { None } else { Some(f.return_type.clone()) },
+        documentation_md,
+        insert_text: format!("{}(", f.name),
+        is_snippet: false,
+        sort_priority: 0,
+      });
     }
   }
   out.len() - start

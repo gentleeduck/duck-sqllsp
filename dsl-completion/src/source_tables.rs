@@ -64,7 +64,7 @@ pub fn from_file(file: &ParsedFile) -> Catalog {
       row_estimate: None,
       owner: None,
     };
-    if schema_name == "public" {
+    if schema_name.eq_ignore_ascii_case("public") {
       public.tables.push(table);
     } else {
       other
@@ -100,6 +100,12 @@ pub fn from_file(file: &ParsedFile) -> Catalog {
 /// `source` is the buffer text the AST in `file` came from.
 pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
   let mut cat = from_file(file);
+  // Text-fallback for CREATE TABLE statements pg_query rejected (often
+  // a single bad column expression aborts the whole stmt -- the rest
+  // of the table is still recoverable from the source). Without this
+  // pass a single syntax error invisibly removes the entire table from
+  // hover / completion / sql001 resolution.
+  recover_failed_create_tables(&mut cat, source);
   cat.sequences = scan_sequences(source);
   cat.types = scan_types(source);
   cat.extensions = scan_extensions(source);
@@ -120,7 +126,7 @@ pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
   let indexes_by_table = scan_indexes(source);
   let triggers_by_table = scan_triggers(source);
   let policies_by_table = scan_policies(source);
-  let insert_counts = scan_insert_tuple_counts(source);
+  let insert_counts = scan_dml_row_deltas(source);
   for schema in cat.schemas.iter_mut() {
     for table in schema.tables.iter_mut() {
       table.constraints = scan_constraints_for(source, &table.name);
@@ -142,7 +148,9 @@ pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
       // workspaces without a live DB (learning projects, test
       // fixtures). Live introspection overrides this via merge.
       if let Some(&n) = insert_counts.get(&key) {
-        table.row_estimate = Some(n as f64);
+        // Clamp negative (DELETE without prior INSERT in buffer) to 0
+        // so the codelens chip never displays a negative count.
+        table.row_estimate = Some((n.max(0)) as f64);
       }
       let generated_by_col = scan_generated_for(source, &table.name);
       let json_keys_by_col = scan_json_keys_for(source, &table.name);
@@ -194,6 +202,295 @@ pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
 /// zero columns -- unknown-column rules can't resolve `child.col`.
 /// Walk the source, find every PARTITION OF and copy parent columns
 /// onto matching children already in the catalog.
+/// Scan the source for `CREATE TABLE [schema.]<name> ( <columns> )`
+/// blocks whose table did NOT make it into the AST-derived catalog
+/// (usually because one column expression aborted pg_query). Build a
+/// minimal Table from the text body so hover / completion / sql001
+/// have *something* to resolve. Best effort -- only inline column
+/// definitions are picked up; constraint clauses are skipped.
+fn recover_failed_create_tables(cat: &mut Catalog, src: &str) {
+  let cleaned = strip_string_literals(src);
+  let upper = cleaned.to_ascii_uppercase();
+  let bytes = cleaned.as_bytes();
+  let n = bytes.len();
+  let needle = "CREATE TABLE";
+  let mut from = 0usize;
+  while let Some(rel) = upper[from..].find(needle) {
+    let at = from + rel;
+    // Word-boundary guard.
+    if at > 0 {
+      let prev = bytes[at - 1] as char;
+      if prev.is_ascii_alphanumeric() || prev == '_' {
+        from = at + needle.len();
+        continue;
+      }
+    }
+    let mut k = at + needle.len();
+    // Skip optional modifiers.
+    for kw in ["IF NOT EXISTS", "UNLOGGED", "TEMP", "TEMPORARY", "GLOBAL", "LOCAL"] {
+      while k < n && bytes[k].is_ascii_whitespace() {
+        k += 1;
+      }
+      if k + kw.len() <= n && upper[k..k + kw.len()] == *kw {
+        k += kw.len();
+      }
+    }
+    while k < n && bytes[k].is_ascii_whitespace() {
+      k += 1;
+    }
+    let (schema, name, after_name) = match read_qualified_ident(&cleaned, k) {
+      Some(t) => t,
+      None => {
+        from = at + needle.len();
+        continue;
+      },
+    };
+    from = at + needle.len();
+    if name.is_empty() {
+      continue;
+    }
+    let schema_name = schema.unwrap_or_else(|| "public".to_string()).to_ascii_lowercase();
+    let table_name_lc = name.to_ascii_lowercase();
+    if cat.schemas.iter().any(|s| {
+      s.name.eq_ignore_ascii_case(&schema_name)
+        && s.tables.iter().any(|t| t.name.eq_ignore_ascii_case(&table_name_lc))
+    }) {
+      continue;
+    }
+    // Find the body parenthesis after the name.
+    let mut p = after_name;
+    while p < n && bytes[p].is_ascii_whitespace() {
+      p += 1;
+    }
+    if p >= n || bytes[p] != b'(' {
+      continue;
+    }
+    let body_start = p + 1;
+    let body_end = match find_matching_paren(&cleaned, p) {
+      Some(e) => e,
+      None => continue,
+    };
+    let body = &cleaned[body_start..body_end];
+    let columns = parse_create_table_columns(body);
+    if columns.is_empty() {
+      continue;
+    }
+    let table = Table {
+      schema: schema_name.clone(),
+      name: name.clone(),
+      kind: TableKind::Table,
+      columns,
+      constraints: Vec::new(),
+      indexes: Vec::new(),
+      triggers: Vec::new(),
+      policies: Vec::new(),
+      comment: None,
+      row_estimate: None,
+      owner: None,
+    };
+    if let Some(s) = cat.schemas.iter_mut().find(|s| s.name.eq_ignore_ascii_case(&schema_name)) {
+      s.tables.push(table);
+    } else {
+      cat.schemas.push(Schema { name: schema_name, tables: vec![table] });
+    }
+  }
+}
+
+/// Read an optionally-quoted ident, then optional `.<ident>` for a
+/// schema-qualified pair. Returns (schema, name, byte_after_last_char).
+fn read_qualified_ident(src: &str, pos: usize) -> Option<(Option<String>, String, usize)> {
+  let (first, after_first) = read_ident_simple(src, pos)?;
+  if first.is_empty() {
+    return None;
+  }
+  let bytes = src.as_bytes();
+  let mut p = after_first;
+  while p < bytes.len() && bytes[p].is_ascii_whitespace() {
+    p += 1;
+  }
+  if p < bytes.len() && bytes[p] == b'.' {
+    let (second, after_second) = read_ident_simple(src, p + 1)?;
+    if !second.is_empty() {
+      return Some((Some(first), second, after_second));
+    }
+  }
+  Some((None, first, after_first))
+}
+
+fn read_ident_simple(src: &str, pos: usize) -> Option<(String, usize)> {
+  let bytes = src.as_bytes();
+  let n = bytes.len();
+  let mut i = pos;
+  while i < n && bytes[i].is_ascii_whitespace() {
+    i += 1;
+  }
+  if i >= n {
+    return None;
+  }
+  if bytes[i] == b'"' {
+    let start = i + 1;
+    let mut j = start;
+    while j < n && bytes[j] != b'"' {
+      j += 1;
+    }
+    if j >= n {
+      return None;
+    }
+    return Some((src[start..j].to_string(), j + 1));
+  }
+  let start = i;
+  while i < n && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+    i += 1;
+  }
+  if i == start {
+    return None;
+  }
+  Some((src[start..i].to_string(), i))
+}
+
+fn find_matching_paren(src: &str, open: usize) -> Option<usize> {
+  let bytes = src.as_bytes();
+  if open >= bytes.len() || bytes[open] != b'(' {
+    return None;
+  }
+  let mut depth = 1i32;
+  let mut i = open + 1;
+  while i < bytes.len() {
+    match bytes[i] {
+      b'(' => depth += 1,
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
+      _ => {},
+    }
+    i += 1;
+  }
+  None
+}
+
+/// Parse the body of a CREATE TABLE (between the outer parens) into a
+/// list of Columns. Skips table-level constraint rows (PRIMARY KEY,
+/// CHECK, UNIQUE, FOREIGN KEY, CONSTRAINT) and entries that don't look
+/// like column definitions.
+fn parse_create_table_columns(body: &str) -> Vec<Column> {
+  let mut out = Vec::new();
+  for raw_line in split_top_level_commas(body) {
+    let trimmed = raw_line.trim();
+    if trimmed.is_empty() {
+      continue;
+    }
+    let upper = trimmed.to_ascii_uppercase();
+    if upper.starts_with("PRIMARY KEY")
+      || upper.starts_with("UNIQUE")
+      || upper.starts_with("CHECK")
+      || upper.starts_with("FOREIGN KEY")
+      || upper.starts_with("CONSTRAINT")
+      || upper.starts_with("LIKE")
+      || upper.starts_with("EXCLUDE")
+    {
+      continue;
+    }
+    let (name, after_name) = match read_ident_simple(trimmed, 0) {
+      Some(t) => t,
+      None => continue,
+    };
+    let rest = trimmed[after_name..].trim();
+    if rest.is_empty() {
+      continue;
+    }
+    // Take the type up to the first NOT NULL / NULL / DEFAULT / PRIMARY
+    // / UNIQUE / CHECK / REFERENCES / GENERATED / COLLATE / -- stopword.
+    let stop_words: &[&str] = &[
+      "NOT NULL",
+      "NULL",
+      "DEFAULT",
+      "PRIMARY",
+      "UNIQUE",
+      "CHECK",
+      "REFERENCES",
+      "GENERATED",
+      "COLLATE",
+      "CONSTRAINT",
+    ];
+    let upper_rest = rest.to_ascii_uppercase();
+    let mut cut = upper_rest.len();
+    for kw in stop_words {
+      if let Some(at) = find_word(&upper_rest, kw)
+        && at < cut
+      {
+        cut = at;
+      }
+    }
+    let type_text = rest[..cut].trim().to_string();
+    if type_text.is_empty() {
+      continue;
+    }
+    let nullable = !upper_rest[..cut.min(upper_rest.len())].contains("NOT NULL")
+      && !upper_rest.contains("PRIMARY KEY");
+    out.push(Column {
+      name,
+      data_type: type_text,
+      nullable,
+      default: None,
+      comment: None,
+      generated: None,
+      json_keys: None,
+    });
+  }
+  out
+}
+
+/// Split `body` on commas that sit at parenthesis-depth 0 only.
+fn split_top_level_commas(body: &str) -> Vec<&str> {
+  let mut out = Vec::new();
+  let bytes = body.as_bytes();
+  let mut depth = 0i32;
+  let mut start = 0usize;
+  let mut i = 0usize;
+  while i < bytes.len() {
+    match bytes[i] {
+      b'(' => depth += 1,
+      b')' => depth -= 1,
+      b',' if depth == 0 => {
+        out.push(&body[start..i]);
+        start = i + 1;
+      },
+      _ => {},
+    }
+    i += 1;
+  }
+  if start < bytes.len() {
+    out.push(&body[start..]);
+  }
+  out
+}
+
+/// Find `kw` in `haystack` only when it sits at a word boundary on
+/// both sides. Case-sensitive (callers upper both first).
+fn find_word(haystack: &str, kw: &str) -> Option<usize> {
+  let mut from = 0;
+  while let Some(rel) = haystack[from..].find(kw) {
+    let at = from + rel;
+    let prev_ok = at == 0 || {
+      let p = haystack.as_bytes()[at - 1];
+      !(p.is_ascii_alphanumeric() || p == b'_')
+    };
+    let end = at + kw.len();
+    let next_ok = end == haystack.len() || {
+      let n = haystack.as_bytes()[end];
+      !(n.is_ascii_alphanumeric() || n == b'_')
+    };
+    if prev_ok && next_ok {
+      return Some(at);
+    }
+    from = at + kw.len();
+  }
+  None
+}
+
 fn inherit_partition_columns(cat: &mut Catalog, src: &str) {
   let cleaned = strip_string_literals(src);
   let upper = cleaned.to_ascii_uppercase();
@@ -1108,6 +1405,27 @@ fn match_paren(bytes: &[u8], open: usize) -> usize {
 fn parse_constraints(body: &str) -> Vec<Constraint> {
   let mut out = Vec::new();
   for entry in split_top_commas(body) {
+    // Skip any leading `-- ...` / `/* ... */` lines so the constraint
+    // parser sees the real declaration. Without this, a comment between
+    // a column row's trailing `,` and a CONSTRAINT line ends up as the
+    // entry's prefix and breaks name extraction (`pk_--` etc).
+    let mut entry = entry;
+    loop {
+      let t = entry.trim_start_matches(['\n', '\r', ' ', '\t']);
+      if let Some(rest) = t.strip_prefix("--") {
+        let end = rest.find('\n').map(|i| i + 1).unwrap_or(rest.len());
+        entry = &rest[end..];
+        continue;
+      }
+      if t.starts_with("/*")
+        && let Some(close) = t.find("*/")
+      {
+        entry = &t[close + 2..];
+        continue;
+      }
+      entry = t;
+      break;
+    }
     let trimmed = entry.trim();
     if trimmed.is_empty() {
       continue;
@@ -1361,6 +1679,62 @@ fn name_followed_by_as_enum(src: &str, upper: &str, prefix: &str, name: &str) ->
 /// Pull the type out of `RETURNS <type>` in a CREATE FUNCTION DDL.
 /// Stops at `AS`, `LANGUAGE`, `$$`, or newline. Returns "?" when
 /// the clause isn't found.
+/// Parse the `(arg_name arg_type, ...)` block immediately after the
+/// function name. Used by both completion (hover signature) and
+/// sql513 arg-count validation. Best effort: bails (returns empty
+/// vec) on malformed input.
+fn extract_arguments(src: &str, name_end: usize) -> Vec<FunctionArg> {
+  let bytes = src.as_bytes();
+  let n = bytes.len();
+  let mut i = name_end;
+  while i < n && bytes[i].is_ascii_whitespace() {
+    i += 1;
+  }
+  if i >= n || bytes[i] != b'(' {
+    return Vec::new();
+  }
+  let Some(close) = match_paren_opt(bytes, i) else { return Vec::new() };
+  let body = &src[i + 1..close];
+  if body.trim().is_empty() {
+    return Vec::new();
+  }
+  let mut out = Vec::new();
+  for raw in split_top_level_commas(body) {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+      continue;
+    }
+    // Strip optional argmode prefix (IN / OUT / INOUT / VARIADIC).
+    let mut rest = trimmed;
+    let upper = rest.to_ascii_uppercase();
+    for mode in ["VARIADIC ", "INOUT ", "IN ", "OUT "] {
+      if upper.starts_with(mode) {
+        rest = rest[mode.len()..].trim_start();
+        break;
+      }
+    }
+    // Tokenize: first token might be name or type; if there's a
+    // second token, name=first, type=rest.
+    let (name, ty) = match rest.find(char::is_whitespace) {
+      Some(at) => {
+        let head = &rest[..at];
+        let tail = rest[at..].trim();
+        if tail.is_empty() {
+          (None, head.to_string())
+        } else {
+          (Some(head.to_string()), tail.to_string())
+        }
+      },
+      None => (None, rest.to_string()),
+    };
+    // Preserve DEFAULT clause marker inside data_type so sql513 can
+    // see it for the arity-min computation.
+    let data_type = if ty.is_empty() { "?".to_string() } else { ty };
+    out.push(FunctionArg { name, data_type });
+  }
+  out
+}
+
 fn extract_returns(ddl: &str) -> String {
   let upper = ddl.to_ascii_uppercase();
   let Some(at) = upper.find(" RETURNS ") else { return "?".into() };
@@ -1408,17 +1782,24 @@ fn scan_functions(src: &str) -> Vec<Function> {
         continue;
       }
       let raw = &src[name_start..k];
-      let bare = raw.rsplit('.').next().unwrap_or(raw).to_string();
+      // `app.current_user_id` -> schema=app, name=current_user_id.
+      // Bare `foo` -> schema=public, name=foo.
+      let (schema, bare) = match raw.rsplit_once('.') {
+        Some((s, n)) => (s.trim_matches('"').to_ascii_lowercase(), n.trim_matches('"').to_string()),
+        None => ("public".into(), raw.to_string()),
+      };
       // Find the full DDL up to the matching `;` after the dollar-
       // quoted body (or just up to the end of file if unterminated).
       let stmt_end = find_function_end(src, k);
       let full_ddl = src[stmt_start..stmt_end].trim().to_string();
       // Extract RETURNS <type> from the DDL header (before AS $$).
       let return_type = extract_returns(&full_ddl);
+      // Extract arg signature from `<name>(<args>)` after the name.
+      let arguments = extract_arguments(src, k);
       out.push(Function {
-        schema: "public".into(),
+        schema,
         name: bare,
-        arguments: Vec::<FunctionArg>::new(),
+        arguments,
         return_type,
         // Render layer reads `comment` for the source block when it
         // starts with CREATE; ship the full DDL so the hover shows
@@ -1480,8 +1861,314 @@ fn find_function_end(src: &str, start: usize) -> usize {
 /// Scan the source for `INSERT INTO <table> [(...)] VALUES (...), (...)`
 /// occurrences and return how many tuples land in each table. Keys are
 /// lowercased table names (bare; schema prefix stripped). Used by
+/// Tally signed row deltas per table from DML statements in `src`:
+///   - INSERT INTO t VALUES (...), (...), (...)  -> +tuples
+///   - INSERT INTO t (cols) SELECT FROM generate_series(a, b) -> +(b-a+1)
+///   - DELETE FROM t                              -> -prior_total  (clears)
+///   - DELETE FROM t WHERE ...                    -> -1  (best effort)
+///   - TRUNCATE TABLE t / TRUNCATE t              -> -prior_total  (clears)
+///
+/// Re-runs on every parse so the codelens row-count chip updates as
+/// the user types more INSERT/DELETE statements in the same buffer.
+fn scan_dml_row_deltas(src: &str) -> std::collections::HashMap<String, i64> {
+  // Merge INSERT + DELETE + TRUNCATE events with their source-byte
+  // position, sort, then walk chronologically so a TRUNCATE in the
+  // middle wipes the prior count but doesn't erase subsequent inserts.
+  let mut events: Vec<(usize, String, Event)> = Vec::new();
+  for (pos, name, n) in scan_insert_inserts(src) {
+    events.push((pos, name.to_ascii_lowercase(), Event::Insert(n)));
+  }
+  for (pos, name, kind) in scan_clears(src) {
+    events.push((pos, name.to_ascii_lowercase(), Event::Clear(kind)));
+  }
+  events.sort_by_key(|(p, _, _)| *p);
+  let mut out: std::collections::HashMap<String, i64> = Default::default();
+  for (_, key, e) in events {
+    match e {
+      Event::Insert(n) => {
+        *out.entry(key).or_insert(0) += n;
+      },
+      Event::Clear(ClearKind::Truncate | ClearKind::DeleteAll) => {
+        out.insert(key, 0);
+      },
+      Event::Clear(ClearKind::DeleteWhere) => {
+        let entry = out.entry(key).or_insert(0);
+        *entry = (*entry - 1).max(0);
+      },
+    }
+  }
+  out
+}
+
+enum Event {
+  Insert(i64),
+  Clear(ClearKind),
+}
+
+enum ClearKind {
+  Truncate,
+  DeleteAll,
+  DeleteWhere,
+}
+
+/// Find every TRUNCATE / DELETE statement and return (table, kind).
+fn scan_clears(src: &str) -> Vec<(usize, String, ClearKind)> {
+  let upper = src.to_ascii_uppercase();
+  let bytes = src.as_bytes();
+  let n = bytes.len();
+  let mut out = Vec::new();
+  // TRUNCATE [TABLE] [ONLY] <name>[, <name>...]
+  let mut from = 0usize;
+  while let Some(rel) = upper[from..].find("TRUNCATE") {
+    let at = from + rel;
+    let prev_ok = at == 0 || !is_word_char(bytes[at - 1]);
+    if !prev_ok {
+      from = at + 8;
+      continue;
+    }
+    let mut i = at + "TRUNCATE".len();
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
+    }
+    if upper[i..].starts_with("TABLE") && i + 5 < n && bytes[i + 5].is_ascii_whitespace() {
+      i += 5;
+      while i < n && bytes[i].is_ascii_whitespace() {
+        i += 1;
+      }
+    }
+    loop {
+      if upper[i..].starts_with("ONLY") && i + 4 < n && bytes[i + 4].is_ascii_whitespace() {
+        i += 4;
+        while i < n && bytes[i].is_ascii_whitespace() {
+          i += 1;
+        }
+      }
+      let id_start = i;
+      while i < n && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_' || bytes[i] == b'.' || bytes[i] == b'"') {
+        i += 1;
+      }
+      if i > id_start {
+        let raw = &src[id_start..i];
+        let bare = raw.rsplit('.').next().unwrap_or(raw).trim_matches('"').to_string();
+        if !bare.is_empty() {
+          out.push((at, bare, ClearKind::Truncate));
+        }
+      }
+      while i < n && bytes[i].is_ascii_whitespace() {
+        i += 1;
+      }
+      if i < n && bytes[i] == b',' {
+        i += 1;
+        while i < n && bytes[i].is_ascii_whitespace() {
+          i += 1;
+        }
+        continue;
+      }
+      break;
+    }
+    from = i.max(at + 8);
+  }
+  // DELETE FROM [ONLY] <name> [WHERE ...]
+  let mut from = 0usize;
+  while let Some(rel) = upper[from..].find("DELETE") {
+    let at = from + rel;
+    let prev_ok = at == 0 || !is_word_char(bytes[at - 1]);
+    if !prev_ok {
+      from = at + 6;
+      continue;
+    }
+    let mut i = at + "DELETE".len();
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
+    }
+    if !upper[i..].starts_with("FROM") {
+      from = at + 6;
+      continue;
+    }
+    i += "FROM".len();
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
+    }
+    if upper[i..].starts_with("ONLY") && i + 4 < n && bytes[i + 4].is_ascii_whitespace() {
+      i += 4;
+      while i < n && bytes[i].is_ascii_whitespace() {
+        i += 1;
+      }
+    }
+    let id_start = i;
+    while i < n && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_' || bytes[i] == b'.' || bytes[i] == b'"') {
+      i += 1;
+    }
+    if i == id_start {
+      from = at + 6;
+      continue;
+    }
+    let raw = &src[id_start..i];
+    let bare = raw.rsplit('.').next().unwrap_or(raw).trim_matches('"').to_string();
+    // Look for a WHERE clause before the next `;` -- presence of WHERE
+    // means we can't predict the row count, so treat as a single-row
+    // delete (best effort). No WHERE = clear table.
+    let stmt_end = src[i..].find(';').map(|p| i + p).unwrap_or(n);
+    let stmt_tail_upper = upper[i..stmt_end].to_string();
+    let has_where = stmt_tail_upper
+      .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+      .any(|w| w == "WHERE");
+    if !bare.is_empty() {
+      out.push((at, bare, if has_where { ClearKind::DeleteWhere } else { ClearKind::DeleteAll }));
+    }
+    from = stmt_end.max(at + 6);
+  }
+  out
+}
+
+/// Walk every INSERT in `src` and return (table, +rows) pairs.
+/// VALUES counts the tuples; INSERT ... SELECT FROM generate_series(a, b)
+/// counts b - a + 1 (best-effort generator literal detection).
+fn scan_insert_inserts(src: &str) -> Vec<(usize, String, i64)> {
+  let mut out = Vec::new();
+  let upper = src.to_ascii_uppercase();
+  let bytes = src.as_bytes();
+  let n = bytes.len();
+  let needle = "INSERT INTO";
+  let mut from = 0usize;
+  while let Some(rel) = upper[from..].find(needle) {
+    let at = from + rel;
+    let prev_ok = at == 0 || !is_word_char(bytes[at - 1]);
+    if !prev_ok {
+      from = at + needle.len();
+      continue;
+    }
+    let mut i = at + needle.len();
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
+    }
+    if upper[i..].starts_with("ONLY") && i + 4 < n && bytes[i + 4].is_ascii_whitespace() {
+      i += 4;
+      while i < n && bytes[i].is_ascii_whitespace() {
+        i += 1;
+      }
+    }
+    let id_start = i;
+    while i < n && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_' || bytes[i] == b'.' || bytes[i] == b'"') {
+      i += 1;
+    }
+    if i == id_start {
+      from = at + needle.len();
+      continue;
+    }
+    let raw = &src[id_start..i];
+    let bare = raw.rsplit('.').next().unwrap_or(raw).trim_matches('"').to_ascii_lowercase();
+    // Optional column list.
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
+    }
+    if i < n && bytes[i] == b'(' {
+      if let Some(close) = match_paren_opt(bytes, i) {
+        i = close + 1;
+      } else {
+        from = i;
+        continue;
+      }
+    }
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
+    }
+    // Find end-of-statement for this INSERT for the generate_series scan.
+    let stmt_end = src[i..].find(';').map(|p| i + p).unwrap_or(n);
+    if upper[i..].starts_with("VALUES") {
+      i += "VALUES".len();
+      let mut tuples = 0i64;
+      loop {
+        while i < n && bytes[i].is_ascii_whitespace() {
+          i += 1;
+        }
+        if i >= n || bytes[i] != b'(' {
+          break;
+        }
+        let Some(close) = match_paren_opt(bytes, i) else { break };
+        tuples += 1;
+        i = close + 1;
+        while i < n && bytes[i].is_ascii_whitespace() {
+          i += 1;
+        }
+        if i < n && bytes[i] == b',' {
+          i += 1;
+        } else {
+          break;
+        }
+      }
+      if !bare.is_empty() && tuples > 0 {
+        out.push((at, bare, tuples));
+      }
+      from = i.max(at + needle.len());
+      continue;
+    }
+    if upper[i..stmt_end].contains("SELECT") {
+      // INSERT ... SELECT ... -- estimate via generate_series literal.
+      if let Some(rows) = generate_series_literal_count(&src[i..stmt_end])
+        && !bare.is_empty()
+      {
+        out.push((at, bare, rows));
+      }
+    }
+    from = stmt_end.max(at + needle.len());
+  }
+  out
+}
+
+/// Return the row count for a `generate_series(a, b)` or
+/// `generate_series(a, b, step)` literal call embedded anywhere in
+/// `chunk`. Only inspects integer literals; bails on column refs or
+/// other non-literal forms.
+fn generate_series_literal_count(chunk: &str) -> Option<i64> {
+  let upper = chunk.to_ascii_uppercase();
+  let at = upper.find("GENERATE_SERIES")?;
+  let after = chunk[at + "GENERATE_SERIES".len()..].trim_start();
+  let after = after.strip_prefix('(')?;
+  // Find matching `)`.
+  let mut depth = 1i32;
+  let mut end = 0usize;
+  for (k, b) in after.bytes().enumerate() {
+    match b {
+      b'(' => depth += 1,
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          end = k;
+          break;
+        }
+      },
+      _ => {},
+    }
+  }
+  if depth != 0 {
+    return None;
+  }
+  let args: Vec<&str> = after[..end].split(',').map(|s| s.trim()).collect();
+  if args.len() < 2 {
+    return None;
+  }
+  let a: i64 = args[0].parse().ok()?;
+  let b: i64 = args[1].parse().ok()?;
+  let step: i64 = if args.len() >= 3 {
+    args[2].parse().ok().unwrap_or(1)
+  } else {
+    1
+  };
+  if step == 0 {
+    return None;
+  }
+  // Reject impossible series (a<b with negative step, or a>b with
+  // positive step) -> zero rows.
+  if (a < b && step < 0) || (a > b && step > 0) {
+    return Some(0);
+  }
+  Some(((b - a) / step).abs() + 1)
+}
+
 /// `from_source` to seed an offline `row_estimate` so the SELECT chip
 /// shows a useful count even without a live DB connection.
+#[allow(dead_code)]
 fn scan_insert_tuple_counts(src: &str) -> std::collections::HashMap<String, usize> {
   let mut out: std::collections::HashMap<String, usize> = Default::default();
   let upper = src.to_ascii_uppercase();
@@ -1796,7 +2483,7 @@ fn split_top_commas(s: &str) -> Vec<&str> {
 pub fn merge(live: &Catalog, derived: &Catalog) -> Catalog {
   let mut out = live.clone();
   for ds in &derived.schemas {
-    let target = match out.schemas.iter_mut().find(|s| s.name == ds.name) {
+    let target = match out.schemas.iter_mut().find(|s| s.name.eq_ignore_ascii_case(&ds.name)) {
       Some(s) => s,
       None => {
         out.schemas.push(Schema { name: ds.name.clone(), tables: Vec::new() });
@@ -1804,7 +2491,7 @@ pub fn merge(live: &Catalog, derived: &Catalog) -> Catalog {
       },
     };
     for dt in &ds.tables {
-      if !target.tables.iter().any(|t| t.name == dt.name) {
+      if !target.tables.iter().any(|t| t.name.eq_ignore_ascii_case(&dt.name)) {
         target.tables.push(dt.clone());
       }
     }
