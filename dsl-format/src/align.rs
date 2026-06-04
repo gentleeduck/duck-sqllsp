@@ -16,7 +16,10 @@ pub fn rewrite(source: &str, style: &CreateTableStyle) -> String {
   let stage2 = break_function_headers(&stage1);
   let stage3 = break_trigger_headers(&stage2);
   let stage4 = break_index_headers(&stage3);
-  let stage5 = break_constraint_clauses(&stage4);
+  // Keep FK clauses inline (REFERENCES / ON DELETE / ON UPDATE / MATCH /
+  // DEFERRABLE) -- align step already produced single-line constraints
+  // and breaking them again pushes the closing `)` onto its own line.
+  let stage5 = stage4;
   let stage6 = if style.group_indexes { collapse_index_runs(&stage5) } else { stage5 };
   align_plpgsql_bodies(&stage6)
 }
@@ -152,7 +155,25 @@ fn align_body_text(body: &str) -> String {
   let mut out = String::from("\n");
   let mut depth: usize = 0;
   for raw in &stmts {
-    let s = raw.trim();
+    // Collapse multi-line internal whitespace so a wrapped IF / WHILE
+    // condition lands on a single line. String literals + line comments
+    // are preserved verbatim by collapse_one_line. Then re-split the
+    // collapsed text on ` THEN ` so IF body content moves onto its own
+    // indented line.
+    let collapsed_full = collapse_one_line(raw.trim());
+    let up_full = collapsed_full.to_ascii_uppercase();
+    let (collapsed, then_tail): (String, Option<String>) =
+      if (up_full.starts_with("IF ") || up_full.starts_with("ELSIF ") || up_full.starts_with("WHEN "))
+        && let Some(then_at) = find_then(&up_full)
+      {
+        let head_end = then_at + "THEN".len();
+        let head = collapsed_full[..head_end].trim_end().to_string();
+        let tail = collapsed_full[head_end..].trim().to_string();
+        if tail.is_empty() { (head, None) } else { (head, Some(tail)) }
+      } else {
+        (collapsed_full, None)
+      };
+    let s = collapsed.as_str();
     let up = s.to_ascii_uppercase();
     // DECLARE / BEGIN / EXCEPTION / END are peer-level section
     // markers of the *same* PL/pgSQL block: each one closes the
@@ -173,6 +194,14 @@ fn align_body_text(body: &str) -> String {
     }
     out.push_str(s);
     out.push('\n');
+    // Emit the post-THEN tail (IF body content) at depth+1.
+    if let Some(tail) = then_tail {
+      for _ in 0..(print_depth + 1) {
+        out.push_str("  ");
+      }
+      out.push_str(&tail);
+      out.push('\n');
+    }
     // Adjust depth for the NEXT statement.
     // Section markers (DECLARE/BEGIN/EXCEPTION) and control-flow
     // openers (IF/LOOP/FOR/WHILE/CASE/ELSE/ELSIF) reset to the
@@ -265,32 +294,6 @@ fn break_index_headers(source: &str) -> String {
   out
 }
 
-/// FOREIGN KEY constraint sub-clauses (REFERENCES / ON DELETE / ON UPDATE
-/// / MATCH / DEFERRABLE) -- break onto their own deeper-indented lines
-/// so multi-clause FK constraints inside CREATE TABLE read top-to-bottom
-/// instead of running off the right edge.
-fn break_constraint_clauses(source: &str) -> String {
-  let mut out = source.to_string();
-  let ctx = &["CREATE TABLE", "ALTER TABLE"];
-  // Indent 8 = sit visually under the constraint name (which lives at
-  // indent 4 in the aligned CREATE TABLE body).
-  for (kw, indent) in [
-    (" REFERENCES ", 8),
-    (" ON DELETE ", 8),
-    (" ON UPDATE ", 8),
-    (" MATCH FULL", 8),
-    (" MATCH PARTIAL", 8),
-    (" MATCH SIMPLE", 8),
-    (" DEFERRABLE", 8),
-    (" NOT DEFERRABLE", 8),
-    (" INITIALLY DEFERRED", 8),
-    (" INITIALLY IMMEDIATE", 8),
-  ] {
-    out = inject_break_in(&out, kw, ctx, indent);
-  }
-  out
-}
-
 /// Replace every occurrence of ` <kw>` (space prefix, intentional) with
 /// `\n<indent><kw>` when the current statement (scanned back to the
 /// previous `;`) contains any of the supplied context markers.
@@ -307,8 +310,6 @@ fn inject_break_in(text: &str, needle_with_space: &str, contexts: &[&str], inden
     let stmt_start = text[..i].rfind(';').map(|p| p + 1).unwrap_or(0);
     let head_upper = &upper[stmt_start..i];
     let in_ctx = contexts.iter().any(|c| head_upper.contains(*c));
-    // Skip if this match is already at the start of a line with the
-    // correct indent -- avoids stacking indent on rerun.
     let already_broken = {
       let mut j = i;
       while j > 0 && matches!(text.as_bytes()[j - 1], b' ' | b'\t') {
@@ -358,6 +359,18 @@ fn rewrite_tables(source: &str, style: &CreateTableStyle) -> String {
     }
     out.push_str(&source[i..start]);
 
+    // Skip CREATE TABLE ... PARTITION OF -- the body shape is
+    // `FOR VALUES FROM (..) TO (..)` not `(col_defs)`. Letting
+    // rewrite_tables process it shreds the FOR VALUES clause.
+    let upper_tail = source[start..].to_ascii_uppercase();
+    let stmt_term = upper_tail.find(';').map(|p| start + p).unwrap_or(n);
+    if upper_tail[..stmt_term - start].contains("PARTITION OF") {
+      // Pass through verbatim up to and including the `;`.
+      let end_inclusive = (stmt_term + 1).min(n);
+      out.push_str(&source[start..end_inclusive]);
+      i = end_inclusive;
+      continue;
+    }
     // Find the body parens.
     let (paren_start, paren_end) = match find_table_body(bytes, start) {
       Some(p) => p,
@@ -838,15 +851,168 @@ fn scan_default_expr(s: &str) -> usize {
 /// Build the reformatted block (header + body + closing paren). Does not
 /// include the trailing `;`. Aligns four sub-columns across all rows so
 /// `NOT NULL` / `NULL` / `DEFAULT ...` all line up vertically.
+/// Find the top-level `THEN` keyword (whole-word, case-insensitive)
+/// outside of string literals and parenthesised expressions. Returns
+/// its byte offset in `upper` (already uppercased text) or None.
+fn find_then(upper: &str) -> Option<usize> {
+  let bytes = upper.as_bytes();
+  let n = bytes.len();
+  let mut depth = 0i32;
+  let mut i = 0usize;
+  while i < n {
+    match bytes[i] {
+      b'(' => {
+        depth += 1;
+        i += 1;
+      },
+      b')' => {
+        depth -= 1;
+        i += 1;
+      },
+      b'\'' => {
+        i += 1;
+        while i < n && bytes[i] != b'\'' {
+          i += 1;
+        }
+        if i < n {
+          i += 1;
+        }
+      },
+      _ => {
+        if depth == 0
+          && i + 4 <= n
+          && &upper[i..i + 4] == "THEN"
+          && (i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_'))
+          && (i + 4 == n || !(bytes[i + 4].is_ascii_alphanumeric() || bytes[i + 4] == b'_'))
+        {
+          return Some(i);
+        }
+        i += 1;
+      },
+    }
+  }
+  None
+}
+
+/// Collapse a multi-line constraint body (e.g. CHECK with wrapped
+/// predicate, FK with REFERENCES on the next line) onto a single line.
+/// Honours string literals so quoted multi-line content stays intact.
+fn collapse_one_line(s: &str) -> String {
+  let bytes = s.as_bytes();
+  let n = bytes.len();
+  let mut out = String::with_capacity(n);
+  let mut prev_space = false;
+  let mut i = 0usize;
+  while i < n {
+    match bytes[i] {
+      b'\'' => {
+        let start = i;
+        i += 1;
+        while i < n && bytes[i] != b'\'' {
+          i += 1;
+        }
+        if i < n {
+          i += 1;
+        }
+        out.push_str(&s[start..i]);
+        prev_space = false;
+      },
+      // Line comment: preserve the comment + the terminating newline so
+      // we don't accidentally absorb the rest of the constraint into a
+      // `-- ...` tail.
+      b'-' if i + 1 < n && bytes[i + 1] == b'-' => {
+        let start = i;
+        while i < n && bytes[i] != b'\n' {
+          i += 1;
+        }
+        out.push_str(&s[start..i]);
+        if i < n {
+          out.push('\n');
+          i += 1;
+        }
+        prev_space = false;
+      },
+      // Block comment: keep verbatim so `/* ... */` survives the
+      // single-line collapse with its boundaries intact.
+      b'/' if i + 1 < n && bytes[i + 1] == b'*' => {
+        let start = i;
+        i += 2;
+        while i + 1 < n && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+          i += 1;
+        }
+        if i + 1 < n {
+          i += 2;
+        }
+        out.push_str(&s[start..i]);
+        prev_space = false;
+      },
+      c if c.is_ascii_whitespace() => {
+        if !prev_space && !out.is_empty() {
+          out.push(' ');
+        }
+        prev_space = true;
+        i += 1;
+      },
+      _ => {
+        // Multi-byte char aware: push the whole UTF-8 sequence at once.
+        i = crate::push_one_char(&mut out, s, i);
+        prev_space = false;
+      },
+    }
+  }
+  out.trim().to_string()
+}
+
 fn format_block(header: &str, body: &str, style: &CreateTableStyle) -> String {
+  // Pull out whole-line comments first so they don't pollute width
+  // calculations or get parsed as fake columns. Returns interleaved
+  // items in declaration order so they re-emit in the same slot.
+  enum Item {
+    Comment(String),
+    Column(ColParts),
+    Constraint(String),
+  }
   let entries = split_entries(body);
-  let mut columns: Vec<ColParts> = Vec::new();
-  let mut constraints: Vec<String> = Vec::new();
+  let mut items: Vec<Item> = Vec::new();
   for e in entries {
-    if is_constraint(&e) {
-      constraints.push(e);
+    // Pull leading whole-line comments off the entry. `-- foo\n` lines
+    // before the column body become their own Comment items so the
+    // align widths only see real declarations.
+    let mut rest = e.as_str();
+    loop {
+      let trimmed = rest.trim_start_matches(['\n', '\r', ' ', '\t']);
+      if trimmed.starts_with("--") {
+        let end = trimmed.find('\n').unwrap_or(trimmed.len());
+        items.push(Item::Comment(trimmed[..end].trim_end().to_string()));
+        rest = &trimmed[end..];
+        continue;
+      }
+      if trimmed.starts_with("/*")
+        && let Some(end) = trimmed.find("*/")
+      {
+        items.push(Item::Comment(trimmed[..end + 2].to_string()));
+        rest = &trimmed[end + 2..];
+        continue;
+      }
+      break;
+    }
+    let rest = rest.trim();
+    if rest.is_empty() {
+      continue;
+    }
+    if is_constraint(rest) {
+      items.push(Item::Constraint(rest.to_string()));
     } else {
-      columns.push(split_parts(&e));
+      items.push(Item::Column(split_parts(rest)));
+    }
+  }
+  let mut columns: Vec<&ColParts> = Vec::new();
+  let mut constraints: Vec<&String> = Vec::new();
+  for it in &items {
+    match it {
+      Item::Column(c) => columns.push(c),
+      Item::Constraint(c) => constraints.push(c),
+      Item::Comment(_) => {},
     }
   }
 
@@ -870,39 +1036,48 @@ fn format_block(header: &str, body: &str, style: &CreateTableStyle) -> String {
   }
 
   let order: Vec<(String, String)> = {
-    let mut rows: Vec<(String, String)> = Vec::with_capacity(columns.len() + constraints.len() + 1);
-    for p in &columns {
-      // Inline `/* ... */` / `-- ...` comment attached to the column
-      // line: emit on its own indented row so the column name still
-      // aligns with siblings.
-      if !p.leading_comment.is_empty() {
-        rows.push((format!("    {}", p.leading_comment), String::new()));
+    let mut rows: Vec<(String, String)> = Vec::with_capacity(items.len() + 1);
+    let mut emitted_columns = false;
+    for it in &items {
+      match it {
+        Item::Comment(c) => {
+          rows.push((format!("    {}", collapse_one_line(c)), String::new()));
+        },
+        Item::Column(p) => {
+          if !p.leading_comment.is_empty() {
+            rows.push((format!("    {}", p.leading_comment), String::new()));
+          }
+          let mut row = format!("    {:<nw$}{}{:<tw$}", p.name, gap, p.ty, nw = name_w, tw = type_w);
+          if null_w > 0 {
+            row.push_str(&inter_gap);
+            row.push_str(&format!("{:>w$}", p.nullability, w = null_w));
+          }
+          if def_w > 0 {
+            row.push_str(&inter_gap);
+            row.push_str(&format!("{:<w$}", p.default, w = def_w));
+          }
+          if !p.extra.is_empty() {
+            row.push_str(&inter_gap);
+            row.push_str(&p.extra);
+          }
+          rows.push((row.trim_end().to_string(), p.trailing_comment.clone()));
+          emitted_columns = true;
+        },
+        Item::Constraint(_) if style.constraints_at_end => {},
+        Item::Constraint(c) => {
+          rows.push((format!("    {}", collapse_one_line(c)), String::new()));
+        },
       }
-      // name + gap + type
-      let mut row = format!("    {:<nw$}{}{:<tw$}", p.name, gap, p.ty, nw = name_w, tw = type_w);
-      // Nullability sub-column. Right-aligned so a bare `NULL`
-      // lines up under the `NULL` part of `NOT NULL` on the rows
-      // above, matching the DataGrip style.
-      if null_w > 0 {
-        row.push_str(&inter_gap);
-        row.push_str(&format!("{:>w$}", p.nullability, w = null_w));
-      }
-      // DEFAULT sub-column.
-      if def_w > 0 {
-        row.push_str(&inter_gap);
-        row.push_str(&format!("{:<w$}", p.default, w = def_w));
-      }
-      if !p.extra.is_empty() {
-        row.push_str(&inter_gap);
-        row.push_str(&p.extra);
-      }
-      rows.push((row.trim_end().to_string(), p.trailing_comment.clone()));
     }
-    if style.constraints_at_end && !constraints.is_empty() && !columns.is_empty() {
+    if style.constraints_at_end && !constraints.is_empty() && emitted_columns {
       rows.push((String::new(), String::new()));
-    }
-    for c in &constraints {
-      rows.push((format!("    {c}"), String::new()));
+      for c in &constraints {
+        rows.push((format!("    {}", collapse_one_line(c)), String::new()));
+      }
+    } else if style.constraints_at_end && !constraints.is_empty() {
+      for c in &constraints {
+        rows.push((format!("    {}", collapse_one_line(c)), String::new()));
+      }
     }
     rows
   };

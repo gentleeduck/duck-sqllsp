@@ -87,6 +87,19 @@ pub struct FormatterStyle {
   /// table layouts stay readable. Default off.
   #[serde(rename = "singleLine", alias = "single_line", default)]
   pub single_line: bool,
+  /// `compactClauses` -- middle ground between full multi-line and
+  /// `singleLine`: keep each top-level clause (SELECT / FROM / WHERE /
+  /// JOIN / GROUP BY / HAVING / ORDER BY / LIMIT / RETURNING / VALUES)
+  /// on its own line, but collapse the clause body onto the same line
+  /// as the keyword. Example:
+  ///
+  ///   SELECT name, salary
+  ///   FROM emp
+  ///   WHERE dept='eng';
+  ///
+  /// DDL bodies left untouched. Ignored when `singleLine = true`.
+  #[serde(rename = "compactClauses", alias = "compact_clauses", default)]
+  pub compact_clauses: bool,
 }
 
 impl Default for FormatterStyle {
@@ -103,6 +116,7 @@ impl Default for FormatterStyle {
       expression_width: default_expr_width(),
       logical_operator_newline: default_lon(),
       single_line: false,
+      compact_clauses: false,
     }
   }
 }
