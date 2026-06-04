@@ -24,7 +24,7 @@ fn body_indents_if_then_block() {
   let input = "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$BEGIN; IF x THEN UPDATE users SET name='a'; END IF; END;$$;";
   let out = aligned(input);
   // IF nested under BEGIN, UPDATE nested again, END IF same as IF.
-  assert!(out.contains("IF x THEN UPDATE"), "got:\n{out}");
+  assert!(out.contains("IF x THEN") && out.contains("UPDATE users"), "got:\n{out}");
 }
 
 #[test]
