@@ -93,7 +93,7 @@ pub fn column_decl_at(file: &ParsedFile, source: &str, offset: TextSize) -> Opti
       return None;
     }
 
-    let col = ct.columns.iter().find(|c| c.name == ident)?;
+    let col = ct.columns.iter().find(|c| c.name.eq_ignore_ascii_case(ident))?;
     let implicit = crate::implicit::derive(body_text, col);
     return Some(render::column_decl_with_implicit(&ct.table.name, col, &implicit));
   }

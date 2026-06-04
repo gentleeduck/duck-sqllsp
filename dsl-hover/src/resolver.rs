@@ -12,7 +12,7 @@ pub fn from_token(token: &str, catalog: &Catalog) -> Option<String> {
       return Some(render::table(t));
     }
     if let Some(t) = catalog.find_table(None, left)
-      && let Some(c) = t.columns.iter().find(|c| c.name == right)
+      && let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(right))
     {
       return Some(render::column(t, c));
     }
