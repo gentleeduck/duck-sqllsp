@@ -119,6 +119,17 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
     return Some(md);
   }
 
+  // Cursor on a KNN/distance/phrase operator (<->, <#>, <%>, ...).
+  // Must precede the jsonb-`->` lookup; otherwise `<-` would be matched
+  // as `->` partial.
+  if let Some(md) = distance_operator_hover(source, pos) {
+    return Some(md);
+  }
+  // Geometric / math / range comparison ops (|/, ||/, @-@, ##, &<,
+  // &>, &<|, |>>, <<|, &&). Runs after distance so `<->` isn't shadowed.
+  if let Some(md) = geometric_math_operator_hover(source, pos) {
+    return Some(md);
+  }
   // Cursor on the JSON path operators (-> / ->> / #> / #>>). Surface
   // a short card naming the operator's return type.
   if let Some(md) = jsonb_operator_hover(source, pos) {
@@ -175,6 +186,13 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
           return Some(md);
         }
         if let Some(md) = catalog_lookup(&part, catalog) {
+          return Some(md);
+        }
+        // Schema-qualified function call: `gdpr.update_user_gdpr()`.
+        // Cursor on the function-name segment -- fire the function
+        // card, scoped to the schema when one is provided.
+        let left_seg = tok.split('.').next();
+        if let Some(md) = db_function_scoped(&part, left_seg, catalog) {
           return Some(md);
         }
       } else {
@@ -374,7 +392,9 @@ fn in_field_list_context(src: &str, pos: usize) -> bool {
     if depth == 0 {
       for kw in ["RETURNING", "GROUP BY", "ORDER BY"] {
         let len = kw.len();
-        if i >= len {
+        // Guard against mid-codepoint slicing: only inspect when the
+        // would-be start byte is a UTF-8 char boundary.
+        if i >= len && src.is_char_boundary(i - len) {
           let slice = &src[i - len..i];
           if slice.to_ascii_uppercase() == kw {
             let prev_ok = i == len || !is_word_ch(bytes[i - len - 1]);
@@ -386,7 +406,7 @@ fn in_field_list_context(src: &str, pos: usize) -> bool {
       }
       // UPDATE ... SET <col> = ... : when cursor sits on a column
       // name on the LHS of a SET assignment.
-      if i >= 4 && src[i - 4..i].eq_ignore_ascii_case(" SET") {
+      if i >= 4 && src.is_char_boundary(i - 4) && src[i - 4..i].eq_ignore_ascii_case(" SET") {
         return true;
       }
     }
@@ -480,7 +500,7 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
       return Some(render::table_with_catalog(t, catalog));
     }
     if let Some(t) = catalog.find_table(None, left)
-      && let Some(c) = t.columns.iter().find(|c| c.name == right)
+      && let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(right))
     {
       return Some(render::column(t, c));
     }
@@ -490,6 +510,63 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
   }
   if let Some(ty) = catalog.find_type(None, token) {
     return Some(render::user_type(ty));
+  }
+  // Schema card: cursor on a bare identifier that names a schema in
+  // the catalog. Schema membership is detected through THREE sources
+  // so the card fires even when `CREATE SCHEMA <name>` wasn't seen:
+  //   1. catalog.schemas       (declared schemas)
+  //   2. catalog.functions[*].schema (function definitions)
+  //   3. catalog.types[*].schema     (user-defined types)
+  let schema_known = catalog.schemas.iter().any(|s| s.name.eq_ignore_ascii_case(token))
+    || catalog.functions.iter().any(|f| f.schema.eq_ignore_ascii_case(token))
+    || catalog.types.iter().any(|t| t.schema.eq_ignore_ascii_case(token));
+  if schema_known {
+    let name = catalog
+      .schemas
+      .iter()
+      .find(|s| s.name.eq_ignore_ascii_case(token))
+      .map(|s| s.name.as_str())
+      .unwrap_or(token);
+    let mut card = format!("# `{name}`\n_schema_\n\n");
+    let tables: Vec<&dsl_catalog::Table> = catalog
+      .schemas
+      .iter()
+      .find(|s| s.name.eq_ignore_ascii_case(token))
+      .map(|s| s.tables.iter().collect())
+      .unwrap_or_default();
+    if !tables.is_empty() {
+      card.push_str(&format!("**{} table(s):**\n", tables.len()));
+      for t in tables.iter().take(20) {
+        card.push_str(&format!("- `{}`\n", t.name));
+      }
+      if tables.len() > 20 {
+        card.push_str(&format!("- _\u{2026} +{} more_\n", tables.len() - 20));
+      }
+    }
+    let fns: Vec<&dsl_catalog::Function> = catalog
+      .functions
+      .iter()
+      .filter(|f| f.schema.eq_ignore_ascii_case(token))
+      .collect();
+    if !fns.is_empty() {
+      card.push_str(&format!("\n**{} function(s):**\n", fns.len()));
+      for f in fns.iter().take(20) {
+        let ret = if f.return_type.is_empty() { String::new() } else { format!(" -> `{}`", f.return_type) };
+        card.push_str(&format!("- `{}({} args)`{}\n", f.name, f.arguments.len(), ret));
+      }
+      if fns.len() > 20 {
+        card.push_str(&format!("- _\u{2026} +{} more_\n", fns.len() - 20));
+      }
+    }
+    let types_in_schema: Vec<&dsl_catalog::Type> =
+      catalog.types.iter().filter(|t| t.schema.eq_ignore_ascii_case(token)).collect();
+    if !types_in_schema.is_empty() {
+      card.push_str(&format!("\n**{} type(s):**\n", types_in_schema.len()));
+      for t in types_in_schema.iter().take(20) {
+        card.push_str(&format!("- `{}`\n", t.name));
+      }
+    }
+    return Some(card);
   }
   if let Some((t, p)) = catalog.find_policy(token) {
     return Some(format!(
@@ -655,7 +732,7 @@ fn comparison_operator_hover(source: &str, pos: usize) -> Option<String> {
   }
   // Find the maximal operator span (consecutive ASCII-punctuation chars
   // commonly used in PG operators) containing `pos`.
-  let is_op_byte = |b: u8| matches!(b, b'=' | b'<' | b'>' | b'!' | b'|' | b'@' | b'?' | b'&' | b'~' | b'^');
+  let is_op_byte = |b: u8| matches!(b, b'=' | b'<' | b'>' | b'!' | b'|' | b'@' | b'?' | b'&' | b'~' | b'^' | b'#');
   if !is_op_byte(bytes[pos]) {
     return None;
   }
@@ -669,8 +746,9 @@ fn comparison_operator_hover(source: &str, pos: usize) -> Option<String> {
   }
   let op = &source[s..e];
   // Reject operators handled elsewhere (json-path `->` / `->>` / `#>` /
-  // `#>>`, cast `::`).
-  if op.contains('-') || op.contains('#') || op.contains(':') {
+  // `#>>`, cast `::`). Bare `#` (bitwise XOR) is fine, only multi-char
+  // forms involving `#` go to jsonb_operator_hover.
+  if op.contains('-') || op.contains(':') || (op.contains('#') && op.len() > 1) {
     return None;
   }
   let card = match op {
@@ -701,6 +779,23 @@ fn comparison_operator_hover(source: &str, pos: usize) -> Option<String> {
             key (or array element) equal to the right text. `'{\"a\":1}'::jsonb ? 'a'` -> `true`.\n",
     "?|" => "# `?|`\n\n_jsonb any-key existence_\n\nReturns `true` when ANY key in the right `text[]` is present in the left jsonb.\n",
     "?&" => "# `?&`\n\n_jsonb all-keys existence_\n\nReturns `true` when ALL keys in the right `text[]` are present in the left jsonb.\n",
+    "@@" => "# `@@`\n\n_Full-text search match_\n\nReturns `true` when the right-hand `tsquery` matches the left-hand `tsvector`. \
+            `to_tsvector('quick brown fox') @@ to_tsquery('fox & jump:*')`. Index with GIN on the tsvector for fast lookups.\n",
+    "~" => "# `~`\n\n_POSIX regex match (case-sensitive)_\n\nReturns `true` when the left text matches the right regex. \
+            Pair with `||` to build dynamic patterns; for case-insensitive use `~*`. Escape regex metachars with `\\`.\n",
+    "~*" => "# `~*`\n\n_POSIX regex match (case-insensitive)_\n\n`name ~* '^a'` matches both `Alice` and `aaron`.\n",
+    "!~" => "# `!~`\n\n_POSIX regex NON-match (case-sensitive)_\n\nInverse of `~`. NULL-propagates like the other comparison operators.\n",
+    "!~*" => "# `!~*`\n\n_POSIX regex NON-match (case-insensitive)_\n\nInverse of `~*`.\n",
+    "~~" => "# `~~`\n\n_Internal name of the `LIKE` operator_\n\n`x LIKE 'a%'` is syntactic sugar for `x ~~ 'a%'`. Prefer `LIKE` in source.\n",
+    "~~*" => "# `~~*`\n\n_Internal name of the `ILIKE` operator_\n\n`x ILIKE 'a%'` is syntactic sugar for `x ~~* 'a%'`. Prefer `ILIKE` in source.\n",
+    "!~~" => "# `!~~`\n\n_Internal name of `NOT LIKE`_\n",
+    "!~~*" => "# `!~~*`\n\n_Internal name of `NOT ILIKE`_\n",
+    "^" => "# `^`\n\n_Exponentiation_\n\n`2 ^ 10` -> `1024`. Returns `double precision` or `numeric` depending on operand types.\n",
+    "&" => "# `&`\n\n_Bitwise AND_ (integer / bit / inet)\n\n`5 & 3` -> `1`. For inet: \
+            address-bit AND between the two networks. For bit strings: per-position AND.\n",
+    "|" => "# `|`\n\n_Bitwise OR_ (integer / bit / inet)\n\n`5 | 2` -> `7`. \
+            (Do not confuse with `||` -- text/array concatenation.)\n",
+    "#" => "# `#`\n\n_Bitwise XOR_ (integer / bit)\n\n`5 # 3` -> `6`. Returns the per-bit exclusive-or.\n",
     _ => return None,
   };
   Some(card.to_string())
@@ -712,16 +807,16 @@ fn jsonb_operator_hover(source: &str, pos: usize) -> Option<String> {
     return None;
   }
   let b = bytes[pos];
-  if b != b'-' && b != b'>' && b != b'#' {
+  if b != b'-' && b != b'>' && b != b'#' && b != b'@' && b != b'?' {
     return None;
   }
   // Find the operator span this byte belongs to.
   let mut s = pos;
-  while s > 0 && matches!(bytes[s - 1], b'-' | b'>' | b'#') {
+  while s > 0 && matches!(bytes[s - 1], b'-' | b'>' | b'#' | b'@' | b'?') {
     s -= 1;
   }
   let mut e = pos;
-  while e < bytes.len() && matches!(bytes[e], b'-' | b'>' | b'#') {
+  while e < bytes.len() && matches!(bytes[e], b'-' | b'>' | b'#' | b'@' | b'?') {
     e += 1;
   }
   let op = &source[s..e];
@@ -766,8 +861,113 @@ fn jsonb_operator_hover(source: &str, pos: usize) -> Option<String> {
        ```\n"
         .into(),
     ),
+    "@?" => Some(
+      "# `@?`\n\n_jsonpath predicate match_\n\n\
+       Returns `true` when the right-side `jsonpath` matches *any* value in the left jsonb. \
+       Companion of `@@` which returns the boolean of the path's filter expression.\n\n\
+       ```sql\n\
+       data @? '$.items[*] ? (@.qty > 0)'\n\
+       ```\n"
+        .into(),
+    ),
     _ => None,
   }
+}
+
+/// Cursor on a geometric / math / range comparison operator that
+/// the comparison_operator_hover byte set doesn't cover: `|/`, `||/`,
+/// `@-@`, `##`, `&<`, `&>`, `&<|`, `|>>`, `<<|`, `&&`.
+fn geometric_math_operator_hover(source: &str, pos: usize) -> Option<String> {
+  let bytes = source.as_bytes();
+  if pos >= bytes.len() {
+    return None;
+  }
+  let is_op_byte = |b: u8| matches!(b, b'|' | b'/' | b'@' | b'-' | b'#' | b'&' | b'<' | b'>' | b'?' | b'~' | b'=');
+  if !is_op_byte(bytes[pos]) {
+    return None;
+  }
+  let mut s = pos;
+  while s > 0 && is_op_byte(bytes[s - 1]) {
+    s -= 1;
+  }
+  let mut e = pos;
+  while e < bytes.len() && is_op_byte(bytes[e]) {
+    e += 1;
+  }
+  let op = &source[s..e];
+  let card = match op {
+    "|/" => "# `|/`\n\n_Square root_\n\n`|/ 25.0` -> `5`. Prefix operator. Prefer the SQL-standard `sqrt()` for readability.\n",
+    "||/" => "# `||/`\n\n_Cube root_\n\n`||/ 27.0` -> `3`. Prefix operator. Use `cbrt()` for clarity.\n",
+    "@-@" => "# `@-@`\n\n_Geometric length / circumference_\n\nReturns the length of a path / lseg / line, or the circumference of a circle. \
+              `@-@ lseg '((0,0),(3,4))'` -> `5`.\n",
+    "##" => "# `##`\n\n_Closest-point operator_\n\nReturns the point on the first object closest to the second.\n",
+    "&<" => "# `&<`\n\n_Overlaps-to-left_ (geometric / range)\n\nReturns `true` when the left operand does not extend to the right of the right operand.\n",
+    "&>" => "# `&>`\n\n_Overlaps-to-right_ (geometric / range)\n\nMirror of `&<`.\n",
+    "&<|" => "# `&<|`\n\n_Overlaps-below_ (geometric)\n\nLeft operand does not extend above the right.\n",
+    "|>>" => "# `|>>`\n\n_Strictly above_ (geometric / range)\n\nLeft operand is strictly above the right.\n",
+    "<<|" => "# `<<|`\n\n_Strictly below_ (geometric / range)\n\nLeft operand is strictly below the right.\n",
+    "&&" => "# `&&`\n\n_Overlaps_ (range / array / multirange)\n\nReturns `true` when the two ranges (or arrays) share at least one element. \
+              `int4range(1,10) && int4range(5,20)` -> `true`. Index with GiST/SP-GiST for fast lookups.\n",
+    "<<" => "# `<<`\n\n_Strictly left of_ (range / multirange / inet)\n\n`int4range(1,5) << int4range(10,20)` -> `true`. \
+              For inet: subnet is strictly to the left of the other.\n",
+    ">>" => "# `>>`\n\n_Strictly right of_ (range / multirange / inet)\n\nMirror of `<<`.\n",
+    "-|-" => "# `-|-`\n\n_Adjacent to_ (range / multirange)\n\nReturns `true` when the two ranges abut but do not overlap. \
+              `int4range(1,5) -|- int4range(5,10)` -> `true`.\n",
+    "?-" => "# `?-`\n\n_Horizontal alignment_ (geometric)\n\nReturns `true` when the operands are on the same horizontal line. \
+              `point '(1,0)' ?- point '(5,0)'` -> `true`.\n",
+    "?|" => "# `?|`\n\n_Vertical alignment_ (geometric -- shared with jsonb any-key existence)\n\nFor points/lines: \
+              true when the operands are on the same vertical line. For jsonb: see jsonb path operator card.\n",
+    "?-|" => "# `?-|`\n\n_Perpendicular_ (line/lseg)\n\nReturns `true` when the two segments / lines are perpendicular.\n",
+    "?||" => "# `?||`\n\n_Parallel_ (line/lseg)\n\nReturns `true` when the two segments / lines are parallel.\n",
+    "?#" => "# `?#`\n\n_Intersects_ (geometric)\n\nReturns `true` when the two objects intersect at a point or share an edge.\n",
+    "@" => "# `@`\n\n_Center of_ / contained-by (geometric)\n\nUnary: `@ box '(...)'` returns its center point. Binary: `<obj> @ <obj>` -- left contained by right (geometric).\n",
+    "~=" => "# `~=`\n\n_Same as_ (geometric)\n\nReturns `true` when the two geometric objects are equal (point-wise).\n",
+    ">>=" => "# `>>=`\n\n_Contains-or-equals_ (inet)\n\n`192.168.0.0/16 >>= 192.168.1.0/24` -> `true`. \
+              Left network contains, or equals, the right. Use for CIDR membership checks.\n",
+    "<<=" => "# `<<=`\n\n_Contained-by-or-equals_ (inet)\n\nMirror of `>>=`. The left network is contained by, \
+              or equals, the right.\n",
+    _ => return None,
+  };
+  Some(card.to_string())
+}
+
+/// Cursor on `<->`, `<#>`, `<%>`, `<<->>`, `<<#>>` operators (KNN
+/// distance / phrase / pg_trgm). Surface a brief explanation.
+fn distance_operator_hover(source: &str, pos: usize) -> Option<String> {
+  let bytes = source.as_bytes();
+  if pos >= bytes.len() {
+    return None;
+  }
+  let b = bytes[pos];
+  if !matches!(b, b'<' | b'>' | b'-' | b'#' | b'%') {
+    return None;
+  }
+  let mut s = pos;
+  while s > 0 && matches!(bytes[s - 1], b'<' | b'>' | b'-' | b'#' | b'%') {
+    s -= 1;
+  }
+  let mut e = pos;
+  while e < bytes.len() && matches!(bytes[e], b'<' | b'>' | b'-' | b'#' | b'%') {
+    e += 1;
+  }
+  let op = &source[s..e];
+  let card = match op {
+    "<->" => "# `<->`\n\n_KNN distance / phrase distance_\n\nGeometric distance (point/box/circle), \
+              vector L2 distance (pgvector), pg_trgm similarity-distance, or FTS phrase distance \
+              (immediately adjacent). Index with GiST/SP-GiST/ivfflat for KNN ordering.\n\n\
+              ```sql\n\
+              ORDER BY position <-> point '(0,0)' LIMIT 10;\n\
+              SELECT * FROM articles WHERE doc @@ to_tsquery('quick <-> brown');\n\
+              ```\n",
+    "<#>" => "# `<#>`\n\n_pgvector inner-product distance_\n\nNegative dot product. Use with ivfflat / hnsw \
+              vector indexes for fast approximate nearest neighbour.\n",
+    "<%>" => "# `<%>`\n\n_pg_trgm trigram word-similarity distance_\n\n`1 - word_similarity(a, b)`. \
+              Pair with `ORDER BY a <%> b LIMIT 10` for fuzzy lookup.\n",
+    "<<->>" => "# `<<->>`\n\n_GiST KNN distance for ranges_\n\nDistance between two range values.\n",
+    "<<#>>" => "# `<<#>>`\n\n_Index-only KNN distance variant_\n",
+    _ => return None,
+  };
+  Some(card.to_string())
 }
 
 /// Numeric literal hover. Cursor on `123` / `12.5` / `-7` returns a
@@ -1469,6 +1669,23 @@ fn scope_column_lookup(source: &str, offset: TextSize, tok: &str, catalog: &Cata
     if right.is_empty() {
       return None;
     }
+    // NEW / OLD virtual row aliases inside a CREATE TRIGGER ... WHEN
+    // predicate or a trigger function body. The bare alias has no
+    // FROM binding; instead it stands for the trigger's target table
+    // row. Resolve via the same path as the completion engine: walk
+    // back to the enclosing `CREATE [OR REPLACE | CONSTRAINT] TRIGGER
+    // ... ON <tbl>` (or, in a function body, the trigger declared to
+    // run that function) and render the column card.
+    let upper_left = left.to_ascii_uppercase();
+    if upper_left == "NEW" || upper_left == "OLD" {
+      if let Some(target) = trigger_target_for_hover(source, pos, catalog)
+        && let Some(t) = catalog.find_table(None, &target)
+        && let Some(c) = t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(right))
+      {
+        return Some(render::column(t, c));
+      }
+      return None;
+    }
     // CTE-qualified column? Render a CTE card showing the alias and
     // the projected column name.
     if let Some(cte_cols) = scope.cte_columns_of(left)
@@ -1693,6 +1910,116 @@ fn read_table_after(src: &str, from: usize) -> Option<String> {
   Some(read_ident(rest))
 }
 
+/// Resolve the target table for a `NEW.<col>` / `OLD.<col>` hover.
+/// Walks the buffer for the enclosing `CREATE [OR REPLACE | CONSTRAINT]
+/// TRIGGER ... ON <table>` (closest match before the cursor). When the
+/// cursor sits inside a function body, falls back to finding any
+/// trigger declared to EXECUTE the surrounding function.
+fn trigger_target_for_hover(source: &str, pos: usize, catalog: &Catalog) -> Option<String> {
+  // First try: a CREATE TRIGGER clause in the buffer before the cursor.
+  let upper = source.to_ascii_uppercase();
+  let before = &upper[..pos.min(upper.len())];
+  let idx = [
+    "CREATE OR REPLACE TRIGGER",
+    "CREATE CONSTRAINT TRIGGER",
+    "CREATE TRIGGER",
+  ]
+  .iter()
+  .filter_map(|kw| before.rfind(kw))
+  .max();
+  if let Some(idx) = idx
+    && let Some(on_idx) = upper[idx..].find(" ON ")
+  {
+    let after_on = idx + on_idx + 4;
+    let tail = &source[after_on..];
+    let tok: String = tail
+      .trim_start()
+      .split(|c: char| c.is_whitespace() || c == '(' || c == ';' || c == ',')
+      .find(|s| !s.is_empty())
+      .unwrap_or("")
+      .to_string();
+    let tok = if tok.eq_ignore_ascii_case("ONLY") {
+      tail
+        .trim_start()
+        .split_ascii_whitespace()
+        .nth(1)
+        .unwrap_or("")
+        .to_string()
+    } else {
+      tok
+    };
+    let bare = tok.split('.').next_back().unwrap_or(&tok).trim_matches('"').to_string();
+    if !bare.is_empty() {
+      return Some(bare);
+    }
+  }
+  // Fallback: cursor inside a CREATE FUNCTION body whose function is
+  // wired as a trigger handler -- find that trigger and read its table.
+  let fn_name = enclosing_create_function_name(source, pos)?;
+  for f in &catalog.functions {
+    let _ = f;
+  }
+  // Search the buffer's CREATE TRIGGER statements for one that
+  // EXECUTEs <fn_name>.
+  let fn_upper = fn_name.to_ascii_uppercase();
+  let mut from = 0usize;
+  while let Some(rel) = upper[from..].find("CREATE") {
+    let at = from + rel;
+    let chunk = &upper[at..(at + 200).min(upper.len())];
+    if chunk.contains("TRIGGER")
+      && let Some(on_idx) = chunk.find(" ON ")
+    {
+      // Look for ` EXECUTE ` followed by FUNCTION/PROCEDURE <fn_name>
+      let stmt_end = upper[at..].find(';').map(|p| at + p).unwrap_or(upper.len());
+      let stmt_upper = &upper[at..stmt_end];
+      if stmt_upper.contains(&fn_upper) {
+        let after_on = at + on_idx + 4;
+        let tail = &source[after_on..];
+        let tok: String = tail
+          .trim_start()
+          .split(|c: char| c.is_whitespace() || c == '(' || c == ';' || c == ',')
+          .find(|s| !s.is_empty())
+          .unwrap_or("")
+          .to_string();
+        let bare = tok.split('.').next_back().unwrap_or(&tok).trim_matches('"').to_string();
+        if !bare.is_empty() {
+          return Some(bare);
+        }
+      }
+    }
+    from = at + 6;
+  }
+  None
+}
+
+/// Return the name of the CREATE FUNCTION whose body the cursor sits
+/// in, or None when the cursor isn't inside any function definition.
+fn enclosing_create_function_name(source: &str, pos: usize) -> Option<String> {
+  let upper = source.to_ascii_uppercase();
+  let before = &upper[..pos.min(upper.len())];
+  let idx = ["CREATE OR REPLACE FUNCTION", "CREATE FUNCTION"]
+    .iter()
+    .filter_map(|kw| before.rfind(kw))
+    .max()?;
+  let after = source[idx..].split_once(char::is_whitespace)?.1;
+  let after = after.trim_start();
+  // Skip optional `OR REPLACE FUNCTION` head.
+  let after = if after.to_ascii_uppercase().starts_with("OR REPLACE FUNCTION") {
+    after.splitn(3, char::is_whitespace).nth(2).unwrap_or(after)
+  } else if after.to_ascii_uppercase().starts_with("FUNCTION") {
+    after.split_once(char::is_whitespace).map(|x| x.1).unwrap_or(after)
+  } else {
+    after
+  };
+  let tok: String = after
+    .trim_start()
+    .chars()
+    .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '.')
+    .collect();
+  let bare = tok.split('.').next_back().unwrap_or(&tok).to_string();
+  if bare.is_empty() { None } else { Some(bare) }
+}
+
 fn read_ident(s: &str) -> String {
   let name: String = s.chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '.').collect();
   name.rsplit('.').next().unwrap_or(&name).to_string()
@@ -1746,6 +2073,30 @@ fn plpgsql_local_hover(source: &str, offset: TextSize, token: &str) -> Option<St
     return Some(format!("# `{token}`\n*local (DECLARE)*\n```sql\n{token} {ty}\n```\n"));
   }
   None
+}
+
+/// Like [`db_function`] but biases the lookup by schema when one is
+/// available -- for `schema.fn` calls the user wants the function
+/// declared under THAT schema, not an unrelated overload elsewhere.
+fn db_function_scoped(name: &str, schema: Option<&str>, catalog: &Catalog) -> Option<String> {
+  let f = catalog.functions.iter().find(|f| {
+    f.name.eq_ignore_ascii_case(name) && schema.is_none_or(|s| f.schema.eq_ignore_ascii_case(s))
+  })?;
+  let mut s = render::function_full(f);
+  let (outgoing, incoming) = call_graph(&f.name, catalog);
+  if !outgoing.is_empty() {
+    s.push_str("\n**Calls**\n\n");
+    for callee in outgoing.iter().take(20) {
+      s.push_str(&format!("- `{callee}`\n"));
+    }
+  }
+  if !incoming.is_empty() {
+    s.push_str("\n**Called by**\n\n");
+    for caller in incoming.iter().take(20) {
+      s.push_str(&format!("- `{caller}`\n"));
+    }
+  }
+  Some(s)
 }
 
 fn db_function(token: &str, catalog: &Catalog) -> Option<String> {
@@ -1983,6 +2334,9 @@ fn stmt_end(source: &str, mut i: usize) -> usize {
 /// paths when the cursor is on a real name.
 fn cursor_on_word_byte(source: &str, pos: usize) -> bool {
   let bytes = source.as_bytes();
+  // Clamp: a caller may pass an offset past EOF (editor sometimes
+  // sends an end-of-buffer pos that hasn't been re-validated).
+  let pos = pos.min(bytes.len());
   let on = pos < bytes.len() && is_word_byte(bytes[pos]);
   let after = pos > 0 && is_word_byte(bytes[pos - 1]);
   if !(on || after) {

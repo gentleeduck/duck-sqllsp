@@ -234,7 +234,7 @@ pub fn table_ddl(t: &Table) -> String {
             if let Some(r) = &con.references {
               let target_cols = if r.columns.is_empty() { String::new() } else { format!(" ({})", r.columns.join(", ")) };
               row.push(' ');
-              if r.schema.is_empty() || r.schema == "public" {
+              if r.schema.is_empty() || r.schema.eq_ignore_ascii_case("public") {
                 row.push_str(&format!("{}{target_cols}", r.table));
               } else {
                 row.push_str(&format!("{}.{}{target_cols}", r.schema, r.table));
@@ -291,7 +291,11 @@ fn render_constraint(c: &Constraint) -> String {
     ConstraintKind::ForeignKey => {
       s.push_str(&format!("FOREIGN KEY ({})", c.columns.join(", ")));
       if let Some(r) = &c.references {
-        s.push_str(&format!(" REFERENCES {}.{} ({})", r.schema, r.table, r.columns.join(", ")));
+        if r.schema.is_empty() || r.schema.eq_ignore_ascii_case("public") {
+          s.push_str(&format!(" REFERENCES {} ({})", r.table, r.columns.join(", ")));
+        } else {
+          s.push_str(&format!(" REFERENCES {}.{} ({})", r.schema, r.table, r.columns.join(", ")));
+        }
       }
     },
   }
