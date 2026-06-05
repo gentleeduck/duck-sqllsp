@@ -40,14 +40,52 @@ pub fn run(state: &ServerState, params: DocumentFormattingParams) -> Option<Vec<
     };
   }
 
+  // Format cache: hash (input + style key) to skip the sql-formatter +
+  // align pipeline when nothing changed since the last call. The hash
+  // covers the raw text plus the single bit of formatter style most
+  // likely to change at runtime (singleLine), so toggling that knob
+  // still invalidates the entry.
+  let key = uri.to_string();
+  let mut hasher = std::collections::hash_map::DefaultHasher::new();
+  use std::hash::{Hash, Hasher};
+  original.hash(&mut hasher);
+  formatter_style.single_line.hash(&mut hasher);
+  formatter_style.compact_clauses.hash(&mut hasher);
+  formatter_style.tab_width.hash(&mut hasher);
+  formatter_style.language.hash(&mut hasher);
+  let input_hash = hasher.finish();
+  if let Some((cached_hash, cached_out)) = state.format_cache.read().get(&key)
+    && *cached_hash == input_hash
+  {
+    if cached_out == &original {
+      return None;
+    }
+    let rope = &doc.rope;
+    let last_line = rope.len_lines().saturating_sub(1) as u32;
+    let last_line_text = rope.line(last_line as usize);
+    let last_col = last_line_text.chars().filter(|c| *c != '\n' && *c != '\r').count() as u32;
+    return Some(vec![TextEdit {
+      range: Range { start: Position { line: 0, character: 0 }, end: Position { line: last_line, character: last_col } },
+      new_text: cached_out.clone(),
+    }]);
+  }
+
   let formatted = dsl_format::format(&original, &formatter_style, &cfg.style.create_table);
+  state.format_cache.write().insert(key, (input_hash, formatted.clone()));
   if formatted == original {
     return None;
   }
 
-  let last_line_idx = original.lines().count() as u32;
+  // End-of-document position: nvim 0.11 silently drops TextEdits whose end
+  // range extends past the buffer's line count. Use the rope's last line
+  // index + the column count at that line so the range covers exactly the
+  // document and not one past it.
+  let rope = &doc.rope;
+  let last_line = rope.len_lines().saturating_sub(1) as u32;
+  let last_line_text = rope.line(last_line as usize);
+  let last_col = last_line_text.chars().filter(|c| *c != '\n' && *c != '\r').count() as u32;
   Some(vec![TextEdit {
-    range: Range { start: Position { line: 0, character: 0 }, end: Position { line: last_line_idx + 1, character: 0 } },
+    range: Range { start: Position { line: 0, character: 0 }, end: Position { line: last_line, character: last_col } },
     new_text: formatted,
   }])
 }

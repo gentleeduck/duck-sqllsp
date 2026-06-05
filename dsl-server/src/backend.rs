@@ -170,9 +170,16 @@ impl LanguageServer for Backend {
     // offline catalog (used by other open files' completion / hover /
     // diagnostics) sees the new CREATE TABLE / FUNCTION / TRIGGER /
     // etc immediately, without waiting on a watched-file notification.
+    // Then, if a live connection is configured, also re-introspect the
+    // DB so freshly-applied schema changes (CREATE TABLE / ALTER / ...)
+    // show up in completion / hover without a manual `refreshCatalog`.
     let state = self.state.clone();
+    let client = self.client.clone();
     tokio::spawn(async move {
       state.rescan_workspace_offline();
+      if state.config_snapshot().active().is_some() {
+        refresh::refresh_catalog(state, client).await;
+      }
     });
   }
 
@@ -282,8 +289,21 @@ impl LanguageServer for Backend {
   }
 
   async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
-    let cfg = config::parse(params.settings);
-    self.state.set_config(cfg.duck_sqllsp);
+    // Merge editor-pushed settings on top of whatever we have (so the
+    // project-level .duck-sqllsp.toml loaded at initialize / didOpen
+    // doesn't get clobbered). Then re-walk the project config from the
+    // workspace root so its style.formatter wins over the editor's
+    // partial push -- the editor only sends activeConnection /
+    // connections / scope, never formatter knobs.
+    let incoming = config::parse(params.settings).duck_sqllsp;
+    let mut cfg = self.state.config_snapshot();
+    cfg.merge_from(incoming);
+    if let Some(root) = self.state.workspace_root.read().clone()
+      && let Some(proj) = config::load_project_config(&root)
+    {
+      cfg.merge_from(proj);
+    }
+    self.state.set_config(cfg);
     let dialect = match self.state.config_snapshot().effective_dialect() {
       config::Dialect::Postgresql => dsl_parse::Dialect::Postgres,
       config::Dialect::Mysql => dsl_parse::Dialect::MySql,

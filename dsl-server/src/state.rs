@@ -30,6 +30,13 @@ pub struct ServerState {
   /// EXPLAIN CodeLens commands need a corresponding handler in the
   /// editor, which only the VS Code extension currently ships.
   pub client_name: Arc<RwLock<Option<String>>>,
+  /// Memoised `textDocument/formatting` results. Keyed by document URI;
+  /// value is `(input_hash, output_text)`. When a format request comes
+  /// in for a document whose content hashes to the same value as the
+  /// last cached entry, return the cached output instead of re-running
+  /// sql-formatter + align passes. Saves the 30-80ms shell-out per call
+  /// when the client re-requests format on an unchanged buffer.
+  pub format_cache: Arc<RwLock<std::collections::HashMap<String, (u64, String)>>>,
 }
 
 impl ServerState {

@@ -232,9 +232,11 @@ pub fn load_project_config(start: &Path) -> Option<DuckSqllspConfig> {
       && let Ok(text) = std::fs::read_to_string(&toml_path)
     {
       if let Ok(parsed) = toml::from_str::<RootConfig>(&text) {
+        tracing::info!(path = %toml_path.display(), single_line = parsed.duck_sqllsp.style.formatter.single_line, "loaded .duck-sqllsp.toml");
         return Some(parsed.duck_sqllsp);
       }
       if let Ok(inner) = toml::from_str::<DuckSqllspConfig>(&text) {
+        tracing::info!(path = %toml_path.display(), single_line = inner.style.formatter.single_line, "loaded .duck-sqllsp.toml (bare)");
         return Some(inner);
       }
     }
