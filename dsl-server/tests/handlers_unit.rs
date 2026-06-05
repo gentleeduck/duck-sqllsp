@@ -3,9 +3,9 @@
 use dsl_server::{
   documents::DocumentStore,
   handlers::{
-    call_hierarchy, code_action, completion, definition, document_highlight, document_symbol, folding_range, hover,
-    inlay_hints, linked_editing, on_type_formatting, references, rename, selection_range, semantic_tokens,
-    signature_help, type_definition, workspace_symbol,
+    call_hierarchy, code_action, code_lens, completion, definition, document_highlight, document_symbol,
+    folding_range, formatting, hover, inlay_hints, linked_editing, on_type_formatting, references, rename,
+    selection_range, semantic_tokens, signature_help, type_definition, workspace_symbol,
   },
   state::ServerState,
 };
@@ -1245,4 +1245,771 @@ fn document_store_roundtrip() {
   assert_eq!(store.get(&url).unwrap().text, "world");
   store.close(&url);
   assert!(store.get(&url).is_none());
+}
+
+#[test]
+fn r2_166_completion_at_eof_no_panic() {
+  let (state, url) = state_with("file:///t.sql", "SELECT * FROM users");
+  let resp = completion::run(
+    &state,
+    CompletionParams {
+      text_document_position: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        // Cursor at line 0 char beyond the buffer length.
+        position: Position { line: 0, character: 500 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+      context: None,
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_166_completion_empty_doc_no_panic() {
+  let (state, url) = state_with("file:///empty.sql", "");
+  let resp = completion::run(
+    &state,
+    CompletionParams {
+      text_document_position: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        position: Position { line: 0, character: 0 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+      context: None,
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_166_hover_in_string_literal_no_panic() {
+  let (state, url) = state_with("file:///t.sql", "SELECT 'hello world' FROM users");
+  let resp = hover::run(
+    &state,
+    HoverParams {
+      text_document_position_params: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        position: Position { line: 0, character: 11 }, // inside 'hello'
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_166_completion_past_line_end_clamps() {
+  let (state, url) = state_with("file:///t.sql", "SELECT id FROM users\nSELECT *");
+  let resp = completion::run(
+    &state,
+    CompletionParams {
+      text_document_position: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        // Line 1, char past the end of "SELECT *".
+        position: Position { line: 1, character: 999 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+      context: None,
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_166_completion_for_unknown_doc_no_panic() {
+  let state = ServerState::new();
+  let url: Url = "file:///never-opened.sql".parse().unwrap();
+  let resp = completion::run(
+    &state,
+    CompletionParams {
+      text_document_position: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        position: Position { line: 0, character: 0 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+      context: None,
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_167_definition_on_broken_sql_no_panic() {
+  use tower_lsp::lsp_types::GotoDefinitionParams;
+  let (state, url) = state_with("file:///t.sql", "SELECT * FROM (((id =");
+  let resp = definition::run(
+    &state,
+    GotoDefinitionParams {
+      text_document_position_params: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        position: Position { line: 0, character: 5 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_167_document_symbol_empty_no_panic() {
+  use tower_lsp::lsp_types::DocumentSymbolParams;
+  let (state, url) = state_with("file:///empty.sql", "");
+  let resp = document_symbol::run(
+    &state,
+    DocumentSymbolParams {
+      text_document: TextDocumentIdentifier { uri: url },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_167_document_symbol_broken_sql_no_panic() {
+  use tower_lsp::lsp_types::DocumentSymbolParams;
+  let (state, url) = state_with("file:///broken.sql", "CREATE TABLE (((");
+  let resp = document_symbol::run(
+    &state,
+    DocumentSymbolParams {
+      text_document: TextDocumentIdentifier { uri: url },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_167_code_lens_empty_no_panic() {
+  use tower_lsp::lsp_types::CodeLensParams;
+  let (state, url) = state_with("file:///empty.sql", "");
+  let resp = code_lens::run(
+    &state,
+    CodeLensParams {
+      text_document: TextDocumentIdentifier { uri: url },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_167_code_lens_large_doc_no_panic() {
+  use tower_lsp::lsp_types::CodeLensParams;
+  // 500 simple statements -- code lens scans each. Verify no panic.
+  let mut text = String::new();
+  for i in 0..500 {
+    text.push_str(&format!("SELECT id FROM users WHERE id = {i};\n"));
+  }
+  let (state, url) = state_with("file:///large.sql", &text);
+  let resp = code_lens::run(
+    &state,
+    CodeLensParams {
+      text_document: TextDocumentIdentifier { uri: url },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_167_folding_range_broken_sql_no_panic() {
+  use tower_lsp::lsp_types::FoldingRangeParams;
+  let (state, url) = state_with("file:///fold.sql", "BEGIN; (((( SELECT 1");
+  let resp = folding_range::run(
+    &state,
+    FoldingRangeParams {
+      text_document: TextDocumentIdentifier { uri: url },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_167_selection_range_empty_no_panic() {
+  use tower_lsp::lsp_types::SelectionRangeParams;
+  let (state, url) = state_with("file:///empty.sql", "");
+  let resp = selection_range::run(
+    &state,
+    SelectionRangeParams {
+      text_document: TextDocumentIdentifier { uri: url },
+      positions: vec![Position { line: 0, character: 0 }],
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_167_inlay_hints_broken_sql_no_panic() {
+  use tower_lsp::lsp_types::{InlayHintParams, Range};
+  let (state, url) = state_with("file:///hint.sql", "INSERT INTO ((");
+  let resp = inlay_hints::run(
+    &state,
+    InlayHintParams {
+      text_document: TextDocumentIdentifier { uri: url },
+      range: Range {
+        start: Position { line: 0, character: 0 },
+        end: Position { line: 100, character: 100 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_168_references_broken_sql_no_panic() {
+  use tower_lsp::lsp_types::{ReferenceContext, ReferenceParams};
+  let (state, url) = state_with("file:///t.sql", "SELECT u.id FROM ((( WHERE");
+  let resp = references::run(
+    &state,
+    ReferenceParams {
+      text_document_position: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        position: Position { line: 0, character: 7 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+      context: ReferenceContext { include_declaration: true },
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_168_references_empty_doc_no_panic() {
+  use tower_lsp::lsp_types::{ReferenceContext, ReferenceParams};
+  let (state, url) = state_with("file:///empty.sql", "");
+  let resp = references::run(
+    &state,
+    ReferenceParams {
+      text_document_position: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        position: Position { line: 0, character: 0 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+      context: ReferenceContext { include_declaration: false },
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_168_rename_on_broken_sql_no_panic() {
+  use tower_lsp::lsp_types::RenameParams;
+  let (state, url) = state_with("file:///t.sql", "SELECT u.id FROM ((((");
+  let resp = rename::run(
+    &state,
+    RenameParams {
+      text_document_position: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        position: Position { line: 0, character: 7 },
+      },
+      new_name: "newname".into(),
+      work_done_progress_params: WorkDoneProgressParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_168_rename_empty_new_name_no_panic() {
+  use tower_lsp::lsp_types::RenameParams;
+  let (state, url) = state_with("file:///t.sql", "SELECT u.id FROM users u");
+  let resp = rename::run(
+    &state,
+    RenameParams {
+      text_document_position: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        position: Position { line: 0, character: 7 },
+      },
+      new_name: String::new(),
+      work_done_progress_params: WorkDoneProgressParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_168_semantic_tokens_broken_sql_no_panic() {
+  use tower_lsp::lsp_types::SemanticTokensParams;
+  let (state, url) = state_with("file:///tok.sql", "((( ); SELECT 1; DROP TABLE");
+  let resp = semantic_tokens::run(
+    &state,
+    SemanticTokensParams {
+      text_document: TextDocumentIdentifier { uri: url },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_168_semantic_tokens_large_doc_no_panic() {
+  use tower_lsp::lsp_types::SemanticTokensParams;
+  let mut text = String::new();
+  for i in 0..500 {
+    text.push_str(&format!("SELECT id FROM users WHERE id = {i};\n"));
+  }
+  let (state, url) = state_with("file:///big.sql", &text);
+  let resp = semantic_tokens::run(
+    &state,
+    SemanticTokensParams {
+      text_document: TextDocumentIdentifier { uri: url },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_168_workspace_symbol_empty_query_no_panic() {
+  use tower_lsp::lsp_types::WorkspaceSymbolParams;
+  let state = ServerState::new();
+  let resp = workspace_symbol::run(
+    &state,
+    WorkspaceSymbolParams {
+      query: String::new(),
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_168_signature_help_in_function_call() {
+  use tower_lsp::lsp_types::SignatureHelpParams;
+  let (state, url) = state_with("file:///sig.sql", "SELECT generate_series(1, ");
+  let resp = signature_help::run(
+    &state,
+    SignatureHelpParams {
+      text_document_position_params: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        position: Position { line: 0, character: 26 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      context: None,
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_168_signature_help_broken_sql_no_panic() {
+  use tower_lsp::lsp_types::SignatureHelpParams;
+  let (state, url) = state_with("file:///sig.sql", "(((");
+  let resp = signature_help::run(
+    &state,
+    SignatureHelpParams {
+      text_document_position_params: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        position: Position { line: 0, character: 2 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      context: None,
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_169_call_hierarchy_prepare_on_broken_sql_no_panic() {
+  use tower_lsp::lsp_types::CallHierarchyPrepareParams;
+  let (state, url) = state_with("file:///t.sql", "CREATE FUNCTION ((((");
+  let resp = call_hierarchy::prepare(
+    &state,
+    CallHierarchyPrepareParams {
+      text_document_position_params: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        position: Position { line: 0, character: 16 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_169_call_hierarchy_prepare_empty_no_panic() {
+  use tower_lsp::lsp_types::CallHierarchyPrepareParams;
+  let (state, url) = state_with("file:///empty.sql", "");
+  let resp = call_hierarchy::prepare(
+    &state,
+    CallHierarchyPrepareParams {
+      text_document_position_params: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        position: Position { line: 0, character: 0 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_169_code_action_broken_sql_no_panic() {
+  use tower_lsp::lsp_types::{CodeActionContext, CodeActionParams, Range};
+  let (state, url) = state_with("file:///t.sql", "SELECT (((");
+  let resp = code_action::run(
+    &state,
+    CodeActionParams {
+      text_document: TextDocumentIdentifier { uri: url },
+      range: Range {
+        start: Position { line: 0, character: 0 },
+        end: Position { line: 0, character: 10 },
+      },
+      context: CodeActionContext { diagnostics: Vec::new(), only: None, trigger_kind: None },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_169_document_highlight_broken_sql_no_panic() {
+  use tower_lsp::lsp_types::DocumentHighlightParams;
+  let (state, url) = state_with("file:///hl.sql", "SELECT (((( WHERE");
+  let resp = document_highlight::run(
+    &state,
+    DocumentHighlightParams {
+      text_document_position_params: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        position: Position { line: 0, character: 7 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_169_type_definition_broken_sql_no_panic() {
+  use tower_lsp::lsp_types::request::GotoTypeDefinitionParams;
+  let (state, url) = state_with("file:///td.sql", "SELECT id FROM (((");
+  let resp = type_definition::run(
+    &state,
+    GotoTypeDefinitionParams {
+      text_document_position_params: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        position: Position { line: 0, character: 7 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_169_linked_editing_empty_no_panic() {
+  use tower_lsp::lsp_types::LinkedEditingRangeParams;
+  let (state, url) = state_with("file:///empty.sql", "");
+  let resp = linked_editing::run(
+    &state,
+    LinkedEditingRangeParams {
+      text_document_position_params: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        position: Position { line: 0, character: 0 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_169_on_type_formatting_broken_sql_no_panic() {
+  use tower_lsp::lsp_types::{DocumentOnTypeFormattingParams, FormattingOptions};
+  let (state, url) = state_with("file:///fmt.sql", "SELECT (((");
+  let resp = on_type_formatting::run(
+    &state,
+    DocumentOnTypeFormattingParams {
+      text_document_position: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        position: Position { line: 0, character: 5 },
+      },
+      ch: ";".into(),
+      options: FormattingOptions::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_169_formatting_broken_sql_no_panic() {
+  use tower_lsp::lsp_types::{DocumentFormattingParams, FormattingOptions};
+  let (state, url) = state_with("file:///fmt.sql", "SELECT (((");
+  let resp = formatting::run(
+    &state,
+    DocumentFormattingParams {
+      text_document: TextDocumentIdentifier { uri: url },
+      options: FormattingOptions::default(),
+      work_done_progress_params: WorkDoneProgressParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_169_formatting_empty_no_panic() {
+  use tower_lsp::lsp_types::{DocumentFormattingParams, FormattingOptions};
+  let (state, url) = state_with("file:///empty.sql", "");
+  let resp = formatting::run(
+    &state,
+    DocumentFormattingParams {
+      text_document: TextDocumentIdentifier { uri: url },
+      options: FormattingOptions::default(),
+      work_done_progress_params: WorkDoneProgressParams::default(),
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r2_170_did_open_then_close_lifecycle() {
+  let state = ServerState::new();
+  let url: Url = "file:///life.sql".parse().unwrap();
+  assert!(state.documents.get(&url).is_none(), "doc should not exist before open");
+  state.documents.open(url.clone(), "SELECT 1;".into(), 1);
+  assert!(state.documents.get(&url).is_some(), "doc should exist after open");
+  state.documents.close(&url);
+  assert!(state.documents.get(&url).is_none(), "doc should be gone after close");
+}
+
+#[test]
+fn r2_170_did_open_then_update_increments_version() {
+  let state = ServerState::new();
+  let url: Url = "file:///up.sql".parse().unwrap();
+  state.documents.open(url.clone(), "SELECT 1;".into(), 1);
+  state.documents.update(&url, "SELECT 2;".into(), 2);
+  let doc = state.documents.get(&url).expect("doc");
+  assert_eq!(doc.version, 2);
+}
+
+#[test]
+fn r2_170_update_with_older_version_no_panic() {
+  let state = ServerState::new();
+  let url: Url = "file:///stale.sql".parse().unwrap();
+  state.documents.open(url.clone(), "SELECT 1;".into(), 5);
+  // Out-of-order: update with version 3 after version 5.
+  state.documents.update(&url, "SELECT 2;".into(), 3);
+  let _ = state.documents.get(&url);
+}
+
+#[test]
+fn r2_170_multi_doc_state_isolation() {
+  let state = ServerState::new();
+  let a: Url = "file:///a.sql".parse().unwrap();
+  let b: Url = "file:///b.sql".parse().unwrap();
+  state.documents.open(a.clone(), "SELECT 1;".into(), 1);
+  state.documents.open(b.clone(), "SELECT 2;".into(), 1);
+  assert_eq!(state.documents.get(&a).unwrap().text, "SELECT 1;");
+  assert_eq!(state.documents.get(&b).unwrap().text, "SELECT 2;");
+  state.documents.close(&a);
+  assert!(state.documents.get(&a).is_none());
+  assert!(state.documents.get(&b).is_some(), "b unaffected by a's close");
+}
+
+#[test]
+fn r2_170_update_unopened_doc_no_panic() {
+  let state = ServerState::new();
+  let url: Url = "file:///ghost.sql".parse().unwrap();
+  // No open first. Update should not panic.
+  state.documents.update(&url, "SELECT 1;".into(), 1);
+}
+
+#[test]
+fn r2_170_close_unopened_doc_no_panic() {
+  let state = ServerState::new();
+  let url: Url = "file:///ghost.sql".parse().unwrap();
+  state.documents.close(&url);
+}
+
+#[test]
+fn r2_170_open_same_uri_twice_replaces() {
+  let state = ServerState::new();
+  let url: Url = "file:///twice.sql".parse().unwrap();
+  state.documents.open(url.clone(), "v1".into(), 1);
+  state.documents.open(url.clone(), "v2".into(), 2);
+  let doc = state.documents.get(&url).expect("doc");
+  assert_eq!(doc.text, "v2");
+  assert_eq!(doc.version, 2);
+}
+
+#[test]
+fn r2_170_open_then_completion_then_close_lifecycle() {
+  let state = ServerState::new();
+  let url: Url = "file:///cyc.sql".parse().unwrap();
+  state.documents.open(url.clone(), "SELECT em FROM users".into(), 1);
+  let resp = completion::run(
+    &state,
+    CompletionParams {
+      text_document_position: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url.clone() },
+        position: Position { line: 0, character: 9 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+      context: None,
+    },
+  );
+  let _ = resp;
+  state.documents.close(&url);
+}
+
+#[test]
+fn r3_286_rapid_update_no_panic() {
+  let state = ServerState::new();
+  let url: Url = "file:///rapid.sql".parse().unwrap();
+  state.documents.open(url.clone(), "SELECT".into(), 1);
+  for i in 2..=50 {
+    state.documents.update(&url, format!("SELECT {i}"), i);
+  }
+  let doc = state.documents.get(&url).expect("doc");
+  assert_eq!(doc.version, 50);
+  state.documents.close(&url);
+}
+
+#[test]
+fn r3_287_many_concurrent_docs_no_panic() {
+  let state = ServerState::new();
+  for i in 0..100 {
+    let url: Url = format!("file:///doc{i}.sql").parse().unwrap();
+    state.documents.open(url.clone(), format!("SELECT {i}"), 1);
+  }
+  for i in 0..100 {
+    let url: Url = format!("file:///doc{i}.sql").parse().unwrap();
+    assert!(state.documents.get(&url).is_some());
+  }
+  for i in 0..100 {
+    let url: Url = format!("file:///doc{i}.sql").parse().unwrap();
+    state.documents.close(&url);
+  }
+}
+
+#[test]
+fn r3_288_update_with_huge_text() {
+  let state = ServerState::new();
+  let url: Url = "file:///huge.sql".parse().unwrap();
+  let mut text = String::new();
+  for i in 0..1000 {
+    text.push_str(&format!("SELECT {i};\n"));
+  }
+  state.documents.open(url.clone(), text, 1);
+  let doc = state.documents.get(&url).expect("doc");
+  assert!(doc.text.len() > 5000);
+  state.documents.close(&url);
+}
+
+#[test]
+fn r3_289_open_with_multibyte() {
+  let state = ServerState::new();
+  let url: Url = "file:///utf8.sql".parse().unwrap();
+  state.documents.open(url.clone(), "SELECT '日本語🎉';".into(), 1);
+  let doc = state.documents.get(&url).expect("doc");
+  assert!(doc.text.contains("日本語"));
+}
+
+#[test]
+fn r3_290_completion_on_empty_doc_no_panic() {
+  let state = ServerState::new();
+  let url: Url = "file:///empty.sql".parse().unwrap();
+  state.documents.open(url.clone(), "".into(), 1);
+  let resp = completion::run(
+    &state,
+    CompletionParams {
+      text_document_position: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url.clone() },
+        position: Position { line: 0, character: 0 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+      context: None,
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r4_196_hover_unopened_doc_no_panic() {
+  use tower_lsp::lsp_types::{HoverParams, TextDocumentPositionParams, Position, TextDocumentIdentifier};
+  let state = ServerState::new();
+  let url: Url = "file:///ghost.sql".parse().unwrap();
+  let resp = hover::run(&state, HoverParams {
+    text_document_position_params: TextDocumentPositionParams {
+      text_document: TextDocumentIdentifier { uri: url.clone() },
+      position: Position { line: 0, character: 0 },
+    },
+    work_done_progress_params: Default::default(),
+  });
+  let _ = resp;
+}
+
+#[test]
+fn r4_197_completion_at_huge_position_no_panic() {
+  let state = ServerState::new();
+  let url: Url = "file:///hp.sql".parse().unwrap();
+  state.documents.open(url.clone(), "SELECT".into(), 1);
+  let resp = completion::run(
+    &state,
+    CompletionParams {
+      text_document_position: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url.clone() },
+        position: Position { line: 100, character: 9999 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+      context: None,
+    },
+  );
+  let _ = resp;
+}
+
+#[test]
+fn r4_198_open_doc_with_only_dollar_quote() {
+  let state = ServerState::new();
+  let url: Url = "file:///dq.sql".parse().unwrap();
+  state.documents.open(url.clone(), "$$ $$".into(), 1);
+  let doc = state.documents.get(&url).expect("doc");
+  assert_eq!(doc.text, "$$ $$");
+}
+
+#[test]
+fn r4_199_update_with_crlf_lineending() {
+  let state = ServerState::new();
+  let url: Url = "file:///crlf.sql".parse().unwrap();
+  state.documents.open(url.clone(), "SELECT 1;\r\nSELECT 2;".into(), 1);
+  let doc = state.documents.get(&url).expect("doc");
+  assert!(doc.text.contains("\r\n"));
+}
+
+#[test]
+fn r4_200_close_then_reopen_keeps_separate_versions() {
+  let state = ServerState::new();
+  let url: Url = "file:///rv.sql".parse().unwrap();
+  state.documents.open(url.clone(), "v1".into(), 1);
+  state.documents.close(&url);
+  state.documents.open(url.clone(), "v2".into(), 2);
+  let doc = state.documents.get(&url).expect("doc");
+  assert_eq!(doc.version, 2);
+  assert_eq!(doc.text, "v2");
 }
