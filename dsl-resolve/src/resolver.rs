@@ -47,8 +47,18 @@ fn resolve_one(stmt: &Statement, source: Option<&str>) -> Scope {
         add(&mut scope, &j.table);
       }
     },
-    StatementKind::Update(u) => add(&mut scope, &u.table),
-    StatementKind::Delete(d) => add(&mut scope, &d.table),
+    StatementKind::Update(u) => {
+      add(&mut scope, &u.table);
+      for t in &u.from_tables {
+        add(&mut scope, t);
+      }
+    },
+    StatementKind::Delete(d) => {
+      add(&mut scope, &d.table);
+      for t in &d.using_tables {
+        add(&mut scope, t);
+      }
+    },
     StatementKind::Insert(i) => add(&mut scope, &i.table),
     _ => {},
   }
