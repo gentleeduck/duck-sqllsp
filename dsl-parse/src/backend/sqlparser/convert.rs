@@ -17,17 +17,29 @@ pub fn statement(s: sp::Statement, raw: &str) -> StatementKind {
       table: object_name(&ins.table_name),
       columns: ins.columns.iter().map(|c| c.value.clone()).collect(),
     }),
-    S::Update { table, assignments, selection, .. } => StatementKind::Update(UpdateStmt {
-      table: table_factor(&table.relation),
-      assignments: assignments.into_iter().map(|a| (a.target.to_string(), Expr::Other(a.value.to_string()))).collect(),
-      where_clause: selection.map(|e| Expr::Other(e.to_string())),
-    }),
+    S::Update { table, assignments, selection, from, .. } => {
+      let from_tables: Vec<_> = from.iter().map(|t| table_factor(&t.relation)).collect();
+      StatementKind::Update(UpdateStmt {
+        table: table_factor(&table.relation),
+        assignments: assignments
+          .into_iter()
+          .map(|a| (a.target.to_string(), Expr::Other(a.value.to_string())))
+          .collect(),
+        where_clause: selection.map(|e| Expr::Other(e.to_string())),
+        from_tables,
+      })
+    },
     S::Delete(d) => {
       let from_vec = match &d.from {
         sp::FromTable::WithFromKeyword(v) | sp::FromTable::WithoutKeyword(v) => v,
       };
       let table = from_vec.first().map(|t| table_factor(&t.relation)).unwrap_or_default();
-      StatementKind::Delete(DeleteStmt { table, where_clause: d.selection.map(|e| Expr::Other(e.to_string())) })
+      let using_tables = d.using.iter().flat_map(|v| v.iter().map(|t| table_factor(&t.relation))).collect();
+      StatementKind::Delete(DeleteStmt {
+        table,
+        where_clause: d.selection.map(|e| Expr::Other(e.to_string())),
+        using_tables,
+      })
     },
     S::CreateTable(ct) => StatementKind::CreateTable(CreateTableStmt {
       table: object_name(&ct.name),

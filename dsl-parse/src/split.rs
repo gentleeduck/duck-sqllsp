@@ -115,9 +115,104 @@ fn push_chunk(src: &str, start: usize, end: usize, out: &mut Vec<(String, TextRa
   // trimmed chunk excludes leading/trailing whitespace and the
   // trailing semicolon. The range must follow the trimmed chunk so
   // diagnostics and inlay hints anchor on the actual statement, not
-  // a preceding blank line or the previous statement's terminator.
-  let leading_ws = raw.len() - raw.trim_start().len();
-  let trimmed_start = start + leading_ws;
-  let trimmed_end = trimmed_start + chunk.len();
-  out.push((chunk, TextRange::new(TextSize::from(trimmed_start as u32), TextSize::from(trimmed_end as u32))));
+  // a preceding blank line, the previous statement's terminator, or
+  // a leading comment block (the codelens above-line anchor must
+  // sit above the SQL, not above any preceding doc-comment).
+  let trimmed_start = start + skip_leading_ws_and_comments(raw);
+  let trimmed_end = trimmed_start + (end - trimmed_start) - trailing_ws_bytes(&src[trimmed_start..end]);
+  // Also re-slice the chunk to match the new range so the stored
+  // chunk string excludes the leading comment block consistently.
+  let trimmed_chunk = src[trimmed_start..trimmed_end].trim().to_string();
+  if trimmed_chunk.is_empty() {
+    return;
+  }
+  // Some callers expect the chunk to end exactly where its range
+  // ends, so use the chunk's length for the right edge after the
+  // trim_end above strips trailing whitespace.
+  let final_end = trimmed_start + trimmed_chunk.len();
+  out.push((trimmed_chunk, TextRange::new(TextSize::from(trimmed_start as u32), TextSize::from(final_end as u32))));
+}
+
+/// Count leading bytes of `s` that are whitespace, `-- line comments`,
+/// or `/* block comments */`. Used to advance the statement range so
+/// the editor anchors codelens / inlay hints on the SQL itself rather
+/// than on a comment block that documents the statement.
+fn skip_leading_ws_and_comments(s: &str) -> usize {
+  let bytes = s.as_bytes();
+  let n = bytes.len();
+  let mut i = 0usize;
+  loop {
+    let before = i;
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
+    }
+    if i + 1 < n && bytes[i] == b'-' && bytes[i + 1] == b'-' {
+      while i < n && bytes[i] != b'\n' {
+        i += 1;
+      }
+      continue;
+    }
+    if i + 1 < n && bytes[i] == b'/' && bytes[i + 1] == b'*' {
+      let mut depth = 1u32;
+      i += 2;
+      while i + 1 < n && depth > 0 {
+        if bytes[i] == b'/' && bytes[i + 1] == b'*' {
+          depth += 1;
+          i += 2;
+        } else if bytes[i] == b'*' && bytes[i + 1] == b'/' {
+          depth -= 1;
+          i += 2;
+        } else {
+          i += 1;
+        }
+      }
+      continue;
+    }
+    if i == before {
+      return i;
+    }
+  }
+}
+
+fn trailing_ws_bytes(s: &str) -> usize {
+  s.len() - s.trim_end().len()
+}
+
+#[cfg(test)]
+mod tests_r4 {
+  use super::*;
+  #[test]
+  fn r4_stmt_range_skips_leading_line_comment() {
+    // CYCLE 4: stmt.range used to include the leading `-- comment\n`
+    // which made codelens anchor above the comment, not the SQL.
+    // Now skipped.
+    let src = "-- header comment\nSELECT 1;";
+    let chunks = split_statements(src);
+    assert_eq!(chunks.len(), 1);
+    let (chunk, range) = &chunks[0];
+    assert_eq!(chunk.trim(), "SELECT 1");
+    let s: u32 = range.start().into();
+    let select_pos = src.find("SELECT").unwrap() as u32;
+    assert_eq!(s, select_pos, "range should start at SELECT, not comment");
+  }
+
+  #[test]
+  fn r4_stmt_range_skips_block_comment() {
+    let src = "/* block doc */\nSELECT 1;";
+    let chunks = split_statements(src);
+    let (_, range) = &chunks[0];
+    let s: u32 = range.start().into();
+    let select_pos = src.find("SELECT").unwrap() as u32;
+    assert_eq!(s, select_pos);
+  }
+
+  #[test]
+  fn r4_stmt_range_skips_multi_comment_block() {
+    let src = "-- doc1\n-- doc2\n/* doc3 */\nSELECT * FROM users;";
+    let chunks = split_statements(src);
+    let (_, range) = &chunks[0];
+    let s: u32 = range.start().into();
+    let select_pos = src.find("SELECT").unwrap() as u32;
+    assert_eq!(s, select_pos);
+  }
 }

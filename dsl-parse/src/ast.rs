@@ -128,12 +128,18 @@ pub struct UpdateStmt {
   pub table: TableRef,
   pub assignments: Vec<(String, Expr)>,
   pub where_clause: Option<Expr>,
+  /// Tables introduced by `UPDATE ... FROM <list>` -- not the target,
+  /// but exposed for column refs in SET RHS and WHERE.
+  pub from_tables: Vec<TableRef>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct DeleteStmt {
   pub table: TableRef,
   pub where_clause: Option<Expr>,
+  /// Tables introduced by `DELETE FROM <tgt> USING <list>` -- exposed
+  /// for column refs in WHERE and RETURNING.
+  pub using_tables: Vec<TableRef>,
 }
 
 // ---------------------------------------------------------------------------

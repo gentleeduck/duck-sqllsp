@@ -477,12 +477,40 @@ fn update(u: &pg_query::protobuf::UpdateStmt, _text: &str) -> UpdateStmt {
       _ => None,
     })
     .collect();
-  UpdateStmt { table, assignments, where_clause: u.where_clause.as_ref().map(|n| extract_column_refs_expr(n.node.as_ref())) }
+  // `UPDATE t SET ... FROM <list> WHERE ...` -- the FROM list adds
+  // additional table bindings visible in SET RHS and WHERE.
+  let from_tables = collect_dml_from_tables(&u.from_clause);
+  UpdateStmt {
+    table,
+    assignments,
+    where_clause: u.where_clause.as_ref().map(|n| extract_column_refs_expr(n.node.as_ref())),
+    from_tables,
+  }
 }
 
 fn delete(d: &pg_query::protobuf::DeleteStmt, _text: &str) -> DeleteStmt {
   let table = d.relation.as_ref().map(rangevar_to_tableref).unwrap_or_default();
-  DeleteStmt { table, where_clause: d.where_clause.as_ref().map(|n| extract_column_refs_expr(n.node.as_ref())) }
+  // `DELETE FROM t USING <list> WHERE ...` -- USING list adds
+  // additional bindings visible in WHERE and RETURNING.
+  let using_tables = collect_dml_from_tables(&d.using_clause);
+  DeleteStmt {
+    table,
+    where_clause: d.where_clause.as_ref().map(|n| extract_column_refs_expr(n.node.as_ref())),
+    using_tables,
+  }
+}
+
+/// Extract simple RangeVar table bindings from a DML FROM/USING list.
+/// Subqueries, joins, and function calls are skipped -- only bare table
+/// references contribute alias bindings.
+fn collect_dml_from_tables(list: &[pg_query::protobuf::Node]) -> Vec<TableRef> {
+  let mut out = Vec::new();
+  for n in list {
+    if let Some(PgNode::RangeVar(r)) = n.node.as_ref() {
+      out.push(rangevar_to_tableref(r));
+    }
+  }
+  out
 }
 
 fn alter_table(a: &pg_query::protobuf::AlterTableStmt) -> AlterTableStmt {
