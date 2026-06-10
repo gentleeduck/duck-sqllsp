@@ -94,6 +94,29 @@ pub struct Table {
   /// show ownership at-a-glance.
   #[serde(default)]
   pub owner: Option<String>,
+  /// For views / materialized views: the defining query (the `SELECT`
+  /// body, without the `CREATE VIEW ... AS` prefix or trailing `;`).
+  /// Populated by live introspection (`pg_get_viewdef` / MySQL
+  /// `view_definition` / SQLite `sqlite_master.sql`) and by the offline
+  /// `CREATE VIEW` source scan. `None` for ordinary tables. Used by hover
+  /// to show what a view actually selects. Default `None` so older
+  /// catalog snapshots stay forward-compatible.
+  #[serde(default)]
+  pub definition: Option<String>,
+  /// SQLite `CREATE TABLE ... STRICT` -- the per-column declared types are
+  /// rigidly enforced. Orthogonal to [`TableKind::WithoutRowid`] (a table
+  /// may be both `STRICT` and `WITHOUT ROWID`), so it's a flag rather than a
+  /// table kind. Always `false` for other dialects. Default `false` so older
+  /// catalog snapshots stay forward-compatible.
+  #[serde(default)]
+  pub strict: bool,
+  /// Dialect-specific trailing table-option clause, rendered as DDL text and
+  /// appended after the column list by hover -- e.g. MySQL
+  /// `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`.
+  /// `None` when there are no extra options (or for dialects that have none).
+  /// Default `None` so older catalog snapshots stay forward-compatible.
+  #[serde(default)]
+  pub options: Option<String>,
 }
 
 /// Row-level security policy attached to a table. Mirrors `pg_policies`.
@@ -131,6 +154,11 @@ pub enum TableKind {
   Table,
   View,
   MaterializedView,
+  /// SQLite `CREATE TABLE ... WITHOUT ROWID`. Behaves like an ordinary
+  /// table for DML, but has no implicit `rowid` and requires an explicit
+  /// PRIMARY KEY -- surfaced so hover / completion can flag the
+  /// optimisation. Other dialects never produce this variant.
+  WithoutRowid,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

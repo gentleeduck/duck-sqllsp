@@ -32,7 +32,7 @@ fn cat() -> Catalog {
     policies: vec![],
     comment: None,
     row_estimate: None,
-    owner: None,
+    owner: None, definition: None, strict: false, options: None,
   };
   Catalog {
     version: CATALOG_VERSION,
@@ -3613,7 +3613,7 @@ fn r2_157_hover_fk_uppercase_public_drops_prefix() {
       policies: Vec::new(),
       comment: None,
       row_estimate: None,
-      owner: None,
+      owner: None, definition: None, strict: false, options: None,
     }, Table {
       schema: "public".into(),
       name: "users".into(),
@@ -3644,7 +3644,7 @@ fn r2_157_hover_fk_uppercase_public_drops_prefix() {
       policies: Vec::new(),
       comment: None,
       row_estimate: None,
-      owner: None,
+      owner: None, definition: None, strict: false, options: None,
     }],
   });
   let md = resolve("users", &cat).expect("users hover");
@@ -3681,7 +3681,7 @@ fn r2_154_hover_column_dot_case_insensitive() {
       policies: Vec::new(),
       comment: None,
       row_estimate: None,
-      owner: None,
+      owner: None, definition: None, strict: false, options: None,
     }],
   });
   let md = resolve("USERS.ID", &cat);

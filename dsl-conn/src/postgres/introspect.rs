@@ -11,6 +11,7 @@
 
 use crate::driver::DriverError;
 use crate::spec::ConnectionSpec;
+use crate::util::strip_outer_parens;
 use dsl_catalog::{
   CATALOG_VERSION, Catalog, Column, Constraint, ConstraintKind, ConstraintRef, Extension, Function, FunctionArg,
   IndexDef, Policy, Schema, Sequence, Table, TableKind, Trigger, Type, TypeKind,
@@ -32,10 +33,22 @@ WHERE table_schema NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
 ORDER BY table_schema, table_name
 ";
 
+// View and materialized-view defining queries. `pg_get_viewdef(oid, true)`
+// returns the pretty-printed SELECT body (no `CREATE VIEW ... AS` prefix).
+const VIEWDEFS_SQL: &str = "
+SELECT n.nspname AS schema, c.relname AS name, pg_catalog.pg_get_viewdef(c.oid, true) AS def
+FROM pg_catalog.pg_class c
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind IN ('v', 'm')
+  AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+ORDER BY n.nspname, c.relname
+";
+
 const COLUMNS_SQL: &str = "
 SELECT table_schema, table_name, column_name, data_type,
        is_nullable::text AS is_nullable,
-       column_default
+       column_default,
+       generation_expression
 FROM information_schema.columns
 WHERE table_schema NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
 ORDER BY table_schema, table_name, ordinal_position
@@ -251,25 +264,47 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
       comment: None,
       row_estimate: estimate_lookup.get(&(schema_name.clone(), table_name.clone())).copied(),
       owner: owner_lookup.get(&(schema_name.clone(), table_name.clone())).cloned(),
+      definition: None,
+      strict: false, options: None,
     });
     table_index.insert((schema_name, table_name), (entry.name.clone(), idx));
   }
 
+  // View / materialized-view definitions. `pg_get_viewdef(oid, true)` gives
+  // the pretty-printed SELECT body. Best-effort -- empty on error.
+  if let Ok(rows) = sqlx::query_as::<_, (String, String, String)>(VIEWDEFS_SQL).fetch_all(pool).await {
+    for (schema_name, view_name, def) in rows {
+      if let Some((_, idx)) = table_index.get(&(schema_name.clone(), view_name))
+        && let Some(s) = schemas.get_mut(&schema_name)
+        && let Some(t) = s.tables.get_mut(*idx)
+      {
+        let def = def.trim().trim_end_matches(';').trim().to_string();
+        t.definition = if def.is_empty() { None } else { Some(def) };
+      }
+    }
+  }
+
   // Columns
-  let column_rows: Vec<(String, String, String, String, String, Option<String>)> =
+  #[allow(clippy::type_complexity)]
+  let column_rows: Vec<(String, String, String, String, String, Option<String>, Option<String>)> =
     sqlx::query_as(COLUMNS_SQL).fetch_all(pool).await.map_err(map_err)?;
-  for (schema_name, table_name, column_name, data_type, is_nullable, default) in column_rows {
+  for (schema_name, table_name, column_name, data_type, is_nullable, default, gen_expr) in column_rows {
     if let Some((_, idx)) = table_index.get(&(schema_name.clone(), table_name.clone()))
       && let Some(s) = schemas.get_mut(&schema_name)
       && let Some(t) = s.tables.get_mut(*idx)
     {
+      // `generation_expression` is NULL for plain columns and the
+      // pg_get_expr() text (already parenthesised) for STORED generated
+      // columns. Strip the outer parens to match the bare-expression
+      // convention the offline source scanner and hover renderer use.
+      let generated = gen_expr.filter(|e| !e.is_empty()).map(|e| strip_outer_parens(&e).to_string());
       t.columns.push(Column {
         name: column_name,
         data_type,
         nullable: is_nullable == "YES",
         default,
         comment: None,
-        generated: None,
+        generated,
         json_keys: None,
       });
     }

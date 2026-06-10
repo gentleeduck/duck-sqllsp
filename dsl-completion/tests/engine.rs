@@ -46,7 +46,7 @@ fn catalog_with_users_and_orders() -> Catalog {
     policies: vec![],
     comment: None,
     row_estimate: None,
-    owner: None,
+    owner: None, definition: None, strict: false, options: None,
   };
   let orders = Table {
     schema: "public".into(),
@@ -78,7 +78,7 @@ fn catalog_with_users_and_orders() -> Catalog {
     policies: vec![],
     comment: None,
     row_estimate: None,
-    owner: None,
+    owner: None, definition: None, strict: false, options: None,
   };
   Catalog {
     version: CATALOG_VERSION,
@@ -7394,7 +7394,7 @@ fn r2_155_source_tables_merge_case_insensitive() {
       policies: Vec::new(),
       comment: None,
       row_estimate: None,
-      owner: None,
+      owner: None, definition: None, strict: false, options: None,
     }],
   });
   let mut derived = Catalog::default();
@@ -7411,7 +7411,7 @@ fn r2_155_source_tables_merge_case_insensitive() {
       policies: Vec::new(),
       comment: None,
       row_estimate: None,
-      owner: None,
+      owner: None, definition: None, strict: false, options: None,
     }],
   });
   let merged = ::dsl_completion::source_tables::merge(&live, &derived);

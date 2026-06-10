@@ -63,6 +63,8 @@ pub fn from_file(file: &ParsedFile) -> Catalog {
       comment: None,
       row_estimate: None,
       owner: None,
+      definition: None,
+      strict: false, options: None,
     };
     if schema_name.eq_ignore_ascii_case("public") {
       public.tables.push(table);
@@ -186,7 +188,186 @@ pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
       }
     }
   }
+
+  // Views: the AST converter drops CREATE VIEW (it only models CREATE
+  // TABLE), so offline mode has no views at all without this scan. Surface
+  // them with their defining SELECT so hover can show what they select.
+  for (schema_name, name, kind, columns, definition) in scan_views(source) {
+    if cat
+      .schemas
+      .iter()
+      .any(|s| s.name.eq_ignore_ascii_case(&schema_name) && s.tables.iter().any(|t| t.name.eq_ignore_ascii_case(&name)))
+    {
+      continue; // already present (e.g. a same-named table) -- don't clobber.
+    }
+    let cols: Vec<Column> = columns
+      .into_iter()
+      .map(|c| Column {
+        name: c,
+        data_type: String::new(),
+        nullable: true,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      })
+      .collect();
+    let view = Table {
+      schema: schema_name.clone(),
+      name,
+      kind,
+      columns: cols,
+      constraints: Vec::new(),
+      indexes: Vec::new(),
+      triggers: Vec::new(),
+      policies: Vec::new(),
+      comment: None,
+      row_estimate: None,
+      owner: None,
+      definition: Some(definition),
+      strict: false, options: None,
+    };
+    if let Some(s) = cat.schemas.iter_mut().find(|s| s.name.eq_ignore_ascii_case(&schema_name)) {
+      s.tables.push(view);
+    } else {
+      cat.schemas.push(Schema { name: schema_name, tables: vec![view] });
+    }
+  }
+
   cat
+}
+
+/// Scan `CREATE [OR REPLACE] [TEMP|TEMPORARY] [MATERIALIZED] [RECURSIVE] VIEW
+/// [schema.]name [(col, ...)] AS <select>;` statements and return
+/// `(schema, name, kind, column_names, select_body)` for each. Best-effort
+/// and lenient -- offline mode, so odd / partial input is skipped.
+#[allow(clippy::type_complexity)]
+fn scan_views(src: &str) -> Vec<(String, String, TableKind, Vec<String>, String)> {
+  let upper = src.to_ascii_uppercase();
+  let bytes = src.as_bytes();
+  let n = bytes.len();
+  let is_ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+  let skip_ws = |mut i: usize| {
+    while i < n && bytes[i].is_ascii_whitespace() {
+      i += 1;
+    }
+    i
+  };
+  // Read the next ASCII-word, returning it uppercased plus the end offset.
+  let read_word = |i: usize| -> (String, usize) {
+    let mut j = i;
+    while j < n && is_ident(bytes[j]) {
+      j += 1;
+    }
+    (upper[i..j].to_string(), j)
+  };
+
+  let mut out = Vec::new();
+  let mut from = 0usize;
+  while let Some(rel) = upper[from..].find("CREATE") {
+    let at = from + rel;
+    from = at + 6;
+    if at > 0 && is_ident(bytes[at - 1]) {
+      continue;
+    }
+    // Consume modifier keywords until VIEW (or bail on anything else).
+    let mut p = at + 6;
+    let mut materialized = false;
+    let mut is_view = false;
+    loop {
+      p = skip_ws(p);
+      let (w, np) = read_word(p);
+      if np == p {
+        break;
+      }
+      match w.as_str() {
+        "OR" | "REPLACE" | "TEMP" | "TEMPORARY" | "GLOBAL" | "LOCAL" | "RECURSIVE" | "UNLOGGED" => p = np,
+        "MATERIALIZED" => {
+          materialized = true;
+          p = np;
+        },
+        "VIEW" => {
+          p = np;
+          is_view = true;
+          break;
+        },
+        _ => break,
+      }
+    }
+    if !is_view {
+      continue;
+    }
+    // Optional IF NOT EXISTS.
+    {
+      let (w1, q1) = read_word(skip_ws(p));
+      if w1 == "IF" {
+        let (w2, q2) = read_word(skip_ws(q1));
+        let (w3, q3) = read_word(skip_ws(q2));
+        if w2 == "NOT" && w3 == "EXISTS" {
+          p = q3;
+        }
+      }
+    }
+    // Qualified view name.
+    let Some((schema_opt, name, after)) = read_qualified_ident(src, skip_ws(p)) else { continue };
+    let schema = schema_opt.unwrap_or_else(|| "public".into());
+    p = skip_ws(after);
+    // Optional output-column list.
+    let mut columns = Vec::new();
+    if p < n && bytes[p] == b'(' {
+      if let Some(close) = find_matching_paren(src, p) {
+        for c in src[p + 1..close].split(',') {
+          let c = c.trim().trim_matches('"');
+          if !c.is_empty() {
+            columns.push(c.to_string());
+          }
+        }
+        p = skip_ws(close + 1);
+      } else {
+        continue;
+      }
+    }
+    // Require the AS keyword, then the SELECT body up to the top-level `;`.
+    let (w, np) = read_word(p);
+    if w != "AS" {
+      continue;
+    }
+    let body_start = skip_ws(np);
+    let end = view_stmt_end(bytes, body_start);
+    let definition = src[body_start..end].trim().to_string();
+    if definition.is_empty() {
+      continue;
+    }
+    let kind = if materialized { TableKind::MaterializedView } else { TableKind::View };
+    out.push((schema, name, kind, columns, definition));
+    from = end;
+  }
+  out
+}
+
+/// Offset of the statement-terminating top-level `;` (or end of input),
+/// skipping `;` inside parens and quoted runs.
+fn view_stmt_end(bytes: &[u8], start: usize) -> usize {
+  let n = bytes.len();
+  let mut i = start;
+  let mut depth = 0i32;
+  while i < n {
+    match bytes[i] {
+      b'\'' | b'"' | b'`' => {
+        let q = bytes[i];
+        i += 1;
+        while i < n && bytes[i] != q {
+          i += 1;
+        }
+      },
+      b'(' => depth += 1,
+      b')' => depth -= 1,
+      b';' if depth == 0 => return i,
+      _ => {},
+    }
+    i += 1;
+  }
+  n
 }
 
 /// `CREATE [OR REPLACE] POLICY <name> ON <tbl>
@@ -287,6 +468,8 @@ fn recover_failed_create_tables(cat: &mut Catalog, src: &str) {
       comment: None,
       row_estimate: None,
       owner: None,
+      definition: None,
+      strict: false, options: None,
     };
     if let Some(s) = cat.schemas.iter_mut().find(|s| s.name.eq_ignore_ascii_case(&schema_name)) {
       s.tables.push(table);
@@ -2549,5 +2732,45 @@ mod tests {
     let tbl = cat.schemas.iter().flat_map(|s| s.tables.iter()).find(|t| t.name == "t").unwrap();
     let col = tbl.columns.iter().find(|c| c.name == "data").unwrap();
     assert_eq!(col.json_keys.as_deref(), Some(&["a-b".to_string(), "c".to_string()][..]));
+  }
+
+  #[test]
+  fn scan_views_basic_and_modifiers() {
+    let src = "\
+      CREATE VIEW active_users AS SELECT * FROM users WHERE active;\n\
+      CREATE OR REPLACE MATERIALIZED VIEW reporting.daily (d, total) AS\n\
+        SELECT day, sum(amount) FROM sales GROUP BY day;\n";
+    let views = scan_views(src);
+    assert_eq!(views.len(), 2);
+
+    let (schema, name, kind, cols, def) = &views[0];
+    assert_eq!(schema, "public");
+    assert_eq!(name, "active_users");
+    assert_eq!(*kind, TableKind::View);
+    assert!(cols.is_empty());
+    assert_eq!(def, "SELECT * FROM users WHERE active");
+
+    let (schema, name, kind, cols, def) = &views[1];
+    assert_eq!(schema, "reporting");
+    assert_eq!(name, "daily");
+    assert_eq!(*kind, TableKind::MaterializedView);
+    assert_eq!(cols, &vec!["d".to_string(), "total".to_string()]);
+    assert!(def.starts_with("SELECT day, sum(amount)"));
+    assert!(!def.contains(';'));
+  }
+
+  #[test]
+  fn from_source_surfaces_view_definition() {
+    let src = "CREATE VIEW v AS SELECT id, name FROM t WHERE id > 0;";
+    let parsed = dsl_parse::parse(src, Dialect::Postgres);
+    let cat = from_source(&parsed, src);
+    let view = cat.schemas.iter().flat_map(|s| s.tables.iter()).find(|t| t.name == "v").expect("view v");
+    assert_eq!(view.kind, TableKind::View);
+    assert_eq!(view.definition.as_deref(), Some("SELECT id, name FROM t WHERE id > 0"));
+  }
+
+  #[test]
+  fn scan_views_ignores_create_table() {
+    assert!(scan_views("CREATE TABLE t (id int);").is_empty());
   }
 }

@@ -50,7 +50,7 @@ fn cat() -> Catalog {
     policies: vec![],
     comment: None,
     row_estimate: None,
-    owner: None,
+    owner: None, definition: None, strict: false, options: None,
   };
   let orders = Table {
     schema: "public".into(),
@@ -82,7 +82,7 @@ fn cat() -> Catalog {
     policies: vec![],
     comment: None,
     row_estimate: None,
-    owner: None,
+    owner: None, definition: None, strict: false, options: None,
   };
   let flags = Table {
     schema: "public".into(),
@@ -114,7 +114,7 @@ fn cat() -> Catalog {
     policies: vec![],
     comment: None,
     row_estimate: None,
-    owner: None,
+    owner: None, definition: None, strict: false, options: None,
   };
   Catalog {
     version: CATALOG_VERSION,
@@ -1389,7 +1389,7 @@ fn cat_with_ints() -> Catalog {
       Column { name: "b".into(), data_type: "bigint".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
       Column { name: "t".into(), data_type: "text".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
     ],
-    constraints: vec![], indexes: vec![], triggers: vec![], policies: vec![], comment: None, row_estimate: None, owner: None,
+    constraints: vec![], indexes: vec![], triggers: vec![], policies: vec![], comment: None, row_estimate: None, owner: None, definition: None, strict: false, options: None,
   };
   Catalog { version: CATALOG_VERSION, connection_id: "test".into(), schemas: vec![Schema { name: "public".into(), tables: vec![nums] }], functions: vec![], types: vec![], roles: vec![], sequences: vec![], extensions: vec![] }
 }
@@ -5133,7 +5133,7 @@ fn cat_with_generated() -> Catalog {
       Column { name: "full_name".into(), data_type: "text".into(), nullable: true, default: None, comment: None, generated: Some("first_name || ' ' || last_name".into()), json_keys: None },
       Column { name: "name".into(), data_type: "text".into(), nullable: true, default: None, comment: None, generated: None, json_keys: None },
     ],
-    constraints: vec![], indexes: vec![], triggers: vec![], policies: vec![], comment: None, row_estimate: None, owner: None,
+    constraints: vec![], indexes: vec![], triggers: vec![], policies: vec![], comment: None, row_estimate: None, owner: None, definition: None, strict: false, options: None,
   };
   Catalog { version: CATALOG_VERSION, connection_id: "test".into(), schemas: vec![Schema { name: "public".into(), tables: vec![users] }], functions: vec![], types: vec![], roles: vec![], sequences: vec![], extensions: vec![] }
 }
@@ -5338,7 +5338,7 @@ fn cat_with_tsvector() -> Catalog {
       Column { name: "search".into(), data_type: "tsvector".into(), nullable: true, default: None, comment: None, generated: None, json_keys: None },
       Column { name: "body".into(), data_type: "text".into(), nullable: true, default: None, comment: None, generated: None, json_keys: None },
     ],
-    constraints: vec![], indexes: vec![], triggers: vec![], policies: vec![], comment: None, row_estimate: None, owner: None,
+    constraints: vec![], indexes: vec![], triggers: vec![], policies: vec![], comment: None, row_estimate: None, owner: None, definition: None, strict: false, options: None,
   };
   Catalog { version: CATALOG_VERSION, connection_id: "test".into(), schemas: vec![Schema { name: "public".into(), tables: vec![docs] }], functions: vec![], types: vec![], roles: vec![], sequences: vec![], extensions: vec![] }
 }
@@ -5395,7 +5395,7 @@ fn cat_with_dates() -> Catalog {
       Column { name: "start_ts".into(), data_type: "timestamptz".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
       Column { name: "end_ts".into(), data_type: "timestamptz".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
     ],
-    constraints: vec![], indexes: vec![], triggers: vec![], policies: vec![], comment: None, row_estimate: None, owner: None,
+    constraints: vec![], indexes: vec![], triggers: vec![], policies: vec![], comment: None, row_estimate: None, owner: None, definition: None, strict: false, options: None,
   };
   Catalog { version: CATALOG_VERSION, connection_id: "test".into(), schemas: vec![Schema { name: "public".into(), tables: vec![events] }], functions: vec![], types: vec![], roles: vec![], sequences: vec![], extensions: vec![] }
 }
@@ -5484,7 +5484,7 @@ fn cat_with_tstz() -> Catalog {
       Column { name: "created_at".into(), data_type: "timestamptz".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
       Column { name: "scheduled_for".into(), data_type: "timestamp".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
     ],
-    constraints: vec![], indexes: vec![], triggers: vec![], policies: vec![], comment: None, row_estimate: None, owner: None,
+    constraints: vec![], indexes: vec![], triggers: vec![], policies: vec![], comment: None, row_estimate: None, owner: None, definition: None, strict: false, options: None,
   };
   Catalog { version: CATALOG_VERSION, connection_id: "test".into(), schemas: vec![Schema { name: "public".into(), tables: vec![events] }], functions: vec![], types: vec![], roles: vec![], sequences: vec![], extensions: vec![] }
 }
@@ -5547,7 +5547,7 @@ fn cat_with_json_text() -> Catalog {
       Column { name: "meta".into(), data_type: "json".into(), nullable: true, default: None, comment: None, generated: None, json_keys: None },
       Column { name: "body".into(), data_type: "text".into(), nullable: true, default: None, comment: None, generated: None, json_keys: None },
     ],
-    constraints: vec![], indexes: vec![], triggers: vec![], policies: vec![], comment: None, row_estimate: None, owner: None,
+    constraints: vec![], indexes: vec![], triggers: vec![], policies: vec![], comment: None, row_estimate: None, owner: None, definition: None, strict: false, options: None,
   };
   Catalog { version: CATALOG_VERSION, connection_id: "test".into(), schemas: vec![Schema { name: "public".into(), tables: vec![docs] }], functions: vec![], types: vec![], roles: vec![], sequences: vec![], extensions: vec![] }
 }

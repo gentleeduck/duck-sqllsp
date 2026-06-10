@@ -43,7 +43,7 @@ fn tbl(name: &str, columns: Vec<Column>, constraints: Vec<Constraint>) -> Table 
     policies: vec![],
     comment: None,
     row_estimate: None,
-    owner: None,
+    owner: None, definition: None, strict: false, options: None,
   }
 }
 

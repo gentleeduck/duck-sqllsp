@@ -44,7 +44,7 @@ fn cat() -> Catalog {
         policies: vec![],
         comment: None,
         row_estimate: None,
-    owner: None,
+    owner: None, definition: None, strict: false, options: None,
       }],
     }],
     functions: vec![],

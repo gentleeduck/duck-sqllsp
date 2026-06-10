@@ -8,6 +8,8 @@
 
 pub mod driver;
 pub mod spec;
+#[cfg(any(feature = "postgres", feature = "mysql", feature = "sqlite"))]
+mod util;
 
 #[cfg(feature = "mysql")]
 pub mod mysql;
