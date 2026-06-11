@@ -74,17 +74,35 @@ fn inbound_fks(t: &Table, cat: &dsl_catalog::Catalog) -> Vec<String> {
 }
 
 pub fn table(t: &Table) -> String {
+  // Views render their defining query rather than a synthesised CREATE TABLE
+  // -- the SELECT is what a user hovering a view actually wants to see.
+  if matches!(t.kind, TableKind::View | TableKind::MaterializedView)
+    && let Some(def) = &t.definition
+    && !def.trim().is_empty()
+  {
+    return render_view(t, def);
+  }
+
   // Compact view: skip the `# Table public.<name>` markdown title and
   // emit the DDL block straight up. CREATE TABLE / CREATE VIEW already
   // declares the kind + fully-qualified name on its first line, so the
   // title was redundant noise.
   if t.columns.is_empty() {
     let fq = format!("{}.{}", t.schema, t.name);
-    let kind = match t.kind {
+    let base = match t.kind {
       TableKind::View => "View",
       TableKind::MaterializedView => "Materialised View",
       _ => "Table",
     };
+    // WITHOUT ROWID and STRICT are independent SQLite table options.
+    let mut opts = Vec::new();
+    if matches!(t.kind, TableKind::WithoutRowid) {
+      opts.push("WITHOUT ROWID");
+    }
+    if t.strict {
+      opts.push("STRICT");
+    }
+    let kind = if opts.is_empty() { base.to_string() } else { format!("{base} ({})", opts.join(", ")) };
     return format!("_{kind} `{fq}` -- no columns cached; run `:DBRefresh` after connecting._\n");
   }
 
@@ -163,6 +181,46 @@ pub fn table(t: &Table) -> String {
     s.push('\'');
     s.push_str(&comment.replace('\'', "''"));
     s.push_str("';\n");
+  }
+
+  s.push_str("```\n");
+  s
+}
+
+/// Render a view / materialized view as its defining query, with the output
+/// columns listed as a trailing comment block. Keywords follow the active
+/// hover keyword case.
+fn render_view(t: &Table, def: &str) -> String {
+  let case = crate::current_keyword_case();
+  let kw = |k: &str| case.apply(k);
+  let create = if matches!(t.kind, TableKind::MaterializedView) {
+    kw("CREATE MATERIALIZED VIEW")
+  } else {
+    kw("CREATE VIEW")
+  };
+
+  let mut s = String::new();
+  s.push_str("```sql\n");
+  s.push_str(&format!("{} {}.{} {}\n", create, t.schema, t.name, kw("AS")));
+  s.push_str(def.trim_end().trim_end_matches(';').trim_end());
+  s.push_str(";\n");
+
+  if !t.columns.is_empty() {
+    s.push_str("\n-- Columns\n");
+    for c in &t.columns {
+      // Offline-scanned views carry column names without types.
+      if c.data_type.is_empty() {
+        s.push_str(&format!("--   {}\n", c.name));
+      } else {
+        s.push_str(&format!("--   {} {}\n", c.name, case.apply(display_type(&c.data_type))));
+      }
+    }
+  }
+
+  if let Some(comment) = &t.comment
+    && !comment.trim().is_empty()
+  {
+    s.push_str(&format!("\n-- {}\n", comment.trim()));
   }
 
   s.push_str("```\n");
@@ -273,7 +331,24 @@ pub fn table_ddl(t: &Table) -> String {
       lines.push(m);
     }
   }
-  lines.push(");".into());
+  // Trailing table-option clause after the column list. SQLite carries
+  // WITHOUT ROWID / STRICT (comma-joined, possibly both); MySQL carries a
+  // pre-rendered `ENGINE=... DEFAULT CHARSET=...` string in `options`. The
+  // two dialects never co-occur on one table.
+  let mut sqlite_opts: Vec<String> = Vec::new();
+  if matches!(t.kind, TableKind::WithoutRowid) {
+    sqlite_opts.push(kw("WITHOUT ROWID"));
+  }
+  if t.strict {
+    sqlite_opts.push(kw("STRICT"));
+  }
+  if !sqlite_opts.is_empty() {
+    lines.push(format!(") {};", sqlite_opts.join(", ")));
+  } else if let Some(opts) = t.options.as_deref().map(str::trim).filter(|o| !o.is_empty()) {
+    lines.push(format!(") {opts};"));
+  } else {
+    lines.push(");".into());
+  }
   lines.join("\n")
 }
 
@@ -528,4 +603,109 @@ pub fn user_type(t: &Type) -> String {
     TypeKind::Composite => "composite type",
   };
   format!("# `{fq}`\n_{kind}_\n")
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn view(kind: TableKind, definition: Option<&str>, columns: Vec<Column>) -> Table {
+    Table {
+      schema: "public".into(),
+      name: "v".into(),
+      kind,
+      columns,
+      constraints: Vec::new(),
+      indexes: Vec::new(),
+      triggers: Vec::new(),
+      policies: Vec::new(),
+      comment: None,
+      row_estimate: None,
+      owner: None,
+      definition: definition.map(str::to_string),
+      strict: false, options: None,
+    }
+  }
+
+  #[test]
+  fn view_renders_defining_query() {
+    let out = table(&view(TableKind::View, Some("SELECT id FROM t"), Vec::new()));
+    assert!(out.contains("CREATE VIEW public.v AS"), "{out}");
+    assert!(out.contains("SELECT id FROM t;"), "{out}");
+  }
+
+  #[test]
+  fn materialized_view_label() {
+    let out = table(&view(TableKind::MaterializedView, Some("SELECT 1"), Vec::new()));
+    assert!(out.contains("CREATE MATERIALIZED VIEW public.v AS"), "{out}");
+  }
+
+  #[test]
+  fn view_without_definition_falls_back() {
+    // No definition cached -> keep the legacy "no columns" rendering path
+    // rather than emitting an empty CREATE VIEW.
+    let out = table(&view(TableKind::View, None, Vec::new()));
+    assert!(out.contains("View `public.v`"), "{out}");
+  }
+
+  fn col(name: &str) -> Column {
+    Column {
+      name: name.into(),
+      data_type: "int".into(),
+      nullable: true,
+      default: None,
+      comment: None,
+      generated: None,
+      json_keys: None,
+    }
+  }
+
+  fn sqlite_table(kind: TableKind, strict: bool) -> Table {
+    let mut t = view(kind, None, vec![col("a")]);
+    t.strict = strict;
+    t
+  }
+
+  #[test]
+  fn strict_table_ddl_trailer() {
+    let out = table_ddl(&sqlite_table(TableKind::Table, true));
+    assert!(out.trim_end().ends_with(") STRICT;"), "{out}");
+  }
+
+  #[test]
+  fn without_rowid_and_strict_combine_in_ddl() {
+    let out = table_ddl(&sqlite_table(TableKind::WithoutRowid, true));
+    assert!(out.trim_end().ends_with(") WITHOUT ROWID, STRICT;"), "{out}");
+  }
+
+  #[test]
+  fn mysql_options_render_in_ddl_trailer() {
+    let mut t = sqlite_table(TableKind::Table, false);
+    t.options = Some("ENGINE=InnoDB DEFAULT CHARSET=utf8mb4".into());
+    let out = table_ddl(&t);
+    assert!(out.trim_end().ends_with(") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"), "{out}");
+  }
+
+  #[test]
+  fn sqlite_options_take_precedence_over_generic_options() {
+    // A STRICT SQLite table never also has MySQL `options`, but guard the
+    // precedence anyway: the kind/flag trailer wins.
+    let mut t = sqlite_table(TableKind::WithoutRowid, true);
+    t.options = Some("ENGINE=InnoDB".into());
+    let out = table_ddl(&t);
+    assert!(out.trim_end().ends_with(") WITHOUT ROWID, STRICT;"), "{out}");
+  }
+
+  #[test]
+  fn empty_strict_table_label() {
+    // No columns -> the compact label reflects the option.
+    let out = table(&sqlite_table(TableKind::Table, true));
+    // sqlite_table has a column, so drop it to hit the empty-label path.
+    let mut empty = sqlite_table(TableKind::Table, true);
+    empty.columns.clear();
+    let label = table(&empty);
+    assert!(label.contains("Table (STRICT)"), "{label}");
+    // With columns it renders the DDL trailer instead.
+    assert!(out.contains("STRICT"), "{out}");
+  }
 }
