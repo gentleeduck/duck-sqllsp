@@ -958,16 +958,15 @@ pub fn columns_of_alias(cat: &Catalog, scope: &Scope, alias: &str, out: &mut Vec
 }
 
 fn table_item(t: &Table) -> Item {
-  let detail = format!(
-    "{}  {}.{}",
-    match t.kind {
-      TableKind::View => "view",
-      TableKind::MaterializedView => "matview",
-      _ => "table",
-    },
-    t.schema,
-    t.name
-  );
+  let base = match t.kind {
+    TableKind::View => "view",
+    TableKind::MaterializedView => "matview",
+    TableKind::WithoutRowid => "table (no rowid)",
+    TableKind::Table => "table",
+  };
+  // STRICT composes with any table kind; surface it as a trailing tag.
+  let label = if t.strict { format!("{base}, strict") } else { base.to_string() };
+  let detail = format!("{label}  {}.{}", t.schema, t.name);
   Item {
     label: t.name.clone(),
     kind: if matches!(t.kind, TableKind::View) { ItemKind::View } else { ItemKind::Table },
