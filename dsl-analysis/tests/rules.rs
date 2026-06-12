@@ -24775,3 +24775,49 @@ fn sql519_quiet_when_term_has_and() {
   let d = diags("SELECT * FROM users WHERE id = 1 OR id = 2 OR (id = 3 AND name = 'x');");
   assert!(!d.iter().any(|x| x.code == "sql519"), "AND term breaks the run: {d:?}");
 }
+
+#[test]
+fn sql520_flags_lower_eq_uppercase_literal() {
+  let d = diags("SELECT * FROM users WHERE lower(name) = 'ABC';");
+  let m = d.iter().find(|x| x.code == "sql520").unwrap_or_else(|| panic!("expected sql520: {d:?}"));
+  assert!(m.message.contains("zero rows"), "{}", m.message);
+}
+
+#[test]
+fn sql520_flags_upper_like_lowercase_literal() {
+  let d = diags("SELECT * FROM users WHERE upper(name) LIKE 'abc%';");
+  assert!(d.iter().any(|x| x.code == "sql520"), "upper LIKE lowercase should flag: {d:?}");
+}
+
+#[test]
+fn sql520_quiet_when_literal_case_matches() {
+  let d = diags("SELECT * FROM users WHERE lower(name) = 'abc';");
+  assert!(!d.iter().any(|x| x.code == "sql520"), "matching-case literal must not flag: {d:?}");
+  let d2 = diags("SELECT * FROM users WHERE upper(name) = 'ABC';");
+  assert!(!d2.iter().any(|x| x.code == "sql520"), "upper vs uppercase must not flag: {d2:?}");
+}
+
+#[test]
+fn sql520_quiet_for_non_literal_rhs() {
+  let d = diags("SELECT * FROM users WHERE lower(name) = lower(email);");
+  assert!(!d.iter().any(|x| x.code == "sql520"), "non-literal rhs must not flag: {d:?}");
+}
+
+#[test]
+fn sql521_flags_single_element_any_array() {
+  let d = diags("SELECT * FROM users WHERE id = ANY(ARRAY[1]);");
+  let m = d.iter().find(|x| x.code == "sql521").unwrap_or_else(|| panic!("expected sql521: {d:?}"));
+  assert!(m.message.contains("compare against `1`"), "{}", m.message);
+}
+
+#[test]
+fn sql521_flags_single_element_all_array() {
+  let d = diags("SELECT * FROM users WHERE name <> ALL(ARRAY['x']);");
+  assert!(d.iter().any(|x| x.code == "sql521"), "single-element ALL array should flag: {d:?}");
+}
+
+#[test]
+fn sql521_quiet_for_multi_element_array() {
+  let d = diags("SELECT * FROM users WHERE id = ANY(ARRAY[1, 2, 3]);");
+  assert!(!d.iter().any(|x| x.code == "sql521"), "multi-element array must not flag: {d:?}");
+}
