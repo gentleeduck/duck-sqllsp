@@ -24871,3 +24871,44 @@ fn sql522_quiet_for_filter_on_preserved_side() {
   let d = diags("SELECT * FROM users u LEFT JOIN orders o ON o.user_id = u.id WHERE u.email = 'x';");
   assert!(!d.iter().any(|x| x.code == "sql522"), "filter on preserved side must not flag: {d:?}");
 }
+
+#[test]
+fn sql524_flags_like_all_wildcard() {
+  let d = diags("SELECT * FROM users WHERE name LIKE '%';");
+  let m = d.iter().find(|x| x.code == "sql524").unwrap_or_else(|| panic!("expected sql524: {d:?}"));
+  assert!(m.message.contains("filters nothing"), "{}", m.message);
+}
+
+#[test]
+fn sql524_flags_not_like_all_wildcard() {
+  let d = diags("SELECT * FROM users WHERE name NOT LIKE '%%';");
+  let m = d.iter().find(|x| x.code == "sql524").unwrap_or_else(|| panic!("expected sql524: {d:?}"));
+  assert!(m.message.contains("returns nothing"), "{}", m.message);
+}
+
+#[test]
+fn sql524_quiet_for_real_pattern() {
+  let d = diags("SELECT * FROM users WHERE name LIKE '%abc%';");
+  assert!(!d.iter().any(|x| x.code == "sql524"), "real pattern must not flag: {d:?}");
+  let d2 = diags("SELECT * FROM users WHERE name LIKE '_';");
+  assert!(!d2.iter().any(|x| x.code == "sql524"), "single-char wildcard must not flag: {d2:?}");
+}
+
+#[test]
+fn sql525_flags_limit_in_exists() {
+  let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id LIMIT 1);");
+  let m = d.iter().find(|x| x.code == "sql525").unwrap_or_else(|| panic!("expected sql525: {d:?}"));
+  assert!(m.message.contains("redundant"), "{}", m.message);
+}
+
+#[test]
+fn sql525_quiet_for_exists_without_limit() {
+  let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id);");
+  assert!(!d.iter().any(|x| x.code == "sql525"), "EXISTS without LIMIT must not flag: {d:?}");
+}
+
+#[test]
+fn sql525_quiet_for_limit_in_nested_derived_table() {
+  let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM (SELECT * FROM orders LIMIT 5) s WHERE s.user_id = u.id);");
+  assert!(!d.iter().any(|x| x.code == "sql525"), "LIMIT in nested derived table must not flag: {d:?}");
+}

@@ -227,6 +227,8 @@ pub mod identifier_too_long;
 pub mod immutable_calls_volatile;
 pub mod implicit_cross_join;
 pub mod in_list_duplicates;
+pub mod like_all_wildcard;
+pub mod exists_with_limit;
 pub mod left_join_defeated_by_where;
 pub mod is_null_or_is_not_null;
 pub mod case_fold_impossible_compare;
@@ -801,6 +803,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(self_fk_no_deferrable::Rule),
     Box::new(information_schema_perf::Rule),
     Box::new(in_list_duplicates::Rule),
+    Box::new(like_all_wildcard::Rule),
+    Box::new(exists_with_limit::Rule),
     Box::new(left_join_defeated_by_where::Rule),
     Box::new(is_null_or_is_not_null::Rule),
     Box::new(case_fold_impossible_compare::Rule),
