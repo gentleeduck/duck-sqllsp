@@ -24718,3 +24718,60 @@ fn sql517_quiet_for_partial_tautology() {
   let d = diags("SELECT * FROM users u JOIN orders o ON u.id = o.user_id AND 1 = 1;");
   assert!(!d.iter().any(|x| x.code == "sql517"), "partial tautology must not flag: {d:?}");
 }
+
+#[test]
+fn sql518_flags_then_true_else_false() {
+  let d = diags("SELECT CASE WHEN id > 0 THEN TRUE ELSE FALSE END FROM users;");
+  let m = d.iter().find(|x| x.code == "sql518").unwrap_or_else(|| panic!("expected sql518: {d:?}"));
+  assert!(m.message.contains("IS TRUE"), "{}", m.message);
+}
+
+#[test]
+fn sql518_flags_inverted_form() {
+  let d = diags("SELECT CASE WHEN id > 0 THEN FALSE ELSE TRUE END FROM users;");
+  let m = d.iter().find(|x| x.code == "sql518").unwrap_or_else(|| panic!("expected sql518: {d:?}"));
+  assert!(m.message.contains("IS NOT TRUE"), "{}", m.message);
+}
+
+#[test]
+fn sql518_quiet_for_non_boolean_arms() {
+  let d = diags("SELECT CASE WHEN id > 0 THEN 'yes' ELSE 'no' END FROM users;");
+  assert!(!d.iter().any(|x| x.code == "sql518"), "non-boolean arms must not flag: {d:?}");
+}
+
+#[test]
+fn sql518_quiet_for_multi_branch() {
+  let d = diags("SELECT CASE WHEN id > 0 THEN TRUE WHEN id < 0 THEN FALSE ELSE FALSE END FROM users;");
+  assert!(!d.iter().any(|x| x.code == "sql518"), "multi-branch CASE must not flag: {d:?}");
+}
+
+#[test]
+fn sql519_flags_three_way_or_chain() {
+  let d = diags("SELECT * FROM users WHERE id = 1 OR id = 2 OR id = 3;");
+  let m = d.iter().find(|x| x.code == "sql519").unwrap_or_else(|| panic!("expected sql519: {d:?}"));
+  assert!(m.message.contains("IN (...)") && m.message.contains("id"), "{}", m.message);
+}
+
+#[test]
+fn sql519_flags_parenthesized_chain() {
+  let d = diags("SELECT * FROM users WHERE (name = 'a' OR name = 'b' OR name = 'c');");
+  assert!(d.iter().any(|x| x.code == "sql519"), "parenthesized OR chain should flag: {d:?}");
+}
+
+#[test]
+fn sql519_quiet_for_two_values() {
+  let d = diags("SELECT * FROM users WHERE id = 1 OR id = 2;");
+  assert!(!d.iter().any(|x| x.code == "sql519"), "two-value OR must not flag: {d:?}");
+}
+
+#[test]
+fn sql519_quiet_for_different_columns() {
+  let d = diags("SELECT * FROM users WHERE id = 1 OR name = 'a' OR email = 'b';");
+  assert!(!d.iter().any(|x| x.code == "sql519"), "different columns must not flag: {d:?}");
+}
+
+#[test]
+fn sql519_quiet_when_term_has_and() {
+  let d = diags("SELECT * FROM users WHERE id = 1 OR id = 2 OR (id = 3 AND name = 'x');");
+  assert!(!d.iter().any(|x| x.code == "sql519"), "AND term breaks the run: {d:?}");
+}
