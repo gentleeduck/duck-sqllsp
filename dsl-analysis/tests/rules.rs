@@ -24912,3 +24912,61 @@ fn sql525_quiet_for_limit_in_nested_derived_table() {
   let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM (SELECT * FROM orders LIMIT 5) s WHERE s.user_id = u.id);");
   assert!(!d.iter().any(|x| x.code == "sql525"), "LIMIT in nested derived table must not flag: {d:?}");
 }
+
+#[test]
+fn sql526_flags_two_different_equality_constants() {
+  let d = diags("SELECT * FROM users WHERE id = 1 AND id = 2;");
+  let m = d.iter().find(|x| x.code == "sql526").unwrap_or_else(|| panic!("expected sql526: {d:?}"));
+  assert!(m.message.contains("always false"), "{}", m.message);
+}
+
+#[test]
+fn sql526_flags_eq_and_neq_same_value() {
+  let d = diags("SELECT * FROM users WHERE name = 'a' AND name <> 'a';");
+  assert!(d.iter().any(|x| x.code == "sql526"), "eq + neq same value should flag: {d:?}");
+}
+
+#[test]
+fn sql526_quiet_for_numeric_equivalent_constants() {
+  // 1 and 1.0 are the same number -- not a contradiction.
+  let d = diags("SELECT * FROM users WHERE id = 1 AND id = 1.0;");
+  assert!(!d.iter().any(|x| x.code == "sql526"), "1 vs 1.0 must not flag: {d:?}");
+}
+
+#[test]
+fn sql526_quiet_for_different_columns() {
+  let d = diags("SELECT * FROM users WHERE id = 1 AND name = 'x';");
+  assert!(!d.iter().any(|x| x.code == "sql526"), "different columns must not flag: {d:?}");
+}
+
+#[test]
+fn sql527_flags_impossible_range() {
+  let d = diags("SELECT * FROM users WHERE id > 5 AND id < 3;");
+  let m = d.iter().find(|x| x.code == "sql527").unwrap_or_else(|| panic!("expected sql527: {d:?}"));
+  assert!(m.message.contains("always empty"), "{}", m.message);
+}
+
+#[test]
+fn sql527_flags_equal_bound_with_strict() {
+  let d = diags("SELECT * FROM users WHERE id >= 5 AND id < 5;");
+  assert!(d.iter().any(|x| x.code == "sql527"), "id>=5 AND id<5 is empty: {d:?}");
+}
+
+#[test]
+fn sql527_quiet_for_valid_range() {
+  let d = diags("SELECT * FROM users WHERE id > 5 AND id < 10;");
+  assert!(!d.iter().any(|x| x.code == "sql527"), "valid range must not flag: {d:?}");
+}
+
+#[test]
+fn sql527_quiet_for_ambiguous_int_range() {
+  // Empty for integers, non-empty for numeric -- left alone to avoid a wrong call.
+  let d = diags("SELECT * FROM users WHERE id > 5 AND id < 6;");
+  assert!(!d.iter().any(|x| x.code == "sql527"), "ambiguous int range must not flag: {d:?}");
+}
+
+#[test]
+fn sql527_quiet_for_inclusive_equal_bounds() {
+  let d = diags("SELECT * FROM users WHERE id >= 5 AND id <= 5;");
+  assert!(!d.iter().any(|x| x.code == "sql527"), "id >= 5 AND id <= 5 allows id=5: {d:?}");
+}
