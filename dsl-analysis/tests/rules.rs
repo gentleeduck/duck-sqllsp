@@ -24604,3 +24604,117 @@ fn r32_probe2() {
     eprintln!("P9|{}|fires={}|got={:?}", code, fires, codes);
   }
 }
+
+#[test]
+fn sql515_flags_single_value_in() {
+  let d = diags("SELECT * FROM users WHERE id IN (1);");
+  let m = d.iter().find(|x| x.code == "sql515").unwrap_or_else(|| panic!("expected sql515: {d:?}"));
+  assert!(m.message.contains("= 1"), "should suggest `= 1`: {}", m.message);
+}
+
+#[test]
+fn sql515_flags_single_value_not_in_with_neq() {
+  let d = diags("SELECT * FROM users WHERE id NOT IN ('x');");
+  let m = d.iter().find(|x| x.code == "sql515").unwrap_or_else(|| panic!("expected sql515: {d:?}"));
+  assert!(m.message.contains("<> 'x'"), "NOT IN should suggest `<>`: {}", m.message);
+}
+
+#[test]
+fn sql515_handles_no_space_before_paren() {
+  let d = diags("SELECT * FROM users WHERE id IN(42);");
+  assert!(d.iter().any(|x| x.code == "sql515"), "IN(x) without space should still flag: {d:?}");
+}
+
+#[test]
+fn sql515_quiet_for_multi_element_list() {
+  let d = diags("SELECT * FROM users WHERE id IN (1, 2, 3);");
+  assert!(!d.iter().any(|x| x.code == "sql515"), "multi-element IN must not flag: {d:?}");
+}
+
+#[test]
+fn sql515_quiet_for_subquery() {
+  let d = diags("SELECT * FROM users WHERE id IN (SELECT user_id FROM orders);");
+  assert!(!d.iter().any(|x| x.code == "sql515"), "subquery IN must not flag: {d:?}");
+}
+
+#[test]
+fn sql515_flags_single_function_call_value() {
+  // A lone function call is still a single value; its internal comma is
+  // nested, so the top-level-comma guard correctly treats it as one element.
+  let d = diags("SELECT * FROM users WHERE id IN (coalesce(id, 0));");
+  let m = d.iter().find(|x| x.code == "sql515").unwrap_or_else(|| panic!("expected sql515: {d:?}"));
+  assert!(m.message.contains("= coalesce(id, 0)"), "{}", m.message);
+}
+
+#[test]
+fn sql515_quiet_for_in_null() {
+  let d = diags("SELECT * FROM users WHERE id IN (NULL);");
+  assert!(!d.iter().any(|x| x.code == "sql515"), "IN (NULL) must not suggest `= NULL`: {d:?}");
+}
+
+#[test]
+fn sql516_flags_self_assignment() {
+  let d = diags("UPDATE users SET name = name WHERE id = '1';");
+  let m = d.iter().find(|x| x.code == "sql516").unwrap_or_else(|| panic!("expected sql516: {d:?}"));
+  assert!(m.message.contains("no-op"), "{}", m.message);
+}
+
+#[test]
+fn sql516_flags_qualified_self_assignment() {
+  let d = diags("UPDATE users SET users.name = users.name;");
+  assert!(d.iter().any(|x| x.code == "sql516"), "qualified self-assign should flag: {d:?}");
+}
+
+#[test]
+fn sql516_quiet_for_real_assignment() {
+  let d = diags("UPDATE users SET name = email WHERE id = '1';");
+  assert!(!d.iter().any(|x| x.code == "sql516"), "real assign must not flag: {d:?}");
+  let d2 = diags("UPDATE users SET name = name || 'x';");
+  assert!(!d2.iter().any(|x| x.code == "sql516"), "expression rhs must not flag: {d2:?}");
+}
+
+#[test]
+fn sql516_quiet_for_cross_table_copy() {
+  // `name = o.name` copies from another table -- not a self-assign.
+  let d = diags("UPDATE users SET name = o.name FROM orders o WHERE o.user_id = users.id;");
+  assert!(!d.iter().any(|x| x.code == "sql516"), "cross-table copy must not flag: {d:?}");
+}
+
+#[test]
+fn sql516_finds_self_assign_among_many() {
+  let d = diags("UPDATE users SET email = 'x', name = name WHERE id = '1';");
+  assert!(d.iter().any(|x| x.code == "sql516"), "self-assign in a list should flag: {d:?}");
+}
+
+#[test]
+fn sql517_flags_join_on_one_equals_one() {
+  let d = diags("SELECT * FROM users u JOIN orders o ON 1 = 1;");
+  let m = d.iter().find(|x| x.code == "sql517").unwrap_or_else(|| panic!("expected sql517: {d:?}"));
+  assert!(m.message.contains("CROSS JOIN"), "{}", m.message);
+}
+
+#[test]
+fn sql517_flags_no_space_tautology() {
+  let d = diags("SELECT * FROM users u JOIN orders o ON 1=1 WHERE u.id = o.user_id;");
+  assert!(d.iter().any(|x| x.code == "sql517"), "ON 1=1 should flag: {d:?}");
+}
+
+#[test]
+fn sql517_quiet_for_real_join_predicate() {
+  let d = diags("SELECT * FROM users u JOIN orders o ON u.id = o.user_id;");
+  assert!(!d.iter().any(|x| x.code == "sql517"), "real join predicate must not flag: {d:?}");
+}
+
+#[test]
+fn sql517_quiet_for_on_true() {
+  // ON TRUE is idiomatic for LATERAL joins -- must not flag.
+  let d = diags("SELECT * FROM users u LEFT JOIN LATERAL (SELECT 1) s ON TRUE;");
+  assert!(!d.iter().any(|x| x.code == "sql517"), "ON TRUE must not flag: {d:?}");
+}
+
+#[test]
+fn sql517_quiet_for_partial_tautology() {
+  // A real predicate AND 1=1 still has a real condition -- don't flag.
+  let d = diags("SELECT * FROM users u JOIN orders o ON u.id = o.user_id AND 1 = 1;");
+  assert!(!d.iter().any(|x| x.code == "sql517"), "partial tautology must not flag: {d:?}");
+}
