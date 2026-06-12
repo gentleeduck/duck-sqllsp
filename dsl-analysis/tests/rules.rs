@@ -24821,3 +24821,53 @@ fn sql521_quiet_for_multi_element_array() {
   let d = diags("SELECT * FROM users WHERE id = ANY(ARRAY[1, 2, 3]);");
   assert!(!d.iter().any(|x| x.code == "sql521"), "multi-element array must not flag: {d:?}");
 }
+
+#[test]
+fn sql523_flags_is_null_or_is_not_null() {
+  let d = diags("SELECT * FROM users WHERE name IS NULL OR name IS NOT NULL;");
+  let m = d.iter().find(|x| x.code == "sql523").unwrap_or_else(|| panic!("expected sql523: {d:?}"));
+  assert!(m.message.contains("always true"), "{}", m.message);
+}
+
+#[test]
+fn sql523_flags_reversed_order() {
+  let d = diags("SELECT * FROM users WHERE name IS NOT NULL OR name IS NULL;");
+  assert!(d.iter().any(|x| x.code == "sql523"), "reversed order should flag: {d:?}");
+}
+
+#[test]
+fn sql523_quiet_for_different_columns() {
+  let d = diags("SELECT * FROM users WHERE name IS NULL OR email IS NOT NULL;");
+  assert!(!d.iter().any(|x| x.code == "sql523"), "different columns must not flag: {d:?}");
+}
+
+#[test]
+fn sql523_quiet_for_single_null_check() {
+  let d = diags("SELECT * FROM users WHERE name IS NULL;");
+  assert!(!d.iter().any(|x| x.code == "sql523"), "single null check must not flag: {d:?}");
+}
+
+#[test]
+fn sql522_flags_where_filter_on_left_joined_table() {
+  let d = diags("SELECT * FROM users u LEFT JOIN orders o ON o.user_id = u.id WHERE o.total = 5;");
+  let m = d.iter().find(|x| x.code == "sql522").unwrap_or_else(|| panic!("expected sql522: {d:?}"));
+  assert!(m.message.contains("INNER JOIN") && m.message.contains('o'), "{}", m.message);
+}
+
+#[test]
+fn sql522_quiet_for_is_null_anti_join() {
+  let d = diags("SELECT * FROM users u LEFT JOIN orders o ON o.user_id = u.id WHERE o.id IS NULL;");
+  assert!(!d.iter().any(|x| x.code == "sql522"), "IS NULL anti-join must not flag: {d:?}");
+}
+
+#[test]
+fn sql522_quiet_for_or_null_guard() {
+  let d = diags("SELECT * FROM users u LEFT JOIN orders o ON o.user_id = u.id WHERE o.total = 5 OR o.id IS NULL;");
+  assert!(!d.iter().any(|x| x.code == "sql522"), "OR-null-guarded filter must not flag: {d:?}");
+}
+
+#[test]
+fn sql522_quiet_for_filter_on_preserved_side() {
+  let d = diags("SELECT * FROM users u LEFT JOIN orders o ON o.user_id = u.id WHERE u.email = 'x';");
+  assert!(!d.iter().any(|x| x.code == "sql522"), "filter on preserved side must not flag: {d:?}");
+}
