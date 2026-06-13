@@ -226,6 +226,21 @@ pub mod group_by_required;
 pub mod identifier_too_long;
 pub mod immutable_calls_volatile;
 pub mod implicit_cross_join;
+pub mod between_equal_bounds;
+pub mod boolean_literal_dominates;
+pub mod now_cast_to_date;
+pub mod coalesce_nested;
+pub mod distinct_looks_like_function;
+pub mod length_compare_zero;
+pub mod neq_chain_to_not_in;
+pub mod not_paren_comparison;
+pub mod on_conflict_self_assignment;
+pub mod round_trunc_zero_scale;
+pub mod greatest_least_dup_arg;
+pub mod having_count_always_true;
+pub mod redundant_column_alias;
+pub mod replace_same_from_to;
+pub mod setop_identical_branches;
 pub mod in_list_duplicates;
 pub mod eq_contradiction;
 pub mod impossible_range;
@@ -804,6 +819,21 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(empty_array_no_cast::Rule),
     Box::new(self_fk_no_deferrable::Rule),
     Box::new(information_schema_perf::Rule),
+    Box::new(having_count_always_true::Rule),
+    Box::new(between_equal_bounds::Rule),
+    Box::new(boolean_literal_dominates::Rule),
+    Box::new(now_cast_to_date::Rule),
+    Box::new(greatest_least_dup_arg::Rule),
+    Box::new(distinct_looks_like_function::Rule),
+    Box::new(length_compare_zero::Rule),
+    Box::new(neq_chain_to_not_in::Rule),
+    Box::new(not_paren_comparison::Rule),
+    Box::new(on_conflict_self_assignment::Rule),
+    Box::new(round_trunc_zero_scale::Rule),
+    Box::new(coalesce_nested::Rule),
+    Box::new(redundant_column_alias::Rule),
+    Box::new(replace_same_from_to::Rule),
+    Box::new(setop_identical_branches::Rule),
     Box::new(in_list_duplicates::Rule),
     Box::new(eq_contradiction::Rule),
     Box::new(impossible_range::Rule),
