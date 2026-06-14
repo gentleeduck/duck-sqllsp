@@ -25270,3 +25270,194 @@ fn sql542_quiet_for_column_cast() {
   let d = diags("SELECT created_at::date FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql542"), "column::date must not flag: {d:?}");
 }
+
+#[test]
+fn sql543_flags_group_by_aggregate() {
+  let d = diags("SELECT user_id, count(*) FROM orders GROUP BY user_id, count(*);");
+  let m = d.iter().find(|x| x.code == "sql543").unwrap_or_else(|| panic!("expected sql543: {d:?}"));
+  assert!(m.message.contains("42803"), "{}", m.message);
+}
+
+#[test]
+fn sql543_flags_sum_in_group_by() {
+  let d = diags("SELECT a FROM t GROUP BY sum(b);");
+  assert!(d.iter().any(|x| x.code == "sql543"), "sum() in GROUP BY should flag: {d:?}");
+}
+
+#[test]
+fn sql543_quiet_for_plain_group_by() {
+  let d = diags("SELECT user_id, count(*) FROM orders GROUP BY user_id;");
+  assert!(!d.iter().any(|x| x.code == "sql543"), "plain GROUP BY must not flag: {d:?}");
+  // A column merely named like an aggregate (no parens) is fine.
+  let d2 = diags("SELECT count FROM t GROUP BY count;");
+  assert!(!d2.iter().any(|x| x.code == "sql543"), "column named count must not flag: {d2:?}");
+}
+
+#[test]
+fn sql544_flags_inclusive_equal_bounds() {
+  let d = diags("SELECT * FROM users WHERE id >= 5 AND id <= 5;");
+  let m = d.iter().find(|x| x.code == "sql544").unwrap_or_else(|| panic!("expected sql544: {d:?}"));
+  assert!(m.message.contains("id = 5"), "{}", m.message);
+}
+
+#[test]
+fn sql544_quiet_for_real_range_or_strict() {
+  let d = diags("SELECT * FROM users WHERE id >= 5 AND id <= 10;");
+  assert!(!d.iter().any(|x| x.code == "sql544"), "real range must not flag: {d:?}");
+  // Strict bounds at the same value are empty (sql527's job), not equality.
+  let d2 = diags("SELECT * FROM users WHERE id > 5 AND id <= 5;");
+  assert!(!d2.iter().any(|x| x.code == "sql544"), "strict bound must not flag here: {d2:?}");
+}
+
+#[test]
+fn sql545_flags_month_out_of_range() {
+  let d = diags("SELECT * FROM events WHERE EXTRACT(MONTH FROM created_at) = 13;");
+  let m = d.iter().find(|x| x.code == "sql545").unwrap_or_else(|| panic!("expected sql545: {d:?}"));
+  assert!(m.message.contains("1-12") && m.message.contains("never matches"), "{}", m.message);
+}
+
+#[test]
+fn sql545_flags_dow_seven_with_hint() {
+  let d = diags("SELECT * FROM events WHERE EXTRACT(DOW FROM created_at) = 7;");
+  let m = d.iter().find(|x| x.code == "sql545").unwrap_or_else(|| panic!("expected sql545: {d:?}"));
+  assert!(m.message.contains("ISODOW"), "{}", m.message);
+}
+
+#[test]
+fn sql545_flags_date_part_form() {
+  let d = diags("SELECT * FROM events WHERE date_part('hour', created_at) = 24;");
+  assert!(d.iter().any(|x| x.code == "sql545"), "date_part hour=24 should flag: {d:?}");
+}
+
+#[test]
+fn sql545_quiet_for_in_range() {
+  let d = diags("SELECT * FROM events WHERE EXTRACT(MONTH FROM created_at) = 12;");
+  assert!(!d.iter().any(|x| x.code == "sql545"), "in-range value must not flag: {d:?}");
+}
+
+#[test]
+fn sql546_flags_modulo_out_of_range() {
+  let d = diags("SELECT * FROM users WHERE id % 7 = 7;");
+  let m = d.iter().find(|x| x.code == "sql546").unwrap_or_else(|| panic!("expected sql546: {d:?}"));
+  assert!(m.message.contains("never matches"), "{}", m.message);
+}
+
+#[test]
+fn sql546_quiet_for_valid_modulo() {
+  let d = diags("SELECT * FROM users WHERE id % 2 = 0;");
+  assert!(!d.iter().any(|x| x.code == "sql546"), "id % 2 = 0 is valid: {d:?}");
+  let d2 = diags("SELECT * FROM users WHERE id % 7 = 3;");
+  assert!(!d2.iter().any(|x| x.code == "sql546"), "id % 7 = 3 is valid: {d2:?}");
+}
+
+#[test]
+fn sql547_flags_array_length_eq_zero() {
+  let d = diags("SELECT * FROM t WHERE array_length(tags, 1) = 0;");
+  let m = d.iter().find(|x| x.code == "sql547").unwrap_or_else(|| panic!("expected sql547: {d:?}"));
+  assert!(m.message.contains("never 0"), "{}", m.message);
+}
+
+#[test]
+fn sql547_flags_array_length_lt_one() {
+  let d = diags("SELECT * FROM t WHERE array_length(tags, 1) < 1;");
+  assert!(d.iter().any(|x| x.code == "sql547"), "array_length < 1 never matches: {d:?}");
+}
+
+#[test]
+fn sql547_quiet_for_valid_comparison() {
+  let d = diags("SELECT * FROM t WHERE array_length(tags, 1) > 0;");
+  assert!(!d.iter().any(|x| x.code == "sql547"), "array_length > 0 is valid: {d:?}");
+  let d2 = diags("SELECT * FROM t WHERE array_length(tags, 1) = 3;");
+  assert!(!d2.iter().any(|x| x.code == "sql547"), "array_length = 3 is valid: {d2:?}");
+}
+
+#[test]
+fn sql548_flags_neq_all_array() {
+  let d = diags("SELECT * FROM users WHERE id <> ALL(ARRAY[1, 2, 3]);");
+  let m = d.iter().find(|x| x.code == "sql548").unwrap_or_else(|| panic!("expected sql548: {d:?}"));
+  assert!(m.message.contains("NOT IN"), "{}", m.message);
+}
+
+#[test]
+fn sql548_quiet_for_single_element_or_eq_all() {
+  // Single element is sql521's domain.
+  let d = diags("SELECT * FROM users WHERE id <> ALL(ARRAY[1]);");
+  assert!(!d.iter().any(|x| x.code == "sql548"), "single-element <> ALL is sql521: {d:?}");
+  // `= ALL` is a different (buggy) construct (sql495).
+  let d2 = diags("SELECT * FROM users WHERE id = ALL(ARRAY[1, 2, 3]);");
+  assert!(!d2.iter().any(|x| x.code == "sql548"), "= ALL must not flag here: {d2:?}");
+}
+
+#[test]
+fn sql549_flags_table_self_alias() {
+  let d = diags("SELECT * FROM users AS users;");
+  let m = d.iter().find(|x| x.code == "sql549").unwrap_or_else(|| panic!("expected sql549: {d:?}"));
+  assert!(m.message.contains("its own name"), "{}", m.message);
+}
+
+#[test]
+fn sql549_flags_implicit_self_alias_in_join() {
+  let d = diags("SELECT * FROM users u JOIN orders orders ON orders.user_id = u.id;");
+  assert!(d.iter().any(|x| x.code == "sql549"), "JOIN orders orders should flag: {d:?}");
+}
+
+#[test]
+fn sql549_quiet_for_real_alias() {
+  let d = diags("SELECT * FROM users u JOIN orders o ON o.user_id = u.id;");
+  assert!(!d.iter().any(|x| x.code == "sql549"), "distinct aliases must not flag: {d:?}");
+  let d2 = diags("SELECT * FROM users WHERE id = 1;");
+  assert!(!d2.iter().any(|x| x.code == "sql549"), "no alias must not flag: {d2:?}");
+}
+
+#[test]
+fn sql550_flags_two_lower_bounds() {
+  let d = diags("SELECT * FROM users WHERE id > 5 AND id > 3;");
+  let m = d.iter().find(|x| x.code == "sql550").unwrap_or_else(|| panic!("expected sql550: {d:?}"));
+  assert!(m.message.contains("lower bounds"), "{}", m.message);
+}
+
+#[test]
+fn sql550_quiet_for_opposite_bounds() {
+  let d = diags("SELECT * FROM users WHERE id > 3 AND id < 10;");
+  assert!(!d.iter().any(|x| x.code == "sql550"), "a real range must not flag: {d:?}");
+}
+
+#[test]
+fn sql551_flags_upper_lower_nesting() {
+  let d = diags("SELECT upper(lower(name)) FROM users;");
+  let m = d.iter().find(|x| x.code == "sql551").unwrap_or_else(|| panic!("expected sql551: {d:?}"));
+  assert!(m.message.contains("case-fold"), "{}", m.message);
+}
+
+#[test]
+fn sql551_flags_trim_and_reverse() {
+  let d = diags("SELECT trim(trim(name)) FROM users;");
+  assert!(d.iter().any(|x| x.code == "sql551"), "trim(trim(x)) should flag: {d:?}");
+  let d2 = diags("SELECT reverse(reverse(name)) FROM users;");
+  assert!(d2.iter().any(|x| x.code == "sql551"), "reverse(reverse(x)) should flag: {d2:?}");
+}
+
+#[test]
+fn sql551_quiet_for_non_redundant_nesting() {
+  let d = diags("SELECT upper(trim(name)) FROM users;");
+  assert!(!d.iter().any(|x| x.code == "sql551"), "upper(trim(x)) is not redundant: {d:?}");
+}
+
+#[test]
+fn sql552_flags_abs_negative() {
+  let d = diags("SELECT * FROM t WHERE abs(balance) < 0;");
+  let m = d.iter().find(|x| x.code == "sql552").unwrap_or_else(|| panic!("expected sql552: {d:?}"));
+  assert!(m.message.contains("never negative"), "{}", m.message);
+}
+
+#[test]
+fn sql552_flags_cardinality_eq_negative() {
+  let d = diags("SELECT * FROM t WHERE cardinality(tags) = -1;");
+  assert!(d.iter().any(|x| x.code == "sql552"), "cardinality = -1 never matches: {d:?}");
+}
+
+#[test]
+fn sql552_quiet_for_valid_comparison() {
+  let d = diags("SELECT * FROM t WHERE abs(balance) > 100;");
+  assert!(!d.iter().any(|x| x.code == "sql552"), "abs > 100 is valid: {d:?}");
+}

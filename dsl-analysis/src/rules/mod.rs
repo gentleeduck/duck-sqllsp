@@ -232,6 +232,16 @@ pub mod now_cast_to_date;
 pub mod coalesce_nested;
 pub mod distinct_looks_like_function;
 pub mod length_compare_zero;
+pub mod group_by_aggregate;
+pub mod extract_value_out_of_range;
+pub mod array_length_zero_check;
+pub mod table_self_alias;
+pub mod redundant_nested_function;
+pub mod nonneg_func_negative_compare;
+pub mod redundant_range_bound;
+pub mod neq_all_array_to_not_in;
+pub mod modulo_out_of_range;
+pub mod range_is_equality;
 pub mod neq_chain_to_not_in;
 pub mod not_paren_comparison;
 pub mod on_conflict_self_assignment;
@@ -826,6 +836,16 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(greatest_least_dup_arg::Rule),
     Box::new(distinct_looks_like_function::Rule),
     Box::new(length_compare_zero::Rule),
+    Box::new(group_by_aggregate::Rule),
+    Box::new(extract_value_out_of_range::Rule),
+    Box::new(array_length_zero_check::Rule),
+    Box::new(table_self_alias::Rule),
+    Box::new(redundant_nested_function::Rule),
+    Box::new(nonneg_func_negative_compare::Rule),
+    Box::new(redundant_range_bound::Rule),
+    Box::new(neq_all_array_to_not_in::Rule),
+    Box::new(modulo_out_of_range::Rule),
+    Box::new(range_is_equality::Rule),
     Box::new(neq_chain_to_not_in::Rule),
     Box::new(not_paren_comparison::Rule),
     Box::new(on_conflict_self_assignment::Rule),
