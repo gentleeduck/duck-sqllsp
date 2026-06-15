@@ -239,15 +239,26 @@ pub mod table_self_alias;
 pub mod redundant_nested_function;
 pub mod like_operator_form;
 pub mod is_true_redundant;
+pub mod create_table_dup_column;
+pub mod index_dup_column;
 pub mod limit_all_redundant;
 pub mod any_array_duplicate;
 pub mod self_arithmetic;
 pub mod builtin_too_few_args;
 pub mod exists_order_by;
 pub mod exists_group_by;
+pub mod fk_set_null_not_null;
+pub mod check_subquery;
+pub mod type_no_modifier;
+pub mod unique_index_non_btree;
+pub mod generated_column_not_stored;
 pub mod exists_distinct;
 pub mod regex_literal_could_be_like;
 pub mod col_eq_col_offset;
+pub mod null_not_null_conflict;
+pub mod default_subquery;
+pub mod fk_column_count_mismatch;
+pub mod multiple_primary_keys;
 pub mod eq_any_array_to_in;
 pub mod default_null_redundant;
 pub mod nonneg_func_negative_compare;
@@ -856,15 +867,26 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(redundant_nested_function::Rule),
     Box::new(like_operator_form::Rule),
     Box::new(is_true_redundant::Rule),
+    Box::new(create_table_dup_column::Rule),
+    Box::new(index_dup_column::Rule),
     Box::new(limit_all_redundant::Rule),
     Box::new(any_array_duplicate::Rule),
     Box::new(self_arithmetic::Rule),
     Box::new(builtin_too_few_args::Rule),
     Box::new(exists_order_by::Rule),
     Box::new(exists_group_by::Rule),
+    Box::new(fk_set_null_not_null::Rule),
+    Box::new(check_subquery::Rule),
+    Box::new(type_no_modifier::Rule),
+    Box::new(unique_index_non_btree::Rule),
+    Box::new(generated_column_not_stored::Rule),
     Box::new(exists_distinct::Rule),
     Box::new(regex_literal_could_be_like::Rule),
     Box::new(col_eq_col_offset::Rule),
+    Box::new(null_not_null_conflict::Rule),
+    Box::new(default_subquery::Rule),
+    Box::new(fk_column_count_mismatch::Rule),
+    Box::new(multiple_primary_keys::Rule),
     Box::new(eq_any_array_to_in::Rule),
     Box::new(default_null_redundant::Rule),
     Box::new(nonneg_func_negative_compare::Rule),

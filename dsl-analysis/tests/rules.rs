@@ -25539,6 +25539,69 @@ fn sql556_quiet_for_single_or_neq() {
 }
 
 #[test]
+fn sql557_flags_duplicate_column() {
+  let d = diags("CREATE TABLE t (id int, name text, id bigint);");
+  let m = d.iter().find(|x| x.code == "sql557").unwrap_or_else(|| panic!("expected sql557: {d:?}"));
+  assert!(m.message.contains("42701") && m.message.contains("id"), "{}", m.message);
+}
+
+#[test]
+fn sql557_quiet_for_distinct_columns_and_constraints() {
+  let d = diags("CREATE TABLE t (id int PRIMARY KEY, name text, UNIQUE (name));");
+  assert!(!d.iter().any(|x| x.code == "sql557"), "distinct columns must not flag: {d:?}");
+}
+
+#[test]
+fn sql558_flags_multiple_primary_keys() {
+  let d = diags("CREATE TABLE t (id int PRIMARY KEY, code text PRIMARY KEY);");
+  let m = d.iter().find(|x| x.code == "sql558").unwrap_or_else(|| panic!("expected sql558: {d:?}"));
+  assert!(m.message.contains("42P16"), "{}", m.message);
+}
+
+#[test]
+fn sql558_flags_inline_plus_table_level() {
+  let d = diags("CREATE TABLE t (id int PRIMARY KEY, a int, b int, PRIMARY KEY (a, b));");
+  assert!(d.iter().any(|x| x.code == "sql558"), "inline + table-level PK should flag: {d:?}");
+}
+
+#[test]
+fn sql558_quiet_for_single_composite_pk() {
+  let d = diags("CREATE TABLE t (a int, b int, PRIMARY KEY (a, b));");
+  assert!(!d.iter().any(|x| x.code == "sql558"), "single composite PK must not flag: {d:?}");
+}
+
+#[test]
+fn sql559_flags_duplicate_index_column() {
+  let d = diags("CREATE INDEX idx ON users (name, id, name);");
+  let m = d.iter().find(|x| x.code == "sql559").unwrap_or_else(|| panic!("expected sql559: {d:?}"));
+  assert!(m.message.contains("42701"), "{}", m.message);
+}
+
+#[test]
+fn sql559_quiet_for_distinct_index_columns() {
+  let d = diags("CREATE INDEX idx ON users (name, id);");
+  assert!(!d.iter().any(|x| x.code == "sql559"), "distinct index cols must not flag: {d:?}");
+  let d2 = diags("CREATE UNIQUE INDEX idx ON users USING btree (lower(name), id);");
+  assert!(!d2.iter().any(|x| x.code == "sql559"), "distinct expr cols must not flag: {d2:?}");
+}
+
+#[test]
+fn sql560_flags_fk_count_mismatch() {
+  let d = diags("CREATE TABLE t (a int, b int, FOREIGN KEY (a, b) REFERENCES other (c));");
+  let m = d.iter().find(|x| x.code == "sql560").unwrap_or_else(|| panic!("expected sql560: {d:?}"));
+  assert!(m.message.contains("42830"), "{}", m.message);
+}
+
+#[test]
+fn sql560_quiet_for_matching_counts() {
+  let d = diags("CREATE TABLE t (a int, b int, FOREIGN KEY (a, b) REFERENCES other (c, d));");
+  assert!(!d.iter().any(|x| x.code == "sql560"), "matching FK counts must not flag: {d:?}");
+  // Referenced PK omitted -> can't check, must not flag.
+  let d2 = diags("CREATE TABLE t (a int, FOREIGN KEY (a) REFERENCES other);");
+  assert!(!d2.iter().any(|x| x.code == "sql560"), "omitted ref cols must not flag: {d2:?}");
+}
+
+#[test]
 fn sql561_flags_limit_all() {
   let d = diags("SELECT * FROM users LIMIT ALL;");
   let m = d.iter().find(|x| x.code == "sql561").unwrap_or_else(|| panic!("expected sql561: {d:?}"));
@@ -25552,6 +25615,21 @@ fn sql561_quiet_for_numeric_limit() {
 }
 
 #[test]
+fn sql562_flags_default_subquery() {
+  let d = diags("CREATE TABLE t (id int, seq int DEFAULT (SELECT max(seq) FROM t));");
+  let m = d.iter().find(|x| x.code == "sql562").unwrap_or_else(|| panic!("expected sql562: {d:?}"));
+  assert!(m.message.contains("DEFAULT"), "{}", m.message);
+}
+
+#[test]
+fn sql562_quiet_for_normal_default() {
+  let d = diags("CREATE TABLE t (id int, created timestamptz DEFAULT now());");
+  assert!(!d.iter().any(|x| x.code == "sql562"), "function default must not flag: {d:?}");
+  let d2 = diags("CREATE TABLE t (n int DEFAULT (1 + 2));");
+  assert!(!d2.iter().any(|x| x.code == "sql562"), "parenthesized expression default must not flag: {d2:?}");
+}
+
+#[test]
 fn sql563_flags_duplicate_in_any_array() {
   let d = diags("SELECT * FROM users WHERE id = ANY(ARRAY[1, 2, 1]);");
   let m = d.iter().find(|x| x.code == "sql563").unwrap_or_else(|| panic!("expected sql563: {d:?}"));
@@ -25562,6 +25640,19 @@ fn sql563_flags_duplicate_in_any_array() {
 fn sql563_quiet_for_distinct_array() {
   let d = diags("SELECT * FROM users WHERE id = ANY(ARRAY[1, 2, 3]);");
   assert!(!d.iter().any(|x| x.code == "sql563"), "distinct array must not flag: {d:?}");
+}
+
+#[test]
+fn sql564_flags_null_not_null_conflict() {
+  let d = diags("CREATE TABLE t (a int NULL NOT NULL);");
+  let m = d.iter().find(|x| x.code == "sql564").unwrap_or_else(|| panic!("expected sql564: {d:?}"));
+  assert!(m.message.contains("42601"), "{}", m.message);
+}
+
+#[test]
+fn sql564_quiet_for_normal_columns() {
+  let d = diags("CREATE TABLE t (a int NOT NULL, b int, c int DEFAULT NULL);");
+  assert!(!d.iter().any(|x| x.code == "sql564"), "normal columns must not flag: {d:?}");
 }
 
 #[test]
@@ -25667,5 +25758,113 @@ fn sql583_flags_group_by_in_exists() {
 fn sql583_quiet_for_group_by_with_having() {
   let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id GROUP BY o.status HAVING count(*) > 3);");
   assert!(!d.iter().any(|x| x.code == "sql583"), "GROUP BY + HAVING is meaningful: {d:?}");
+}
+
+#[test]
+fn sql605_set_null_on_not_null() {
+  let d = diags("CREATE TABLE o (cid int NOT NULL REFERENCES c(id) ON DELETE SET NULL)");
+  assert!(d.iter().any(|x| x.code == "sql605"));
+}
+
+#[test]
+fn sql605_quiet_nullable_set_null() {
+  let d = diags("CREATE TABLE o (cid int REFERENCES c(id) ON DELETE SET NULL)");
+  assert!(!d.iter().any(|x| x.code == "sql605"));
+}
+
+#[test]
+fn sql605_quiet_cascade() {
+  let d = diags("CREATE TABLE o (cid int NOT NULL REFERENCES c(id) ON DELETE CASCADE)");
+  assert!(!d.iter().any(|x| x.code == "sql605"));
+}
+
+#[test]
+fn sql606_subquery_in_check() {
+  let d = diags("CREATE TABLE t (x int CHECK (x IN (SELECT id FROM allowed)))");
+  assert!(d.iter().any(|x| x.code == "sql606"));
+}
+
+#[test]
+fn sql606_quiet_plain_check() {
+  let d = diags("CREATE TABLE t (x int CHECK (x > 0))");
+  assert!(!d.iter().any(|x| x.code == "sql606"));
+}
+
+#[test]
+fn sql606_quiet_no_check() {
+  let d = diags("SELECT id FROM (SELECT id FROM t) s");
+  assert!(!d.iter().any(|x| x.code == "sql606"));
+}
+
+#[test]
+fn sql607_text_with_length() {
+  let d = diags("CREATE TABLE t (a text(50))");
+  assert!(d.iter().any(|x| x.code == "sql607"));
+}
+
+#[test]
+fn sql607_bytea_with_length() {
+  let d = diags("CREATE TABLE t (a bytea(16))");
+  assert!(d.iter().any(|x| x.code == "sql607"));
+}
+
+#[test]
+fn sql607_quiet_plain_text() {
+  let d = diags("CREATE TABLE t (a text)");
+  assert!(!d.iter().any(|x| x.code == "sql607"));
+}
+
+#[test]
+fn sql607_quiet_varchar() {
+  let d = diags("CREATE TABLE t (a varchar(50))");
+  assert!(!d.iter().any(|x| x.code == "sql607"));
+}
+
+#[test]
+fn sql608_unique_hash_index() {
+  let d = diags("CREATE UNIQUE INDEX idx ON t USING hash (a)");
+  assert!(d.iter().any(|x| x.code == "sql608"));
+}
+
+#[test]
+fn sql608_unique_gin_index() {
+  let d = diags("CREATE UNIQUE INDEX idx ON t USING gin (a)");
+  assert!(d.iter().any(|x| x.code == "sql608"));
+}
+
+#[test]
+fn sql608_quiet_nonunique_hash() {
+  let d = diags("CREATE INDEX idx ON t USING hash (a)");
+  assert!(!d.iter().any(|x| x.code == "sql608"));
+}
+
+#[test]
+fn sql608_quiet_unique_btree() {
+  let d = diags("CREATE UNIQUE INDEX idx ON t USING btree (a)");
+  assert!(!d.iter().any(|x| x.code == "sql608"));
+}
+
+#[test]
+fn sql613_generated_missing_stored() {
+  let d = diags("CREATE TABLE t (w int, h int, area int GENERATED ALWAYS AS (w * h))");
+  assert!(d.iter().any(|x| x.code == "sql613"));
+}
+
+#[test]
+fn sql613_generated_virtual() {
+  let d = diags("CREATE TABLE t (w int, area int GENERATED ALWAYS AS (w * 2) VIRTUAL)");
+  assert!(d.iter().any(|x| x.code == "sql613"));
+}
+
+#[test]
+fn sql613_quiet_stored() {
+  let d = diags("CREATE TABLE t (w int, h int, area int GENERATED ALWAYS AS (w * h) STORED)");
+  assert!(!d.iter().any(|x| x.code == "sql613"));
+}
+
+#[test]
+fn sql613_quiet_identity() {
+  let d = diags("CREATE TABLE t (id int GENERATED ALWAYS AS IDENTITY)");
+  assert!(!d.iter().any(|x| x.code == "sql613"));
 }
 
