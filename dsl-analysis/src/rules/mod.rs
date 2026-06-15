@@ -242,6 +242,10 @@ pub mod is_true_redundant;
 pub mod limit_all_redundant;
 pub mod any_array_duplicate;
 pub mod self_arithmetic;
+pub mod builtin_too_few_args;
+pub mod exists_order_by;
+pub mod exists_group_by;
+pub mod exists_distinct;
 pub mod regex_literal_could_be_like;
 pub mod col_eq_col_offset;
 pub mod eq_any_array_to_in;
@@ -855,6 +859,10 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(limit_all_redundant::Rule),
     Box::new(any_array_duplicate::Rule),
     Box::new(self_arithmetic::Rule),
+    Box::new(builtin_too_few_args::Rule),
+    Box::new(exists_order_by::Rule),
+    Box::new(exists_group_by::Rule),
+    Box::new(exists_distinct::Rule),
     Box::new(regex_literal_could_be_like::Rule),
     Box::new(col_eq_col_offset::Rule),
     Box::new(eq_any_array_to_in::Rule),

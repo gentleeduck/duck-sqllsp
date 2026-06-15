@@ -25597,6 +25597,25 @@ fn sql566_quiet_for_real_predicates() {
 }
 
 #[test]
+fn sql567_flags_to_char_missing_format() {
+  let d = diags("SELECT to_char(created_at) FROM t;");
+  let m = d.iter().find(|x| x.code == "sql567").unwrap_or_else(|| panic!("expected sql567: {d:?}"));
+  assert!(m.message.contains("42883") && m.message.contains("to_char"), "{}", m.message);
+}
+
+#[test]
+fn sql567_flags_split_part_two_args() {
+  let d = diags("SELECT split_part(path, '/') FROM t;");
+  assert!(d.iter().any(|x| x.code == "sql567"), "split_part with 2 args should flag: {d:?}");
+}
+
+#[test]
+fn sql567_quiet_for_correct_arity() {
+  let d = diags("SELECT to_char(created_at, 'YYYY-MM-DD'), lpad(code, 5, '0') FROM t;");
+  assert!(!d.iter().any(|x| x.code == "sql567"), "correct arity must not flag: {d:?}");
+}
+
+#[test]
 fn sql568_flags_literal_regex() {
   let d = diags("SELECT * FROM t WHERE name ~ 'abc';");
   let m = d.iter().find(|x| x.code == "sql568").unwrap_or_else(|| panic!("expected sql568: {d:?}"));
@@ -25609,5 +25628,44 @@ fn sql568_quiet_for_real_regex_and_like() {
   assert!(!d.iter().any(|x| x.code == "sql568"), "regex with metachars must not flag: {d:?}");
   let d2 = diags("SELECT * FROM t WHERE name ~~ 'abc';");
   assert!(!d2.iter().any(|x| x.code == "sql568"), "~~ (LIKE operator) is sql554, not regex: {d2:?}");
+}
+
+#[test]
+fn sql569_flags_order_by_in_exists() {
+  let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id ORDER BY o.created_at);");
+  let m = d.iter().find(|x| x.code == "sql569").unwrap_or_else(|| panic!("expected sql569: {d:?}"));
+  assert!(m.message.contains("ignores ordering"), "{}", m.message);
+}
+
+#[test]
+fn sql569_quiet_for_exists_without_order() {
+  let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id);");
+  assert!(!d.iter().any(|x| x.code == "sql569"), "EXISTS without ORDER BY must not flag: {d:?}");
+}
+
+#[test]
+fn sql570_flags_distinct_in_exists() {
+  let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT DISTINCT o.user_id FROM orders o WHERE o.user_id = u.id);");
+  let m = d.iter().find(|x| x.code == "sql570").unwrap_or_else(|| panic!("expected sql570: {d:?}"));
+  assert!(m.message.contains("pointless"), "{}", m.message);
+}
+
+#[test]
+fn sql570_quiet_for_plain_exists() {
+  let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id);");
+  assert!(!d.iter().any(|x| x.code == "sql570"), "plain EXISTS must not flag: {d:?}");
+}
+
+#[test]
+fn sql583_flags_group_by_in_exists() {
+  let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id GROUP BY o.status);");
+  let m = d.iter().find(|x| x.code == "sql583").unwrap_or_else(|| panic!("expected sql583: {d:?}"));
+  assert!(m.message.contains("pointless"), "{}", m.message);
+}
+
+#[test]
+fn sql583_quiet_for_group_by_with_having() {
+  let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id GROUP BY o.status HAVING count(*) > 3);");
+  assert!(!d.iter().any(|x| x.code == "sql583"), "GROUP BY + HAVING is meaningful: {d:?}");
 }
 
