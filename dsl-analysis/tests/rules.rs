@@ -25461,3 +25461,153 @@ fn sql552_quiet_for_valid_comparison() {
   let d = diags("SELECT * FROM t WHERE abs(balance) > 100;");
   assert!(!d.iter().any(|x| x.code == "sql552"), "abs > 100 is valid: {d:?}");
 }
+
+#[test]
+fn sql553_flags_redundant_default_null() {
+  let d = diags("CREATE TABLE t (id int, name text DEFAULT NULL);");
+  let m = d.iter().find(|x| x.code == "sql553").unwrap_or_else(|| panic!("expected sql553: {d:?}"));
+  assert!(m.message.contains("redundant"), "{}", m.message);
+}
+
+#[test]
+fn sql553_quiet_for_not_null_or_real_default() {
+  // NOT NULL DEFAULT NULL is sql069's (contradiction), not this rule.
+  let d = diags("CREATE TABLE t (name text NOT NULL DEFAULT NULL);");
+  assert!(!d.iter().any(|x| x.code == "sql553"), "NOT NULL case is sql069: {d:?}");
+  let d2 = diags("CREATE TABLE t (name text DEFAULT 'x');");
+  assert!(!d2.iter().any(|x| x.code == "sql553"), "real default must not flag: {d2:?}");
+}
+
+#[test]
+fn sql554_flags_like_operator() {
+  let d = diags("SELECT * FROM users WHERE name ~~ 'a%';");
+  let m = d.iter().find(|x| x.code == "sql554").unwrap_or_else(|| panic!("expected sql554: {d:?}"));
+  assert!(m.message.contains("LIKE"), "{}", m.message);
+}
+
+#[test]
+fn sql554_flags_not_ilike_operator() {
+  let d = diags("SELECT * FROM users WHERE name !~~* 'a%';");
+  let m = d.iter().find(|x| x.code == "sql554").unwrap_or_else(|| panic!("expected sql554: {d:?}"));
+  assert!(m.message.contains("NOT ILIKE"), "{}", m.message);
+}
+
+#[test]
+fn sql554_quiet_for_regex_and_like_keyword() {
+  let d = diags("SELECT * FROM users WHERE name ~ '^a';");
+  assert!(!d.iter().any(|x| x.code == "sql554"), "regex ~ must not flag: {d:?}");
+  let d2 = diags("SELECT * FROM users WHERE name LIKE 'a%';");
+  assert!(!d2.iter().any(|x| x.code == "sql554"), "LIKE keyword must not flag: {d2:?}");
+}
+
+#[test]
+fn sql555_flags_is_true() {
+  let d = diags("SELECT * FROM users WHERE active IS TRUE;");
+  let m = d.iter().find(|x| x.code == "sql555").unwrap_or_else(|| panic!("expected sql555: {d:?}"));
+  assert!(m.message.contains("IS TRUE"), "{}", m.message);
+}
+
+#[test]
+fn sql555_flags_is_false() {
+  let d = diags("SELECT * FROM users WHERE active IS FALSE;");
+  let m = d.iter().find(|x| x.code == "sql555").unwrap_or_else(|| panic!("expected sql555: {d:?}"));
+  assert!(m.message.contains("NOT"), "{}", m.message);
+}
+
+#[test]
+fn sql555_quiet_for_is_not_true_and_select_list() {
+  let d = diags("SELECT * FROM users WHERE active IS NOT TRUE;");
+  assert!(!d.iter().any(|x| x.code == "sql555"), "IS NOT TRUE has different semantics: {d:?}");
+  // In the SELECT list, `x IS TRUE` produces a boolean value -- not redundant.
+  let d2 = diags("SELECT active IS TRUE AS flag FROM users;");
+  assert!(!d2.iter().any(|x| x.code == "sql555"), "SELECT-list IS TRUE must not flag: {d2:?}");
+}
+
+#[test]
+fn sql556_flags_eq_any_array() {
+  let d = diags("SELECT * FROM users WHERE id = ANY(ARRAY[1, 2, 3]);");
+  let m = d.iter().find(|x| x.code == "sql556").unwrap_or_else(|| panic!("expected sql556: {d:?}"));
+  assert!(m.message.contains("IN (1, 2, 3)"), "{}", m.message);
+}
+
+#[test]
+fn sql556_quiet_for_single_or_neq() {
+  let d = diags("SELECT * FROM users WHERE id = ANY(ARRAY[1]);");
+  assert!(!d.iter().any(|x| x.code == "sql556"), "single-element is sql521: {d:?}");
+  let d2 = diags("SELECT * FROM users WHERE id <> ANY(ARRAY[1, 2, 3]);");
+  assert!(!d2.iter().any(|x| x.code == "sql556"), "<> ANY is not = ANY: {d2:?}");
+}
+
+#[test]
+fn sql561_flags_limit_all() {
+  let d = diags("SELECT * FROM users LIMIT ALL;");
+  let m = d.iter().find(|x| x.code == "sql561").unwrap_or_else(|| panic!("expected sql561: {d:?}"));
+  assert!(m.message.contains("no limit"), "{}", m.message);
+}
+
+#[test]
+fn sql561_quiet_for_numeric_limit() {
+  let d = diags("SELECT * FROM users LIMIT 10;");
+  assert!(!d.iter().any(|x| x.code == "sql561"), "numeric LIMIT must not flag: {d:?}");
+}
+
+#[test]
+fn sql563_flags_duplicate_in_any_array() {
+  let d = diags("SELECT * FROM users WHERE id = ANY(ARRAY[1, 2, 1]);");
+  let m = d.iter().find(|x| x.code == "sql563").unwrap_or_else(|| panic!("expected sql563: {d:?}"));
+  assert!(m.message.contains("more than once"), "{}", m.message);
+}
+
+#[test]
+fn sql563_quiet_for_distinct_array() {
+  let d = diags("SELECT * FROM users WHERE id = ANY(ARRAY[1, 2, 3]);");
+  assert!(!d.iter().any(|x| x.code == "sql563"), "distinct array must not flag: {d:?}");
+}
+
+#[test]
+fn sql565_flags_self_subtraction_and_division() {
+  let d = diags("SELECT amount - amount FROM t;");
+  let m = d.iter().find(|x| x.code == "sql565").unwrap_or_else(|| panic!("expected sql565: {d:?}"));
+  assert!(m.message.contains("always 0"), "{}", m.message);
+  let d2 = diags("SELECT total / total FROM t;");
+  assert!(d2.iter().any(|x| x.code == "sql565" && x.message.contains("always 1")), "got {d2:?}");
+}
+
+#[test]
+fn sql565_quiet_for_distinct_operands_and_arrows() {
+  let d = diags("SELECT price - cost FROM t;");
+  assert!(!d.iter().any(|x| x.code == "sql565"), "distinct operands must not flag: {d:?}");
+  let d2 = diags("SELECT data->'a' FROM t;");
+  assert!(!d2.iter().any(|x| x.code == "sql565"), "jsonb arrow must not flag: {d2:?}");
+}
+
+#[test]
+fn sql566_flags_col_eq_col_plus_one() {
+  let d = diags("SELECT * FROM t WHERE counter = counter + 1;");
+  let m = d.iter().find(|x| x.code == "sql566").unwrap_or_else(|| panic!("expected sql566: {d:?}"));
+  assert!(m.message.contains("always false"), "{}", m.message);
+}
+
+#[test]
+fn sql566_quiet_for_real_predicates() {
+  let d = diags("SELECT * FROM t WHERE counter = other + 1;");
+  assert!(!d.iter().any(|x| x.code == "sql566"), "different column must not flag: {d:?}");
+  let d2 = diags("SELECT * FROM t WHERE counter = counter + 0;");
+  assert!(!d2.iter().any(|x| x.code == "sql566"), "+ 0 is a no-op, not always-false: {d2:?}");
+}
+
+#[test]
+fn sql568_flags_literal_regex() {
+  let d = diags("SELECT * FROM t WHERE name ~ 'abc';");
+  let m = d.iter().find(|x| x.code == "sql568").unwrap_or_else(|| panic!("expected sql568: {d:?}"));
+  assert!(m.message.contains("LIKE '%abc%'"), "{}", m.message);
+}
+
+#[test]
+fn sql568_quiet_for_real_regex_and_like() {
+  let d = diags("SELECT * FROM t WHERE name ~ '^abc$';");
+  assert!(!d.iter().any(|x| x.code == "sql568"), "regex with metachars must not flag: {d:?}");
+  let d2 = diags("SELECT * FROM t WHERE name ~~ 'abc';");
+  assert!(!d2.iter().any(|x| x.code == "sql568"), "~~ (LIKE operator) is sql554, not regex: {d2:?}");
+}
+

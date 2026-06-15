@@ -237,6 +237,15 @@ pub mod extract_value_out_of_range;
 pub mod array_length_zero_check;
 pub mod table_self_alias;
 pub mod redundant_nested_function;
+pub mod like_operator_form;
+pub mod is_true_redundant;
+pub mod limit_all_redundant;
+pub mod any_array_duplicate;
+pub mod self_arithmetic;
+pub mod regex_literal_could_be_like;
+pub mod col_eq_col_offset;
+pub mod eq_any_array_to_in;
+pub mod default_null_redundant;
 pub mod nonneg_func_negative_compare;
 pub mod redundant_range_bound;
 pub mod neq_all_array_to_not_in;
@@ -841,6 +850,15 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(array_length_zero_check::Rule),
     Box::new(table_self_alias::Rule),
     Box::new(redundant_nested_function::Rule),
+    Box::new(like_operator_form::Rule),
+    Box::new(is_true_redundant::Rule),
+    Box::new(limit_all_redundant::Rule),
+    Box::new(any_array_duplicate::Rule),
+    Box::new(self_arithmetic::Rule),
+    Box::new(regex_literal_could_be_like::Rule),
+    Box::new(col_eq_col_offset::Rule),
+    Box::new(eq_any_array_to_in::Rule),
+    Box::new(default_null_redundant::Rule),
     Box::new(nonneg_func_negative_compare::Rule),
     Box::new(redundant_range_bound::Rule),
     Box::new(neq_all_array_to_not_in::Rule),
