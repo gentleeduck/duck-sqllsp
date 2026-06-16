@@ -249,6 +249,7 @@ pub mod exists_order_by;
 pub mod exists_group_by;
 pub mod mysql_limit_comma;
 pub mod mysql_replace_into;
+pub mod mysql_regexp_operator;
 pub mod use_statement;
 pub mod mysql_unsigned;
 pub mod backtick_identifier;
@@ -259,16 +260,23 @@ pub mod unique_index_non_btree;
 pub mod generated_column_not_stored;
 pub mod mysql_inline_index;
 pub mod mysql_character_set;
+pub mod mysql_if_function;
+pub mod mysql_string_functions;
 pub mod mysql_enum_inline;
 pub mod mysql_on_update_timestamp;
 pub mod mysql_zerofill;
 pub mod mysql_query_modifiers;
+pub mod mysql_xor_div;
+pub mod mysql_datepart_fns;
+pub mod mysql_file_io;
+pub mod mysql_date_arith_fns;
 pub mod mysql_insert_ignore;
 pub mod mysql_insert_set;
 pub mod mysql_lock_in_share_mode;
 pub mod mysql_show_statement;
 pub mod mysql_describe;
 pub mod mysql_alter_change_modify;
+pub mod mysql_functions;
 pub mod mysql_on_duplicate_key;
 pub mod exists_distinct;
 pub mod regex_literal_could_be_like;
@@ -895,6 +903,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(exists_group_by::Rule),
     Box::new(mysql_limit_comma::Rule),
     Box::new(mysql_replace_into::Rule),
+    Box::new(mysql_regexp_operator::Rule),
     Box::new(use_statement::Rule),
     Box::new(mysql_unsigned::Rule),
     Box::new(backtick_identifier::Rule),
@@ -905,16 +914,23 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(generated_column_not_stored::Rule),
     Box::new(mysql_inline_index::Rule),
     Box::new(mysql_character_set::Rule),
+    Box::new(mysql_if_function::Rule),
+    Box::new(mysql_string_functions::Rule),
     Box::new(mysql_enum_inline::Rule),
     Box::new(mysql_on_update_timestamp::Rule),
     Box::new(mysql_zerofill::Rule),
     Box::new(mysql_query_modifiers::Rule),
+    Box::new(mysql_xor_div::Rule),
+    Box::new(mysql_datepart_fns::Rule),
+    Box::new(mysql_file_io::Rule),
+    Box::new(mysql_date_arith_fns::Rule),
     Box::new(mysql_insert_ignore::Rule),
     Box::new(mysql_insert_set::Rule),
     Box::new(mysql_lock_in_share_mode::Rule),
     Box::new(mysql_show_statement::Rule),
     Box::new(mysql_describe::Rule),
     Box::new(mysql_alter_change_modify::Rule),
+    Box::new(mysql_functions::Rule),
     Box::new(mysql_on_duplicate_key::Rule),
     Box::new(exists_distinct::Rule),
     Box::new(regex_literal_could_be_like::Rule),

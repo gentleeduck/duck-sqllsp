@@ -25800,6 +25800,33 @@ fn sql595_quiet_for_replace_function() {
 }
 
 #[test]
+fn sql596_flags_mysql_functions() {
+  let d = diags("SELECT group_concat(name), date_format(created_at, '%Y') FROM users;");
+  assert!(d.iter().any(|x| x.code == "sql596" && x.message.contains("string_agg")), "group_concat: {d:?}");
+  assert!(d.iter().any(|x| x.code == "sql596" && x.message.contains("to_char")), "date_format: {d:?}");
+}
+
+#[test]
+fn sql596_quiet_for_pg_functions() {
+  let d = diags("SELECT string_agg(name, ','), to_char(created_at, 'YYYY') FROM users;");
+  assert!(!d.iter().any(|x| x.code == "sql596"), "PG functions must not flag: {d:?}");
+}
+
+#[test]
+fn sql597_flags_regexp_and_rlike() {
+  let d = diags("SELECT * FROM users WHERE name REGEXP '^a';");
+  assert!(d.iter().any(|x| x.code == "sql597"), "REGEXP: {d:?}");
+  let d2 = diags("SELECT * FROM users WHERE name RLIKE 'a';");
+  assert!(d2.iter().any(|x| x.code == "sql597"), "RLIKE: {d2:?}");
+}
+
+#[test]
+fn sql597_quiet_for_regexp_functions() {
+  let d = diags("SELECT regexp_replace(name, 'a', 'b') FROM users;");
+  assert!(!d.iter().any(|x| x.code == "sql597"), "regexp_replace must not flag: {d:?}");
+}
+
+#[test]
 fn sql598_flags_use_statement() {
   let d = diags("USE analytics;");
   let m = d.iter().find(|x| x.code == "sql598").unwrap_or_else(|| panic!("expected sql598: {d:?}"));
@@ -26005,6 +26032,42 @@ fn sql616_quiet_collate() {
 }
 
 #[test]
+fn sql621_if_function() {
+  let d = diags("SELECT IF(x > 0, 'pos', 'neg') FROM t");
+  assert!(d.iter().any(|x| x.code == "sql621"));
+}
+
+#[test]
+fn sql621_quiet_plpgsql_if() {
+  let d = diags("CREATE FUNCTION f() RETURNS int AS $$ BEGIN IF (x > 0) THEN RETURN 1; END IF; END; $$ LANGUAGE plpgsql");
+  assert!(!d.iter().any(|x| x.code == "sql621"));
+}
+
+#[test]
+fn sql621_quiet_if_exists() {
+  let d = diags("DROP TABLE IF EXISTS t");
+  assert!(!d.iter().any(|x| x.code == "sql621"));
+}
+
+#[test]
+fn sql622_lcase() {
+  let d = diags("SELECT lcase(name) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql622"));
+}
+
+#[test]
+fn sql622_substring_index() {
+  let d = diags("SELECT substring_index(path, '/', 1) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql622"));
+}
+
+#[test]
+fn sql622_quiet_lower() {
+  let d = diags("SELECT lower(name) FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql622"));
+}
+
+#[test]
 fn sql623_inline_enum() {
   let d = diags("CREATE TABLE t (status ENUM('a', 'b', 'c'))");
   assert!(d.iter().any(|x| x.code == "sql623"));
@@ -26074,6 +26137,78 @@ fn sql626_low_priority() {
 fn sql626_quiet_plain_select() {
   let d = diags("SELECT * FROM t LIMIT 10");
   assert!(!d.iter().any(|x| x.code == "sql626"));
+}
+
+#[test]
+fn sql627_xor() {
+  let d = diags("SELECT * FROM t WHERE a XOR b");
+  assert!(d.iter().any(|x| x.code == "sql627"));
+}
+
+#[test]
+fn sql627_div() {
+  let d = diags("SELECT a DIV b FROM t");
+  assert!(d.iter().any(|x| x.code == "sql627"));
+}
+
+#[test]
+fn sql627_quiet_plain() {
+  let d = diags("SELECT a / b FROM t WHERE a <> b");
+  assert!(!d.iter().any(|x| x.code == "sql627"));
+}
+
+#[test]
+fn sql640_dayofweek() {
+  let d = diags("SELECT dayofweek(ts) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql640"));
+}
+
+#[test]
+fn sql640_monthname() {
+  let d = diags("SELECT monthname(ts) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql640"));
+}
+
+#[test]
+fn sql640_quiet_extract() {
+  let d = diags("SELECT extract(dow FROM ts) FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql640"));
+}
+
+#[test]
+fn sql642_into_outfile() {
+  let d = diags("SELECT * FROM t INTO OUTFILE '/tmp/out.csv'");
+  assert!(d.iter().any(|x| x.code == "sql642"));
+}
+
+#[test]
+fn sql642_load_data() {
+  let d = diags("LOAD DATA INFILE '/tmp/in.csv' INTO TABLE t");
+  assert!(d.iter().any(|x| x.code == "sql642"));
+}
+
+#[test]
+fn sql642_quiet_copy() {
+  let d = diags("COPY t FROM '/tmp/in.csv' CSV");
+  assert!(!d.iter().any(|x| x.code == "sql642"));
+}
+
+#[test]
+fn sql644_adddate() {
+  let d = diags("SELECT adddate(d, 7) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql644"));
+}
+
+#[test]
+fn sql644_last_day() {
+  let d = diags("SELECT last_day(d) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql644"));
+}
+
+#[test]
+fn sql644_quiet_make_date_underscore() {
+  let d = diags("SELECT make_date(2020, 1, 1)");
+  assert!(!d.iter().any(|x| x.code == "sql644"));
 }
 
 #[test]
