@@ -26104,6 +26104,48 @@ fn sql616_quiet_collate() {
 }
 
 #[test]
+fn sql619_invalid_unit() {
+  let d = diags("SELECT date_trunc('minutes', ts) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql619"));
+}
+
+#[test]
+fn sql619_invalid_unit_typo() {
+  let d = diags("SELECT date_trunc('mon', ts) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql619"));
+}
+
+#[test]
+fn sql619_quiet_valid_unit() {
+  let d = diags("SELECT date_trunc('month', ts) FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql619"));
+}
+
+#[test]
+fn sql619_quiet_column_unit() {
+  let d = diags("SELECT date_trunc(unit_col, ts) FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql619"));
+}
+
+#[test]
+fn sql620_datediff() {
+  let d = diags("SELECT datediff(day, a, b) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql620"));
+}
+
+#[test]
+fn sql620_timestampdiff() {
+  let d = diags("SELECT timestampdiff(MINUTE, a, b) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql620"));
+}
+
+#[test]
+fn sql620_quiet_extract() {
+  let d = diags("SELECT extract(day FROM (a - b)) FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql620"));
+}
+
+#[test]
 fn sql621_if_function() {
   let d = diags("SELECT IF(x > 0, 'pos', 'neg') FROM t");
   assert!(d.iter().any(|x| x.code == "sql621"));
@@ -26230,6 +26272,30 @@ fn sql627_quiet_plain() {
 }
 
 #[test]
+fn sql628_instr() {
+  let d = diags("SELECT instr(name, 'x') FROM t");
+  assert!(d.iter().any(|x| x.code == "sql628"));
+}
+
+#[test]
+fn sql628_iif() {
+  let d = diags("SELECT iif(x > 0, 1, 0) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql628"));
+}
+
+#[test]
+fn sql628_nvl2() {
+  let d = diags("SELECT nvl2(a, b, c) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql628"));
+}
+
+#[test]
+fn sql628_quiet_length() {
+  let d = diags("SELECT length(name), strpos(name, 'x') FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql628"));
+}
+
+#[test]
 fn sql629_nvarchar() {
   let d = diags("CREATE TABLE t (name NVARCHAR(50))");
   assert!(d.iter().any(|x| x.code == "sql629"));
@@ -26338,6 +26404,24 @@ fn sql638_quiet_to_char() {
 }
 
 #[test]
+fn sql639_hex() {
+  let d = diags("SELECT hex(data) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql639"));
+}
+
+#[test]
+fn sql639_space() {
+  let d = diags("SELECT space(4) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql639"));
+}
+
+#[test]
+fn sql639_quiet_encode() {
+  let d = diags("SELECT encode(data, 'hex') FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql639"));
+}
+
+#[test]
 fn sql640_dayofweek() {
   let d = diags("SELECT dayofweek(ts) FROM t");
   assert!(d.iter().any(|x| x.code == "sql640"));
@@ -26353,6 +26437,24 @@ fn sql640_monthname() {
 fn sql640_quiet_extract() {
   let d = diags("SELECT extract(dow FROM ts) FROM t");
   assert!(!d.iter().any(|x| x.code == "sql640"));
+}
+
+#[test]
+fn sql641_default_now_string() {
+  let d = diags("CREATE TABLE t (created_at timestamptz DEFAULT 'now')");
+  assert!(d.iter().any(|x| x.code == "sql641"));
+}
+
+#[test]
+fn sql641_default_now_cast() {
+  let d = diags("CREATE TABLE t (created_at timestamp DEFAULT 'now'::timestamp)");
+  assert!(d.iter().any(|x| x.code == "sql641"));
+}
+
+#[test]
+fn sql641_quiet_now_function() {
+  let d = diags("CREATE TABLE t (created_at timestamptz DEFAULT now())");
+  assert!(!d.iter().any(|x| x.code == "sql641"));
 }
 
 #[test]

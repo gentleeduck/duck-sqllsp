@@ -264,6 +264,8 @@ pub mod unique_index_non_btree;
 pub mod generated_column_not_stored;
 pub mod mysql_inline_index;
 pub mod mysql_character_set;
+pub mod date_trunc_invalid_unit;
+pub mod non_pg_date_diff_fns;
 pub mod mysql_if_function;
 pub mod mysql_string_functions;
 pub mod mysql_enum_inline;
@@ -271,13 +273,16 @@ pub mod mysql_on_update_timestamp;
 pub mod mysql_zerofill;
 pub mod mysql_query_modifiers;
 pub mod mysql_xor_div;
+pub mod cross_dialect_scalar_fns;
 pub mod tsql_types;
 pub mod tsql_identity_fns;
 pub mod sqlite_pragma;
 pub mod sqlite_autoincrement;
 pub mod sqlite_glob;
 pub mod sqlite_functions;
+pub mod cross_dialect_string_fns2;
 pub mod mysql_datepart_fns;
+pub mod default_relative_datetime_string;
 pub mod mysql_file_io;
 pub mod oracle_date_misc_fns;
 pub mod mysql_date_arith_fns;
@@ -929,6 +934,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(generated_column_not_stored::Rule),
     Box::new(mysql_inline_index::Rule),
     Box::new(mysql_character_set::Rule),
+    Box::new(date_trunc_invalid_unit::Rule),
+    Box::new(non_pg_date_diff_fns::Rule),
     Box::new(mysql_if_function::Rule),
     Box::new(mysql_string_functions::Rule),
     Box::new(mysql_enum_inline::Rule),
@@ -936,13 +943,16 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(mysql_zerofill::Rule),
     Box::new(mysql_query_modifiers::Rule),
     Box::new(mysql_xor_div::Rule),
+    Box::new(cross_dialect_scalar_fns::Rule),
     Box::new(tsql_types::Rule),
     Box::new(tsql_identity_fns::Rule),
     Box::new(sqlite_pragma::Rule),
     Box::new(sqlite_autoincrement::Rule),
     Box::new(sqlite_glob::Rule),
     Box::new(sqlite_functions::Rule),
+    Box::new(cross_dialect_string_fns2::Rule),
     Box::new(mysql_datepart_fns::Rule),
+    Box::new(default_relative_datetime_string::Rule),
     Box::new(mysql_file_io::Rule),
     Box::new(oracle_date_misc_fns::Rule),
     Box::new(mysql_date_arith_fns::Rule),
