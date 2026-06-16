@@ -253,6 +253,10 @@ pub mod mysql_regexp_operator;
 pub mod use_statement;
 pub mod mysql_unsigned;
 pub mod backtick_identifier;
+pub mod oracle_varchar2;
+pub mod oracle_decode;
+pub mod oracle_minus;
+pub mod oracle_lob_types;
 pub mod fk_set_null_not_null;
 pub mod check_subquery;
 pub mod type_no_modifier;
@@ -267,8 +271,15 @@ pub mod mysql_on_update_timestamp;
 pub mod mysql_zerofill;
 pub mod mysql_query_modifiers;
 pub mod mysql_xor_div;
+pub mod tsql_types;
+pub mod tsql_identity_fns;
+pub mod sqlite_pragma;
+pub mod sqlite_autoincrement;
+pub mod sqlite_glob;
+pub mod sqlite_functions;
 pub mod mysql_datepart_fns;
 pub mod mysql_file_io;
+pub mod oracle_date_misc_fns;
 pub mod mysql_date_arith_fns;
 pub mod mysql_insert_ignore;
 pub mod mysql_insert_set;
@@ -907,6 +918,10 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(use_statement::Rule),
     Box::new(mysql_unsigned::Rule),
     Box::new(backtick_identifier::Rule),
+    Box::new(oracle_varchar2::Rule),
+    Box::new(oracle_decode::Rule),
+    Box::new(oracle_minus::Rule),
+    Box::new(oracle_lob_types::Rule),
     Box::new(fk_set_null_not_null::Rule),
     Box::new(check_subquery::Rule),
     Box::new(type_no_modifier::Rule),
@@ -921,8 +936,15 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(mysql_zerofill::Rule),
     Box::new(mysql_query_modifiers::Rule),
     Box::new(mysql_xor_div::Rule),
+    Box::new(tsql_types::Rule),
+    Box::new(tsql_identity_fns::Rule),
+    Box::new(sqlite_pragma::Rule),
+    Box::new(sqlite_autoincrement::Rule),
+    Box::new(sqlite_glob::Rule),
+    Box::new(sqlite_functions::Rule),
     Box::new(mysql_datepart_fns::Rule),
     Box::new(mysql_file_io::Rule),
+    Box::new(oracle_date_misc_fns::Rule),
     Box::new(mysql_date_arith_fns::Rule),
     Box::new(mysql_insert_ignore::Rule),
     Box::new(mysql_insert_set::Rule),

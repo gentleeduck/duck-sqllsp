@@ -25876,6 +25876,78 @@ fn sql600_quiet_backtick_in_string() {
 }
 
 #[test]
+fn sql601_varchar2() {
+  let d = diags("CREATE TABLE t (name varchar2(50))");
+  assert!(d.iter().any(|x| x.code == "sql601"));
+}
+
+#[test]
+fn sql601_nvarchar2() {
+  let d = diags("CREATE TABLE t (name NVARCHAR2(50))");
+  assert!(d.iter().any(|x| x.code == "sql601"));
+}
+
+#[test]
+fn sql601_quiet_varchar() {
+  let d = diags("CREATE TABLE t (name varchar(50))");
+  assert!(!d.iter().any(|x| x.code == "sql601"));
+}
+
+#[test]
+fn sql602_decode_three_args() {
+  let d = diags("SELECT decode(status, 1, 'active') FROM t");
+  assert!(d.iter().any(|x| x.code == "sql602"));
+}
+
+#[test]
+fn sql602_decode_with_default() {
+  let d = diags("SELECT decode(grade, 'A', 4, 'B', 3, 0) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql602"));
+}
+
+#[test]
+fn sql602_quiet_two_arg_decode() {
+  let d = diags("SELECT decode(payload, 'base64') FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql602"));
+}
+
+#[test]
+fn sql603_minus_operator() {
+  let d = diags("SELECT id FROM a MINUS SELECT id FROM b");
+  assert!(d.iter().any(|x| x.code == "sql603"));
+}
+
+#[test]
+fn sql603_quiet_except() {
+  let d = diags("SELECT id FROM a EXCEPT SELECT id FROM b");
+  assert!(!d.iter().any(|x| x.code == "sql603"));
+}
+
+#[test]
+fn sql603_quiet_identifier() {
+  let d = diags("SELECT minus_balance FROM accounts");
+  assert!(!d.iter().any(|x| x.code == "sql603"));
+}
+
+#[test]
+fn sql604_clob() {
+  let d = diags("CREATE TABLE t (body clob)");
+  assert!(d.iter().any(|x| x.code == "sql604"));
+}
+
+#[test]
+fn sql604_nclob() {
+  let d = diags("CREATE TABLE t (body NCLOB)");
+  assert!(d.iter().any(|x| x.code == "sql604"));
+}
+
+#[test]
+fn sql604_quiet_text() {
+  let d = diags("CREATE TABLE t (body text)");
+  assert!(!d.iter().any(|x| x.code == "sql604"));
+}
+
+#[test]
 fn sql605_set_null_on_not_null() {
   let d = diags("CREATE TABLE o (cid int NOT NULL REFERENCES c(id) ON DELETE SET NULL)");
   assert!(d.iter().any(|x| x.code == "sql605"));
@@ -26158,6 +26230,114 @@ fn sql627_quiet_plain() {
 }
 
 #[test]
+fn sql629_nvarchar() {
+  let d = diags("CREATE TABLE t (name NVARCHAR(50))");
+  assert!(d.iter().any(|x| x.code == "sql629"));
+}
+
+#[test]
+fn sql629_uniqueidentifier() {
+  let d = diags("CREATE TABLE t (id UNIQUEIDENTIFIER)");
+  assert!(d.iter().any(|x| x.code == "sql629"));
+}
+
+#[test]
+fn sql629_datetime2() {
+  let d = diags("CREATE TABLE t (ts DATETIME2)");
+  assert!(d.iter().any(|x| x.code == "sql629"));
+}
+
+#[test]
+fn sql629_quiet_varchar() {
+  let d = diags("CREATE TABLE t (name varchar(50))");
+  assert!(!d.iter().any(|x| x.code == "sql629"));
+}
+
+#[test]
+fn sql630_newid() {
+  let d = diags("CREATE TABLE t (id uuid DEFAULT newid())");
+  assert!(d.iter().any(|x| x.code == "sql630"));
+}
+
+#[test]
+fn sql630_scope_identity() {
+  let d = diags("SELECT scope_identity()");
+  assert!(d.iter().any(|x| x.code == "sql630"));
+}
+
+#[test]
+fn sql630_quiet_gen_random_uuid() {
+  let d = diags("CREATE TABLE t (id uuid DEFAULT gen_random_uuid())");
+  assert!(!d.iter().any(|x| x.code == "sql630"));
+}
+
+#[test]
+fn sql635_pragma() {
+  let d = diags("PRAGMA foreign_keys = ON");
+  assert!(d.iter().any(|x| x.code == "sql635"));
+}
+
+#[test]
+fn sql635_quiet_set() {
+  let d = diags("SET search_path = public");
+  assert!(!d.iter().any(|x| x.code == "sql635"));
+}
+
+#[test]
+fn sql636_autoincrement() {
+  let d = diags("CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT)");
+  assert!(d.iter().any(|x| x.code == "sql636"));
+}
+
+#[test]
+fn sql636_quiet_identity() {
+  let d = diags("CREATE TABLE t (id int GENERATED ALWAYS AS IDENTITY)");
+  assert!(!d.iter().any(|x| x.code == "sql636"));
+}
+
+#[test]
+fn sql636_quiet_auto_increment_underscore() {
+  let d = diags("CREATE TABLE t (id int AUTO_INCREMENT)");
+  assert!(!d.iter().any(|x| x.code == "sql636"));
+}
+
+#[test]
+fn sql637_glob() {
+  let d = diags("SELECT * FROM t WHERE name GLOB 'foo*'");
+  assert!(d.iter().any(|x| x.code == "sql637"));
+}
+
+#[test]
+fn sql637_quiet_like() {
+  let d = diags("SELECT * FROM t WHERE name LIKE 'foo%'");
+  assert!(!d.iter().any(|x| x.code == "sql637"));
+}
+
+#[test]
+fn sql638_strftime() {
+  let d = diags("SELECT strftime('%Y', ts) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql638"));
+}
+
+#[test]
+fn sql638_typeof() {
+  let d = diags("SELECT typeof(x) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql638"));
+}
+
+#[test]
+fn sql638_last_insert_rowid() {
+  let d = diags("SELECT last_insert_rowid()");
+  assert!(d.iter().any(|x| x.code == "sql638"));
+}
+
+#[test]
+fn sql638_quiet_to_char() {
+  let d = diags("SELECT to_char(ts, 'YYYY') FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql638"));
+}
+
+#[test]
 fn sql640_dayofweek() {
   let d = diags("SELECT dayofweek(ts) FROM t");
   assert!(d.iter().any(|x| x.code == "sql640"));
@@ -26191,6 +26371,24 @@ fn sql642_load_data() {
 fn sql642_quiet_copy() {
   let d = diags("COPY t FROM '/tmp/in.csv' CSV");
   assert!(!d.iter().any(|x| x.code == "sql642"));
+}
+
+#[test]
+fn sql643_add_months() {
+  let d = diags("SELECT add_months(d, 3) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql643"));
+}
+
+#[test]
+fn sql643_sys_guid() {
+  let d = diags("SELECT sys_guid()");
+  assert!(d.iter().any(|x| x.code == "sql643"));
+}
+
+#[test]
+fn sql643_quiet_age() {
+  let d = diags("SELECT age(a, b) FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql643"));
 }
 
 #[test]
