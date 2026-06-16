@@ -25813,6 +25813,42 @@ fn sql598_quiet_for_using_clause() {
 }
 
 #[test]
+fn sql599_unsigned_modifier() {
+  let d = diags("CREATE TABLE t (id int unsigned)");
+  assert!(d.iter().any(|x| x.code == "sql599"));
+}
+
+#[test]
+fn sql599_bigint_unsigned() {
+  let d = diags("CREATE TABLE t (n bigint UNSIGNED not null)");
+  assert!(d.iter().any(|x| x.code == "sql599"));
+}
+
+#[test]
+fn sql599_quiet_plain_int() {
+  let d = diags("CREATE TABLE t (id int)");
+  assert!(!d.iter().any(|x| x.code == "sql599"));
+}
+
+#[test]
+fn sql600_backtick_identifier() {
+  let d = diags("SELECT `name` FROM users");
+  assert!(d.iter().any(|x| x.code == "sql600"));
+}
+
+#[test]
+fn sql600_quiet_double_quote() {
+  let d = diags("SELECT \"name\" FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql600"));
+}
+
+#[test]
+fn sql600_quiet_backtick_in_string() {
+  let d = diags("SELECT 'a`b' FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql600"));
+}
+
+#[test]
 fn sql605_set_null_on_not_null() {
   let d = diags("CREATE TABLE o (cid int NOT NULL REFERENCES c(id) ON DELETE SET NULL)");
   assert!(d.iter().any(|x| x.code == "sql605"));
@@ -25918,6 +25954,102 @@ fn sql613_quiet_stored() {
 fn sql613_quiet_identity() {
   let d = diags("CREATE TABLE t (id int GENERATED ALWAYS AS IDENTITY)");
   assert!(!d.iter().any(|x| x.code == "sql613"));
+}
+
+#[test]
+fn sql614_inline_key() {
+  let d = diags("CREATE TABLE t (id int, name text, KEY idx_name (name))");
+  assert!(d.iter().any(|x| x.code == "sql614"));
+}
+
+#[test]
+fn sql614_inline_index() {
+  let d = diags("CREATE TABLE t (id int, name text, INDEX idx_name (name))");
+  assert!(d.iter().any(|x| x.code == "sql614"));
+}
+
+#[test]
+fn sql614_quiet_primary_key() {
+  let d = diags("CREATE TABLE t (id int PRIMARY KEY, name text)");
+  assert!(!d.iter().any(|x| x.code == "sql614"));
+}
+
+#[test]
+fn sql614_quiet_foreign_key() {
+  let d = diags("CREATE TABLE t (id int, oid int, FOREIGN KEY (oid) REFERENCES o(id))");
+  assert!(!d.iter().any(|x| x.code == "sql614"));
+}
+
+#[test]
+fn sql616_character_set() {
+  let d = diags("CREATE TABLE t (name varchar(50) CHARACTER SET utf8mb4)");
+  assert!(d.iter().any(|x| x.code == "sql616"));
+}
+
+#[test]
+fn sql616_charset() {
+  let d = diags("CREATE TABLE t (id int) ENGINE=InnoDB DEFAULT CHARSET=utf8");
+  assert!(d.iter().any(|x| x.code == "sql616"));
+}
+
+#[test]
+fn sql616_quiet_character_varying() {
+  let d = diags("CREATE TABLE t (name character varying(50))");
+  assert!(!d.iter().any(|x| x.code == "sql616"));
+}
+
+#[test]
+fn sql616_quiet_collate() {
+  let d = diags("CREATE TABLE t (name text COLLATE \"en_US\")");
+  assert!(!d.iter().any(|x| x.code == "sql616"));
+}
+
+#[test]
+fn sql623_inline_enum() {
+  let d = diags("CREATE TABLE t (status ENUM('a', 'b', 'c'))");
+  assert!(d.iter().any(|x| x.code == "sql623"));
+}
+
+#[test]
+fn sql623_quiet_named_type() {
+  let d = diags("CREATE TABLE t (status mood)");
+  assert!(!d.iter().any(|x| x.code == "sql623"));
+}
+
+#[test]
+fn sql624_on_update_current_timestamp() {
+  let d = diags("CREATE TABLE t (updated_at timestamp ON UPDATE CURRENT_TIMESTAMP)");
+  assert!(d.iter().any(|x| x.code == "sql624"));
+}
+
+#[test]
+fn sql624_on_update_now() {
+  let d = diags("CREATE TABLE t (updated_at timestamp ON UPDATE NOW())");
+  assert!(d.iter().any(|x| x.code == "sql624"));
+}
+
+#[test]
+fn sql624_quiet_fk_on_update_cascade() {
+  let d = diags("CREATE TABLE t (oid int REFERENCES o(id) ON UPDATE CASCADE)");
+  assert!(!d.iter().any(|x| x.code == "sql624"));
+}
+
+#[test]
+fn sql624_quiet_fk_on_update_set_null() {
+  let d = diags("CREATE TABLE t (oid int REFERENCES o(id) ON UPDATE SET NULL)");
+  assert!(!d.iter().any(|x| x.code == "sql624"));
+}
+
+#[test]
+fn sql625_zerofill() {
+  let d = diags("CREATE TABLE t (n int ZEROFILL)");
+  assert!(d.iter().any(|x| x.code == "sql625"));
+}
+
+#[test]
+fn sql625_quiet_plain_int() {
+  let d = diags("CREATE TABLE t (n int)");
+  assert!(!d.iter().any(|x| x.code == "sql625"));
 }
 
 #[test]
@@ -26032,5 +26164,23 @@ fn sql671_desc_table() {
 fn sql671_quiet_order_by_desc() {
   let d = diags("SELECT * FROM t ORDER BY x DESC");
   assert!(!d.iter().any(|x| x.code == "sql671"));
+}
+
+#[test]
+fn sql672_modify_column() {
+  let d = diags("ALTER TABLE t MODIFY COLUMN a bigint");
+  assert!(d.iter().any(|x| x.code == "sql672"));
+}
+
+#[test]
+fn sql672_change_column() {
+  let d = diags("ALTER TABLE t CHANGE a b int");
+  assert!(d.iter().any(|x| x.code == "sql672"));
+}
+
+#[test]
+fn sql672_quiet_alter_column_type() {
+  let d = diags("ALTER TABLE t ALTER COLUMN a TYPE bigint");
+  assert!(!d.iter().any(|x| x.code == "sql672"));
 }
 

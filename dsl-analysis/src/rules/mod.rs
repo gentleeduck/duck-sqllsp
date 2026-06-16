@@ -250,17 +250,25 @@ pub mod exists_group_by;
 pub mod mysql_limit_comma;
 pub mod mysql_replace_into;
 pub mod use_statement;
+pub mod mysql_unsigned;
+pub mod backtick_identifier;
 pub mod fk_set_null_not_null;
 pub mod check_subquery;
 pub mod type_no_modifier;
 pub mod unique_index_non_btree;
 pub mod generated_column_not_stored;
+pub mod mysql_inline_index;
+pub mod mysql_character_set;
+pub mod mysql_enum_inline;
+pub mod mysql_on_update_timestamp;
+pub mod mysql_zerofill;
 pub mod mysql_query_modifiers;
 pub mod mysql_insert_ignore;
 pub mod mysql_insert_set;
 pub mod mysql_lock_in_share_mode;
 pub mod mysql_show_statement;
 pub mod mysql_describe;
+pub mod mysql_alter_change_modify;
 pub mod mysql_on_duplicate_key;
 pub mod exists_distinct;
 pub mod regex_literal_could_be_like;
@@ -888,17 +896,25 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(mysql_limit_comma::Rule),
     Box::new(mysql_replace_into::Rule),
     Box::new(use_statement::Rule),
+    Box::new(mysql_unsigned::Rule),
+    Box::new(backtick_identifier::Rule),
     Box::new(fk_set_null_not_null::Rule),
     Box::new(check_subquery::Rule),
     Box::new(type_no_modifier::Rule),
     Box::new(unique_index_non_btree::Rule),
     Box::new(generated_column_not_stored::Rule),
+    Box::new(mysql_inline_index::Rule),
+    Box::new(mysql_character_set::Rule),
+    Box::new(mysql_enum_inline::Rule),
+    Box::new(mysql_on_update_timestamp::Rule),
+    Box::new(mysql_zerofill::Rule),
     Box::new(mysql_query_modifiers::Rule),
     Box::new(mysql_insert_ignore::Rule),
     Box::new(mysql_insert_set::Rule),
     Box::new(mysql_lock_in_share_mode::Rule),
     Box::new(mysql_show_statement::Rule),
     Box::new(mysql_describe::Rule),
+    Box::new(mysql_alter_change_modify::Rule),
     Box::new(mysql_on_duplicate_key::Rule),
     Box::new(exists_distinct::Rule),
     Box::new(regex_literal_could_be_like::Rule),
