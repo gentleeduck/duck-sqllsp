@@ -247,11 +247,21 @@ pub mod self_arithmetic;
 pub mod builtin_too_few_args;
 pub mod exists_order_by;
 pub mod exists_group_by;
+pub mod mysql_limit_comma;
+pub mod mysql_replace_into;
+pub mod use_statement;
 pub mod fk_set_null_not_null;
 pub mod check_subquery;
 pub mod type_no_modifier;
 pub mod unique_index_non_btree;
 pub mod generated_column_not_stored;
+pub mod mysql_query_modifiers;
+pub mod mysql_insert_ignore;
+pub mod mysql_insert_set;
+pub mod mysql_lock_in_share_mode;
+pub mod mysql_show_statement;
+pub mod mysql_describe;
+pub mod mysql_on_duplicate_key;
 pub mod exists_distinct;
 pub mod regex_literal_could_be_like;
 pub mod col_eq_col_offset;
@@ -875,11 +885,21 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(builtin_too_few_args::Rule),
     Box::new(exists_order_by::Rule),
     Box::new(exists_group_by::Rule),
+    Box::new(mysql_limit_comma::Rule),
+    Box::new(mysql_replace_into::Rule),
+    Box::new(use_statement::Rule),
     Box::new(fk_set_null_not_null::Rule),
     Box::new(check_subquery::Rule),
     Box::new(type_no_modifier::Rule),
     Box::new(unique_index_non_btree::Rule),
     Box::new(generated_column_not_stored::Rule),
+    Box::new(mysql_query_modifiers::Rule),
+    Box::new(mysql_insert_ignore::Rule),
+    Box::new(mysql_insert_set::Rule),
+    Box::new(mysql_lock_in_share_mode::Rule),
+    Box::new(mysql_show_statement::Rule),
+    Box::new(mysql_describe::Rule),
+    Box::new(mysql_on_duplicate_key::Rule),
     Box::new(exists_distinct::Rule),
     Box::new(regex_literal_could_be_like::Rule),
     Box::new(col_eq_col_offset::Rule),

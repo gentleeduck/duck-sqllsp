@@ -25761,6 +25761,58 @@ fn sql583_quiet_for_group_by_with_having() {
 }
 
 #[test]
+fn sql593_flags_mysql_limit_comma() {
+  let d = diags("SELECT * FROM users ORDER BY id LIMIT 10, 20;");
+  let m = d.iter().find(|x| x.code == "sql593").unwrap_or_else(|| panic!("expected sql593: {d:?}"));
+  assert!(m.message.contains("MySQL"), "{}", m.message);
+}
+
+#[test]
+fn sql593_quiet_for_standard_limit_offset() {
+  let d = diags("SELECT * FROM users ORDER BY id LIMIT 20 OFFSET 10;");
+  assert!(!d.iter().any(|x| x.code == "sql593"), "standard LIMIT/OFFSET must not flag: {d:?}");
+}
+
+#[test]
+fn sql594_flags_on_duplicate_key() {
+  let d = diags("INSERT INTO t (id, n) VALUES (1, 2) ON DUPLICATE KEY UPDATE n = n + 1;");
+  let m = d.iter().find(|x| x.code == "sql594").unwrap_or_else(|| panic!("expected sql594: {d:?}"));
+  assert!(m.message.contains("ON CONFLICT"), "{}", m.message);
+}
+
+#[test]
+fn sql594_quiet_for_on_conflict() {
+  let d = diags("INSERT INTO t (id, n) VALUES (1, 2) ON CONFLICT (id) DO UPDATE SET n = EXCLUDED.n;");
+  assert!(!d.iter().any(|x| x.code == "sql594"), "ON CONFLICT must not flag: {d:?}");
+}
+
+#[test]
+fn sql595_flags_replace_into() {
+  let d = diags("REPLACE INTO users (id, name) VALUES (1, 'a');");
+  let m = d.iter().find(|x| x.code == "sql595").unwrap_or_else(|| panic!("expected sql595: {d:?}"));
+  assert!(m.message.contains("ON CONFLICT"), "{}", m.message);
+}
+
+#[test]
+fn sql595_quiet_for_replace_function() {
+  let d = diags("SELECT replace(name, '-', '_') FROM users;");
+  assert!(!d.iter().any(|x| x.code == "sql595"), "replace() function must not flag: {d:?}");
+}
+
+#[test]
+fn sql598_flags_use_statement() {
+  let d = diags("USE analytics;");
+  let m = d.iter().find(|x| x.code == "sql598").unwrap_or_else(|| panic!("expected sql598: {d:?}"));
+  assert!(m.message.contains("no USE"), "{}", m.message);
+}
+
+#[test]
+fn sql598_quiet_for_using_clause() {
+  let d = diags("DELETE FROM a USING b WHERE a.id = b.id;");
+  assert!(!d.iter().any(|x| x.code == "sql598"), "USING clause must not flag: {d:?}");
+}
+
+#[test]
 fn sql605_set_null_on_not_null() {
   let d = diags("CREATE TABLE o (cid int NOT NULL REFERENCES c(id) ON DELETE SET NULL)");
   assert!(d.iter().any(|x| x.code == "sql605"));
@@ -25866,5 +25918,119 @@ fn sql613_quiet_stored() {
 fn sql613_quiet_identity() {
   let d = diags("CREATE TABLE t (id int GENERATED ALWAYS AS IDENTITY)");
   assert!(!d.iter().any(|x| x.code == "sql613"));
+}
+
+#[test]
+fn sql626_calc_found_rows() {
+  let d = diags("SELECT SQL_CALC_FOUND_ROWS * FROM t LIMIT 10");
+  assert!(d.iter().any(|x| x.code == "sql626"));
+}
+
+#[test]
+fn sql626_straight_join() {
+  let d = diags("SELECT * FROM a STRAIGHT_JOIN b ON a.id = b.id");
+  assert!(d.iter().any(|x| x.code == "sql626"));
+}
+
+#[test]
+fn sql626_low_priority() {
+  let d = diags("INSERT LOW_PRIORITY INTO t (a) VALUES (1)");
+  assert!(d.iter().any(|x| x.code == "sql626"));
+}
+
+#[test]
+fn sql626_quiet_plain_select() {
+  let d = diags("SELECT * FROM t LIMIT 10");
+  assert!(!d.iter().any(|x| x.code == "sql626"));
+}
+
+#[test]
+fn sql666_insert_ignore() {
+  let d = diags("INSERT IGNORE INTO t (a) VALUES (1)");
+  assert!(d.iter().any(|x| x.code == "sql666"));
+}
+
+#[test]
+fn sql666_quiet_plain_insert() {
+  let d = diags("INSERT INTO t (a) VALUES (1)");
+  assert!(!d.iter().any(|x| x.code == "sql666"));
+}
+
+#[test]
+fn sql666_quiet_on_conflict() {
+  let d = diags("INSERT INTO t (a) VALUES (1) ON CONFLICT DO NOTHING");
+  assert!(!d.iter().any(|x| x.code == "sql666"));
+}
+
+#[test]
+fn sql667_insert_set() {
+  let d = diags("INSERT INTO t SET a = 1, b = 2");
+  assert!(d.iter().any(|x| x.code == "sql667"));
+}
+
+#[test]
+fn sql667_quiet_values() {
+  let d = diags("INSERT INTO t (a, b) VALUES (1, 2)");
+  assert!(!d.iter().any(|x| x.code == "sql667"));
+}
+
+#[test]
+fn sql667_quiet_on_conflict_set() {
+  let d = diags("INSERT INTO t (a) VALUES (1) ON CONFLICT (a) DO UPDATE SET a = 2");
+  assert!(!d.iter().any(|x| x.code == "sql667"));
+}
+
+#[test]
+fn sql669_lock_in_share_mode() {
+  let d = diags("SELECT * FROM t WHERE id = 1 LOCK IN SHARE MODE");
+  assert!(d.iter().any(|x| x.code == "sql669"));
+}
+
+#[test]
+fn sql669_quiet_for_share() {
+  let d = diags("SELECT * FROM t WHERE id = 1 FOR SHARE");
+  assert!(!d.iter().any(|x| x.code == "sql669"));
+}
+
+#[test]
+fn sql670_show_tables() {
+  let d = diags("SHOW TABLES");
+  assert!(d.iter().any(|x| x.code == "sql670"));
+}
+
+#[test]
+fn sql670_show_create_table() {
+  let d = diags("SHOW CREATE TABLE users");
+  assert!(d.iter().any(|x| x.code == "sql670"));
+}
+
+#[test]
+fn sql670_quiet_show_config() {
+  let d = diags("SHOW search_path");
+  assert!(!d.iter().any(|x| x.code == "sql670"));
+}
+
+#[test]
+fn sql670_quiet_show_all() {
+  let d = diags("SHOW ALL");
+  assert!(!d.iter().any(|x| x.code == "sql670"));
+}
+
+#[test]
+fn sql671_describe() {
+  let d = diags("DESCRIBE users");
+  assert!(d.iter().any(|x| x.code == "sql671"));
+}
+
+#[test]
+fn sql671_desc_table() {
+  let d = diags("DESC users");
+  assert!(d.iter().any(|x| x.code == "sql671"));
+}
+
+#[test]
+fn sql671_quiet_order_by_desc() {
+  let d = diags("SELECT * FROM t ORDER BY x DESC");
+  assert!(!d.iter().any(|x| x.code == "sql671"));
 }
 
