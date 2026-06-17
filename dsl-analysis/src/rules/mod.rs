@@ -256,6 +256,7 @@ pub mod exists_group_by;
 pub mod cluster_locks_table;
 pub mod add_column_volatile_default;
 pub mod add_fk_not_valid;
+pub mod values_inconsistent_length;
 pub mod mysql_limit_comma;
 pub mod mysql_replace_into;
 pub mod mysql_regexp_operator;
@@ -270,10 +271,16 @@ pub mod fk_set_null_not_null;
 pub mod check_subquery;
 pub mod type_no_modifier;
 pub mod unique_index_non_btree;
+pub mod for_update_distinct;
+pub mod for_update_window;
+pub mod update_delete_order_by;
+pub mod returning_aggregate;
 pub mod generated_column_not_stored;
 pub mod mysql_inline_index;
 pub mod with_oids;
 pub mod mysql_character_set;
+pub mod natural_join;
+pub mod with_ties_no_order;
 pub mod date_trunc_invalid_unit;
 pub mod non_pg_date_diff_fns;
 pub mod mysql_if_function;
@@ -286,6 +293,7 @@ pub mod mysql_xor_div;
 pub mod cross_dialect_scalar_fns;
 pub mod tsql_types;
 pub mod tsql_identity_fns;
+pub mod last_value_default_frame;
 pub mod large_object_file_access;
 pub mod server_file_read_fns;
 pub mod weak_gen_salt;
@@ -299,6 +307,16 @@ pub mod default_relative_datetime_string;
 pub mod mysql_file_io;
 pub mod oracle_date_misc_fns;
 pub mod mysql_date_arith_fns;
+pub mod srf_in_where;
+pub mod aggregate_distinct_star;
+pub mod in_subquery_multi_column;
+pub mod tablesample_out_of_range;
+pub mod on_conflict_do_update_no_target;
+pub mod row_comparison_arity;
+pub mod srf_in_group_order;
+pub mod duplicate_cte_name;
+pub mod aggregate_in_check;
+pub mod aggregate_in_index;
 pub mod mysql_insert_ignore;
 pub mod mysql_insert_set;
 pub mod mysql_lock_in_share_mode;
@@ -949,6 +967,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(cluster_locks_table::Rule),
     Box::new(add_column_volatile_default::Rule),
     Box::new(add_fk_not_valid::Rule),
+    Box::new(values_inconsistent_length::Rule),
     Box::new(mysql_limit_comma::Rule),
     Box::new(mysql_replace_into::Rule),
     Box::new(mysql_regexp_operator::Rule),
@@ -963,10 +982,16 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(check_subquery::Rule),
     Box::new(type_no_modifier::Rule),
     Box::new(unique_index_non_btree::Rule),
+    Box::new(for_update_distinct::Rule),
+    Box::new(for_update_window::Rule),
+    Box::new(update_delete_order_by::Rule),
+    Box::new(returning_aggregate::Rule),
     Box::new(generated_column_not_stored::Rule),
     Box::new(mysql_inline_index::Rule),
     Box::new(with_oids::Rule),
     Box::new(mysql_character_set::Rule),
+    Box::new(natural_join::Rule),
+    Box::new(with_ties_no_order::Rule),
     Box::new(date_trunc_invalid_unit::Rule),
     Box::new(non_pg_date_diff_fns::Rule),
     Box::new(mysql_if_function::Rule),
@@ -979,6 +1004,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(cross_dialect_scalar_fns::Rule),
     Box::new(tsql_types::Rule),
     Box::new(tsql_identity_fns::Rule),
+    Box::new(last_value_default_frame::Rule),
     Box::new(large_object_file_access::Rule),
     Box::new(server_file_read_fns::Rule),
     Box::new(weak_gen_salt::Rule),
@@ -992,6 +1018,16 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(mysql_file_io::Rule),
     Box::new(oracle_date_misc_fns::Rule),
     Box::new(mysql_date_arith_fns::Rule),
+    Box::new(srf_in_where::Rule),
+    Box::new(aggregate_distinct_star::Rule),
+    Box::new(in_subquery_multi_column::Rule),
+    Box::new(tablesample_out_of_range::Rule),
+    Box::new(on_conflict_do_update_no_target::Rule),
+    Box::new(row_comparison_arity::Rule),
+    Box::new(srf_in_group_order::Rule),
+    Box::new(duplicate_cte_name::Rule),
+    Box::new(aggregate_in_check::Rule),
+    Box::new(aggregate_in_index::Rule),
     Box::new(mysql_insert_ignore::Rule),
     Box::new(mysql_insert_set::Rule),
     Box::new(mysql_lock_in_share_mode::Rule),
