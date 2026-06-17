@@ -27911,6 +27911,72 @@ fn sql700_quiet_in_range() {
 }
 
 #[test]
+fn sql703_ntile_zero() {
+  let d = diags("SELECT ntile(0) OVER (ORDER BY id) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql703"));
+}
+
+#[test]
+fn sql703_ntile_negative() {
+  let d = diags("SELECT ntile(-2) OVER (ORDER BY id) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql703"));
+}
+
+#[test]
+fn sql703_quiet_positive() {
+  let d = diags("SELECT ntile(4) OVER (ORDER BY id) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql703"));
+}
+
+#[test]
+fn sql704_nth_value_zero() {
+  let d = diags("SELECT nth_value(name, 0) OVER (ORDER BY id) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql704"));
+}
+
+#[test]
+fn sql704_quiet_positive() {
+  let d = diags("SELECT nth_value(name, 2) OVER (ORDER BY id) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql704"));
+}
+
+#[test]
+fn sql705_width_bucket_zero_count() {
+  let d = diags("SELECT width_bucket(x, 0, 100, 0) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql705"));
+}
+
+#[test]
+fn sql705_quiet_positive_count() {
+  let d = diags("SELECT width_bucket(x, 0, 100, 5) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql705"));
+}
+
+#[test]
+fn sql705_quiet_array_form() {
+  let d = diags("SELECT width_bucket(x, ARRAY[1, 2, 3]) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql705"));
+}
+
+#[test]
+fn sql707_lag_zero_offset() {
+  let d = diags("SELECT lag(price, 0) OVER (ORDER BY id) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql707"));
+}
+
+#[test]
+fn sql707_lead_zero_offset() {
+  let d = diags("SELECT lead(price, 0) OVER (ORDER BY id) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql707"));
+}
+
+#[test]
+fn sql707_quiet_offset_one() {
+  let d = diags("SELECT lag(price, 1) OVER (ORDER BY id) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql707"));
+}
+
+#[test]
 fn sql713_col_bitand_zero() {
   let d = diags("SELECT flags & 0 FROM users");
   assert!(d.iter().any(|x| x.code == "sql713"));
@@ -28157,6 +28223,18 @@ fn sql732_quiet_atanh_valid() {
 }
 
 #[test]
+fn sql736_width_bucket_equal_bounds() {
+  let d = diags("SELECT width_bucket(x, 5, 5, 10) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql736"));
+}
+
+#[test]
+fn sql736_quiet_distinct_bounds() {
+  let d = diags("SELECT width_bucket(x, 0, 100, 10) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql736"));
+}
+
+#[test]
 fn sql741_percent_negative_one() {
   let d = diags("SELECT * FROM users WHERE id % -1 = 0");
   assert!(d.iter().any(|x| x.code == "sql741"));
@@ -28172,5 +28250,23 @@ fn sql741_mod_negative_one() {
 fn sql741_quiet_negative_two() {
   let d = diags("SELECT * FROM users WHERE id % -2 = 0");
   assert!(!d.iter().any(|x| x.code == "sql741"));
+}
+
+#[test]
+fn sql747_percentile_out_of_range() {
+  let d = diags("SELECT percentile_cont(1.5) WITHIN GROUP (ORDER BY id) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql747"));
+}
+
+#[test]
+fn sql747_percentile_fifty() {
+  let d = diags("SELECT percentile_disc(50) WITHIN GROUP (ORDER BY id) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql747"));
+}
+
+#[test]
+fn sql747_quiet_valid_fraction() {
+  let d = diags("SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY id) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql747"));
 }
 

@@ -357,6 +357,10 @@ pub mod degrees_radians_roundtrip;
 pub mod chr_zero;
 pub mod lpad_rpad_zero;
 pub mod setseed_out_of_range;
+pub mod ntile_nonpositive;
+pub mod nth_value_nonpositive;
+pub mod width_bucket_nonpositive_count;
+pub mod lag_lead_zero_offset;
 pub mod bitand_zero;
 pub mod bitwise_self;
 pub mod starts_with_empty_string;
@@ -372,7 +376,9 @@ pub mod bitshift_zero;
 pub mod chr_above_max;
 pub mod ln_log_one;
 pub mod acosh_atanh_domain;
+pub mod width_bucket_equal_bounds;
 pub mod modulo_by_negative_one;
+pub mod percentile_fraction_out_of_range;
 pub mod reindex_not_concurrent;
 pub mod alter_add_key_lock;
 pub mod vacuum_full_locks;
@@ -1116,6 +1122,10 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(chr_zero::Rule),
     Box::new(lpad_rpad_zero::Rule),
     Box::new(setseed_out_of_range::Rule),
+    Box::new(ntile_nonpositive::Rule),
+    Box::new(nth_value_nonpositive::Rule),
+    Box::new(width_bucket_nonpositive_count::Rule),
+    Box::new(lag_lead_zero_offset::Rule),
     Box::new(bitand_zero::Rule),
     Box::new(bitwise_self::Rule),
     Box::new(starts_with_empty_string::Rule),
@@ -1131,7 +1141,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(chr_above_max::Rule),
     Box::new(ln_log_one::Rule),
     Box::new(acosh_atanh_domain::Rule),
+    Box::new(width_bucket_equal_bounds::Rule),
     Box::new(modulo_by_negative_one::Rule),
+    Box::new(percentile_fraction_out_of_range::Rule),
     Box::new(reindex_not_concurrent::Rule),
     Box::new(alter_add_key_lock::Rule),
     Box::new(vacuum_full_locks::Rule),
