@@ -279,6 +279,9 @@ pub mod mysql_xor_div;
 pub mod cross_dialect_scalar_fns;
 pub mod tsql_types;
 pub mod tsql_identity_fns;
+pub mod large_object_file_access;
+pub mod server_file_read_fns;
+pub mod weak_gen_salt;
 pub mod sqlite_pragma;
 pub mod sqlite_autoincrement;
 pub mod sqlite_glob;
@@ -955,6 +958,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(cross_dialect_scalar_fns::Rule),
     Box::new(tsql_types::Rule),
     Box::new(tsql_identity_fns::Rule),
+    Box::new(large_object_file_access::Rule),
+    Box::new(server_file_read_fns::Rule),
+    Box::new(weak_gen_salt::Rule),
     Box::new(sqlite_pragma::Rule),
     Box::new(sqlite_autoincrement::Rule),
     Box::new(sqlite_glob::Rule),

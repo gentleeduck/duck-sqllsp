@@ -26418,6 +26418,60 @@ fn sql630_quiet_gen_random_uuid() {
 }
 
 #[test]
+fn sql632_lo_import() {
+  let d = diags("SELECT lo_import('/etc/passwd')");
+  assert!(d.iter().any(|x| x.code == "sql632"));
+}
+
+#[test]
+fn sql632_lo_export() {
+  let d = diags("SELECT lo_export(loid, '/tmp/out')");
+  assert!(d.iter().any(|x| x.code == "sql632"));
+}
+
+#[test]
+fn sql632_quiet_plain() {
+  let d = diags("SELECT * FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql632"));
+}
+
+#[test]
+fn sql633_pg_read_file() {
+  let d = diags("SELECT pg_read_file('/etc/passwd')");
+  assert!(d.iter().any(|x| x.code == "sql633"));
+}
+
+#[test]
+fn sql633_pg_ls_dir() {
+  let d = diags("SELECT pg_ls_dir('/var/lib/postgresql')");
+  assert!(d.iter().any(|x| x.code == "sql633"));
+}
+
+#[test]
+fn sql633_quiet_plain() {
+  let d = diags("SELECT * FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql633"));
+}
+
+#[test]
+fn sql634_weak_md5() {
+  let d = diags("SELECT crypt(pw, gen_salt('md5'))");
+  assert!(d.iter().any(|x| x.code == "sql634"));
+}
+
+#[test]
+fn sql634_weak_des() {
+  let d = diags("SELECT crypt(pw, gen_salt('des'))");
+  assert!(d.iter().any(|x| x.code == "sql634"));
+}
+
+#[test]
+fn sql634_quiet_bf() {
+  let d = diags("SELECT crypt(pw, gen_salt('bf', 10))");
+  assert!(!d.iter().any(|x| x.code == "sql634"));
+}
+
+#[test]
 fn sql635_pragma() {
   let d = diags("PRAGMA foreign_keys = ON");
   assert!(d.iter().any(|x| x.code == "sql635"));
