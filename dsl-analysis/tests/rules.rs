@@ -27749,6 +27749,54 @@ fn sql682_quiet_coalesce_sum() {
 }
 
 #[test]
+fn sql683_case_when_true() {
+  let d = diags("SELECT CASE WHEN TRUE THEN 1 ELSE 0 END FROM users");
+  assert!(d.iter().any(|x| x.code == "sql683"));
+}
+
+#[test]
+fn sql683_case_when_false() {
+  let d = diags("SELECT CASE WHEN FALSE THEN 1 ELSE 0 END FROM users");
+  assert!(d.iter().any(|x| x.code == "sql683"));
+}
+
+#[test]
+fn sql683_quiet_real_condition() {
+  let d = diags("SELECT CASE WHEN id > 0 THEN 1 ELSE 0 END FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql683"));
+}
+
+#[test]
+fn sql683_quiet_simple_case() {
+  let d = diags("SELECT CASE flag WHEN TRUE THEN 1 ELSE 0 END FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql683"));
+}
+
+#[test]
+fn sql684_greatest_null_arg() {
+  let d = diags("SELECT greatest(id, NULL, 5) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql684"));
+}
+
+#[test]
+fn sql684_least_null_arg() {
+  let d = diags("SELECT least(id, NULL) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql684"));
+}
+
+#[test]
+fn sql684_quiet_no_null() {
+  let d = diags("SELECT greatest(id, 5, 10) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql684"));
+}
+
+#[test]
+fn sql684_quiet_all_null() {
+  let d = diags("SELECT greatest(NULL, NULL) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql684"));
+}
+
+#[test]
 fn sql685_power_base_one() {
   let d = diags("SELECT power(1, n) FROM users");
   assert!(d.iter().any(|x| x.code == "sql685"));
@@ -27764,6 +27812,54 @@ fn sql685_quiet_real_base() {
 fn sql685_quiet_exponent_one() {
   let d = diags("SELECT power(n, 1) FROM users");
   assert!(!d.iter().any(|x| x.code == "sql685"));
+}
+
+#[test]
+fn sql686_not_not() {
+  let d = diags("SELECT * FROM users WHERE NOT NOT active");
+  assert!(d.iter().any(|x| x.code == "sql686"));
+}
+
+#[test]
+fn sql686_not_paren_not() {
+  let d = diags("SELECT * FROM users WHERE NOT (NOT active)");
+  assert!(d.iter().any(|x| x.code == "sql686"));
+}
+
+#[test]
+fn sql686_quiet_single_not() {
+  let d = diags("SELECT * FROM users WHERE NOT active");
+  assert!(!d.iter().any(|x| x.code == "sql686"));
+}
+
+#[test]
+fn sql686_quiet_not_in() {
+  let d = diags("SELECT * FROM users WHERE id NOT IN (1, 2)");
+  assert!(!d.iter().any(|x| x.code == "sql686"));
+}
+
+#[test]
+fn sql687_coalesce_string_first() {
+  let d = diags("SELECT coalesce('default', name) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql687"));
+}
+
+#[test]
+fn sql687_coalesce_number_first() {
+  let d = diags("SELECT coalesce(0, id) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql687"));
+}
+
+#[test]
+fn sql687_quiet_column_first() {
+  let d = diags("SELECT coalesce(name, 'default') FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql687"));
+}
+
+#[test]
+fn sql687_quiet_null_first() {
+  let d = diags("SELECT coalesce(NULL, name) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql687"));
 }
 
 #[test]
@@ -27992,6 +28088,30 @@ fn sql700_setseed_negative_out_of_range() {
 fn sql700_quiet_in_range() {
   let d = diags("SELECT setseed(0.5)");
   assert!(!d.iter().any(|x| x.code == "sql700"));
+}
+
+#[test]
+fn sql701_nullif_distinct_strings() {
+  let d = diags("SELECT nullif('a', 'b') FROM users");
+  assert!(d.iter().any(|x| x.code == "sql701"));
+}
+
+#[test]
+fn sql701_nullif_distinct_numbers() {
+  let d = diags("SELECT nullif(1, 2) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql701"));
+}
+
+#[test]
+fn sql701_quiet_same_value() {
+  let d = diags("SELECT nullif(5, 5.0) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql701"));
+}
+
+#[test]
+fn sql701_quiet_column_arg() {
+  let d = diags("SELECT nullif(id, 0) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql701"));
 }
 
 #[test]
@@ -28340,6 +28460,30 @@ fn sql736_width_bucket_equal_bounds() {
 fn sql736_quiet_distinct_bounds() {
   let d = diags("SELECT width_bucket(x, 0, 100, 10) FROM users");
   assert!(!d.iter().any(|x| x.code == "sql736"));
+}
+
+#[test]
+fn sql740_not_true() {
+  let d = diags("SELECT * FROM users WHERE NOT TRUE");
+  assert!(d.iter().any(|x| x.code == "sql740"));
+}
+
+#[test]
+fn sql740_not_false() {
+  let d = diags("SELECT * FROM users WHERE active AND NOT FALSE");
+  assert!(d.iter().any(|x| x.code == "sql740"));
+}
+
+#[test]
+fn sql740_quiet_is_not_true() {
+  let d = diags("SELECT * FROM users WHERE active IS NOT TRUE");
+  assert!(!d.iter().any(|x| x.code == "sql740"));
+}
+
+#[test]
+fn sql740_quiet_not_column() {
+  let d = diags("SELECT * FROM users WHERE NOT active");
+  assert!(!d.iter().any(|x| x.code == "sql740"));
 }
 
 #[test]

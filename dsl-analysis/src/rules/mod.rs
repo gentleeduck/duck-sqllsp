@@ -348,7 +348,11 @@ pub mod left_right_zero;
 pub mod substring_zero_length;
 pub mod multiply_by_zero;
 pub mod coalesce_count_redundant;
+pub mod case_constant_when;
+pub mod greatest_least_null_arg;
 pub mod power_base_one;
+pub mod not_not_double_negation;
+pub mod coalesce_constant_first;
 pub mod modulo_self;
 pub mod sqrt_negative_literal;
 pub mod min_max_distinct;
@@ -361,6 +365,7 @@ pub mod degrees_radians_roundtrip;
 pub mod chr_zero;
 pub mod lpad_rpad_zero;
 pub mod setseed_out_of_range;
+pub mod nullif_distinct_literals;
 pub mod ntile_nonpositive;
 pub mod nth_value_nonpositive;
 pub mod width_bucket_nonpositive_count;
@@ -382,6 +387,7 @@ pub mod ln_log_one;
 pub mod acosh_atanh_domain;
 pub mod exists_aggregate;
 pub mod width_bucket_equal_bounds;
+pub mod not_boolean_literal;
 pub mod modulo_by_negative_one;
 pub mod percentile_fraction_out_of_range;
 pub mod reindex_not_concurrent;
@@ -1118,7 +1124,11 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(substring_zero_length::Rule),
     Box::new(multiply_by_zero::Rule),
     Box::new(coalesce_count_redundant::Rule),
+    Box::new(case_constant_when::Rule),
+    Box::new(greatest_least_null_arg::Rule),
     Box::new(power_base_one::Rule),
+    Box::new(not_not_double_negation::Rule),
+    Box::new(coalesce_constant_first::Rule),
     Box::new(modulo_self::Rule),
     Box::new(sqrt_negative_literal::Rule),
     Box::new(min_max_distinct::Rule),
@@ -1131,6 +1141,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(chr_zero::Rule),
     Box::new(lpad_rpad_zero::Rule),
     Box::new(setseed_out_of_range::Rule),
+    Box::new(nullif_distinct_literals::Rule),
     Box::new(ntile_nonpositive::Rule),
     Box::new(nth_value_nonpositive::Rule),
     Box::new(width_bucket_nonpositive_count::Rule),
@@ -1152,6 +1163,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(acosh_atanh_domain::Rule),
     Box::new(exists_aggregate::Rule),
     Box::new(width_bucket_equal_bounds::Rule),
+    Box::new(not_boolean_literal::Rule),
     Box::new(modulo_by_negative_one::Rule),
     Box::new(percentile_fraction_out_of_range::Rule),
     Box::new(reindex_not_concurrent::Rule),
