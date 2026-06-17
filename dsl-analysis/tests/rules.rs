@@ -25828,6 +25828,88 @@ fn sql576_quiet_for_disable_trigger_user() {
 }
 
 #[test]
+fn sql577_flags_order_by_in_view() {
+  let d = diags("CREATE VIEW v AS SELECT id, name FROM users ORDER BY name;");
+  let m = d.iter().find(|x| x.code == "sql577").unwrap_or_else(|| panic!("expected sql577: {d:?}"));
+  assert!(m.message.contains("isn't preserved"), "{}", m.message);
+}
+
+#[test]
+fn sql577_quiet_for_top_n_and_matview() {
+  let d = diags("CREATE VIEW v AS SELECT id FROM users ORDER BY id LIMIT 10;");
+  assert!(!d.iter().any(|x| x.code == "sql577"), "ORDER BY + LIMIT is a deliberate top-N: {d:?}");
+  let d2 = diags("CREATE MATERIALIZED VIEW v AS SELECT id FROM users ORDER BY id;");
+  assert!(!d2.iter().any(|x| x.code == "sql577"), "matview ORDER BY must not flag: {d2:?}");
+}
+
+#[test]
+fn sql578_flags_create_rule() {
+  let d = diags("CREATE RULE log_ins AS ON INSERT TO t DO ALSO INSERT INTO audit VALUES (NEW.id);");
+  let m = d.iter().find(|x| x.code == "sql578").unwrap_or_else(|| panic!("expected sql578: {d:?}"));
+  assert!(m.message.contains("legacy"), "{}", m.message);
+}
+
+#[test]
+fn sql578_quiet_for_create_table() {
+  let d = diags("CREATE TABLE rule_book (id int);");
+  assert!(!d.iter().any(|x| x.code == "sql578"), "CREATE TABLE must not flag: {d:?}");
+}
+
+#[test]
+fn sql579_flags_autovacuum_disabled() {
+  let d = diags("ALTER TABLE events SET (autovacuum_enabled = false);");
+  let m = d.iter().find(|x| x.code == "sql579").unwrap_or_else(|| panic!("expected sql579: {d:?}"));
+  assert!(m.message.contains("autovacuum is disabled"), "{}", m.message);
+}
+
+#[test]
+fn sql579_quiet_for_other_storage_params() {
+  let d = diags("ALTER TABLE events SET (fillfactor = 70, autovacuum_enabled = true);");
+  assert!(!d.iter().any(|x| x.code == "sql579"), "enabled/other params must not flag: {d:?}");
+}
+
+#[test]
+fn sql580_flags_unlogged_table() {
+  let d = diags("CREATE UNLOGGED TABLE cache (k text, v text);");
+  let m = d.iter().find(|x| x.code == "sql580").unwrap_or_else(|| panic!("expected sql580: {d:?}"));
+  assert!(m.message.contains("UNLOGGED"), "{}", m.message);
+}
+
+#[test]
+fn sql580_quiet_for_logged_table() {
+  let d = diags("CREATE TABLE accounts (id int);");
+  assert!(!d.iter().any(|x| x.code == "sql580"), "logged table must not flag: {d:?}");
+}
+
+#[test]
+fn sql581_flags_json_column() {
+  let d = diags("CREATE TABLE t (id int, payload json);");
+  let m = d.iter().find(|x| x.code == "sql581").unwrap_or_else(|| panic!("expected sql581: {d:?}"));
+  assert!(m.message.contains("jsonb"), "{}", m.message);
+}
+
+#[test]
+fn sql581_quiet_for_jsonb_and_json_functions() {
+  let d = diags("CREATE TABLE t (id int, payload jsonb);");
+  assert!(!d.iter().any(|x| x.code == "sql581"), "jsonb must not flag: {d:?}");
+  let d2 = diags("SELECT json_build_object('a', 1), to_json(x) FROM t;");
+  assert!(!d2.iter().any(|x| x.code == "sql581"), "json functions must not flag: {d2:?}");
+}
+
+#[test]
+fn sql582_flags_money_type() {
+  let d = diags("CREATE TABLE invoices (id int, total money);");
+  let m = d.iter().find(|x| x.code == "sql582").unwrap_or_else(|| panic!("expected sql582: {d:?}"));
+  assert!(m.message.contains("numeric"), "{}", m.message);
+}
+
+#[test]
+fn sql582_quiet_for_numeric() {
+  let d = diags("CREATE TABLE invoices (id int, total numeric(12, 2));");
+  assert!(!d.iter().any(|x| x.code == "sql582"), "numeric must not flag: {d:?}");
+}
+
+#[test]
 fn sql583_flags_group_by_in_exists() {
   let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id GROUP BY o.status);");
   let m = d.iter().find(|x| x.code == "sql583").unwrap_or_else(|| panic!("expected sql583: {d:?}"));
@@ -25838,6 +25920,99 @@ fn sql583_flags_group_by_in_exists() {
 fn sql583_quiet_for_group_by_with_having() {
   let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id GROUP BY o.status HAVING count(*) > 3);");
   assert!(!d.iter().any(|x| x.code == "sql583"), "GROUP BY + HAVING is meaningful: {d:?}");
+}
+
+#[test]
+fn sql584_flags_internal_aliases() {
+  let d = diags("CREATE TABLE t (a int4, b float8);");
+  assert!(d.iter().any(|x| x.code == "sql584" && x.message.contains("integer")), "int4: {d:?}");
+  assert!(d.iter().any(|x| x.code == "sql584" && x.message.contains("double precision")), "float8: {d:?}");
+}
+
+#[test]
+fn sql584_quiet_for_standard_types() {
+  let d = diags("CREATE TABLE t (a integer, b bigint);");
+  assert!(!d.iter().any(|x| x.code == "sql584"), "standard types must not flag: {d:?}");
+}
+
+#[test]
+fn sql585_flags_cluster() {
+  let d = diags("CLUSTER orders USING orders_pkey;");
+  let m = d.iter().find(|x| x.code == "sql585").unwrap_or_else(|| panic!("expected sql585: {d:?}"));
+  assert!(m.message.contains("ACCESS EXCLUSIVE"), "{}", m.message);
+}
+
+#[test]
+fn sql585_quiet_for_alter_cluster_on() {
+  let d = diags("ALTER TABLE orders CLUSTER ON orders_pkey;");
+  assert!(!d.iter().any(|x| x.code == "sql585"), "ALTER ... CLUSTER ON just marks the index: {d:?}");
+}
+
+#[test]
+fn sql586_flags_vacuum_full() {
+  let d = diags("VACUUM FULL orders;");
+  let m = d.iter().find(|x| x.code == "sql586").unwrap_or_else(|| panic!("expected sql586: {d:?}"));
+  assert!(m.message.contains("ACCESS EXCLUSIVE"), "{}", m.message);
+}
+
+#[test]
+fn sql586_quiet_for_plain_vacuum() {
+  let d = diags("VACUUM ANALYZE orders;");
+  assert!(!d.iter().any(|x| x.code == "sql586"), "plain VACUUM must not flag: {d:?}");
+}
+
+#[test]
+fn sql587_flags_add_column_volatile_default() {
+  let d = diags("ALTER TABLE users ADD COLUMN ref uuid DEFAULT gen_random_uuid();");
+  let m = d.iter().find(|x| x.code == "sql587").unwrap_or_else(|| panic!("expected sql587: {d:?}"));
+  assert!(m.message.contains("rewrites the whole table"), "{}", m.message);
+}
+
+#[test]
+fn sql587_quiet_for_constant_default() {
+  let d = diags("ALTER TABLE users ADD COLUMN active boolean DEFAULT true;");
+  assert!(!d.iter().any(|x| x.code == "sql587"), "constant default must not flag: {d:?}");
+}
+
+#[test]
+fn sql588_flags_alter_add_primary_key() {
+  let d = diags("ALTER TABLE users ADD PRIMARY KEY (id);");
+  let m = d.iter().find(|x| x.code == "sql588").unwrap_or_else(|| panic!("expected sql588: {d:?}"));
+  assert!(m.message.contains("ACCESS EXCLUSIVE"), "{}", m.message);
+}
+
+#[test]
+fn sql588_quiet_for_using_index_and_create_table() {
+  let d = diags("ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY USING INDEX users_id_idx;");
+  assert!(!d.iter().any(|x| x.code == "sql588"), "USING INDEX form must not flag: {d:?}");
+  let d2 = diags("CREATE TABLE t (id int, PRIMARY KEY (id));");
+  assert!(!d2.iter().any(|x| x.code == "sql588"), "CREATE TABLE PK must not flag: {d2:?}");
+}
+
+#[test]
+fn sql589_flags_add_fk_without_not_valid() {
+  let d = diags("ALTER TABLE orders ADD CONSTRAINT fk FOREIGN KEY (user_id) REFERENCES users (id);");
+  let m = d.iter().find(|x| x.code == "sql589").unwrap_or_else(|| panic!("expected sql589: {d:?}"));
+  assert!(m.message.contains("NOT VALID"), "{}", m.message);
+}
+
+#[test]
+fn sql589_quiet_for_not_valid() {
+  let d = diags("ALTER TABLE orders ADD CONSTRAINT fk FOREIGN KEY (user_id) REFERENCES users (id) NOT VALID;");
+  assert!(!d.iter().any(|x| x.code == "sql589"), "NOT VALID must not flag: {d:?}");
+}
+
+#[test]
+fn sql590_flags_reindex() {
+  let d = diags("REINDEX TABLE orders;");
+  let m = d.iter().find(|x| x.code == "sql590").unwrap_or_else(|| panic!("expected sql590: {d:?}"));
+  assert!(m.message.contains("CONCURRENTLY"), "{}", m.message);
+}
+
+#[test]
+fn sql590_quiet_for_concurrent_reindex() {
+  let d = diags("REINDEX INDEX CONCURRENTLY orders_pkey;");
+  assert!(!d.iter().any(|x| x.code == "sql590"), "CONCURRENTLY reindex must not flag: {d:?}");
 }
 
 #[test]
@@ -26157,6 +26332,24 @@ fn sql614_quiet_primary_key() {
 fn sql614_quiet_foreign_key() {
   let d = diags("CREATE TABLE t (id int, oid int, FOREIGN KEY (oid) REFERENCES o(id))");
   assert!(!d.iter().any(|x| x.code == "sql614"));
+}
+
+#[test]
+fn sql615_with_oids() {
+  let d = diags("CREATE TABLE t (id int) WITH OIDS");
+  assert!(d.iter().any(|x| x.code == "sql615"));
+}
+
+#[test]
+fn sql615_quiet_without_oids() {
+  let d = diags("CREATE TABLE t (id int) WITHOUT OIDS");
+  assert!(!d.iter().any(|x| x.code == "sql615"));
+}
+
+#[test]
+fn sql615_quiet_plain() {
+  let d = diags("CREATE TABLE t (id int)");
+  assert!(!d.iter().any(|x| x.code == "sql615"));
 }
 
 #[test]

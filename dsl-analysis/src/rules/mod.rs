@@ -249,7 +249,13 @@ pub mod exists_order_by;
 pub mod plaintext_password;
 pub mod role_bypassrls;
 pub mod policy_using_true;
+pub mod view_order_by;
+pub mod autovacuum_disabled;
+pub mod json_prefer_jsonb;
 pub mod exists_group_by;
+pub mod cluster_locks_table;
+pub mod add_column_volatile_default;
+pub mod add_fk_not_valid;
 pub mod mysql_limit_comma;
 pub mod mysql_replace_into;
 pub mod mysql_regexp_operator;
@@ -266,6 +272,7 @@ pub mod type_no_modifier;
 pub mod unique_index_non_btree;
 pub mod generated_column_not_stored;
 pub mod mysql_inline_index;
+pub mod with_oids;
 pub mod mysql_character_set;
 pub mod date_trunc_invalid_unit;
 pub mod non_pg_date_diff_fns;
@@ -300,6 +307,13 @@ pub mod mysql_describe;
 pub mod mysql_alter_change_modify;
 pub mod mysql_functions;
 pub mod mysql_on_duplicate_key;
+pub mod reindex_not_concurrent;
+pub mod alter_add_key_lock;
+pub mod vacuum_full_locks;
+pub mod internal_type_alias;
+pub mod money_type;
+pub mod unlogged_table;
+pub mod create_rule_legacy;
 pub mod disable_trigger_all;
 pub mod disable_row_level_security;
 pub mod role_superuser;
@@ -928,7 +942,13 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(plaintext_password::Rule),
     Box::new(role_bypassrls::Rule),
     Box::new(policy_using_true::Rule),
+    Box::new(view_order_by::Rule),
+    Box::new(autovacuum_disabled::Rule),
+    Box::new(json_prefer_jsonb::Rule),
     Box::new(exists_group_by::Rule),
+    Box::new(cluster_locks_table::Rule),
+    Box::new(add_column_volatile_default::Rule),
+    Box::new(add_fk_not_valid::Rule),
     Box::new(mysql_limit_comma::Rule),
     Box::new(mysql_replace_into::Rule),
     Box::new(mysql_regexp_operator::Rule),
@@ -945,6 +965,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(unique_index_non_btree::Rule),
     Box::new(generated_column_not_stored::Rule),
     Box::new(mysql_inline_index::Rule),
+    Box::new(with_oids::Rule),
     Box::new(mysql_character_set::Rule),
     Box::new(date_trunc_invalid_unit::Rule),
     Box::new(non_pg_date_diff_fns::Rule),
@@ -979,6 +1000,13 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(mysql_alter_change_modify::Rule),
     Box::new(mysql_functions::Rule),
     Box::new(mysql_on_duplicate_key::Rule),
+    Box::new(reindex_not_concurrent::Rule),
+    Box::new(alter_add_key_lock::Rule),
+    Box::new(vacuum_full_locks::Rule),
+    Box::new(internal_type_alias::Rule),
+    Box::new(money_type::Rule),
+    Box::new(unlogged_table::Rule),
+    Box::new(create_rule_legacy::Rule),
     Box::new(disable_trigger_all::Rule),
     Box::new(disable_row_level_security::Rule),
     Box::new(role_superuser::Rule),
