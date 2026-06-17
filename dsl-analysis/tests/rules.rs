@@ -27657,3 +27657,124 @@ fn sql678_quiet_real_date() {
   let d = diags("SELECT * FROM t WHERE d = '2024-01-01'");
   assert!(!d.iter().any(|x| x.code == "sql678"));
 }
+
+#[test]
+fn sql679_left_zero() {
+  let d = diags("SELECT left(name, 0) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql679"));
+}
+
+#[test]
+fn sql679_right_zero() {
+  let d = diags("SELECT right(name, 0) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql679"));
+}
+
+#[test]
+fn sql679_quiet_real_length() {
+  let d = diags("SELECT left(name, 3) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql679"));
+}
+
+#[test]
+fn sql679_quiet_left_join() {
+  let d = diags("SELECT * FROM users LEFT JOIN t ON t.id = users.id");
+  assert!(!d.iter().any(|x| x.code == "sql679"));
+}
+
+#[test]
+fn sql680_substr_func_zero() {
+  let d = diags("SELECT substr(name, 1, 0) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql680"));
+}
+
+#[test]
+fn sql680_substring_for_zero() {
+  let d = diags("SELECT substring(name FROM 1 FOR 0) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql680"));
+}
+
+#[test]
+fn sql680_quiet_real_length() {
+  let d = diags("SELECT substr(name, 1, 5) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql680"));
+}
+
+#[test]
+fn sql699_lpad_zero() {
+  let d = diags("SELECT lpad(name, 0) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql699"));
+}
+
+#[test]
+fn sql699_rpad_zero_with_fill() {
+  let d = diags("SELECT rpad(name, 0, '*') FROM users");
+  assert!(d.iter().any(|x| x.code == "sql699"));
+}
+
+#[test]
+fn sql699_quiet_real_width() {
+  let d = diags("SELECT lpad(name, 10, '0') FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql699"));
+}
+
+#[test]
+fn sql715_starts_with_empty() {
+  let d = diags("SELECT * FROM users WHERE starts_with(name, '')");
+  assert!(d.iter().any(|x| x.code == "sql715"));
+}
+
+#[test]
+fn sql715_quiet_real_prefix() {
+  let d = diags("SELECT * FROM users WHERE starts_with(name, 'A')");
+  assert!(!d.iter().any(|x| x.code == "sql715"));
+}
+
+#[test]
+fn sql716_translate_empty_from() {
+  let d = diags("SELECT translate(name, '', 'x') FROM users");
+  assert!(d.iter().any(|x| x.code == "sql716"));
+}
+
+#[test]
+fn sql716_quiet_real_from() {
+  let d = diags("SELECT translate(name, 'abc', 'xyz') FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql716"));
+}
+
+#[test]
+fn sql717_to_char_empty_format() {
+  let d = diags("SELECT to_char(created_at, '') FROM users");
+  assert!(d.iter().any(|x| x.code == "sql717"));
+}
+
+#[test]
+fn sql717_quiet_real_format() {
+  let d = diags("SELECT to_char(created_at, 'YYYY-MM-DD') FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql717"));
+}
+
+#[test]
+fn sql718_repeat_one() {
+  let d = diags("SELECT repeat(name, 1) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql718"));
+}
+
+#[test]
+fn sql718_quiet_real_count() {
+  let d = diags("SELECT repeat(name, 3) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql718"));
+}
+
+#[test]
+fn sql726_ascii_empty() {
+  let d = diags("SELECT ascii('') FROM users");
+  assert!(d.iter().any(|x| x.code == "sql726"));
+}
+
+#[test]
+fn sql726_quiet_real_char() {
+  let d = diags("SELECT ascii('A') FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql726"));
+}
+
