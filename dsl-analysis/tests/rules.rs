@@ -28463,6 +28463,24 @@ fn sql722_quiet_positive() {
 }
 
 #[test]
+fn sql723_array_cat_empty_literal() {
+  let d = diags("SELECT array_cat(tags, '{}') FROM users");
+  assert!(d.iter().any(|x| x.code == "sql723"));
+}
+
+#[test]
+fn sql723_array_cat_empty_constructor() {
+  let d = diags("SELECT array_cat(ARRAY[], tags) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql723"));
+}
+
+#[test]
+fn sql723_quiet_real_arrays() {
+  let d = diags("SELECT array_cat(tags, other_tags) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql723"));
+}
+
+#[test]
 fn sql724_numeric_precision_too_large() {
   let d = diags("CREATE TABLE t (n NUMERIC(2000))");
   assert!(d.iter().any(|x| x.code == "sql724"));
@@ -28796,6 +28814,54 @@ fn sql741_mod_negative_one() {
 fn sql741_quiet_negative_two() {
   let d = diags("SELECT * FROM users WHERE id % -2 = 0");
   assert!(!d.iter().any(|x| x.code == "sql741"));
+}
+
+#[test]
+fn sql742_array_remove_null() {
+  let d = diags("SELECT array_remove(tags, NULL) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql742"));
+}
+
+#[test]
+fn sql742_quiet_real_value() {
+  let d = diags("SELECT array_remove(tags, 'x') FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql742"));
+}
+
+#[test]
+fn sql743_array_replace_same() {
+  let d = diags("SELECT array_replace(tags, 'a', 'a') FROM users");
+  assert!(d.iter().any(|x| x.code == "sql743"));
+}
+
+#[test]
+fn sql743_quiet_different() {
+  let d = diags("SELECT array_replace(tags, 'a', 'b') FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql743"));
+}
+
+#[test]
+fn sql744_array_position_eq_zero() {
+  let d = diags("SELECT * FROM users WHERE array_position(tags, 'x') = 0");
+  assert!(d.iter().any(|x| x.code == "sql744"));
+}
+
+#[test]
+fn sql744_array_position_lt_one() {
+  let d = diags("SELECT * FROM users WHERE array_position(tags, 'x') < 1");
+  assert!(d.iter().any(|x| x.code == "sql744"));
+}
+
+#[test]
+fn sql744_quiet_gt_zero() {
+  let d = diags("SELECT * FROM users WHERE array_position(tags, 'x') > 0");
+  assert!(!d.iter().any(|x| x.code == "sql744"));
+}
+
+#[test]
+fn sql744_quiet_eq_one() {
+  let d = diags("SELECT * FROM users WHERE array_position(tags, 'x') = 1");
+  assert!(!d.iter().any(|x| x.code == "sql744"));
 }
 
 #[test]

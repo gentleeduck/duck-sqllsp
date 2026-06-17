@@ -388,6 +388,7 @@ pub mod sequence_increment_zero;
 pub mod power_zero_negative_exponent;
 pub mod make_timestamp_invalid;
 pub mod factorial_negative;
+pub mod array_cat_empty;
 pub mod numeric_precision_out_of_range;
 pub mod random_compare_out_of_range;
 pub mod ascii_empty_string;
@@ -406,6 +407,9 @@ pub mod nonneg_func_negative_compare2;
 pub mod redundant_double_cast;
 pub mod not_boolean_literal;
 pub mod modulo_by_negative_one;
+pub mod array_remove_null;
+pub mod array_replace_same;
+pub mod array_position_compare_impossible;
 pub mod date_part_unknown_field;
 pub mod range_lower_gt_upper;
 pub mod percentile_fraction_out_of_range;
@@ -1188,6 +1192,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(power_zero_negative_exponent::Rule),
     Box::new(make_timestamp_invalid::Rule),
     Box::new(factorial_negative::Rule),
+    Box::new(array_cat_empty::Rule),
     Box::new(numeric_precision_out_of_range::Rule),
     Box::new(random_compare_out_of_range::Rule),
     Box::new(ascii_empty_string::Rule),
@@ -1206,6 +1211,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(redundant_double_cast::Rule),
     Box::new(not_boolean_literal::Rule),
     Box::new(modulo_by_negative_one::Rule),
+    Box::new(array_remove_null::Rule),
+    Box::new(array_replace_same::Rule),
+    Box::new(array_position_compare_impossible::Rule),
     Box::new(date_part_unknown_field::Rule),
     Box::new(range_lower_gt_upper::Rule),
     Box::new(percentile_fraction_out_of_range::Rule),
