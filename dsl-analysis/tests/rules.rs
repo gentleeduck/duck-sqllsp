@@ -27731,6 +27731,24 @@ fn sql681_quiet_times_two() {
 }
 
 #[test]
+fn sql685_power_base_one() {
+  let d = diags("SELECT power(1, n) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql685"));
+}
+
+#[test]
+fn sql685_quiet_real_base() {
+  let d = diags("SELECT power(2, n) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql685"));
+}
+
+#[test]
+fn sql685_quiet_exponent_one() {
+  let d = diags("SELECT power(n, 1) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql685"));
+}
+
+#[test]
 fn sql689_modulo_self() {
   let d = diags("SELECT * FROM users WHERE id % id = 0");
   assert!(d.iter().any(|x| x.code == "sql689"));
@@ -27740,6 +27758,24 @@ fn sql689_modulo_self() {
 fn sql689_quiet_different_operand() {
   let d = diags("SELECT * FROM users WHERE id % 2 = 0");
   assert!(!d.iter().any(|x| x.code == "sql689"));
+}
+
+#[test]
+fn sql697_degrees_radians() {
+  let d = diags("SELECT degrees(radians(angle)) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql697"));
+}
+
+#[test]
+fn sql697_radians_degrees() {
+  let d = diags("SELECT radians(degrees(angle)) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql697"));
+}
+
+#[test]
+fn sql697_quiet_single_call() {
+  let d = diags("SELECT degrees(angle) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql697"));
 }
 
 #[test]
@@ -27863,6 +27899,24 @@ fn sql726_quiet_real_char() {
 }
 
 #[test]
+fn sql727_exp_ln() {
+  let d = diags("SELECT exp(ln(x)) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql727"));
+}
+
+#[test]
+fn sql727_ln_exp() {
+  let d = diags("SELECT ln(exp(x)) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql727"));
+}
+
+#[test]
+fn sql727_quiet_single() {
+  let d = diags("SELECT exp(x) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql727"));
+}
+
+#[test]
 fn sql728_bitor_zero() {
   let d = diags("SELECT flags | 0 FROM users");
   assert!(d.iter().any(|x| x.code == "sql728"));
@@ -27896,6 +27950,24 @@ fn sql729_shift_right_zero() {
 fn sql729_quiet_real_shift() {
   let d = diags("SELECT flags << 2 FROM users");
   assert!(!d.iter().any(|x| x.code == "sql729"));
+}
+
+#[test]
+fn sql731_ln_one() {
+  let d = diags("SELECT ln(1) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql731"));
+}
+
+#[test]
+fn sql731_log_one() {
+  let d = diags("SELECT log(1) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql731"));
+}
+
+#[test]
+fn sql731_quiet_real_arg() {
+  let d = diags("SELECT ln(x) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql731"));
 }
 
 #[test]
