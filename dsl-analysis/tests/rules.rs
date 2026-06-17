@@ -26029,6 +26029,21 @@ fn sql591_quiet_for_consistent_values() {
 }
 
 #[test]
+fn sql592_flags_where_bare_integer() {
+  let d = diags("SELECT * FROM users WHERE 1;");
+  let m = d.iter().find(|x| x.code == "sql592").unwrap_or_else(|| panic!("expected sql592: {d:?}"));
+  assert!(m.message.contains("42804"), "{}", m.message);
+}
+
+#[test]
+fn sql592_quiet_for_boolean_predicate() {
+  let d = diags("SELECT * FROM users WHERE id = 1;");
+  assert!(!d.iter().any(|x| x.code == "sql592"), "real predicate must not flag: {d:?}");
+  let d2 = diags("SELECT * FROM users WHERE true;");
+  assert!(!d2.iter().any(|x| x.code == "sql592"), "WHERE true must not flag: {d2:?}");
+}
+
+#[test]
 fn sql593_flags_mysql_limit_comma() {
   let d = diags("SELECT * FROM users ORDER BY id LIMIT 10, 20;");
   let m = d.iter().find(|x| x.code == "sql593").unwrap_or_else(|| panic!("expected sql593: {d:?}"));
@@ -27176,6 +27191,210 @@ fn sql654_quiet_max_named_table() {
 }
 
 #[test]
+fn sql655_arity_mismatch() {
+  let d = diags("UPDATE t SET (a, b) = (1, 2, 3)");
+  assert!(d.iter().any(|x| x.code == "sql655"));
+}
+
+#[test]
+fn sql655_quiet_match() {
+  let d = diags("UPDATE t SET (a, b) = (1, 2)");
+  assert!(!d.iter().any(|x| x.code == "sql655"));
+}
+
+#[test]
+fn sql655_quiet_single() {
+  let d = diags("UPDATE t SET a = 1");
+  assert!(!d.iter().any(|x| x.code == "sql655"));
+}
+
+#[test]
+fn sql656_truncate_where() {
+  let d = diags("TRUNCATE t WHERE id > 100");
+  assert!(d.iter().any(|x| x.code == "sql656"));
+}
+
+#[test]
+fn sql656_quiet_plain_truncate() {
+  let d = diags("TRUNCATE t");
+  assert!(!d.iter().any(|x| x.code == "sql656"));
+}
+
+#[test]
+fn sql656_quiet_delete_where() {
+  let d = diags("DELETE FROM t WHERE id > 100");
+  assert!(!d.iter().any(|x| x.code == "sql656"));
+}
+
+#[test]
+fn sql657_order_after_limit() {
+  let d = diags("SELECT * FROM t LIMIT 5 ORDER BY x");
+  assert!(d.iter().any(|x| x.code == "sql657"));
+}
+
+#[test]
+fn sql657_quiet_correct_order() {
+  let d = diags("SELECT * FROM t ORDER BY x LIMIT 5");
+  assert!(!d.iter().any(|x| x.code == "sql657"));
+}
+
+#[test]
+fn sql657_quiet_subquery_order() {
+  let d = diags("SELECT * FROM (SELECT * FROM s ORDER BY y) q LIMIT 5");
+  assert!(!d.iter().any(|x| x.code == "sql657"));
+}
+
+#[test]
+fn sql658_limit_and_fetch() {
+  let d = diags("SELECT * FROM t LIMIT 5 FETCH FIRST 3 ROWS ONLY");
+  assert!(d.iter().any(|x| x.code == "sql658"));
+}
+
+#[test]
+fn sql658_quiet_only_limit() {
+  let d = diags("SELECT * FROM t LIMIT 5");
+  assert!(!d.iter().any(|x| x.code == "sql658"));
+}
+
+#[test]
+fn sql658_quiet_only_fetch() {
+  let d = diags("SELECT * FROM t FETCH FIRST 3 ROWS ONLY");
+  assert!(!d.iter().any(|x| x.code == "sql658"));
+}
+
+#[test]
+fn sql659_where_after_group_by() {
+  let d = diags("SELECT a FROM t GROUP BY a WHERE a > 0");
+  assert!(d.iter().any(|x| x.code == "sql659"));
+}
+
+#[test]
+fn sql659_quiet_correct_order() {
+  let d = diags("SELECT a FROM t WHERE a > 0 GROUP BY a");
+  assert!(!d.iter().any(|x| x.code == "sql659"));
+}
+
+#[test]
+fn sql659_quiet_union_where() {
+  let d = diags("SELECT a FROM t GROUP BY a UNION SELECT b FROM s WHERE b > 0");
+  assert!(!d.iter().any(|x| x.code == "sql659"));
+}
+
+#[test]
+fn sql660_cross_join_on() {
+  let d = diags("SELECT * FROM a CROSS JOIN b ON a.id = b.id");
+  assert!(d.iter().any(|x| x.code == "sql660"));
+}
+
+#[test]
+fn sql660_quiet_plain_cross() {
+  let d = diags("SELECT * FROM a CROSS JOIN b");
+  assert!(!d.iter().any(|x| x.code == "sql660"));
+}
+
+#[test]
+fn sql660_quiet_inner_join_on() {
+  let d = diags("SELECT * FROM a CROSS JOIN b JOIN c ON b.id = c.id");
+  assert!(!d.iter().any(|x| x.code == "sql660"));
+}
+
+#[test]
+fn sql661_row_number_no_over() {
+  let d = diags("SELECT row_number() FROM t");
+  assert!(d.iter().any(|x| x.code == "sql661"));
+}
+
+#[test]
+fn sql661_rank_no_over() {
+  let d = diags("SELECT rank() FROM t");
+  assert!(d.iter().any(|x| x.code == "sql661"));
+}
+
+#[test]
+fn sql661_quiet_with_over() {
+  let d = diags("SELECT row_number() OVER (ORDER BY x) FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql661"));
+}
+
+#[test]
+fn sql661_quiet_count() {
+  let d = diags("SELECT count(*) FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql661"));
+}
+
+#[test]
+fn sql662_distinct_on_no_parens() {
+  let d = diags("SELECT DISTINCT ON x, y FROM t");
+  assert!(d.iter().any(|x| x.code == "sql662"));
+}
+
+#[test]
+fn sql662_quiet_with_parens() {
+  let d = diags("SELECT DISTINCT ON (x) y FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql662"));
+}
+
+#[test]
+fn sql662_quiet_plain_distinct() {
+  let d = diags("SELECT DISTINCT a, b FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql662"));
+}
+
+#[test]
+fn sql663_order_before_union() {
+  let d = diags("SELECT a FROM t ORDER BY a UNION SELECT b FROM s");
+  assert!(d.iter().any(|x| x.code == "sql663"));
+}
+
+#[test]
+fn sql663_limit_before_union() {
+  let d = diags("SELECT a FROM t LIMIT 5 UNION SELECT b FROM s");
+  assert!(d.iter().any(|x| x.code == "sql663"));
+}
+
+#[test]
+fn sql663_quiet_order_after_union() {
+  let d = diags("SELECT a FROM t UNION SELECT b FROM s ORDER BY a");
+  assert!(!d.iter().any(|x| x.code == "sql663"));
+}
+
+#[test]
+fn sql663_quiet_parenthesized() {
+  let d = diags("(SELECT a FROM t LIMIT 5) UNION SELECT b FROM s");
+  assert!(!d.iter().any(|x| x.code == "sql663"));
+}
+
+#[test]
+fn sql664_having_before_group() {
+  let d = diags("SELECT a, count(*) FROM t HAVING count(*) > 1 GROUP BY a");
+  assert!(d.iter().any(|x| x.code == "sql664"));
+}
+
+#[test]
+fn sql664_quiet_correct_order() {
+  let d = diags("SELECT a, count(*) FROM t GROUP BY a HAVING count(*) > 1");
+  assert!(!d.iter().any(|x| x.code == "sql664"));
+}
+
+#[test]
+fn sql665_where_before_set() {
+  let d = diags("UPDATE t WHERE id = 1 SET x = 2");
+  assert!(d.iter().any(|x| x.code == "sql665"));
+}
+
+#[test]
+fn sql665_quiet_correct_order() {
+  let d = diags("UPDATE t SET x = 2 WHERE id = 1");
+  assert!(!d.iter().any(|x| x.code == "sql665"));
+}
+
+#[test]
+fn sql665_quiet_subquery_where() {
+  let d = diags("UPDATE t SET x = (SELECT v FROM s WHERE s.id = t.id)");
+  assert!(!d.iter().any(|x| x.code == "sql665"));
+}
+
+#[test]
 fn sql666_insert_ignore() {
   let d = diags("INSERT IGNORE INTO t (a) VALUES (1)");
   assert!(d.iter().any(|x| x.code == "sql666"));
@@ -27209,6 +27428,24 @@ fn sql667_quiet_values() {
 fn sql667_quiet_on_conflict_set() {
   let d = diags("INSERT INTO t (a) VALUES (1) ON CONFLICT (a) DO UPDATE SET a = 2");
   assert!(!d.iter().any(|x| x.code == "sql667"));
+}
+
+#[test]
+fn sql668_delete_alias_from() {
+  let d = diags("DELETE t1 FROM t1 JOIN t2 ON t1.id = t2.id");
+  assert!(d.iter().any(|x| x.code == "sql668"));
+}
+
+#[test]
+fn sql668_quiet_delete_from() {
+  let d = diags("DELETE FROM t WHERE id = 1");
+  assert!(!d.iter().any(|x| x.code == "sql668"));
+}
+
+#[test]
+fn sql668_quiet_delete_from_only() {
+  let d = diags("DELETE FROM ONLY t WHERE id = 1");
+  assert!(!d.iter().any(|x| x.code == "sql668"));
 }
 
 #[test]

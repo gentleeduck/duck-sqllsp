@@ -317,14 +317,27 @@ pub mod srf_in_group_order;
 pub mod duplicate_cte_name;
 pub mod aggregate_in_check;
 pub mod aggregate_in_index;
+pub mod update_set_arity;
+pub mod truncate_with_where;
+pub mod order_by_after_limit;
+pub mod limit_and_fetch;
+pub mod where_after_group_by;
+pub mod cross_join_with_on;
+pub mod window_fn_without_over;
+pub mod distinct_on_no_parens;
+pub mod tail_clause_before_setop;
+pub mod having_before_group_by;
+pub mod update_where_before_set;
 pub mod mysql_insert_ignore;
 pub mod mysql_insert_set;
+pub mod delete_alias_before_from;
 pub mod mysql_lock_in_share_mode;
 pub mod mysql_show_statement;
 pub mod mysql_describe;
 pub mod mysql_alter_change_modify;
 pub mod mysql_functions;
 pub mod mysql_on_duplicate_key;
+pub mod where_bare_integer;
 pub mod reindex_not_concurrent;
 pub mod alter_add_key_lock;
 pub mod vacuum_full_locks;
@@ -1028,14 +1041,27 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(duplicate_cte_name::Rule),
     Box::new(aggregate_in_check::Rule),
     Box::new(aggregate_in_index::Rule),
+    Box::new(update_set_arity::Rule),
+    Box::new(truncate_with_where::Rule),
+    Box::new(order_by_after_limit::Rule),
+    Box::new(limit_and_fetch::Rule),
+    Box::new(where_after_group_by::Rule),
+    Box::new(cross_join_with_on::Rule),
+    Box::new(window_fn_without_over::Rule),
+    Box::new(distinct_on_no_parens::Rule),
+    Box::new(tail_clause_before_setop::Rule),
+    Box::new(having_before_group_by::Rule),
+    Box::new(update_where_before_set::Rule),
     Box::new(mysql_insert_ignore::Rule),
     Box::new(mysql_insert_set::Rule),
+    Box::new(delete_alias_before_from::Rule),
     Box::new(mysql_lock_in_share_mode::Rule),
     Box::new(mysql_show_statement::Rule),
     Box::new(mysql_describe::Rule),
     Box::new(mysql_alter_change_modify::Rule),
     Box::new(mysql_functions::Rule),
     Box::new(mysql_on_duplicate_key::Rule),
+    Box::new(where_bare_integer::Rule),
     Box::new(reindex_not_concurrent::Rule),
     Box::new(alter_add_key_lock::Rule),
     Box::new(vacuum_full_locks::Rule),
