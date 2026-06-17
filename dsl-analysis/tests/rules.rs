@@ -27731,6 +27731,24 @@ fn sql681_quiet_times_two() {
 }
 
 #[test]
+fn sql682_coalesce_count() {
+  let d = diags("SELECT coalesce(count(*), 0) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql682"));
+}
+
+#[test]
+fn sql682_coalesce_count_col() {
+  let d = diags("SELECT coalesce(count(id), 0) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql682"));
+}
+
+#[test]
+fn sql682_quiet_coalesce_sum() {
+  let d = diags("SELECT coalesce(sum(id), 0) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql682"));
+}
+
+#[test]
 fn sql685_power_base_one() {
   let d = diags("SELECT power(1, n) FROM users");
   assert!(d.iter().any(|x| x.code == "sql685"));
@@ -27776,6 +27794,30 @@ fn sql690_quiet_positive() {
 fn sql690_quiet_column() {
   let d = diags("SELECT sqrt(id) FROM users");
   assert!(!d.iter().any(|x| x.code == "sql690"));
+}
+
+#[test]
+fn sql691_min_distinct() {
+  let d = diags("SELECT min(DISTINCT id) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql691"));
+}
+
+#[test]
+fn sql691_max_distinct() {
+  let d = diags("SELECT max(DISTINCT id) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql691"));
+}
+
+#[test]
+fn sql691_quiet_plain_min() {
+  let d = diags("SELECT min(id) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql691"));
+}
+
+#[test]
+fn sql691_quiet_count_distinct() {
+  let d = diags("SELECT count(DISTINCT id) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql691"));
 }
 
 #[test]
@@ -27842,6 +27884,48 @@ fn sql694_quiet_in_range() {
 fn sql694_quiet_column() {
   let d = diags("SELECT acos(x) FROM users");
   assert!(!d.iter().any(|x| x.code == "sql694"));
+}
+
+#[test]
+fn sql695_nested_aggregate() {
+  let d = diags("SELECT sum(count(*)) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql695"));
+}
+
+#[test]
+fn sql695_max_avg() {
+  let d = diags("SELECT max(avg(id)) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql695"));
+}
+
+#[test]
+fn sql695_quiet_separate_aggregates() {
+  let d = diags("SELECT sum(id), count(name) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql695"));
+}
+
+#[test]
+fn sql695_quiet_aggregate_over_subquery() {
+  let d = diags("SELECT sum((SELECT count(*) FROM users)) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql695"));
+}
+
+#[test]
+fn sql696_count_coalesce() {
+  let d = diags("SELECT count(coalesce(name, '')) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql696"));
+}
+
+#[test]
+fn sql696_quiet_plain_count() {
+  let d = diags("SELECT count(name) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql696"));
+}
+
+#[test]
+fn sql696_quiet_count_distinct_coalesce() {
+  let d = diags("SELECT count(DISTINCT coalesce(name, '')) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql696"));
 }
 
 #[test]
@@ -28220,6 +28304,30 @@ fn sql732_quiet_acosh_valid() {
 fn sql732_quiet_atanh_valid() {
   let d = diags("SELECT atanh(0.5) FROM users");
   assert!(!d.iter().any(|x| x.code == "sql732"));
+}
+
+#[test]
+fn sql735_exists_count() {
+  let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT count(*) FROM users)");
+  assert!(d.iter().any(|x| x.code == "sql735"));
+}
+
+#[test]
+fn sql735_exists_max() {
+  let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT max(id) FROM users)");
+  assert!(d.iter().any(|x| x.code == "sql735"));
+}
+
+#[test]
+fn sql735_quiet_select_one() {
+  let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM users)");
+  assert!(!d.iter().any(|x| x.code == "sql735"));
+}
+
+#[test]
+fn sql735_quiet_with_group_by() {
+  let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT count(*) FROM users GROUP BY name)");
+  assert!(!d.iter().any(|x| x.code == "sql735"));
 }
 
 #[test]

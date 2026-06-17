@@ -347,12 +347,16 @@ pub mod zero_date_literal;
 pub mod left_right_zero;
 pub mod substring_zero_length;
 pub mod multiply_by_zero;
+pub mod coalesce_count_redundant;
 pub mod power_base_one;
 pub mod modulo_self;
 pub mod sqrt_negative_literal;
+pub mod min_max_distinct;
 pub mod ln_log_nonpositive_literal;
 pub mod log_base_one;
 pub mod acos_asin_domain;
+pub mod nested_aggregate;
+pub mod count_of_coalesce;
 pub mod degrees_radians_roundtrip;
 pub mod chr_zero;
 pub mod lpad_rpad_zero;
@@ -376,6 +380,7 @@ pub mod bitshift_zero;
 pub mod chr_above_max;
 pub mod ln_log_one;
 pub mod acosh_atanh_domain;
+pub mod exists_aggregate;
 pub mod width_bucket_equal_bounds;
 pub mod modulo_by_negative_one;
 pub mod percentile_fraction_out_of_range;
@@ -1112,12 +1117,16 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(left_right_zero::Rule),
     Box::new(substring_zero_length::Rule),
     Box::new(multiply_by_zero::Rule),
+    Box::new(coalesce_count_redundant::Rule),
     Box::new(power_base_one::Rule),
     Box::new(modulo_self::Rule),
     Box::new(sqrt_negative_literal::Rule),
+    Box::new(min_max_distinct::Rule),
     Box::new(ln_log_nonpositive_literal::Rule),
     Box::new(log_base_one::Rule),
     Box::new(acos_asin_domain::Rule),
+    Box::new(nested_aggregate::Rule),
+    Box::new(count_of_coalesce::Rule),
     Box::new(degrees_radians_roundtrip::Rule),
     Box::new(chr_zero::Rule),
     Box::new(lpad_rpad_zero::Rule),
@@ -1141,6 +1150,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(chr_above_max::Rule),
     Box::new(ln_log_one::Rule),
     Box::new(acosh_atanh_domain::Rule),
+    Box::new(exists_aggregate::Rule),
     Box::new(width_bucket_equal_bounds::Rule),
     Box::new(modulo_by_negative_one::Rule),
     Box::new(percentile_fraction_out_of_range::Rule),
