@@ -376,6 +376,8 @@ pub mod lag_lead_zero_offset;
 pub mod lpad_rpad_null_fill;
 pub mod jsonb_typeof_invalid_literal;
 pub mod coalesce_is_not_null_always_true;
+pub mod make_date_invalid;
+pub mod make_time_invalid;
 pub mod bitand_zero;
 pub mod bitwise_self;
 pub mod starts_with_empty_string;
@@ -383,6 +385,7 @@ pub mod translate_empty_from;
 pub mod to_char_empty_format;
 pub mod repeat_one;
 pub mod power_zero_negative_exponent;
+pub mod make_timestamp_invalid;
 pub mod factorial_negative;
 pub mod random_compare_out_of_range;
 pub mod ascii_empty_string;
@@ -394,6 +397,7 @@ pub mod ln_log_one;
 pub mod acosh_atanh_domain;
 pub mod exists_aggregate;
 pub mod width_bucket_equal_bounds;
+pub mod date_bin_nonpositive_stride;
 pub mod nonneg_func_negative_compare2;
 pub mod not_boolean_literal;
 pub mod modulo_by_negative_one;
@@ -1160,6 +1164,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(lpad_rpad_null_fill::Rule),
     Box::new(jsonb_typeof_invalid_literal::Rule),
     Box::new(coalesce_is_not_null_always_true::Rule),
+    Box::new(make_date_invalid::Rule),
+    Box::new(make_time_invalid::Rule),
     Box::new(bitand_zero::Rule),
     Box::new(bitwise_self::Rule),
     Box::new(starts_with_empty_string::Rule),
@@ -1167,6 +1173,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(to_char_empty_format::Rule),
     Box::new(repeat_one::Rule),
     Box::new(power_zero_negative_exponent::Rule),
+    Box::new(make_timestamp_invalid::Rule),
     Box::new(factorial_negative::Rule),
     Box::new(random_compare_out_of_range::Rule),
     Box::new(ascii_empty_string::Rule),
@@ -1178,6 +1185,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(acosh_atanh_domain::Rule),
     Box::new(exists_aggregate::Rule),
     Box::new(width_bucket_equal_bounds::Rule),
+    Box::new(date_bin_nonpositive_stride::Rule),
     Box::new(nonneg_func_negative_compare2::Rule),
     Box::new(not_boolean_literal::Rule),
     Box::new(modulo_by_negative_one::Rule),

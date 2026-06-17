@@ -28271,6 +28271,42 @@ fn sql710_quiet_nullable_fallback() {
 }
 
 #[test]
+fn sql711_make_date_bad_month() {
+  let d = diags("SELECT make_date(2024, 13, 1)");
+  assert!(d.iter().any(|x| x.code == "sql711"));
+}
+
+#[test]
+fn sql711_make_date_bad_day() {
+  let d = diags("SELECT make_date(2024, 6, 40)");
+  assert!(d.iter().any(|x| x.code == "sql711"));
+}
+
+#[test]
+fn sql711_quiet_valid() {
+  let d = diags("SELECT make_date(2024, 6, 15)");
+  assert!(!d.iter().any(|x| x.code == "sql711"));
+}
+
+#[test]
+fn sql712_make_time_bad_hour() {
+  let d = diags("SELECT make_time(25, 0, 0)");
+  assert!(d.iter().any(|x| x.code == "sql712"));
+}
+
+#[test]
+fn sql712_make_time_bad_second() {
+  let d = diags("SELECT make_time(10, 0, 60)");
+  assert!(d.iter().any(|x| x.code == "sql712"));
+}
+
+#[test]
+fn sql712_quiet_valid() {
+  let d = diags("SELECT make_time(23, 59, 59)");
+  assert!(!d.iter().any(|x| x.code == "sql712"));
+}
+
+#[test]
 fn sql713_col_bitand_zero() {
   let d = diags("SELECT flags & 0 FROM users");
   assert!(d.iter().any(|x| x.code == "sql713"));
@@ -28376,6 +28412,24 @@ fn sql720_quiet_positive_exponent() {
 fn sql720_quiet_nonzero_base() {
   let d = diags("SELECT power(2, -1) FROM users");
   assert!(!d.iter().any(|x| x.code == "sql720"));
+}
+
+#[test]
+fn sql721_make_timestamp_bad_month() {
+  let d = diags("SELECT make_timestamp(2024, 13, 1, 0, 0, 0)");
+  assert!(d.iter().any(|x| x.code == "sql721"));
+}
+
+#[test]
+fn sql721_make_timestamp_bad_hour() {
+  let d = diags("SELECT make_timestamp(2024, 6, 1, 25, 0, 0)");
+  assert!(d.iter().any(|x| x.code == "sql721"));
+}
+
+#[test]
+fn sql721_quiet_valid() {
+  let d = diags("SELECT make_timestamp(2024, 6, 1, 12, 30, 0)");
+  assert!(!d.iter().any(|x| x.code == "sql721"));
 }
 
 #[test]
@@ -28568,6 +28622,24 @@ fn sql736_width_bucket_equal_bounds() {
 fn sql736_quiet_distinct_bounds() {
   let d = diags("SELECT width_bucket(x, 0, 100, 10) FROM users");
   assert!(!d.iter().any(|x| x.code == "sql736"));
+}
+
+#[test]
+fn sql737_date_bin_zero_stride() {
+  let d = diags("SELECT date_bin('0 seconds', ts, '2024-01-01') FROM users");
+  assert!(d.iter().any(|x| x.code == "sql737"));
+}
+
+#[test]
+fn sql737_date_bin_negative_stride() {
+  let d = diags("SELECT date_bin('-1 day', ts, '2024-01-01') FROM users");
+  assert!(d.iter().any(|x| x.code == "sql737"));
+}
+
+#[test]
+fn sql737_quiet_positive_stride() {
+  let d = diags("SELECT date_bin('15 minutes', ts, '2024-01-01') FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql737"));
 }
 
 #[test]
