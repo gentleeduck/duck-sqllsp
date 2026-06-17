@@ -246,6 +246,9 @@ pub mod any_array_duplicate;
 pub mod self_arithmetic;
 pub mod builtin_too_few_args;
 pub mod exists_order_by;
+pub mod plaintext_password;
+pub mod role_bypassrls;
+pub mod policy_using_true;
 pub mod exists_group_by;
 pub mod mysql_limit_comma;
 pub mod mysql_replace_into;
@@ -294,6 +297,9 @@ pub mod mysql_describe;
 pub mod mysql_alter_change_modify;
 pub mod mysql_functions;
 pub mod mysql_on_duplicate_key;
+pub mod disable_trigger_all;
+pub mod disable_row_level_security;
+pub mod role_superuser;
 pub mod exists_distinct;
 pub mod regex_literal_could_be_like;
 pub mod col_eq_col_offset;
@@ -916,6 +922,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(self_arithmetic::Rule),
     Box::new(builtin_too_few_args::Rule),
     Box::new(exists_order_by::Rule),
+    Box::new(plaintext_password::Rule),
+    Box::new(role_bypassrls::Rule),
+    Box::new(policy_using_true::Rule),
     Box::new(exists_group_by::Rule),
     Box::new(mysql_limit_comma::Rule),
     Box::new(mysql_replace_into::Rule),
@@ -964,6 +973,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(mysql_alter_change_modify::Rule),
     Box::new(mysql_functions::Rule),
     Box::new(mysql_on_duplicate_key::Rule),
+    Box::new(disable_trigger_all::Rule),
+    Box::new(disable_row_level_security::Rule),
+    Box::new(role_superuser::Rule),
     Box::new(exists_distinct::Rule),
     Box::new(regex_literal_could_be_like::Rule),
     Box::new(col_eq_col_offset::Rule),

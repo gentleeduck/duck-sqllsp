@@ -25748,6 +25748,86 @@ fn sql570_quiet_for_plain_exists() {
 }
 
 #[test]
+fn sql571_flags_plaintext_password() {
+  let d = diags("CREATE ROLE app LOGIN PASSWORD 'hunter2';");
+  let m = d.iter().find(|x| x.code == "sql571").unwrap_or_else(|| panic!("expected sql571: {d:?}"));
+  assert!(m.message.contains("plaintext"), "{}", m.message);
+}
+
+#[test]
+fn sql571_quiet_for_hashed_or_no_password() {
+  let d = diags("CREATE ROLE app PASSWORD 'SCRAM-SHA-256$4096:abc$def:ghi';");
+  assert!(!d.iter().any(|x| x.code == "sql571"), "scram verifier must not flag: {d:?}");
+  let d2 = diags("ALTER ROLE app PASSWORD NULL;");
+  assert!(!d2.iter().any(|x| x.code == "sql571"), "PASSWORD NULL must not flag: {d2:?}");
+}
+
+#[test]
+fn sql572_flags_superuser() {
+  let d = diags("CREATE ROLE deploy SUPERUSER LOGIN;");
+  let m = d.iter().find(|x| x.code == "sql572").unwrap_or_else(|| panic!("expected sql572: {d:?}"));
+  assert!(m.message.contains("SUPERUSER"), "{}", m.message);
+}
+
+#[test]
+fn sql572_quiet_for_nosuperuser() {
+  let d = diags("CREATE ROLE app NOSUPERUSER LOGIN;");
+  assert!(!d.iter().any(|x| x.code == "sql572"), "NOSUPERUSER must not flag: {d:?}");
+}
+
+#[test]
+fn sql573_flags_bypassrls() {
+  let d = diags("CREATE ROLE etl BYPASSRLS LOGIN;");
+  let m = d.iter().find(|x| x.code == "sql573").unwrap_or_else(|| panic!("expected sql573: {d:?}"));
+  assert!(m.message.contains("row-level security"), "{}", m.message);
+}
+
+#[test]
+fn sql573_quiet_for_nobypassrls() {
+  let d = diags("CREATE ROLE app NOBYPASSRLS LOGIN;");
+  assert!(!d.iter().any(|x| x.code == "sql573"), "NOBYPASSRLS must not flag: {d:?}");
+}
+
+#[test]
+fn sql574_flags_disable_rls() {
+  let d = diags("ALTER TABLE accounts DISABLE ROW LEVEL SECURITY;");
+  let m = d.iter().find(|x| x.code == "sql574").unwrap_or_else(|| panic!("expected sql574: {d:?}"));
+  assert!(m.message.contains("RLS"), "{}", m.message);
+}
+
+#[test]
+fn sql574_quiet_for_enable_rls() {
+  let d = diags("ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;");
+  assert!(!d.iter().any(|x| x.code == "sql574"), "ENABLE RLS must not flag: {d:?}");
+}
+
+#[test]
+fn sql575_flags_policy_using_true() {
+  let d = diags("CREATE POLICY p ON accounts USING (true);");
+  let m = d.iter().find(|x| x.code == "sql575").unwrap_or_else(|| panic!("expected sql575: {d:?}"));
+  assert!(m.message.contains("always true"), "{}", m.message);
+}
+
+#[test]
+fn sql575_quiet_for_real_policy() {
+  let d = diags("CREATE POLICY p ON accounts USING (owner_id = current_user_id());");
+  assert!(!d.iter().any(|x| x.code == "sql575"), "real policy must not flag: {d:?}");
+}
+
+#[test]
+fn sql576_flags_disable_trigger_all() {
+  let d = diags("ALTER TABLE orders DISABLE TRIGGER ALL;");
+  let m = d.iter().find(|x| x.code == "sql576").unwrap_or_else(|| panic!("expected sql576: {d:?}"));
+  assert!(m.message.contains("foreign-key"), "{}", m.message);
+}
+
+#[test]
+fn sql576_quiet_for_disable_trigger_user() {
+  let d = diags("ALTER TABLE orders DISABLE TRIGGER USER;");
+  assert!(!d.iter().any(|x| x.code == "sql576"), "DISABLE TRIGGER USER must not flag: {d:?}");
+}
+
+#[test]
 fn sql583_flags_group_by_in_exists() {
   let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id GROUP BY o.status);");
   let m = d.iter().find(|x| x.code == "sql583").unwrap_or_else(|| panic!("expected sql583: {d:?}"));
