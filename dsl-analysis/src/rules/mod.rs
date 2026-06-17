@@ -349,19 +349,29 @@ pub mod substring_zero_length;
 pub mod multiply_by_zero;
 pub mod power_base_one;
 pub mod modulo_self;
+pub mod sqrt_negative_literal;
+pub mod ln_log_nonpositive_literal;
+pub mod log_base_one;
+pub mod acos_asin_domain;
 pub mod degrees_radians_roundtrip;
+pub mod chr_zero;
 pub mod lpad_rpad_zero;
+pub mod setseed_out_of_range;
 pub mod bitand_zero;
 pub mod bitwise_self;
 pub mod starts_with_empty_string;
 pub mod translate_empty_from;
 pub mod to_char_empty_format;
 pub mod repeat_one;
+pub mod power_zero_negative_exponent;
+pub mod factorial_negative;
 pub mod ascii_empty_string;
 pub mod exp_ln_roundtrip;
 pub mod bitor_zero;
 pub mod bitshift_zero;
+pub mod chr_above_max;
 pub mod ln_log_one;
+pub mod acosh_atanh_domain;
 pub mod modulo_by_negative_one;
 pub mod reindex_not_concurrent;
 pub mod alter_add_key_lock;
@@ -1098,19 +1108,29 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(multiply_by_zero::Rule),
     Box::new(power_base_one::Rule),
     Box::new(modulo_self::Rule),
+    Box::new(sqrt_negative_literal::Rule),
+    Box::new(ln_log_nonpositive_literal::Rule),
+    Box::new(log_base_one::Rule),
+    Box::new(acos_asin_domain::Rule),
     Box::new(degrees_radians_roundtrip::Rule),
+    Box::new(chr_zero::Rule),
     Box::new(lpad_rpad_zero::Rule),
+    Box::new(setseed_out_of_range::Rule),
     Box::new(bitand_zero::Rule),
     Box::new(bitwise_self::Rule),
     Box::new(starts_with_empty_string::Rule),
     Box::new(translate_empty_from::Rule),
     Box::new(to_char_empty_format::Rule),
     Box::new(repeat_one::Rule),
+    Box::new(power_zero_negative_exponent::Rule),
+    Box::new(factorial_negative::Rule),
     Box::new(ascii_empty_string::Rule),
     Box::new(exp_ln_roundtrip::Rule),
     Box::new(bitor_zero::Rule),
     Box::new(bitshift_zero::Rule),
+    Box::new(chr_above_max::Rule),
     Box::new(ln_log_one::Rule),
+    Box::new(acosh_atanh_domain::Rule),
     Box::new(modulo_by_negative_one::Rule),
     Box::new(reindex_not_concurrent::Rule),
     Box::new(alter_add_key_lock::Rule),

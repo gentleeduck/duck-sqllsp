@@ -27761,6 +27761,90 @@ fn sql689_quiet_different_operand() {
 }
 
 #[test]
+fn sql690_sqrt_negative() {
+  let d = diags("SELECT sqrt(-1) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql690"));
+}
+
+#[test]
+fn sql690_quiet_positive() {
+  let d = diags("SELECT sqrt(2) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql690"));
+}
+
+#[test]
+fn sql690_quiet_column() {
+  let d = diags("SELECT sqrt(id) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql690"));
+}
+
+#[test]
+fn sql692_ln_zero() {
+  let d = diags("SELECT ln(0) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql692"));
+}
+
+#[test]
+fn sql692_log_negative() {
+  let d = diags("SELECT log(-5) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql692"));
+}
+
+#[test]
+fn sql692_quiet_positive() {
+  let d = diags("SELECT ln(10) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql692"));
+}
+
+#[test]
+fn sql692_quiet_log_two_arg() {
+  let d = diags("SELECT log(10, n) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql692"));
+}
+
+#[test]
+fn sql693_log_base_one() {
+  let d = diags("SELECT log(1, n) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql693"));
+}
+
+#[test]
+fn sql693_quiet_real_base() {
+  let d = diags("SELECT log(10, n) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql693"));
+}
+
+#[test]
+fn sql693_quiet_single_arg() {
+  let d = diags("SELECT log(100) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql693"));
+}
+
+#[test]
+fn sql694_acos_out_of_range() {
+  let d = diags("SELECT acos(2) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql694"));
+}
+
+#[test]
+fn sql694_asin_negative_out_of_range() {
+  let d = diags("SELECT asin(-3) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql694"));
+}
+
+#[test]
+fn sql694_quiet_in_range() {
+  let d = diags("SELECT acos(0.5) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql694"));
+}
+
+#[test]
+fn sql694_quiet_column() {
+  let d = diags("SELECT acos(x) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql694"));
+}
+
+#[test]
 fn sql697_degrees_radians() {
   let d = diags("SELECT degrees(radians(angle)) FROM users");
   assert!(d.iter().any(|x| x.code == "sql697"));
@@ -27779,6 +27863,18 @@ fn sql697_quiet_single_call() {
 }
 
 #[test]
+fn sql698_chr_zero() {
+  let d = diags("SELECT chr(0) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql698"));
+}
+
+#[test]
+fn sql698_quiet_chr_real() {
+  let d = diags("SELECT chr(65) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql698"));
+}
+
+#[test]
 fn sql699_lpad_zero() {
   let d = diags("SELECT lpad(name, 0) FROM users");
   assert!(d.iter().any(|x| x.code == "sql699"));
@@ -27794,6 +27890,24 @@ fn sql699_rpad_zero_with_fill() {
 fn sql699_quiet_real_width() {
   let d = diags("SELECT lpad(name, 10, '0') FROM users");
   assert!(!d.iter().any(|x| x.code == "sql699"));
+}
+
+#[test]
+fn sql700_setseed_out_of_range() {
+  let d = diags("SELECT setseed(2)");
+  assert!(d.iter().any(|x| x.code == "sql700"));
+}
+
+#[test]
+fn sql700_setseed_negative_out_of_range() {
+  let d = diags("SELECT setseed(-5)");
+  assert!(d.iter().any(|x| x.code == "sql700"));
+}
+
+#[test]
+fn sql700_quiet_in_range() {
+  let d = diags("SELECT setseed(0.5)");
+  assert!(!d.iter().any(|x| x.code == "sql700"));
 }
 
 #[test]
@@ -27887,6 +28001,36 @@ fn sql718_quiet_real_count() {
 }
 
 #[test]
+fn sql720_power_zero_negative() {
+  let d = diags("SELECT power(0, -1) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql720"));
+}
+
+#[test]
+fn sql720_quiet_positive_exponent() {
+  let d = diags("SELECT power(0, 2) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql720"));
+}
+
+#[test]
+fn sql720_quiet_nonzero_base() {
+  let d = diags("SELECT power(2, -1) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql720"));
+}
+
+#[test]
+fn sql722_factorial_negative() {
+  let d = diags("SELECT factorial(-3)");
+  assert!(d.iter().any(|x| x.code == "sql722"));
+}
+
+#[test]
+fn sql722_quiet_positive() {
+  let d = diags("SELECT factorial(5)");
+  assert!(!d.iter().any(|x| x.code == "sql722"));
+}
+
+#[test]
 fn sql726_ascii_empty() {
   let d = diags("SELECT ascii('') FROM users");
   assert!(d.iter().any(|x| x.code == "sql726"));
@@ -27953,6 +28097,24 @@ fn sql729_quiet_real_shift() {
 }
 
 #[test]
+fn sql730_chr_too_large() {
+  let d = diags("SELECT chr(2000000) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql730"));
+}
+
+#[test]
+fn sql730_chr_negative() {
+  let d = diags("SELECT chr(-1) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql730"));
+}
+
+#[test]
+fn sql730_quiet_real_code() {
+  let d = diags("SELECT chr(65) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql730"));
+}
+
+#[test]
 fn sql731_ln_one() {
   let d = diags("SELECT ln(1) FROM users");
   assert!(d.iter().any(|x| x.code == "sql731"));
@@ -27968,6 +28130,30 @@ fn sql731_log_one() {
 fn sql731_quiet_real_arg() {
   let d = diags("SELECT ln(x) FROM users");
   assert!(!d.iter().any(|x| x.code == "sql731"));
+}
+
+#[test]
+fn sql732_acosh_below_one() {
+  let d = diags("SELECT acosh(0) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql732"));
+}
+
+#[test]
+fn sql732_atanh_at_one() {
+  let d = diags("SELECT atanh(1) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql732"));
+}
+
+#[test]
+fn sql732_quiet_acosh_valid() {
+  let d = diags("SELECT acosh(2) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql732"));
+}
+
+#[test]
+fn sql732_quiet_atanh_valid() {
+  let d = diags("SELECT atanh(0.5) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql732"));
 }
 
 #[test]
