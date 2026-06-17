@@ -366,10 +366,13 @@ pub mod chr_zero;
 pub mod lpad_rpad_zero;
 pub mod setseed_out_of_range;
 pub mod nullif_distinct_literals;
+pub mod coalesce_is_null_always_false;
 pub mod ntile_nonpositive;
 pub mod nth_value_nonpositive;
 pub mod width_bucket_nonpositive_count;
 pub mod lag_lead_zero_offset;
+pub mod jsonb_typeof_invalid_literal;
+pub mod coalesce_is_not_null_always_true;
 pub mod bitand_zero;
 pub mod bitwise_self;
 pub mod starts_with_empty_string;
@@ -378,6 +381,7 @@ pub mod to_char_empty_format;
 pub mod repeat_one;
 pub mod power_zero_negative_exponent;
 pub mod factorial_negative;
+pub mod random_compare_out_of_range;
 pub mod ascii_empty_string;
 pub mod exp_ln_roundtrip;
 pub mod bitor_zero;
@@ -387,6 +391,7 @@ pub mod ln_log_one;
 pub mod acosh_atanh_domain;
 pub mod exists_aggregate;
 pub mod width_bucket_equal_bounds;
+pub mod nonneg_func_negative_compare2;
 pub mod not_boolean_literal;
 pub mod modulo_by_negative_one;
 pub mod percentile_fraction_out_of_range;
@@ -1142,10 +1147,13 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(lpad_rpad_zero::Rule),
     Box::new(setseed_out_of_range::Rule),
     Box::new(nullif_distinct_literals::Rule),
+    Box::new(coalesce_is_null_always_false::Rule),
     Box::new(ntile_nonpositive::Rule),
     Box::new(nth_value_nonpositive::Rule),
     Box::new(width_bucket_nonpositive_count::Rule),
     Box::new(lag_lead_zero_offset::Rule),
+    Box::new(jsonb_typeof_invalid_literal::Rule),
+    Box::new(coalesce_is_not_null_always_true::Rule),
     Box::new(bitand_zero::Rule),
     Box::new(bitwise_self::Rule),
     Box::new(starts_with_empty_string::Rule),
@@ -1154,6 +1162,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(repeat_one::Rule),
     Box::new(power_zero_negative_exponent::Rule),
     Box::new(factorial_negative::Rule),
+    Box::new(random_compare_out_of_range::Rule),
     Box::new(ascii_empty_string::Rule),
     Box::new(exp_ln_roundtrip::Rule),
     Box::new(bitor_zero::Rule),
@@ -1163,6 +1172,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(acosh_atanh_domain::Rule),
     Box::new(exists_aggregate::Rule),
     Box::new(width_bucket_equal_bounds::Rule),
+    Box::new(nonneg_func_negative_compare2::Rule),
     Box::new(not_boolean_literal::Rule),
     Box::new(modulo_by_negative_one::Rule),
     Box::new(percentile_fraction_out_of_range::Rule),

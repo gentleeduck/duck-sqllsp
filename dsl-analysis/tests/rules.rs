@@ -28115,6 +28115,24 @@ fn sql701_quiet_column_arg() {
 }
 
 #[test]
+fn sql702_coalesce_is_null() {
+  let d = diags("SELECT * FROM users WHERE coalesce(name, 'x') IS NULL");
+  assert!(d.iter().any(|x| x.code == "sql702"));
+}
+
+#[test]
+fn sql702_quiet_nullable_fallback() {
+  let d = diags("SELECT * FROM users WHERE coalesce(name, other) IS NULL");
+  assert!(!d.iter().any(|x| x.code == "sql702"));
+}
+
+#[test]
+fn sql702_quiet_is_not_null() {
+  let d = diags("SELECT * FROM users WHERE coalesce(name, 'x') IS NOT NULL");
+  assert!(!d.iter().any(|x| x.code == "sql702"));
+}
+
+#[test]
 fn sql703_ntile_zero() {
   let d = diags("SELECT ntile(0) OVER (ORDER BY id) FROM users");
   assert!(d.iter().any(|x| x.code == "sql703"));
@@ -28178,6 +28196,36 @@ fn sql707_lead_zero_offset() {
 fn sql707_quiet_offset_one() {
   let d = diags("SELECT lag(price, 1) OVER (ORDER BY id) FROM users");
   assert!(!d.iter().any(|x| x.code == "sql707"));
+}
+
+#[test]
+fn sql709_jsonb_typeof_invalid() {
+  let d = diags("SELECT * FROM users WHERE jsonb_typeof(data) = 'int'");
+  assert!(d.iter().any(|x| x.code == "sql709"));
+}
+
+#[test]
+fn sql709_json_typeof_neq_invalid() {
+  let d = diags("SELECT * FROM users WHERE json_typeof(data) <> 'text'");
+  assert!(d.iter().any(|x| x.code == "sql709"));
+}
+
+#[test]
+fn sql709_quiet_valid_type() {
+  let d = diags("SELECT * FROM users WHERE jsonb_typeof(data) = 'object'");
+  assert!(!d.iter().any(|x| x.code == "sql709"));
+}
+
+#[test]
+fn sql710_coalesce_is_not_null() {
+  let d = diags("SELECT * FROM users WHERE coalesce(name, 'x') IS NOT NULL");
+  assert!(d.iter().any(|x| x.code == "sql710"));
+}
+
+#[test]
+fn sql710_quiet_nullable_fallback() {
+  let d = diags("SELECT * FROM users WHERE coalesce(name, other) IS NOT NULL");
+  assert!(!d.iter().any(|x| x.code == "sql710"));
 }
 
 #[test]
@@ -28298,6 +28346,24 @@ fn sql722_factorial_negative() {
 fn sql722_quiet_positive() {
   let d = diags("SELECT factorial(5)");
   assert!(!d.iter().any(|x| x.code == "sql722"));
+}
+
+#[test]
+fn sql725_random_ge_one() {
+  let d = diags("SELECT * FROM users WHERE random() >= 1");
+  assert!(d.iter().any(|x| x.code == "sql725"));
+}
+
+#[test]
+fn sql725_random_lt_zero() {
+  let d = diags("SELECT * FROM users WHERE random() < 0");
+  assert!(d.iter().any(|x| x.code == "sql725"));
+}
+
+#[test]
+fn sql725_quiet_valid_range() {
+  let d = diags("SELECT * FROM users WHERE random() < 0.5");
+  assert!(!d.iter().any(|x| x.code == "sql725"));
 }
 
 #[test]
@@ -28460,6 +28526,30 @@ fn sql736_width_bucket_equal_bounds() {
 fn sql736_quiet_distinct_bounds() {
   let d = diags("SELECT width_bucket(x, 0, 100, 10) FROM users");
   assert!(!d.iter().any(|x| x.code == "sql736"));
+}
+
+#[test]
+fn sql738_strpos_eq_negative() {
+  let d = diags("SELECT * FROM users WHERE strpos(name, 'x') = -1");
+  assert!(d.iter().any(|x| x.code == "sql738"));
+}
+
+#[test]
+fn sql738_array_length_lt_zero() {
+  let d = diags("SELECT * FROM users WHERE array_length(tags, 1) < 0");
+  assert!(d.iter().any(|x| x.code == "sql738"));
+}
+
+#[test]
+fn sql738_quiet_position_eq_zero() {
+  let d = diags("SELECT * FROM users WHERE position('x' in name) = 0");
+  assert!(!d.iter().any(|x| x.code == "sql738"));
+}
+
+#[test]
+fn sql738_quiet_strpos_gt_zero() {
+  let d = diags("SELECT * FROM users WHERE strpos(name, 'x') > 0");
+  assert!(!d.iter().any(|x| x.code == "sql738"));
 }
 
 #[test]
