@@ -27701,6 +27701,48 @@ fn sql680_quiet_real_length() {
 }
 
 #[test]
+fn sql681_col_times_zero() {
+  let d = diags("SELECT id * 0 FROM users");
+  assert!(d.iter().any(|x| x.code == "sql681"));
+}
+
+#[test]
+fn sql681_zero_times_col() {
+  let d = diags("SELECT 0 * id FROM users");
+  assert!(d.iter().any(|x| x.code == "sql681"));
+}
+
+#[test]
+fn sql681_quiet_select_star() {
+  let d = diags("SELECT * FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql681"));
+}
+
+#[test]
+fn sql681_quiet_count_star() {
+  let d = diags("SELECT count(*) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql681"));
+}
+
+#[test]
+fn sql681_quiet_times_two() {
+  let d = diags("SELECT id * 2 FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql681"));
+}
+
+#[test]
+fn sql689_modulo_self() {
+  let d = diags("SELECT * FROM users WHERE id % id = 0");
+  assert!(d.iter().any(|x| x.code == "sql689"));
+}
+
+#[test]
+fn sql689_quiet_different_operand() {
+  let d = diags("SELECT * FROM users WHERE id % 2 = 0");
+  assert!(!d.iter().any(|x| x.code == "sql689"));
+}
+
+#[test]
 fn sql699_lpad_zero() {
   let d = diags("SELECT lpad(name, 0) FROM users");
   assert!(d.iter().any(|x| x.code == "sql699"));
@@ -27716,6 +27758,48 @@ fn sql699_rpad_zero_with_fill() {
 fn sql699_quiet_real_width() {
   let d = diags("SELECT lpad(name, 10, '0') FROM users");
   assert!(!d.iter().any(|x| x.code == "sql699"));
+}
+
+#[test]
+fn sql713_col_bitand_zero() {
+  let d = diags("SELECT flags & 0 FROM users");
+  assert!(d.iter().any(|x| x.code == "sql713"));
+}
+
+#[test]
+fn sql713_quiet_real_mask() {
+  let d = diags("SELECT flags & 4 FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql713"));
+}
+
+#[test]
+fn sql713_quiet_array_overlap() {
+  let d = diags("SELECT * FROM users WHERE tags && ARRAY[1]");
+  assert!(!d.iter().any(|x| x.code == "sql713"));
+}
+
+#[test]
+fn sql714_bitand_self() {
+  let d = diags("SELECT flags & flags FROM users");
+  assert!(d.iter().any(|x| x.code == "sql714"));
+}
+
+#[test]
+fn sql714_bitor_self() {
+  let d = diags("SELECT flags | flags FROM users");
+  assert!(d.iter().any(|x| x.code == "sql714"));
+}
+
+#[test]
+fn sql714_quiet_concat() {
+  let d = diags("SELECT name || name FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql714"));
+}
+
+#[test]
+fn sql714_quiet_different_operands() {
+  let d = diags("SELECT flags & mask FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql714"));
 }
 
 #[test]
@@ -27776,5 +27860,59 @@ fn sql726_ascii_empty() {
 fn sql726_quiet_real_char() {
   let d = diags("SELECT ascii('A') FROM users");
   assert!(!d.iter().any(|x| x.code == "sql726"));
+}
+
+#[test]
+fn sql728_bitor_zero() {
+  let d = diags("SELECT flags | 0 FROM users");
+  assert!(d.iter().any(|x| x.code == "sql728"));
+}
+
+#[test]
+fn sql728_quiet_real_mask() {
+  let d = diags("SELECT flags | 4 FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql728"));
+}
+
+#[test]
+fn sql728_quiet_concat() {
+  let d = diags("SELECT name || '0' FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql728"));
+}
+
+#[test]
+fn sql729_shift_left_zero() {
+  let d = diags("SELECT flags << 0 FROM users");
+  assert!(d.iter().any(|x| x.code == "sql729"));
+}
+
+#[test]
+fn sql729_shift_right_zero() {
+  let d = diags("SELECT flags >> 0 FROM users");
+  assert!(d.iter().any(|x| x.code == "sql729"));
+}
+
+#[test]
+fn sql729_quiet_real_shift() {
+  let d = diags("SELECT flags << 2 FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql729"));
+}
+
+#[test]
+fn sql741_percent_negative_one() {
+  let d = diags("SELECT * FROM users WHERE id % -1 = 0");
+  assert!(d.iter().any(|x| x.code == "sql741"));
+}
+
+#[test]
+fn sql741_mod_negative_one() {
+  let d = diags("SELECT mod(id, -1) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql741"));
+}
+
+#[test]
+fn sql741_quiet_negative_two() {
+  let d = diags("SELECT * FROM users WHERE id % -2 = 0");
+  assert!(!d.iter().any(|x| x.code == "sql741"));
 }
 

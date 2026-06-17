@@ -346,12 +346,19 @@ pub mod modulo_by_one;
 pub mod zero_date_literal;
 pub mod left_right_zero;
 pub mod substring_zero_length;
+pub mod multiply_by_zero;
+pub mod modulo_self;
 pub mod lpad_rpad_zero;
+pub mod bitand_zero;
+pub mod bitwise_self;
 pub mod starts_with_empty_string;
 pub mod translate_empty_from;
 pub mod to_char_empty_format;
 pub mod repeat_one;
 pub mod ascii_empty_string;
+pub mod bitor_zero;
+pub mod bitshift_zero;
+pub mod modulo_by_negative_one;
 pub mod reindex_not_concurrent;
 pub mod alter_add_key_lock;
 pub mod vacuum_full_locks;
@@ -1084,12 +1091,19 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(zero_date_literal::Rule),
     Box::new(left_right_zero::Rule),
     Box::new(substring_zero_length::Rule),
+    Box::new(multiply_by_zero::Rule),
+    Box::new(modulo_self::Rule),
     Box::new(lpad_rpad_zero::Rule),
+    Box::new(bitand_zero::Rule),
+    Box::new(bitwise_self::Rule),
     Box::new(starts_with_empty_string::Rule),
     Box::new(translate_empty_from::Rule),
     Box::new(to_char_empty_format::Rule),
     Box::new(repeat_one::Rule),
     Box::new(ascii_empty_string::Rule),
+    Box::new(bitor_zero::Rule),
+    Box::new(bitshift_zero::Rule),
+    Box::new(modulo_by_negative_one::Rule),
     Box::new(reindex_not_concurrent::Rule),
     Box::new(alter_add_key_lock::Rule),
     Box::new(vacuum_full_locks::Rule),
