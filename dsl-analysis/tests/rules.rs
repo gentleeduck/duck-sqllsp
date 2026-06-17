@@ -27863,6 +27863,18 @@ fn sql687_quiet_null_first() {
 }
 
 #[test]
+fn sql688_concat_ws_null_sep() {
+  let d = diags("SELECT concat_ws(NULL, a, b) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql688"));
+}
+
+#[test]
+fn sql688_quiet_real_sep() {
+  let d = diags("SELECT concat_ws(',', a, b) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql688"));
+}
+
+#[test]
 fn sql689_modulo_self() {
   let d = diags("SELECT * FROM users WHERE id % id = 0");
   assert!(d.iter().any(|x| x.code == "sql689"));
@@ -28181,6 +28193,18 @@ fn sql705_quiet_array_form() {
 }
 
 #[test]
+fn sql706_array_to_string_null() {
+  let d = diags("SELECT array_to_string(tags, NULL) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql706"));
+}
+
+#[test]
+fn sql706_quiet_real_delimiter() {
+  let d = diags("SELECT array_to_string(tags, ',') FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql706"));
+}
+
+#[test]
 fn sql707_lag_zero_offset() {
   let d = diags("SELECT lag(price, 0) OVER (ORDER BY id) FROM users");
   assert!(d.iter().any(|x| x.code == "sql707"));
@@ -28196,6 +28220,24 @@ fn sql707_lead_zero_offset() {
 fn sql707_quiet_offset_one() {
   let d = diags("SELECT lag(price, 1) OVER (ORDER BY id) FROM users");
   assert!(!d.iter().any(|x| x.code == "sql707"));
+}
+
+#[test]
+fn sql708_lpad_null_fill() {
+  let d = diags("SELECT lpad(name, 10, NULL) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql708"));
+}
+
+#[test]
+fn sql708_rpad_null_fill() {
+  let d = diags("SELECT rpad(name, 10, NULL) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql708"));
+}
+
+#[test]
+fn sql708_quiet_real_fill() {
+  let d = diags("SELECT lpad(name, 10, '0') FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql708"));
 }
 
 #[test]

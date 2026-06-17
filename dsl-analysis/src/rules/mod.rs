@@ -353,6 +353,7 @@ pub mod greatest_least_null_arg;
 pub mod power_base_one;
 pub mod not_not_double_negation;
 pub mod coalesce_constant_first;
+pub mod concat_ws_null_separator;
 pub mod modulo_self;
 pub mod sqrt_negative_literal;
 pub mod min_max_distinct;
@@ -370,7 +371,9 @@ pub mod coalesce_is_null_always_false;
 pub mod ntile_nonpositive;
 pub mod nth_value_nonpositive;
 pub mod width_bucket_nonpositive_count;
+pub mod array_to_string_null_delimiter;
 pub mod lag_lead_zero_offset;
+pub mod lpad_rpad_null_fill;
 pub mod jsonb_typeof_invalid_literal;
 pub mod coalesce_is_not_null_always_true;
 pub mod bitand_zero;
@@ -1134,6 +1137,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(power_base_one::Rule),
     Box::new(not_not_double_negation::Rule),
     Box::new(coalesce_constant_first::Rule),
+    Box::new(concat_ws_null_separator::Rule),
     Box::new(modulo_self::Rule),
     Box::new(sqrt_negative_literal::Rule),
     Box::new(min_max_distinct::Rule),
@@ -1151,7 +1155,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(ntile_nonpositive::Rule),
     Box::new(nth_value_nonpositive::Rule),
     Box::new(width_bucket_nonpositive_count::Rule),
+    Box::new(array_to_string_null_delimiter::Rule),
     Box::new(lag_lead_zero_offset::Rule),
+    Box::new(lpad_rpad_null_fill::Rule),
     Box::new(jsonb_typeof_invalid_literal::Rule),
     Box::new(coalesce_is_not_null_always_true::Rule),
     Box::new(bitand_zero::Rule),
