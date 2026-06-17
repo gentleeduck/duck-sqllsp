@@ -28397,6 +28397,24 @@ fn sql718_quiet_real_count() {
 }
 
 #[test]
+fn sql719_increment_zero() {
+  let d = diags("CREATE SEQUENCE s INCREMENT 0");
+  assert!(d.iter().any(|x| x.code == "sql719"));
+}
+
+#[test]
+fn sql719_increment_by_zero() {
+  let d = diags("CREATE SEQUENCE s INCREMENT BY 0");
+  assert!(d.iter().any(|x| x.code == "sql719"));
+}
+
+#[test]
+fn sql719_quiet_real_increment() {
+  let d = diags("CREATE SEQUENCE s INCREMENT 2");
+  assert!(!d.iter().any(|x| x.code == "sql719"));
+}
+
+#[test]
 fn sql720_power_zero_negative() {
   let d = diags("SELECT power(0, -1) FROM users");
   assert!(d.iter().any(|x| x.code == "sql720"));
@@ -28442,6 +28460,24 @@ fn sql722_factorial_negative() {
 fn sql722_quiet_positive() {
   let d = diags("SELECT factorial(5)");
   assert!(!d.iter().any(|x| x.code == "sql722"));
+}
+
+#[test]
+fn sql724_numeric_precision_too_large() {
+  let d = diags("CREATE TABLE t (n NUMERIC(2000))");
+  assert!(d.iter().any(|x| x.code == "sql724"));
+}
+
+#[test]
+fn sql724_numeric_precision_zero() {
+  let d = diags("CREATE TABLE t (n DECIMAL(0, 0))");
+  assert!(d.iter().any(|x| x.code == "sql724"));
+}
+
+#[test]
+fn sql724_quiet_valid_precision() {
+  let d = diags("CREATE TABLE t (n NUMERIC(10, 2))");
+  assert!(!d.iter().any(|x| x.code == "sql724"));
 }
 
 #[test]
@@ -28667,6 +28703,30 @@ fn sql738_quiet_strpos_gt_zero() {
 }
 
 #[test]
+fn sql739_double_cast() {
+  let d = diags("SELECT id::int::int FROM users");
+  assert!(d.iter().any(|x| x.code == "sql739"));
+}
+
+#[test]
+fn sql739_double_cast_text() {
+  let d = diags("SELECT (a || b)::text::text FROM users");
+  assert!(d.iter().any(|x| x.code == "sql739"));
+}
+
+#[test]
+fn sql739_quiet_different_casts() {
+  let d = diags("SELECT id::text::int FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql739"));
+}
+
+#[test]
+fn sql739_quiet_single_cast() {
+  let d = diags("SELECT id::int FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql739"));
+}
+
+#[test]
 fn sql740_not_true() {
   let d = diags("SELECT * FROM users WHERE NOT TRUE");
   assert!(d.iter().any(|x| x.code == "sql740"));
@@ -28709,6 +28769,48 @@ fn sql741_quiet_negative_two() {
 }
 
 #[test]
+fn sql745_date_part_unknown_field() {
+  let d = diags("SELECT date_part('yearr', created_at) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql745"));
+}
+
+#[test]
+fn sql745_quiet_valid_field() {
+  let d = diags("SELECT date_part('year', created_at) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql745"));
+}
+
+#[test]
+fn sql745_quiet_column_field() {
+  let d = diags("SELECT date_part(unit_col, created_at) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql745"));
+}
+
+#[test]
+fn sql746_int4range_reversed() {
+  let d = diags("SELECT int4range(5, 1)");
+  assert!(d.iter().any(|x| x.code == "sql746"));
+}
+
+#[test]
+fn sql746_numrange_reversed() {
+  let d = diags("SELECT numrange(10, 2)");
+  assert!(d.iter().any(|x| x.code == "sql746"));
+}
+
+#[test]
+fn sql746_quiet_ordered() {
+  let d = diags("SELECT int4range(1, 5)");
+  assert!(!d.iter().any(|x| x.code == "sql746"));
+}
+
+#[test]
+fn sql746_quiet_unbounded() {
+  let d = diags("SELECT int4range(NULL, 5)");
+  assert!(!d.iter().any(|x| x.code == "sql746"));
+}
+
+#[test]
 fn sql747_percentile_out_of_range() {
   let d = diags("SELECT percentile_cont(1.5) WITHIN GROUP (ORDER BY id) FROM users");
   assert!(d.iter().any(|x| x.code == "sql747"));
@@ -28724,5 +28826,23 @@ fn sql747_percentile_fifty() {
 fn sql747_quiet_valid_fraction() {
   let d = diags("SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY id) FROM users");
   assert!(!d.iter().any(|x| x.code == "sql747"));
+}
+
+#[test]
+fn sql749_daterange_reversed() {
+  let d = diags("SELECT daterange('2024-01-01', '2023-01-01')");
+  assert!(d.iter().any(|x| x.code == "sql749"));
+}
+
+#[test]
+fn sql749_quiet_ordered() {
+  let d = diags("SELECT daterange('2023-01-01', '2024-01-01')");
+  assert!(!d.iter().any(|x| x.code == "sql749"));
+}
+
+#[test]
+fn sql749_quiet_unbounded() {
+  let d = diags("SELECT daterange(NULL, '2024-01-01')");
+  assert!(!d.iter().any(|x| x.code == "sql749"));
 }
 
