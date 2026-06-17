@@ -28625,6 +28625,36 @@ fn sql732_quiet_atanh_valid() {
 }
 
 #[test]
+fn sql733_dblink_password() {
+  let d = diags("SELECT * FROM dblink('host=db user=app password=secret dbname=prod', 'SELECT 1') AS t(x int)");
+  assert!(d.iter().any(|x| x.code == "sql733"));
+}
+
+#[test]
+fn sql733_quiet_no_password() {
+  let d = diags("SELECT * FROM dblink('host=db dbname=prod', 'SELECT 1') AS t(x int)");
+  assert!(!d.iter().any(|x| x.code == "sql733"));
+}
+
+#[test]
+fn sql734_ilike_no_wildcard() {
+  let d = diags("SELECT * FROM users WHERE name ILIKE 'alice'");
+  assert!(d.iter().any(|x| x.code == "sql734"));
+}
+
+#[test]
+fn sql734_quiet_with_wildcard() {
+  let d = diags("SELECT * FROM users WHERE name ILIKE 'alice%'");
+  assert!(!d.iter().any(|x| x.code == "sql734"));
+}
+
+#[test]
+fn sql734_quiet_plain_like() {
+  let d = diags("SELECT * FROM users WHERE name LIKE 'alice'");
+  assert!(!d.iter().any(|x| x.code == "sql734"));
+}
+
+#[test]
 fn sql735_exists_count() {
   let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT count(*) FROM users)");
   assert!(d.iter().any(|x| x.code == "sql735"));

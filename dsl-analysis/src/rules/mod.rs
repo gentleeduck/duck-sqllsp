@@ -397,6 +397,8 @@ pub mod bitshift_zero;
 pub mod chr_above_max;
 pub mod ln_log_one;
 pub mod acosh_atanh_domain;
+pub mod connection_string_password;
+pub mod ilike_without_wildcard;
 pub mod exists_aggregate;
 pub mod width_bucket_equal_bounds;
 pub mod date_bin_nonpositive_stride;
@@ -1195,6 +1197,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(chr_above_max::Rule),
     Box::new(ln_log_one::Rule),
     Box::new(acosh_atanh_domain::Rule),
+    Box::new(connection_string_password::Rule),
+    Box::new(ilike_without_wildcard::Rule),
     Box::new(exists_aggregate::Rule),
     Box::new(width_bucket_equal_bounds::Rule),
     Box::new(date_bin_nonpositive_stride::Rule),
