@@ -407,7 +407,11 @@ pub mod modulo_by_negative_one;
 pub mod date_part_unknown_field;
 pub mod range_lower_gt_upper;
 pub mod percentile_fraction_out_of_range;
+pub mod encode_invalid_format;
 pub mod daterange_reversed;
+pub mod bit_string_invalid_digit;
+pub mod hex_string_invalid_digit;
+pub mod like_escape_multichar;
 pub mod reindex_not_concurrent;
 pub mod alter_add_key_lock;
 pub mod vacuum_full_locks;
@@ -1201,7 +1205,11 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(date_part_unknown_field::Rule),
     Box::new(range_lower_gt_upper::Rule),
     Box::new(percentile_fraction_out_of_range::Rule),
+    Box::new(encode_invalid_format::Rule),
     Box::new(daterange_reversed::Rule),
+    Box::new(bit_string_invalid_digit::Rule),
+    Box::new(hex_string_invalid_digit::Rule),
+    Box::new(like_escape_multichar::Rule),
     Box::new(reindex_not_concurrent::Rule),
     Box::new(alter_add_key_lock::Rule),
     Box::new(vacuum_full_locks::Rule),

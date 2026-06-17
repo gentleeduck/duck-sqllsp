@@ -28829,6 +28829,24 @@ fn sql747_quiet_valid_fraction() {
 }
 
 #[test]
+fn sql748_encode_bad_format() {
+  let d = diags("SELECT encode(data, 'base32') FROM users");
+  assert!(d.iter().any(|x| x.code == "sql748"));
+}
+
+#[test]
+fn sql748_quiet_hex() {
+  let d = diags("SELECT encode(data, 'hex') FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql748"));
+}
+
+#[test]
+fn sql748_quiet_base64() {
+  let d = diags("SELECT encode(data, 'base64') FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql748"));
+}
+
+#[test]
 fn sql749_daterange_reversed() {
   let d = diags("SELECT daterange('2024-01-01', '2023-01-01')");
   assert!(d.iter().any(|x| x.code == "sql749"));
@@ -28846,3 +28864,44 @@ fn sql749_quiet_unbounded() {
   assert!(!d.iter().any(|x| x.code == "sql749"));
 }
 
+#[test]
+fn sql750_bit_string_invalid() {
+  let d = diags("SELECT B'1021'");
+  assert!(d.iter().any(|x| x.code == "sql750"));
+}
+
+#[test]
+fn sql750_quiet_valid_bits() {
+  let d = diags("SELECT B'1010'");
+  assert!(!d.iter().any(|x| x.code == "sql750"));
+}
+
+#[test]
+fn sql750_quiet_plain_string() {
+  let d = diags("SELECT 'B comes before C' FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql750"));
+}
+
+#[test]
+fn sql751_hex_string_invalid() {
+  let d = diags("SELECT X'1G'");
+  assert!(d.iter().any(|x| x.code == "sql751"));
+}
+
+#[test]
+fn sql751_quiet_valid_hex() {
+  let d = diags("SELECT X'1f'");
+  assert!(!d.iter().any(|x| x.code == "sql751"));
+}
+
+#[test]
+fn sql752_escape_multichar() {
+  let d = diags("SELECT * FROM users WHERE name LIKE 'a%' ESCAPE 'ab'");
+  assert!(d.iter().any(|x| x.code == "sql752"));
+}
+
+#[test]
+fn sql752_quiet_single_char() {
+  let d = diags("SELECT * FROM users WHERE name LIKE 'a!%' ESCAPE '!'");
+  assert!(!d.iter().any(|x| x.code == "sql752"));
+}
