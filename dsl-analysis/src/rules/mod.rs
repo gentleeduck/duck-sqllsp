@@ -338,6 +338,12 @@ pub mod mysql_alter_change_modify;
 pub mod mysql_functions;
 pub mod mysql_on_duplicate_key;
 pub mod where_bare_integer;
+pub mod between_null_bound;
+pub mod ranking_fn_with_frame;
+pub mod union_branch_distinct;
+pub mod count_distinct_constant;
+pub mod modulo_by_one;
+pub mod zero_date_literal;
 pub mod reindex_not_concurrent;
 pub mod alter_add_key_lock;
 pub mod vacuum_full_locks;
@@ -1062,6 +1068,12 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(mysql_functions::Rule),
     Box::new(mysql_on_duplicate_key::Rule),
     Box::new(where_bare_integer::Rule),
+    Box::new(between_null_bound::Rule),
+    Box::new(ranking_fn_with_frame::Rule),
+    Box::new(union_branch_distinct::Rule),
+    Box::new(count_distinct_constant::Rule),
+    Box::new(modulo_by_one::Rule),
+    Box::new(zero_date_literal::Rule),
     Box::new(reindex_not_concurrent::Rule),
     Box::new(alter_add_key_lock::Rule),
     Box::new(vacuum_full_locks::Rule),

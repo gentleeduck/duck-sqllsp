@@ -27520,3 +27520,140 @@ fn sql672_quiet_alter_column_type() {
   assert!(!d.iter().any(|x| x.code == "sql672"));
 }
 
+#[test]
+fn sql673_between_low_null() {
+  let d = diags("SELECT * FROM t WHERE x BETWEEN NULL AND 5");
+  assert!(d.iter().any(|x| x.code == "sql673"));
+}
+
+#[test]
+fn sql673_between_high_null() {
+  let d = diags("SELECT * FROM t WHERE x BETWEEN 1 AND NULL");
+  assert!(d.iter().any(|x| x.code == "sql673"));
+}
+
+#[test]
+fn sql673_not_between_null() {
+  let d = diags("SELECT * FROM t WHERE x NOT BETWEEN NULL AND 5");
+  assert!(d.iter().any(|x| x.code == "sql673"));
+}
+
+#[test]
+fn sql673_quiet_real_bounds() {
+  let d = diags("SELECT * FROM t WHERE x BETWEEN 1 AND 5");
+  assert!(!d.iter().any(|x| x.code == "sql673"));
+}
+
+#[test]
+fn sql674_row_number_frame() {
+  let d = diags("SELECT row_number() OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql674"));
+}
+
+#[test]
+fn sql674_rank_range_frame() {
+  let d = diags("SELECT rank() OVER (ORDER BY id RANGE UNBOUNDED PRECEDING) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql674"));
+}
+
+#[test]
+fn sql674_quiet_no_frame() {
+  let d = diags("SELECT row_number() OVER (PARTITION BY name ORDER BY id) FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql674"));
+}
+
+#[test]
+fn sql674_quiet_aggregate_with_frame() {
+  let d = diags("SELECT sum(id) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql674"));
+}
+
+#[test]
+fn sql675_distinct_in_union_branch() {
+  let d = diags("SELECT DISTINCT id FROM t UNION SELECT id FROM users");
+  assert!(d.iter().any(|x| x.code == "sql675"));
+}
+
+#[test]
+fn sql675_quiet_union_all() {
+  let d = diags("SELECT DISTINCT id FROM t UNION ALL SELECT id FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql675"));
+}
+
+#[test]
+fn sql675_quiet_distinct_no_setop() {
+  let d = diags("SELECT DISTINCT id FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql675"));
+}
+
+#[test]
+fn sql675_quiet_distinct_on() {
+  let d = diags("SELECT DISTINCT ON (id) id FROM t UNION SELECT id FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql675"));
+}
+
+#[test]
+fn sql676_count_distinct_int() {
+  let d = diags("SELECT count(DISTINCT 1) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql676"));
+}
+
+#[test]
+fn sql676_count_distinct_string() {
+  let d = diags("SELECT count(DISTINCT 'x') FROM t");
+  assert!(d.iter().any(|x| x.code == "sql676"));
+}
+
+#[test]
+fn sql676_quiet_count_distinct_column() {
+  let d = diags("SELECT count(DISTINCT id) FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql676"));
+}
+
+#[test]
+fn sql676_quiet_count_star() {
+  let d = diags("SELECT count(*) FROM t");
+  assert!(!d.iter().any(|x| x.code == "sql676"));
+}
+
+#[test]
+fn sql677_percent_one() {
+  let d = diags("SELECT * FROM t WHERE x % 1 = 0");
+  assert!(d.iter().any(|x| x.code == "sql677"));
+}
+
+#[test]
+fn sql677_mod_one() {
+  let d = diags("SELECT mod(x, 1) FROM t");
+  assert!(d.iter().any(|x| x.code == "sql677"));
+}
+
+#[test]
+fn sql677_quiet_percent_two() {
+  let d = diags("SELECT * FROM t WHERE x % 2 = 0");
+  assert!(!d.iter().any(|x| x.code == "sql677"));
+}
+
+#[test]
+fn sql677_quiet_percent_ten() {
+  let d = diags("SELECT * FROM t WHERE x % 10 = 0");
+  assert!(!d.iter().any(|x| x.code == "sql677"));
+}
+
+#[test]
+fn sql678_zero_date() {
+  let d = diags("INSERT INTO t (d) VALUES ('0000-00-00')");
+  assert!(d.iter().any(|x| x.code == "sql678"));
+}
+
+#[test]
+fn sql678_zero_datetime() {
+  let d = diags("SELECT * FROM t WHERE d = '0000-00-00 00:00:00'");
+  assert!(d.iter().any(|x| x.code == "sql678"));
+}
+
+#[test]
+fn sql678_quiet_real_date() {
+  let d = diags("SELECT * FROM t WHERE d = '2024-01-01'");
+  assert!(!d.iter().any(|x| x.code == "sql678"));
+}
