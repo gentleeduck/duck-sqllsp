@@ -29001,3 +29001,40 @@ fn sql752_quiet_single_char() {
   let d = diags("SELECT * FROM users WHERE name LIKE 'a!%' ESCAPE '!'");
   assert!(!d.iter().any(|x| x.code == "sql752"));
 }
+
+#[test]
+fn sql753_setweight_bad_label() {
+  let d = diags("SELECT setweight(to_tsvector(body), 'E') FROM users");
+  assert!(d.iter().any(|x| x.code == "sql753"));
+}
+
+#[test]
+fn sql753_quiet_valid_label() {
+  let d = diags("SELECT setweight(to_tsvector(body), 'A') FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql753"));
+}
+
+#[test]
+fn sql754_to_tsquery_plain_phrase() {
+  let d = diags("SELECT to_tsquery('quick brown fox')");
+  assert!(d.iter().any(|x| x.code == "sql754"));
+}
+
+#[test]
+fn sql754_quiet_with_operator() {
+  let d = diags("SELECT to_tsquery('quick & brown')");
+  assert!(!d.iter().any(|x| x.code == "sql754"));
+}
+
+#[test]
+fn sql754_quiet_plainto() {
+  let d = diags("SELECT plainto_tsquery('quick brown fox')");
+  assert!(!d.iter().any(|x| x.code == "sql754"));
+}
+
+#[test]
+fn sql754_quiet_single_word() {
+  let d = diags("SELECT to_tsquery('postgres')");
+  assert!(!d.iter().any(|x| x.code == "sql754"));
+}
+
