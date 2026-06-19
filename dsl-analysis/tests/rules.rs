@@ -29038,3 +29038,38 @@ fn sql754_quiet_single_word() {
   assert!(!d.iter().any(|x| x.code == "sql754"));
 }
 
+#[test]
+fn sql755_count_distinct_two_cols() {
+  let d = diags("SELECT count(DISTINCT a, b) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql755"));
+}
+
+#[test]
+fn sql755_quiet_single_distinct() {
+  let d = diags("SELECT count(DISTINCT id) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql755"));
+}
+
+#[test]
+fn sql755_quiet_row_value() {
+  let d = diags("SELECT count(DISTINCT (a, b)) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql755"));
+}
+
+#[test]
+fn sql756_string_agg_no_delimiter() {
+  let d = diags("SELECT string_agg(name) FROM users");
+  assert!(d.iter().any(|x| x.code == "sql756"));
+}
+
+#[test]
+fn sql756_quiet_with_delimiter() {
+  let d = diags("SELECT string_agg(name, ', ') FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql756"));
+}
+
+#[test]
+fn sql756_quiet_array_agg() {
+  let d = diags("SELECT array_agg(name) FROM users");
+  assert!(!d.iter().any(|x| x.code == "sql756"));
+}

@@ -420,6 +420,8 @@ pub mod hex_string_invalid_digit;
 pub mod like_escape_multichar;
 pub mod setweight_invalid_label;
 pub mod to_tsquery_plain_text;
+pub mod count_distinct_multiple_args;
+pub mod agg_missing_delimiter;
 pub mod reindex_not_concurrent;
 pub mod alter_add_key_lock;
 pub mod vacuum_full_locks;
@@ -1226,6 +1228,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(like_escape_multichar::Rule),
     Box::new(setweight_invalid_label::Rule),
     Box::new(to_tsquery_plain_text::Rule),
+    Box::new(count_distinct_multiple_args::Rule),
+    Box::new(agg_missing_delimiter::Rule),
     Box::new(reindex_not_concurrent::Rule),
     Box::new(alter_add_key_lock::Rule),
     Box::new(vacuum_full_locks::Rule),
