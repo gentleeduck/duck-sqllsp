@@ -105,14 +105,13 @@ fn find_matching_end(ub: &[u8], from: usize) -> Option<usize> {
       }
       // No END before next CASE -> unbalanced.
       return None;
-    } else if let Some(erel) = next_word(ub, i, b"END") {
+    } else {
+      let erel = next_word(ub, i, b"END")?;
       if depth == 0 {
         return Some(erel);
       }
       depth -= 1;
       i = erel + 3;
-    } else {
-      return None;
     }
   }
   None
