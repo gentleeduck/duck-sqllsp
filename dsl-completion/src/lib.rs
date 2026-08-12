@@ -14,6 +14,7 @@ pub mod create_table;
 pub mod engine;
 pub mod fallback;
 pub mod item;
+pub mod merge;
 pub mod phase;
 pub mod plpgsql_locals;
 pub mod render;

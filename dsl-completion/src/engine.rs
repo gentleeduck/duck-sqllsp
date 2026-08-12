@@ -18,6 +18,7 @@ use crate::create_index;
 use crate::create_table;
 use crate::fallback;
 use crate::item::Item;
+use crate::merge;
 use crate::phase::{self, Phase};
 use crate::source_tables;
 use crate::sources;
@@ -31,7 +32,7 @@ use text_size::TextSize;
 /// verbatim; `upper` is the uppercase of `slice` with byte offsets preserved
 /// (no trim). Callers that need `upper.starts_with("CREATE …")` should do
 /// `upper.trim_start().starts_with(...)` themselves.
-fn stmt_slice_upper(source: &str, offset: TextSize) -> (String, String) {
+pub(crate) fn stmt_slice_upper(source: &str, offset: TextSize) -> (String, String) {
   let pos: usize = (u32::from(offset) as usize).min(source.len());
   let stmt_start = source[..pos].rfind(';').map(|p| p + 1).unwrap_or(0);
   let slice = source[stmt_start..pos].to_string();
@@ -43,7 +44,7 @@ fn stmt_slice_upper(source: &str, offset: TextSize) -> (String, String) {
 /// boundary. Phase detectors short-circuit on this so they don't yank
 /// the menu open while the user is typing a token. Matches the legacy
 /// guard `pos < bytes.len() && !bytes[pos].is_ascii_whitespace()`.
-fn cursor_not_at_ws_boundary(source: &str, offset: TextSize) -> bool {
+pub(crate) fn cursor_not_at_ws_boundary(source: &str, offset: TextSize) -> bool {
   let pos: usize = (u32::from(offset) as usize).min(source.len());
   let bytes = source.as_bytes();
   pos < bytes.len() && !bytes[pos].is_ascii_whitespace()
@@ -1163,21 +1164,21 @@ fn route_phase(
         // dml_drop_or_truncate_expects_table branch which would otherwise
         // emit the COPY target table list inside the option paren.
         push_keyword_kvs(&mut out, kws);
-      } else if merge_insert_col_list_slot(source, offset) {
+      } else if merge::merge_insert_col_list_slot(source, offset) {
         // MERGE ... WHEN NOT MATCHED THEN INSERT (<cursor>) -- column
         // list slot scoped to the MERGE target table. Surface its
         // columns instead of the generic table dump.
-        let (tgt, _) = merge_target_and_source(source);
+        let (tgt, _) = merge::merge_target_and_source(source);
         if let Some(t) = tgt.as_deref() {
           sources::columns_of_table(cat, None, t, &mut out);
         }
-      } else if merge_update_set_lhs_slot(source, offset) {
+      } else if merge::merge_update_set_lhs_slot(source, offset) {
         // MERGE ... WHEN MATCHED THEN UPDATE SET <cursor> / SET c=v,
         // <cursor> -- LHS column slot. Must beat `dml_drop_or_truncate_
         // expects_table` which otherwise matches `MERGE INTO` and
         // dumps every catalog table (e.g. when the slice ends in a
         // trailing comma).
-        let (tgt, _) = merge_target_and_source(source);
+        let (tgt, _) = merge::merge_target_and_source(source);
         if let Some(t) = tgt.as_deref() {
           sources::columns_of_table(cat, None, t, &mut out);
         }
@@ -1829,28 +1830,28 @@ fn route_phase(
         push_keyword_kvs(&mut out, kws);
       } else if let Some(kws) = alter_type_next_keyword(source, offset) {
         push_keyword_kvs(&mut out, kws);
-      } else if merge_update_set_lhs_slot(source, offset) {
+      } else if merge::merge_update_set_lhs_slot(source, offset) {
         // `MERGE ... THEN UPDATE SET <cursor>` / `... SET col=v, <cursor>`
         // -- LHS slot wants target table columns only.
-        let (tgt, _) = merge_target_and_source(source);
+        let (tgt, _) = merge::merge_target_and_source(source);
         if let Some(t) = tgt.as_deref() {
           sources::columns_of_table(cat, None, t, &mut out);
         }
-      } else if merge_when_matched_and_predicate_slot(source, offset)
-        || merge_update_set_rhs_expr_slot(source, offset)
+      } else if merge::merge_when_matched_and_predicate_slot(source, offset)
+        || merge::merge_update_set_rhs_expr_slot(source, offset)
       {
         // `MERGE ... WHEN [NOT] MATCHED AND <cursor>` -- expression
         // slot. Same shape for `... UPDATE SET <col> = <cursor>` RHS.
         // Surface columns from both the MERGE target and the USING
         // source, plus aliases, functions, expression kws.
-        let (tgt, src_tbl) = merge_target_and_source(source);
+        let (tgt, src_tbl) = merge::merge_target_and_source(source);
         if let Some(t) = tgt.as_deref() {
           sources::columns_of_table(cat, None, t, &mut out);
         }
         if let Some(s) = src_tbl.as_deref() {
           sources::columns_of_table(cat, None, s, &mut out);
         }
-        for alias in merge_aliases(source) {
+        for alias in merge::merge_aliases(source) {
           out.push(crate::item::Item {
             label: alias.clone(),
             kind: crate::item::ItemKind::Table,
@@ -1862,7 +1863,7 @@ fn route_phase(
         }
         push_all_functions(cat, &mut out);
         sources::expression_keywords(&mut out);
-      } else if let Some(kws) = merge_next_keyword(source, offset) {
+      } else if let Some(kws) = merge::merge_next_keyword(source, offset) {
         push_keyword_kvs(&mut out, kws);
       } else if let Some(kws) = after_top_level_create_keyword(source, offset) {
         // `CREATE <cursor>` -- narrow to the object-type keywords PG
@@ -8978,266 +8979,6 @@ fn alter_type_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(
 /// from RHS by: SET present, and either no `=` after SET yet, OR the
 /// last word is a comma-trailing comma terminator (so a new assignment
 /// is starting).
-fn merge_update_set_lhs_slot(source: &str, offset: TextSize) -> bool {
-  if cursor_not_at_ws_boundary(source, offset) {
-    return false;
-  }
-  let (slice, upper) = stmt_slice_upper(source, offset);
-  let words: Vec<&str> = upper.split_ascii_whitespace().collect();
-  if words.first() != Some(&"MERGE") {
-    return false;
-  }
-  let set_idx = match words.iter().rposition(|w| *w == "SET") {
-    Some(i) => i,
-    None => return false,
-  };
-  let after_set = &words[set_idx + 1..];
-  // Bare SET → first LHS slot.
-  if after_set.is_empty() {
-    return true;
-  }
-  // Trailing comma → next LHS slot.
-  let trimmed = slice.trim_end();
-  trimmed.ends_with(',')
-}
-
-fn merge_update_set_rhs_expr_slot(source: &str, offset: TextSize) -> bool {
-  if cursor_not_at_ws_boundary(source, offset) {
-    return false;
-  }
-  let (_, upper) = stmt_slice_upper(source, offset);
-  let words: Vec<&str> = upper.split_ascii_whitespace().collect();
-  if words.first() != Some(&"MERGE") {
-    return false;
-  }
-  // Need SET earlier and `=` between SET and cursor.
-  let set_idx = match words.iter().rposition(|w| *w == "SET") {
-    Some(i) => i,
-    None => return false,
-  };
-  let after_set = &words[set_idx + 1..];
-  // Allow trailing comma-separated assignments too: just verify any
-  // `=` is present in the tail.
-  after_set.contains(&"=")
-}
-
-/// True when the cursor sits at `MERGE ... WHEN NOT MATCHED THEN
-/// INSERT (<cursor>` -- the column-list slot. Detect by walking back
-/// to an unmatched `(` whose preceding word is INSERT, with MERGE as
-/// the statement-leading keyword.
-fn merge_insert_col_list_slot(source: &str, offset: TextSize) -> bool {
-  let pos: usize = (u32::from(offset) as usize).min(source.len());
-  let bytes = source.as_bytes();
-  let (_, upper) = stmt_slice_upper(source, offset);
-  let words: Vec<&str> = upper.split_ascii_whitespace().collect();
-  if words.first() != Some(&"MERGE") {
-    return false;
-  }
-  // Walk back from cursor to the nearest unmatched `(`.
-  let mut depth = 0i32;
-  let mut i = pos;
-  while i > 0 {
-    i -= 1;
-    match bytes[i] {
-      b')' => depth += 1,
-      b'(' => {
-        if depth == 0 {
-          break;
-        }
-        depth -= 1;
-      },
-      _ => {},
-    }
-  }
-  if bytes.get(i) != Some(&b'(') {
-    return false;
-  }
-  // Preceding word must be INSERT.
-  let mut e = i;
-  while e > 0 && bytes[e - 1].is_ascii_whitespace() {
-    e -= 1;
-  }
-  let mut s = e;
-  while s > 0 && (bytes[s - 1].is_ascii_alphanumeric() || bytes[s - 1] == b'_') {
-    s -= 1;
-  }
-  s != e && source[s..e].eq_ignore_ascii_case("INSERT")
-}
-
-/// True when the cursor sits at `MERGE ... WHEN [NOT] MATCHED AND
-/// <cursor>` -- the predicate slot. Returns false when AND is absent
-/// or the statement isn't a MERGE.
-fn merge_when_matched_and_predicate_slot(source: &str, offset: TextSize) -> bool {
-  if cursor_not_at_ws_boundary(source, offset) {
-    return false;
-  }
-  let (_, upper) = stmt_slice_upper(source, offset);
-  let words: Vec<&str> = upper.split_ascii_whitespace().collect();
-  if words.first() != Some(&"MERGE") {
-    return false;
-  }
-  let n = words.len();
-  if n < 2 || words[n - 1] != "AND" {
-    return false;
-  }
-  // Verify the AND is the WHEN [NOT] MATCHED AND form, not some inner AND.
-  // Walk backwards: skip arbitrary tokens between MATCHED and AND -- there
-  // must be no THEN between them.
-  let mut i = n - 1;
-  while i > 0 {
-    i -= 1;
-    if words[i] == "THEN" {
-      return false;
-    }
-    if words[i] == "MATCHED" {
-      return true;
-    }
-  }
-  false
-}
-
-/// Parse `MERGE INTO <target> [AS alias_t] USING <source> [AS alias_s]`
-/// from the buffer and return (target, source) table names. Crude
-/// whitespace tokenization; preserves original case.
-fn merge_target_and_source(source: &str) -> (Option<String>, Option<String>) {
-  let upper = source.to_ascii_uppercase();
-  let into = upper.find("MERGE INTO ");
-  let using = upper.find(" USING ");
-  let into_pos = match into { Some(p) => p + "MERGE INTO ".len(), None => return (None, None) };
-  let using_pos = match using { Some(p) => p, None => return (None, None) };
-  if using_pos <= into_pos {
-    return (None, None);
-  }
-  let target = extract_first_ident(&source[into_pos..using_pos]);
-  let after_using = &source[using_pos + " USING ".len()..];
-  let on_at = after_using.to_ascii_uppercase().find(" ON ").unwrap_or(after_using.len());
-  let src = extract_first_ident(&after_using[..on_at]);
-  (target, src)
-}
-
-/// Extract `MERGE INTO <t> <alias_t>, USING <s> <alias_s>` aliases
-/// (the bare identifiers right after the table names).
-fn merge_aliases(source: &str) -> Vec<String> {
-  let mut out = Vec::new();
-  let upper = source.to_ascii_uppercase();
-  if let Some(p) = upper.find("MERGE INTO ") {
-    let rest = &source[p + "MERGE INTO ".len()..];
-    if let Some(alias) = nth_ident(rest, 1) {
-      out.push(alias);
-    }
-  }
-  if let Some(p) = upper.find(" USING ") {
-    let rest = &source[p + " USING ".len()..];
-    if let Some(alias) = nth_ident(rest, 1) {
-      out.push(alias);
-    }
-  }
-  out
-}
-
-fn extract_first_ident(s: &str) -> Option<String> {
-  nth_ident(s, 0)
-}
-
-/// Pick the n-th whitespace-separated bare identifier (alphanumeric +
-/// underscore + dot). Skips the optional `AS` keyword.
-fn nth_ident(s: &str, n: usize) -> Option<String> {
-  let mut idx = 0;
-  for tok in s.split_ascii_whitespace() {
-    let t = tok.trim_end_matches([',', ';']);
-    if t.eq_ignore_ascii_case("AS") {
-      continue;
-    }
-    if !t.chars().next().map(|c| c.is_ascii_alphabetic() || c == '_').unwrap_or(false) {
-      return None;
-    }
-    let ident: String = t.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '.').collect();
-    if ident.is_empty() {
-      return None;
-    }
-    if idx == n {
-      // Drop schema-qualifier prefix; keep just the last segment.
-      return Some(ident.rsplit('.').next().unwrap_or(&ident).to_string());
-    }
-    idx += 1;
-  }
-  None
-}
-
-fn merge_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
-  if cursor_not_at_ws_boundary(source, offset) {
-    return None;
-  }
-  let (slice_owned, _) = stmt_slice_upper(source, offset);
-  let slice = slice_owned.trim();
-  let upper = slice.to_ascii_uppercase();
-  let words: Vec<&str> = upper.split_ascii_whitespace().collect();
-  if words.first() != Some(&"MERGE") {
-    return None;
-  }
-  // Map trailing-token shape to the next keyword set.
-  let n = words.len();
-  // `MERGE` alone -> INTO
-  if n == 1 {
-    return Some(&[("INTO", "MERGE INTO <target_table>")]);
-  }
-  // `MERGE INTO <target>` -> USING
-  if n >= 3 && words[1] == "INTO" && !words[n - 1].chars().all(|c| c.is_ascii_uppercase()) {
-    // crude: last word looks like an ident -> we have the target.
-    if !["USING", "AS", "ON", "WHEN"].contains(&words[n - 1]) {
-      return Some(&[("USING", "USING <source_table_or_subquery>"), ("AS", "AS <alias>")]);
-    }
-  }
-  // `... USING <source>` -> ON
-  if words.contains(&"USING") && !words.contains(&"ON") && !words.contains(&"WHEN") {
-    let after_using_idx = words.iter().position(|w| *w == "USING").unwrap();
-    if n > after_using_idx + 1 {
-      return Some(&[("ON", "ON <join_condition>")]);
-    }
-  }
-  // After ON ... -> WHEN
-  if words.contains(&"ON") && !words.contains(&"WHEN") {
-    return Some(&[("WHEN", "WHEN [NOT] MATCHED [AND ...] THEN ...")]);
-  }
-  // `WHEN <cursor>` -> MATCHED / NOT MATCHED
-  if matches!(words.last(), Some(&"WHEN")) {
-    return Some(&[("MATCHED", "WHEN MATCHED [AND ...] THEN ..."), ("NOT MATCHED", "WHEN NOT MATCHED [AND ...] THEN ...")]);
-  }
-  // `... MATCHED` (no THEN yet) -> THEN | AND
-  if matches!(words.last(), Some(&"MATCHED")) && !words.contains(&"THEN") {
-    return Some(&[("THEN", "THEN <action>"), ("AND", "AND <extra_condition>")]);
-  }
-  // `WHEN MATCHED THEN <cursor>` -> UPDATE / DELETE / DO NOTHING
-  if let Some(then_idx) = words.iter().rposition(|w| *w == "THEN")
-    && then_idx == n - 1
-  {
-    let prior = &words[..then_idx];
-    let is_not_matched = prior.windows(2).any(|w| w[0] == "NOT" && w[1] == "MATCHED");
-    if is_not_matched {
-      return Some(&[("INSERT", "INSERT (<cols>) VALUES (<vals>)"), ("DO NOTHING", "DO NOTHING")]);
-    }
-    return Some(&[("UPDATE", "UPDATE SET <col> = <val> [, ...]"), ("DELETE", "DELETE"), ("DO NOTHING", "DO NOTHING")]);
-  }
-  // `WHEN [NOT] MATCHED THEN UPDATE <cursor>` -> SET
-  if matches!(words.last(), Some(&"UPDATE"))
-    && words.iter().rposition(|w| *w == "THEN").map(|t| t == n - 2).unwrap_or(false)
-  {
-    return Some(&[("SET", "SET <col> = <val> [, <col> = <val> ...]")]);
-  }
-  // `WHEN NOT MATCHED THEN INSERT <cursor>` -> VALUES / OVERRIDING / `(`
-  if matches!(words.last(), Some(&"INSERT"))
-    && words.iter().rposition(|w| *w == "THEN").map(|t| t == n - 2).unwrap_or(false)
-  {
-    return Some(&[
-      ("VALUES", "VALUES (<v1>, <v2>, ...)"),
-      ("OVERRIDING", "OVERRIDING { SYSTEM | USER } VALUE"),
-      ("DEFAULT VALUES", "DEFAULT VALUES"),
-      ("(", "( <col1>, <col2>, ... ) VALUES (...)"),
-    ]);
-  }
-  None
-}
-
 /// DROP USER MAPPING follow-up:
 ///   DROP USER MAPPING <cursor>             -> FOR / IF EXISTS
 ///   DROP USER MAPPING IF EXISTS <cursor>   -> FOR
