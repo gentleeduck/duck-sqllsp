@@ -7753,9 +7753,9 @@ fn check_constraint_no_inherit_next_keyword(
     return None;
   }
   // The latest CHECK must have a matching closing `)`.
-  let after_check = match upper.rfind("CHECK") {
-    Some(p) => &upper[p + "CHECK".len()..],
-    None => return None,
+  let after_check = {
+    let p = upper.rfind("CHECK")?;
+    &upper[p + "CHECK".len()..]
   };
   let opens = after_check.matches('(').count();
   let closes = after_check.matches(')').count();
@@ -9776,10 +9776,9 @@ fn dml_target_table(source: &str, offset: TextSize) -> Option<String> {
     (a, "INSERT INTO".len())
   } else if let Some(a) = upper.rfind("DELETE FROM") {
     (a, "DELETE FROM".len())
-  } else if let Some(a) = upper.rfind("UPDATE ") {
-    (a, "UPDATE".len())
   } else {
-    return None;
+    let a = upper.rfind("UPDATE ")?;
+    (a, "UPDATE".len())
   };
   let after = anchor + kw_len;
   let rest = &stmt[after..];
