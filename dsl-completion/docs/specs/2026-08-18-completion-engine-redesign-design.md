@@ -44,6 +44,23 @@ There is no dedicated performance benchmark for this crate (`dsl-
 analysis` has `tests/perf_bench.rs`; `dsl-completion` does not), even
 though the README states a `Completion p50 < 5 ms` target.
 
+**Update from Phase A (measured, not hypothetical):** now that
+`dsl-completion/tests/perf_bench.rs` exists, the target is confirmed
+missed, and the reason is now known. On a 10,000-statement buffer,
+`complete()` averages **~25ms/call -- 5x the < 5ms target**. A second
+benchmark (`perf_scaling_is_position_independent_not_size_
+independent`) isolated why: per-call cost is the same whether the
+cursor sits near the start or the end of the buffer (ruling out
+"distance scanned back to buffer start"), but grows with *total*
+statement count -- roughly `0.65ms + 0.0025ms * n_statements` across
+n = 200/1000/3000. Every `complete()` call is doing work proportional
+to the whole buffer, not to local cursor context. On a large
+migrations file this means every keystroke's completion request gets
+slower as the file grows, regardless of where in the file you're
+typing. This sharpens Phase D's success criterion below: eliminate
+this whole-buffer scaling, not just move the same per-call cost into
+better-organized files.
+
 ## Evidence (reproducible)
 
 ```sh
@@ -179,14 +196,23 @@ rule project.
 
 ## Success criteria
 
-- Phase A: `perf_bench.rs` exists and runs, producing a baseline p50/
-  p95.
+- Phase A (done): `perf_bench.rs` exists and runs, producing a
+  baseline. Confirmed the < 5ms target is currently missed by ~5x at
+  10k statements, and confirmed the cause is whole-buffer-size
+  scaling, not cursor-position scaling -- see the spec update above
+  and the commit history for exact numbers.
 - Phase B: `engine.rs` no longer contains the three-layer informal
   short-circuit structure; priority order lives in one place; full
   test suite green and clippy clean after every migration batch; zero
   behavior change (no test assertions rewritten to match new output --
-  only moved/reorganized).
+  only moved/reorganized). Additionally -- since the refactor is the
+  natural place to fix this -- `complete()`'s cost should stop scaling
+  with total buffer/statement count: `perf_scaling_is_position_
+  independent_not_size_independent`'s per-call numbers at n=3000
+  should drop toward the n=200 numbers, not stay at ~8ms.
 - Phase C: every newly added completion case has a test and was
   verified against the real engine before being called done.
-- Phase D: benchmark re-run recorded; p50 target (< 5 ms, per the
-  README) still holds.
+- Phase D: both `perf_bench.rs` tests re-run and numbers recorded;
+  the whole-buffer scaling is gone or clearly reduced (not just
+  "p50 holds" in the abstract -- the concrete n=200 vs n=3000
+  comparison from Phase A is the falsifiable check).
