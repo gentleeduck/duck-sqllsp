@@ -662,6 +662,12 @@ pub mod partition_by_expression_volatile;
 pub mod partition_by_duplicate_column;
 pub mod detach_partition_concurrently_in_tx;
 pub mod hash_partition_modulus_remainder;
+pub mod json_exists_bad_path;
+pub mod json_value_returning_without_on_error;
+pub mod json_query_wrapper_conflict;
+pub mod json_table_duplicate_column_name;
+pub mod is_json_redundant_with_jsonb_column;
+pub mod is_json_scalar_object_conflict;
 
 use crate::LintRule;
 
@@ -1334,5 +1340,11 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(partition_by_duplicate_column::Rule),
     Box::new(detach_partition_concurrently_in_tx::Rule),
     Box::new(hash_partition_modulus_remainder::Rule),
+    Box::new(json_exists_bad_path::Rule),
+    Box::new(json_value_returning_without_on_error::Rule),
+    Box::new(json_query_wrapper_conflict::Rule),
+    Box::new(json_table_duplicate_column_name::Rule),
+    Box::new(is_json_redundant_with_jsonb_column::Rule),
+    Box::new(is_json_scalar_object_conflict::Rule),
   ]
 }
