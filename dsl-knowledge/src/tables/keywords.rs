@@ -959,12 +959,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
     pg("collation.html")
   );
   k!(
-    "FILTER",
-    "Aggregate filter: count(...) FILTER (WHERE predicate).",
-    "SELECT count(*) FILTER (WHERE active) FROM users;",
-    pg("sql-expressions.html#SYNTAX-AGGREGATES")
-  );
-  k!(
     "WITHIN",
     "Used by ordered-set aggregates: agg() WITHIN GROUP (ORDER BY ...).",
     "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY age) FROM users;",

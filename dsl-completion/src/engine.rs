@@ -127,6 +127,15 @@ pub fn complete_with_derived(
   let off = floor_char_boundary(source, raw_off.min(source.len()));
   let offset = TextSize::from(off as u32);
 
+  // Merge live catalog with the (caller-supplied) buffer-derived
+  // catalog: tables from AST + sequences / types / extensions /
+  // functions / roles harvested from buffer text + the default
+  // offline roles. Live catalog wins on collisions. Computed up front
+  // (cheap -- no more scan work than a shallow struct merge) so the
+  // JSON-path key slot below can consult catalog-typed `json_keys`
+  // hints, not just same-buffer literal examples.
+  let cat = source_tables::merge(catalog, derived);
+
   // Hard-suppress completion when the cursor sits at the "fresh
   // name" slot after a `CREATE [OR REPLACE] <KIND>` keyword. The
   // user is naming a brand-new object; no existing catalog symbol or
@@ -199,18 +208,20 @@ pub fn complete_with_derived(
 
   // JSON-path key slot: `data->'<cursor>` or `data->>'<cursor>`.
   // Surface keys observed in same-buffer jsonb literal defaults / CHECK
-  // constraints. Highest priority -- we don't want to drown the menu
-  // in catalog table names when the user is clearly typing a JSON key.
-  // (Runs BEFORE the inert-span bailout so JSON key completion still
-  // works while the cursor sits inside the `'...'` literal.)
-  if let Some(keys) = json_path::json_path_keys_at(source, offset) {
+  // constraints, falling back to catalog-recorded `Column.json_keys`
+  // when the buffer has no example literal to harvest. Highest
+  // priority -- we don't want to drown the menu in catalog table names
+  // when the user is clearly typing a JSON key. (Runs BEFORE the
+  // inert-span bailout so JSON key completion still works while the
+  // cursor sits inside the `'...'` literal.)
+  if let Some(keys) = json_path::json_path_keys_at_with_catalog(source, offset, &cat) {
     let mut out = Vec::with_capacity(keys.len());
     for k in keys {
       out.push(crate::item::Item {
         label: k.clone(),
         kind: crate::item::ItemKind::Variable,
         detail: Some("JSON key".into()),
-        description: Some("observed in this buffer".into()),
+        description: Some("known JSON key".into()),
         documentation_md: None,
         insert_text: k,
         is_snippet: false,
@@ -227,12 +238,6 @@ pub fn complete_with_derived(
   if cursor_in_inert_span(source, u32::from(offset) as usize) {
     return Vec::new();
   }
-
-  // Merge live catalog with the (caller-supplied) buffer-derived
-  // catalog: tables from AST + sequences / types / extensions /
-  // functions / roles harvested from buffer text + the default
-  // offline roles. Live catalog wins on collisions.
-  let cat = source_tables::merge(catalog, derived);
 
   // Dot context first: highest priority, beats any phase result.
   if let Some(alias) = dot_alias(source, offset) {
@@ -447,6 +452,13 @@ fn route_phase(
     push_aliases(file, scopes, source, offset, &mut out);
     return out;
   }
+  // JSON_TABLE(... COLUMNS (<cursor> at a fresh column-def slot -- a
+  // brand-new name, not a catalog entity, so must beat the generic
+  // table/column dump every phase would otherwise emit.
+  if json_table_fresh_column_slot(source, offset) {
+    push_keyword_kvs(&mut out, &[("FOR", "<name> FOR ORDINALITY -- 1-based row-number column")]);
+    return out;
+  }
   // CREATE TRANSFORM ... otherwise gets swallowed by the Phase::Start
   // statement-keyword dump.
   if let Some(kws) = create_transform_next_keyword(source, offset) {
@@ -456,6 +468,19 @@ fn route_phase(
   // TABLESAMPLE REPEATABLE / SELECT FETCH chain must beat the SELECT
   // trailing-clause menu (which would emit JOIN/WHERE/ORDER BY).
   if let Some(kws) = tablesample_after_paren_next_keyword(source, offset) {
+    push_keyword_kvs(&mut out, kws);
+    return out;
+  }
+  // `agg(...) FILTER (<cursor>` -- only WHERE is legal, must beat the
+  // expression/column dump every phase would otherwise emit.
+  if let Some(kws) = filter_clause_next_keyword(source, offset) {
+    push_keyword_kvs(&mut out, kws);
+    return out;
+  }
+  // `<table-fn>(...) WITH <cursor>` in FROM/JOIN -- only ORDINALITY is
+  // legal, must beat the JOIN/WHERE/ORDER BY clause-continuation menu
+  // the FROM-item-just-finished phase would otherwise emit.
+  if let Some(kws) = table_function_with_ordinality_next_keyword(source, offset) {
     push_keyword_kvs(&mut out, kws);
     return out;
   }

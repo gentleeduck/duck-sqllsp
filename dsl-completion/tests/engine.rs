@@ -1017,6 +1017,32 @@ fn json_path_completion_works_for_double_arrow() {
 }
 
 #[test]
+fn json_path_completion_falls_back_to_catalog_json_keys() {
+  // No example jsonb literal anywhere in the buffer to harvest from --
+  // the only source of keys is the catalog's `Column.json_keys` (e.g.
+  // populated from a live DB's observed key survey). Confirms
+  // `json_path_keys_at_with_catalog` is actually wired into
+  // `complete()`, not just implemented and unused.
+  let meta = Column {
+    name: "meta".into(),
+    data_type: "jsonb".into(),
+    nullable: true,
+    default: None,
+    comment: None,
+    generated: None,
+    json_keys: Some(vec!["theme".into(), "locale".into()]),
+  };
+  let mut cat = catalog_with_users_and_orders();
+  cat.schemas[0].tables[0].columns.push(meta);
+  let src = "SELECT meta->'' FROM users;";
+  let cur = src.rfind("''").unwrap() + 1;
+  let items = complete_at(src, cur, &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"theme"), "expected `theme` from catalog json_keys; got: {labels:?}");
+  assert!(labels.contains(&"locale"), "expected `locale` from catalog json_keys; got: {labels:?}");
+}
+
+#[test]
 fn extra_dml_snippets_all_present() {
   let cat = catalog_with_users_and_orders();
   let items = complete_at("", 0, &cat);
@@ -2050,6 +2076,89 @@ fn window_clause_partition_by_offers_columns() {
     !labels.contains(&"INNER JOIN"),
     "PARTITION BY slot wrongly listed JOIN keywords: {labels:?}"
   );
+}
+
+#[test]
+fn aggregate_call_offers_filter_keyword() {
+  // `SELECT count(*) <cursor>` -- FILTER (WHERE ...) is a legal
+  // continuation after any aggregate call, same slot as OVER.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT count(*) ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"FILTER"), "expected FILTER; got {labels:?}");
+}
+
+#[test]
+fn filter_paren_offers_only_where() {
+  // `count(*) FILTER (<cursor>` -- FILTER's entire grammar is
+  // `FILTER (WHERE <cond>)`, so WHERE is the only legal token; the
+  // full expression/function menu is noise here.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT count(*) FILTER (";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert_eq!(labels, vec!["WHERE"], "FILTER ( should offer only WHERE; got {labels:?}");
+}
+
+#[test]
+fn filter_where_falls_through_to_normal_expression_menu() {
+  // Once WHERE has actually been typed, the narrow FILTER( slot no
+  // longer applies -- normal column/function completion resumes.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT count(*) FILTER (WHERE ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"id"), "expected column `id`; got a menu of {} items", labels.len());
+}
+
+#[test]
+fn table_function_offers_with_ordinality() {
+  // `FROM unnest(...) WITH <cursor>` -- ORDINALITY is the only legal
+  // token directly after WITH here (a leading WITH is the CTE
+  // keyword, which can't appear mid-FROM).
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM unnest(ARRAY[1,2]) WITH ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert_eq!(labels, vec!["ORDINALITY"], "expected only ORDINALITY; got {labels:?}");
+}
+
+#[test]
+fn json_table_columns_fresh_slot_offers_for_not_catalog_dump() {
+  // `JSON_TABLE(data, '$' COLUMNS (<cursor>` -- a brand-new column
+  // name is expected, not a catalog entity. Before this fix the
+  // generic phase's table/column dump fired here (including an
+  // irrelevant `users` table suggestion); it should now suppress that
+  // and offer only FOR (-> `<name> FOR ORDINALITY`).
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM JSON_TABLE(data, '$' COLUMNS (";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert_eq!(labels, vec!["FOR"], "expected only FOR at a fresh column slot; got {labels:?}");
+}
+
+#[test]
+fn json_table_columns_fresh_slot_after_comma() {
+  // Same fresh-slot suppression after a `,` between column defs.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM JSON_TABLE(data, '$' COLUMNS (id INT PATH '$.id', ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert_eq!(labels, vec!["FOR"], "expected only FOR after a comma; got {labels:?}");
+}
+
+#[test]
+fn create_table_as_with_data_not_shadowed_by_ordinality() {
+  // `CREATE TABLE t AS SELECT ... FROM users WITH <cursor>` also ends
+  // in `) WITH`, but this is the WITH [NO] DATA clause, not a table
+  // function modifier -- the ORDINALITY detector must not fire here.
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE TABLE t2 AS SELECT * FROM users WITH ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"DATA") && labels.contains(&"NO DATA"), "expected DATA/NO DATA; got {labels:?}");
+  assert!(!labels.contains(&"ORDINALITY"), "ORDINALITY should not apply to CREATE TABLE AS; got {labels:?}");
 }
 
 #[test]

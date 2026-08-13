@@ -171,6 +171,7 @@ pub fn expression_keywords(out: &mut Vec<Item>) {
     "ILIKE",
     "OVER",
     "PARTITION BY",
+    "FILTER",
   ];
   emit_keyword_subset(out, KEEP);
 }

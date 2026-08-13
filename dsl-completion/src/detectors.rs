@@ -2164,6 +2164,56 @@ pub(crate) fn tablesample_after_paren_next_keyword(
   Some(&[("REPEATABLE", "REPEATABLE (<seed>) -- reproducible sample")])
 }
 
+/// `<agg>(...) FILTER (<cursor>` -- FILTER's entire grammar is
+/// `FILTER (WHERE <cond>)`, so WHERE is the only legal next token.
+/// Narrow trigger: only fires immediately after the opening paren
+/// (nothing typed yet), not once the user is already inside a WHERE
+/// predicate -- that case wants the normal expression/column menu.
+pub(crate) fn filter_clause_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
+  if cursor_not_at_ws_boundary(source, offset) {
+    return None;
+  }
+  let (_, upper) = stmt_slice_upper(source, offset);
+  let trimmed = upper.trim_end();
+  if trimmed.ends_with("FILTER (") || trimmed.ends_with("FILTER(") {
+    return Some(&[("WHERE", "FILTER (WHERE <cond>) -- restrict which rows the aggregate sees")]);
+  }
+  None
+}
+
+/// `<set-returning-fn>(...) WITH <cursor>` in a FROM/JOIN item --
+/// ORDINALITY is the only keyword that legally follows WITH directly
+/// after a table-function call's closing paren (a leading statement
+/// WITH is the CTE keyword, which can't appear there). Excludes
+/// CREATE TABLE AS / CREATE MATERIALIZED VIEW statements, where a
+/// trailing `... WITH` after the query means `WITH [NO] DATA`
+/// instead -- that ambiguity is real (a table function can be the
+/// last FROM item there too), so this intentionally defers to the
+/// existing WITH DATA / NO DATA completion rather than guessing.
+pub(crate) fn table_function_with_ordinality_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
+  if cursor_not_at_ws_boundary(source, offset) {
+    return None;
+  }
+  let (_, upper) = stmt_slice_upper(source, offset);
+  let trimmed = upper.trim_end();
+  if !trimmed.ends_with(") WITH") {
+    return None;
+  }
+  if upper.trim_start().starts_with("CREATE") {
+    return None;
+  }
+  if !(upper.contains("FROM ") || upper.contains("JOIN ")) {
+    return None;
+  }
+  Some(&[("ORDINALITY", "WITH ORDINALITY -- append a 1-based row-number column")])
+}
+
 /// WINDOW <name> AS ( <cursor> ) -> emit PARTITION BY / ORDER BY / frame.
 pub(crate) fn window_clause_as_paren_keyword(
   source: &str,
@@ -2328,6 +2378,44 @@ pub(crate) fn grouping_sets_inner_paren_expects_column(source: &str, offset: Tex
     }
   }
   depth >= 2
+}
+
+/// `JSON_TABLE(... COLUMNS (<cursor>` at a fresh column-def slot
+/// (right after the opening `(` or after a `,`, nothing typed yet).
+/// There's no catalog entity to complete there -- the user is about
+/// to type a brand-new column name -- so the generic phase's
+/// catalog/table dump is wrong (it doesn't know this is a name
+/// position, not an expression). Doesn't attempt to model the rest of
+/// JSON_TABLE's column grammar (type / PATH / FORMAT / EXISTS /
+/// NESTED); only suppresses the wrong suggestion and offers FOR (the
+/// one non-name keyword that can start a column def, for
+/// `<name> FOR ORDINALITY`).
+pub(crate) fn json_table_fresh_column_slot(source: &str, offset: TextSize) -> bool {
+  let (_, upper) = stmt_slice_upper(source, offset);
+  if !upper.contains("JSON_TABLE") {
+    return false;
+  }
+  let after = match upper.rfind("COLUMNS") {
+    Some(p) => &upper[p + "COLUMNS".len()..],
+    None => return false,
+  };
+  let mut depth = 0i32;
+  for b in after.bytes() {
+    match b {
+      b'(' => depth += 1,
+      b')' => depth -= 1,
+      _ => {},
+    }
+  }
+  // depth == 1: directly inside the column list, not nested deeper
+  // (e.g. a NESTED COLUMNS sub-list) -- falling through to the
+  // generic menu there is an acceptable miss rather than a wrong
+  // guess.
+  if depth != 1 {
+    return false;
+  }
+  let trimmed = after.trim_end();
+  trimmed.ends_with('(') || trimmed.ends_with(',')
 }
 
 pub(crate) fn group_by_set_op_next_keyword(
