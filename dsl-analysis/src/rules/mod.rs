@@ -656,6 +656,12 @@ pub mod where_true_placeholder;
 pub mod where_type_literal;
 pub mod window_frame_reversed;
 pub mod window_no_order;
+pub mod partition_by_no_key_in_pk;
+pub mod partition_range_bound_reversed;
+pub mod partition_by_expression_volatile;
+pub mod partition_by_duplicate_column;
+pub mod detach_partition_concurrently_in_tx;
+pub mod hash_partition_modulus_remainder;
 
 use crate::LintRule;
 
@@ -1322,5 +1328,11 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(dml_where_unknown_column::Rule),
     Box::new(function_arg_validation::Rule),
     Box::new(empty_expression_paren::Rule),
+    Box::new(partition_by_no_key_in_pk::Rule),
+    Box::new(partition_range_bound_reversed::Rule),
+    Box::new(partition_by_expression_volatile::Rule),
+    Box::new(partition_by_duplicate_column::Rule),
+    Box::new(detach_partition_concurrently_in_tx::Rule),
+    Box::new(hash_partition_modulus_remainder::Rule),
   ]
 }
