@@ -7,11 +7,11 @@
 //! follow-up now that this code has no cross-file coupling left to
 //! worry about, only internal reorganization within one file.
 //!
-//! Depends on `engine::{stmt_slice_upper, cursor_not_at_ws_boundary}`
-//! for statement-slice extraction -- the two low-level helpers
-//! shared across every detector.
+//! Depends on `engine::{stmt_slice_upper, cursor_not_at_ws_boundary,
+//! current_statement_span}` for statement-slice extraction -- the
+//! low-level helpers shared across every detector.
 
-use crate::engine::{cursor_not_at_ws_boundary, stmt_slice_upper};
+use crate::engine::{current_statement_span, cursor_not_at_ws_boundary, stmt_slice_upper};
 use crate::fallback;
 use crate::item::Item;
 use crate::sources;
@@ -8332,7 +8332,11 @@ pub(crate) fn push_cte_names(file: &ParsedFile, scopes: &[Scope], source: &str, 
     }
   }
   if names.is_empty() {
-    names = fallback::cte_names_from_text(source);
+    // `cte_names_from_text` only looks at its argument's own leading
+    // prefix (see its doc comment) -- must be scoped to the current
+    // statement, not the whole buffer, or it checks statement #1's
+    // prefix instead of the one under the cursor.
+    names = fallback::cte_names_from_text(current_statement_span(source, offset));
   }
   for name in names {
     if name.is_empty() {
@@ -8357,7 +8361,7 @@ pub(crate) fn push_aliases(file: &ParsedFile, scopes: &[Scope], source: &str, of
     sources::aliases_in_scope(scope, out);
   }
   if out.len() == start
-    && let Some(scope) = fallback::scope_from_text(source)
+    && let Some(scope) = fallback::scope_from_text(current_statement_span(source, offset))
   {
     sources::aliases_in_scope(&scope, out);
   }
@@ -8385,7 +8389,7 @@ pub(crate) fn push_scope_columns_or_all(
     }
     push_scope_columns(scope, cat, out);
   }
-  if !had_scope && let Some(fb) = fallback::scope_from_text(source) {
+  if !had_scope && let Some(fb) = fallback::scope_from_text(current_statement_span(source, offset)) {
     had_scope = scope_has_catalog_binding(&fb, cat);
     push_scope_columns(&fb, cat, out);
   }

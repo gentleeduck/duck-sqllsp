@@ -219,10 +219,9 @@ fn insert_values_signature(
         (name, ty)
       })
       .collect()
-  } else if let Some(t) = t {
-    t.columns.iter().map(|c| (c.name.clone(), dsl_catalog::display_type(&c.data_type).to_string())).collect()
   } else {
-    return None;
+    let t = t?;
+    t.columns.iter().map(|c| (c.name.clone(), dsl_catalog::display_type(&c.data_type).to_string())).collect()
   };
   if params.is_empty() {
     return None;

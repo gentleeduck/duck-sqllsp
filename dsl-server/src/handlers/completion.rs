@@ -3,7 +3,7 @@
 use crate::config::{Case, Style};
 use crate::handlers::position;
 use crate::state::ServerState;
-use dsl_completion::{Item, ItemKind, complete as engine_complete};
+use dsl_completion::{Item, ItemKind, complete_with_derived};
 use tower_lsp::lsp_types::{
   CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams, CompletionResponse, Documentation,
   InsertTextFormat, MarkupContent, MarkupKind,
@@ -19,13 +19,16 @@ pub fn run(state: &ServerState, params: CompletionParams) -> Option<CompletionRe
   let offset = position::to_offset(&doc.rope, params.text_document_position.position);
   let cache = doc.parsed();
   // Workspace-scan catalog (every .sql in the project) merged on top
-  // of the live catalog snapshot. The engine then folds in the
-  // current buffer's own CREATE TABLE bodies inside complete(). Live
-  // wins on collisions because merge keeps the first-seen entry.
+  // of the live catalog snapshot, then the current buffer's own
+  // derived tables / sequences / types / etc -- cached per document
+  // version via `Document::derived_catalog` rather than re-scanning
+  // the whole buffer on every request. Live wins on collisions
+  // because merge keeps the first-seen entry.
   let live = state.catalog.read().clone();
   let ws_offline = state.workspace_offline_snapshot();
   let cat = dsl_completion::source_tables::merge(&live, &ws_offline);
-  let items = engine_complete(&doc.text, &cache.file, &cache.scopes, &cat, offset);
+  let derived = doc.derived_catalog();
+  let items = complete_with_derived(&doc.text, &cache.file, &cache.scopes, &cat, &derived, offset);
 
   let style = state.config_snapshot().style;
   let lsp_items: Vec<CompletionItem> = items.into_iter().map(|it| to_lsp_item(it, &style)).collect();
@@ -65,7 +68,7 @@ fn to_lsp_item(it: Item, style: &Style) -> CompletionItem {
   // `sortText` is a string; clients compare lexicographically. Use a
   // single ASCII digit prefix (0..9) so lower `sort_priority` wins.
   // The label tail breaks ties alphabetically within the same prio.
-  let sort_text = format!("{}{}", it.sort_priority.min(9), &label);
+  let sort_text = format!("{}{}", it.sort_priority.min(9), label);
   // For snippet items, prepend an "Expands to:" preview to the
   // documentation so users can see the final scaffold (with $1 / $0
   // placeholders cleaned out) before they pick it.

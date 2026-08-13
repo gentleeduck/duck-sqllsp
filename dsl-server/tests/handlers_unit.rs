@@ -10,8 +10,8 @@ use dsl_server::{
   state::ServerState,
 };
 use tower_lsp::lsp_types::{
-  CompletionParams, CompletionResponse, HoverParams, PartialResultParams, Position, TextDocumentIdentifier,
-  TextDocumentPositionParams, Url, WorkDoneProgressParams,
+  CompletionParams, CompletionResponse, HoverParams, InlayHintParams, PartialResultParams, Position, Range,
+  TextDocumentIdentifier, TextDocumentPositionParams, Url, WorkDoneProgressParams, WorkspaceSymbolParams,
 };
 
 fn state_with(uri: &str, text: &str) -> (ServerState, Url) {
@@ -2012,4 +2012,141 @@ fn r4_200_close_then_reopen_keeps_separate_versions() {
   let doc = state.documents.get(&url).expect("doc");
   assert_eq!(doc.version, 2);
   assert_eq!(doc.text, "v2");
+}
+
+/// Phase D re-measurement of the Phase A finding (`complete()` at
+/// ~25ms/call at 10k statements, 5x over the < 5ms p50 target -- see
+/// `dsl-completion/tests/perf_bench.rs`). Opens one large document and
+/// fires completion + hover + inlay_hints + workspace_symbol `rounds`
+/// times each against it (one version, no edits), cursor at end-of-
+/// statement to match `perf_bench.rs`'s cursor convention.
+///
+/// Two fixes landed: `Document::derived_catalog` caches
+/// `source_tables::from_source` per document version instead of every
+/// handler re-deriving it (small win, ~1.6ms/call at n=10,000); the
+/// dominant fix is `engine::current_statement_span`, which scopes
+/// `fallback::{scope_from_text, cte_names_from_text,
+/// cte_columns_from_text}` to the current statement instead of the
+/// whole buffer -- those used to scan the entire file for every
+/// FROM/JOIN regardless of cursor position, which was the real O(buffer
+/// size) cost (details + numbers in the design doc's "Phase D
+/// findings" section and in `perf_bench.rs`'s doc comments).
+///
+/// At n=10,000: completion cold (round 0, first call after open) ~74ms
+/// one-time; warm (every cache hit after) ~1.6ms/call, under target.
+/// Not a hard-threshold assertion (machine-dependent) -- prints the
+/// numbers so a regression is visible by eye.
+///
+/// `hover::run` is NOT fixed by this and dominates the per-handler
+/// breakdown by 1-2 orders of magnitude -- unrelated pre-existing
+/// issue in `dsl-hover` (re-parses the whole buffer on every call,
+/// ignoring `ParseCache`), left untouched as out of scope. See the
+/// design doc.
+#[test]
+#[ignore]
+fn r5_201_perf_derived_catalog_cache_avoids_redundant_rescans() {
+  let n = 10_000;
+  let mut text = String::with_capacity(n * 50);
+  for i in 0..n {
+    text.push_str(&format!("SELECT id FROM users WHERE id = {i};\n"));
+  }
+  let (state, url) = state_with("file:///perf_cache.sql", &text);
+  let rounds = 20u32;
+
+  // "Cached": completion + hover + inlay_hints fired `rounds` times each
+  // against the SAME open document (one version, zero edits between
+  // calls) -- derived_catalog() should pay the buffer scan once, not
+  // 3 * rounds times. Timed per-handler-type to isolate which one
+  // dominates rather than only seeing a combined total.
+  let mut t_completion = std::time::Duration::ZERO;
+  let mut t_completion_first = std::time::Duration::ZERO;
+  let mut t_hover = std::time::Duration::ZERO;
+  let mut t_inlay = std::time::Duration::ZERO;
+  let mut t_wsym = std::time::Duration::ZERO;
+  // Cursor lands right after each line's `WHERE id = <i>` (before the
+  // trailing `;`) -- end-of-statement, matching the cursor placement
+  // `dsl-completion/tests/perf_bench.rs`'s `build_buffer` uses. A
+  // mid-keyword position (e.g. character 5, inside "SELECT") hits a
+  // much cheaper, earlier phase-detection short-circuit and would
+  // *not* be a fair comparison against Phase A's original numbers.
+  let prefix_len = "SELECT id FROM users WHERE id = ".len() as u32;
+  let t0 = std::time::Instant::now();
+  for i in 0..rounds {
+    let line = i.min(n as u32 - 1);
+    let character = prefix_len + line.to_string().len() as u32;
+    let pos = Position { line, character };
+    let s = std::time::Instant::now();
+    let _ = completion::run(
+      &state,
+      CompletionParams {
+        text_document_position: TextDocumentPositionParams {
+          text_document: TextDocumentIdentifier { uri: url.clone() },
+          position: pos,
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+        context: None,
+      },
+    );
+    let e = s.elapsed();
+    t_completion += e;
+    if i == 0 {
+      t_completion_first = e;
+    }
+    let s = std::time::Instant::now();
+    let _ = hover::run(
+      &state,
+      HoverParams {
+        text_document_position_params: TextDocumentPositionParams {
+          text_document: TextDocumentIdentifier { uri: url.clone() },
+          position: pos,
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+      },
+    );
+    t_hover += s.elapsed();
+    let s = std::time::Instant::now();
+    let _ = inlay_hints::run(
+      &state,
+      InlayHintParams {
+        text_document: TextDocumentIdentifier { uri: url.clone() },
+        range: Range { start: Position { line: 0, character: 0 }, end: Position { line: i + 1, character: 0 } },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+      },
+    );
+    t_inlay += s.elapsed();
+    let s = std::time::Instant::now();
+    let _ = workspace_symbol::run(
+      &state,
+      WorkspaceSymbolParams {
+        query: String::new(),
+        partial_result_params: PartialResultParams::default(),
+        work_done_progress_params: WorkDoneProgressParams::default(),
+      },
+    );
+    t_wsym += s.elapsed();
+  }
+  let _ = t0.elapsed(); // combined wall time isn't meaningful here -- hover's unrelated cost (see doc comment) would dominate and mislead; per-handler numbers below are the honest comparison.
+  let rest = rounds - 1;
+  eprintln!(
+    "per-handler totals over {rounds} rounds (n_stmts={n}) -- completion: {t_completion:?} ({:?}/call)  hover: {t_hover:?} ({:?}/call)  inlay_hints: {t_inlay:?} ({:?}/call)  workspace_symbol: {t_wsym:?} ({:?}/call)",
+    t_completion / rounds,
+    t_hover / rounds,
+    t_inlay / rounds,
+    t_wsym / rounds
+  );
+  eprintln!(
+    "completion cold-vs-warm split -- round 0 (cold derived_catalog cache): {t_completion_first:?}  rounds 1..{rounds} avg (warm cache): {:?}",
+    (t_completion - t_completion_first) / rest
+  );
+
+  // Reference point: a single standalone `from_source` call at this
+  // buffer size, for scale against the cold-cache number above (round 0
+  // pays this once, plus parse + resolve + complete_with_derived's own
+  // work; warm rounds pay none of it).
+  let doc = state.documents.get(&url).unwrap();
+  let cache = doc.parsed();
+  let t1 = std::time::Instant::now();
+  let _ = dsl_completion::source_tables::from_source(&cache.file, &doc.text);
+  eprintln!("standalone from_source call at n_stmts={n}: {:?}", t1.elapsed());
 }

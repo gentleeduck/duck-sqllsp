@@ -4,6 +4,7 @@
 //! v0.1 we treat each didChange as a full re-sync.
 
 use dashmap::DashMap;
+use dsl_catalog::Catalog;
 use dsl_parse::{Dialect, ParsedFile};
 use dsl_resolve::Scope;
 use ropey::Rope;
@@ -36,6 +37,13 @@ pub struct Document {
   /// rest reuse it. Wrapped in `Arc` so clones from `DashMap::get`
   /// don't re-run the parser.
   parse_cache: Arc<OnceLock<Arc<ParseCache>>>,
+  /// Lazily-populated buffer-derived catalog -- see
+  /// `dsl_completion::source_tables::from_source`. A separate
+  /// `OnceLock` from `parse_cache` so `document_symbol` / `code_lens`
+  /// (which call `parsed()` but never need this) don't pay for a
+  /// derivation they don't use. Cleared alongside `parse_cache` on
+  /// every text/dialect change.
+  derived_cache: Arc<OnceLock<Arc<Catalog>>>,
 }
 
 pub struct ParseCache {
@@ -55,7 +63,15 @@ impl Document {
 
   pub fn with_dialect(uri: Url, text: String, version: i32, dialect: Dialect) -> Self {
     let rope = Rope::from_str(&text);
-    Self { uri, text, version, rope, dialect, parse_cache: Arc::new(OnceLock::new()) }
+    Self {
+      uri,
+      text,
+      version,
+      rope,
+      dialect,
+      parse_cache: Arc::new(OnceLock::new()),
+      derived_cache: Arc::new(OnceLock::new()),
+    }
   }
 
   /// True when the document exceeds [`MAX_DOC_BYTES`] -- heavy handlers
@@ -77,6 +93,19 @@ impl Document {
         let scopes = dsl_resolve::resolve_with_source(&file.statements, &self.text);
         Arc::new(ParseCache { file, scopes, version })
       })
+      .clone()
+  }
+
+  /// Buffer-derived catalog (tables from AST + sequences / types /
+  /// extensions / functions / roles scanned from raw text). Expensive
+  /// multi-pass text scan, so it's computed once per document version
+  /// and cached here instead of every handler re-deriving it
+  /// independently.
+  pub fn derived_catalog(&self) -> Arc<Catalog> {
+    let cache = self.parsed();
+    self
+      .derived_cache
+      .get_or_init(|| Arc::new(dsl_completion::source_tables::from_source(&cache.file, &self.text)))
       .clone()
   }
 }
@@ -109,6 +138,7 @@ impl DocumentStore {
       if entry.dialect != dialect {
         entry.dialect = dialect;
         entry.parse_cache = Arc::new(OnceLock::new());
+        entry.derived_cache = Arc::new(OnceLock::new());
       }
     }
   }
@@ -129,6 +159,7 @@ impl DocumentStore {
       d.rope = Rope::from_str(&d.text);
       d.version = version;
       d.parse_cache = Arc::new(OnceLock::new());
+      d.derived_cache = Arc::new(OnceLock::new());
     }
   }
 

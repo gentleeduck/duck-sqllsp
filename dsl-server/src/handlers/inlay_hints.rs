@@ -24,7 +24,7 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
   // Merge live catalog + buffer-derived tables + workspace .sql scan
   // so JOIN-on heuristics and SELECT * expansion see every CREATE
   // TABLE in the project, not just the open files.
-  let derived = dsl_completion::source_tables::from_source(parsed, &doc.text);
+  let derived = doc.derived_catalog();
   let ws_offline = state.workspace_offline_snapshot();
   let cat = dsl_completion::source_tables::merge(&dsl_completion::source_tables::merge(&live, &derived), &ws_offline);
 

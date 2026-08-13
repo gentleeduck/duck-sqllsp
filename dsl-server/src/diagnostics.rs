@@ -17,6 +17,9 @@ pub async fn publish_for(client: &Client, state: &ServerState, uri: &Url) {
   };
   let snapshot_version = doc.version;
   let cache = doc.parsed();
+  // Must run before `doc.text` / `doc.rope` are moved out below --
+  // `derived_catalog()` borrows the whole `Document`.
+  let derived = doc.derived_catalog();
   let text = doc.text;
   let rope = doc.rope;
 
@@ -26,7 +29,6 @@ pub async fn publish_for(client: &Client, state: &ServerState, uri: &Url) {
   // isn't connected. Clone before the upcoming .await so the parking_lot
   // guard does not cross the suspend point (not Send).
   let live = state.catalog.read().clone();
-  let derived = dsl_completion::source_tables::from_source(&cache.file, &text);
   let ws_offline = state.workspace_offline_snapshot();
   let cat = dsl_completion::source_tables::merge(&dsl_completion::source_tables::merge(&live, &derived), &ws_offline);
   let doc_dialect = state.documents.get(uri).map(|d| d.dialect).unwrap_or(dsl_parse::Dialect::Postgres);

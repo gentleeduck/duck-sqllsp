@@ -23,5 +23,5 @@ pub mod render;
 pub mod source_tables;
 pub mod sources;
 
-pub use engine::complete;
+pub use engine::{complete, complete_with_derived};
 pub use item::{Item, ItemKind};

@@ -48,6 +48,27 @@ pub(crate) fn stmt_slice_upper(source: &str, offset: TextSize) -> (String, Strin
   (slice, upper)
 }
 
+/// Byte-slice of the current statement, semicolon-delimited, covering
+/// *both* sides of the cursor (unlike `stmt_slice_upper`, which stops
+/// at `offset`). Naive `;`-scan -- doesn't account for a semicolon
+/// inside a string literal or a dollar-quoted PL/pgSQL body, same
+/// known limitation `stmt_slice_upper`'s start-boundary already has.
+///
+/// Scopes text-fallback scans (`fallback::scope_from_text` and
+/// friends) to the statement under the cursor instead of the whole
+/// buffer -- `iter_table_bindings` scans its input start-to-end for
+/// every FROM/JOIN, so an unscoped whole-buffer call is O(buffer size)
+/// regardless of cursor position. This was the dominant cost behind
+/// the Phase A perf finding (`dsl-completion/tests/perf_bench.rs`,
+/// ~25ms/call at 10k statements); see the design doc's "Phase D
+/// findings" for the full writeup.
+pub(crate) fn current_statement_span(source: &str, offset: TextSize) -> &str {
+  let pos: usize = (u32::from(offset) as usize).min(source.len());
+  let start = source[..pos].rfind(';').map(|p| p + 1).unwrap_or(0);
+  let end = source[pos..].find(';').map(|p| pos + p + 1).unwrap_or(source.len());
+  &source[start..end]
+}
+
 /// Return true when `offset` does NOT sit at a whitespace (or EOF)
 /// boundary. Phase detectors short-circuit on this so they don't yank
 /// the menu open while the user is typing a token. Matches the legacy
@@ -74,7 +95,32 @@ fn push_keyword_kvs(out: &mut Vec<Item>, kws: &[(&'static str, &'static str)]) {
   }
 }
 
+/// Convenience wrapper for callers with no pre-computed buffer-derived
+/// catalog (tests, one-shot tools, `dsl-cli`). Derives it fresh from
+/// `source` via `source_tables::from_source` on every call. Callers
+/// that invoke completion repeatedly against the *same* buffer (an LSP
+/// server servicing one document across many requests) should derive
+/// this catalog once and call [`complete_with_derived`] directly
+/// instead -- see `Document::derived_catalog` in dsl-server.
 pub fn complete(source: &str, file: &ParsedFile, scopes: &[Scope], catalog: &Catalog, offset: TextSize) -> Vec<Item> {
+  let derived = source_tables::from_source(file, source);
+  complete_with_derived(source, file, scopes, catalog, &derived, offset)
+}
+
+/// Same as [`complete`] but takes the buffer-derived catalog
+/// (normally `source_tables::from_source(file, source)`) as an
+/// explicit parameter instead of computing it internally. `catalog`
+/// and `derived` are merged with `catalog` winning on collisions
+/// (matches [`source_tables::merge`]'s live-wins-over-derived
+/// semantics).
+pub fn complete_with_derived(
+  source: &str,
+  file: &ParsedFile,
+  scopes: &[Scope],
+  catalog: &Catalog,
+  derived: &Catalog,
+  offset: TextSize,
+) -> Vec<Item> {
   // Normalise offset to the nearest valid UTF-8 char boundary so
   // downstream slicing can't panic on multi-byte characters.
   let raw_off: usize = offset.into();
@@ -182,12 +228,11 @@ pub fn complete(source: &str, file: &ParsedFile, scopes: &[Scope], catalog: &Cat
     return Vec::new();
   }
 
-  // Merge live catalog with in-file CREATE TABLE definitions.
-  // Offline-mode enrichment: tables from AST + sequences / types /
-  // extensions / functions / roles harvested from buffer text + the
-  // default offline roles. Live catalog wins on collisions.
-  let derived = source_tables::from_source(file, source);
-  let cat = source_tables::merge(catalog, &derived);
+  // Merge live catalog with the (caller-supplied) buffer-derived
+  // catalog: tables from AST + sequences / types / extensions /
+  // functions / roles harvested from buffer text + the default
+  // offline roles. Live catalog wins on collisions.
+  let cat = source_tables::merge(catalog, derived);
 
   // Dot context first: highest priority, beats any phase result.
   if let Some(alias) = dot_alias(source, offset) {
@@ -225,7 +270,7 @@ pub fn complete(source: &str, file: &ParsedFile, scopes: &[Scope], catalog: &Cat
     let stmt_scope = scope_for_offset(file, scopes, offset);
     let count = stmt_scope.map(|s| sources::columns_of_alias(&cat, s, &alias, &mut out)).unwrap_or(0);
     if count == 0
-      && let Some(fb) = fallback::scope_from_text(source)
+      && let Some(fb) = fallback::scope_from_text(current_statement_span(source, offset))
     {
       sources::columns_of_alias(&cat, &fb, &alias, &mut out);
     }
@@ -253,10 +298,13 @@ pub fn complete(source: &str, file: &ParsedFile, scopes: &[Scope], catalog: &Cat
     // Fallback: when pg_query refused the outer statement (typical
     // mid-typing `WITH t AS (...) SELECT t.`), the resolver never
     // ran -- so cte_columns_of returns None even though the CTE
-    // is plainly declared. Text-scan the buffer for the WITH prefix
-    // and surface that CTE's projected columns.
+    // is plainly declared. Text-scan the *current statement* for its
+    // leading WITH and surface that CTE's projected columns. Must be
+    // scoped to this statement: `cte_columns_from_text` only looks at
+    // its argument's own prefix, so the whole buffer would check
+    // statement #1 instead of the one under the cursor.
     if out.is_empty()
-      && let Some(cols) = fallback::cte_columns_from_text(source, &alias)
+      && let Some(cols) = fallback::cte_columns_from_text(current_statement_span(source, offset), &alias)
     {
       for col in cols {
         out.push(crate::item::Item {
@@ -330,7 +378,7 @@ pub fn complete(source: &str, file: &ParsedFile, scopes: &[Scope], catalog: &Cat
       }
     }
     if tables.is_empty()
-      && let Some(fb) = fallback::scope_from_text(source)
+      && let Some(fb) = fallback::scope_from_text(current_statement_span(source, offset))
     {
       for b in fb.tables() {
         tables.push((b.table.schema.clone(), b.table.name.clone()));

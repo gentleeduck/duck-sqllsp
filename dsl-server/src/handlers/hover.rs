@@ -20,8 +20,7 @@ pub fn run(state: &ServerState, params: HoverParams) -> Option<Hover> {
   // hover finds sequences / types / extensions / roles defined only
   // in the buffer (no DB connection required).
   let live = state.catalog.read().clone();
-  let cache = doc.parsed();
-  let derived = dsl_completion::source_tables::from_source(&cache.file, &doc.text);
+  let derived = doc.derived_catalog();
   let ws_offline = state.workspace_offline_snapshot();
   let cat = dsl_completion::source_tables::merge(&dsl_completion::source_tables::merge(&live, &derived), &ws_offline);
   let case = match state.config_snapshot().style.keyword {

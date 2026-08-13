@@ -17,6 +17,11 @@ fn build_buffer(n: usize) -> (String, Vec<TextSize>) {
   (s, offsets)
 }
 
+/// Headline Phase A number: ~25ms/call avg at n=10,000 (5x over the
+/// < 5ms p50 target). Root cause + fix: see the doc comment below on
+/// `perf_scaling_is_position_independent_not_size_independent` -- same
+/// cause, this is just the larger-n confirmation. Post-fix: ~2.9ms/call,
+/// under target even uncached (this test's worst case).
 #[test]
 #[ignore]
 fn perf_10k_stmts_complete_after_each() {
@@ -56,9 +61,22 @@ fn perf_10k_stmts_complete_after_each() {
 /// This test doesn't assert a hard threshold (timing is
 /// machine-dependent) -- it prints first-vs-last timing at three
 /// sizes so a regression (or a fix -- first/last staying flat as n
-/// grows) is visible by eye. Re-run after the Phase B registry
-/// refactor to confirm this scaling problem is actually addressed,
-/// not just moved around.
+/// grows) is visible by eye.
+///
+/// Root cause found via per-branch timing instrumentation (full
+/// writeup in the design doc's "Phase D findings" and in
+/// `dsl-server/tests/handlers_unit.rs`): with the empty
+/// `Catalog::default()` this benchmark uses, `WHERE id = <cursor>`
+/// doesn't resolve `users` against a known table, so completion falls
+/// back to `fallback::scope_from_text`, whose `iter_table_bindings`
+/// used to collect the *entire buffer* and scan it for every FROM/JOIN
+/// in the whole file -- O(buffer size) regardless of cursor position,
+/// matching the position-independence this test found. Fixed by
+/// `engine::current_statement_span`, scoping that scan (and two
+/// sibling CTE-fallback scans) to the current statement. Post-fix:
+/// n=3000 first/last both ~1.3-1.5ms/call (was ~8ms) -- still flat
+/// across positions, now at statement-sized rather than buffer-sized
+/// cost.
 #[test]
 #[ignore]
 fn perf_scaling_is_position_independent_not_size_independent() {

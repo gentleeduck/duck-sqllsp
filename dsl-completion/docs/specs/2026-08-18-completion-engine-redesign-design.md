@@ -186,7 +186,22 @@ rule project.
 - Clean-slate rewrite (explicitly ruled out by the redesign-approach
   decision).
 - Changing `dsl-analysis`, `dsl-hover`, `dsl-format`, `dsl-server`, or
-  any other crate -- this plan is `dsl-completion` only.
+  any other crate -- this plan is `dsl-completion` only. **Exception
+  made during Phase D** (see the Phase D findings below): the
+  redundant-rescan fix genuinely required touching `dsl-server`'s
+  `Document`/`ParseCache` (there is no way to eliminate cross-handler
+  redundant computation from inside `dsl-completion` alone -- the
+  redundancy exists *between* dsl-server's handlers, not within any
+  one call), so that boundary was crossed deliberately and narrowly:
+  one new cached field + accessor in `documents.rs`, and the 5
+  existing call sites updated to use it instead of recomputing. One
+  pre-existing `dsl-analysis` clippy warning (unrelated `question_mark`
+  lint, blocking the `-D warnings` gate) was also fixed in passing,
+  consistent with how this session has handled every other
+  pre-existing clippy warning it happened to hit. `dsl-hover` was
+  found to have its own, larger, unrelated perf issue during Phase D
+  (see below) and was deliberately left untouched -- that fix is a
+  separate, comparably-sized effort outside this plan's scope.
 - Splitting `dsl-completion/tests/engine.rs` (19,243 lines) is not
   mandated by this plan -- Phase B doesn't change test behavior, so
   splitting the test file is a separate, optional cleanup a future
@@ -212,7 +227,74 @@ rule project.
   should drop toward the n=200 numbers, not stay at ~8ms.
 - Phase C: every newly added completion case has a test and was
   verified against the real engine before being called done.
-- Phase D: both `perf_bench.rs` tests re-run and numbers recorded;
-  the whole-buffer scaling is gone or clearly reduced (not just
-  "p50 holds" in the abstract -- the concrete n=200 vs n=3000
-  comparison from Phase A is the falsifiable check).
+- Phase D (done, 2026-08-18): both `perf_bench.rs` tests re-run and
+  numbers recorded; the whole-buffer scaling is gone -- see "Phase D
+  findings" below for the root cause, the fix, and before/after
+  numbers. `complete()` at n=10,000 (uncached, the benchmark's
+  worst case): ~25ms/call -> ~2.9ms/call, under the < 5ms p50 target.
+
+## Phase D findings (2026-08-18)
+
+Two independent perf issues were found and fixed. The first
+(`Document::derived_catalog` caching in dsl-server, eliminating
+redundant `source_tables::from_source` calls across completion / hover
+/ diagnostics / inlay-hints / workspace-symbol for the same document
+version) was the one this plan anticipated going in -- real, but it
+turned out to be a small slice of the total: standalone `from_source`
+at n=10,000 costs ~1.6ms, a fraction of the original ~25ms/call.
+
+The actual dominant cost, found only by instrumenting
+`complete_with_derived` with per-branch `Instant` timing after fix #1
+alone left the benchmark essentially unchanged (the humbling part --
+the initial root-cause hypothesis, based on reading the code rather
+than measuring it, was wrong): for a cursor sitting in a WHERE clause
+whose table isn't recognized by the catalog (no live DB, no workspace
+scan, no CREATE TABLE in the buffer -- exactly `perf_bench.rs`'s
+`Catalog::default()` setup, and a completely ordinary state for a
+fresh session or a schema-less scratch file), completion falls back to
+`fallback::scope_from_text`. Its `iter_table_bindings` helper collected
+the *entire source buffer* into a `Vec<char>` and scanned it
+start-to-end for every FROM / JOIN / UPDATE / INTO / USING in the
+*whole file*, regardless of cursor position -- O(buffer size), not
+O(statement size), which is exactly why the original Phase A benchmark
+found the cost identical whether the cursor sat near the start or the
+end of the buffer (a clue that, in hindsight, pointed away from
+`from_source` -- a position-independent *and* buffer-size-dependent
+cost, on every fallback-triggering call, not just once per edit).
+
+Fixed by a new `engine::current_statement_span(source, offset)` helper
+(mirrors the existing `stmt_slice_upper`'s semicolon-boundary
+convention, extended to find the end boundary too) and scoping every
+`fallback::{scope_from_text, cte_names_from_text, cte_columns_from_text}`
+call site (4 in total, across `engine.rs` and `detectors.rs`) to the
+current `;`-delimited statement instead of the whole buffer. The two
+CTE-fallback functions had a latent *correctness* bug from the same
+cause, not just a perf one: both only look at their argument's leading
+prefix (per their own doc comments), so passing the whole buffer meant
+they were checking statement #1's prefix for a `WITH` clause instead
+of the current statement's -- scoping to the current statement fixes
+both.
+
+Numbers (n=10,000 statements, cursor at end-of-statement matching
+`build_buffer`'s convention -- see `dsl-completion/tests/perf_bench.rs`
+and `dsl-server/tests/handlers_unit.rs`'s
+`r5_201_perf_derived_catalog_cache_avoids_redundant_rescans` for full
+detail and reproduction steps):
+
+| Path | Before | After |
+|---|---|---|
+| `complete()` uncached (perf_bench.rs, worst case) | ~25ms/call | ~2.9ms/call |
+| dsl-server completion, warm cache | ~25ms/call (no caching existed) | ~1.6ms/call |
+| dsl-server completion, cold cache (first call after an edit) | ~25ms/call | ~74ms one-time (pays parse + resolve + derive; unchanged from before, since parse/resolve were already paid once per edit via the pre-existing `ParseCache`) |
+
+Separate finding, not fixed here: `hover::run` was measured at
+~270ms/call at n=10,000 during this investigation -- one to two orders
+of magnitude worse than everything else, and unrelated to both fixes
+above. Root cause: `dsl_hover::hover_with` takes raw `source: &str` and
+calls `dsl_parse::parse` on it internally on *every* call, ignoring
+dsl-server's already-cached `ParseCache` entirely -- confirmed
+pre-existing, not caused by this session. Left untouched per the
+out-of-scope note above; flagged for a future, `dsl-hover`-scoped
+follow-up (thread a pre-parsed `&ParsedFile` through `hover_with`
+instead of re-parsing, the same shape of fix as this session's `derived_catalog`
+work, just in a different crate).
