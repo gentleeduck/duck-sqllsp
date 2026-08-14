@@ -133,3 +133,120 @@ fn trim_quotes(s: &str) -> &str {
 pub fn is_word(c: char) -> bool {
   c.is_alphanumeric() || c == '_'
 }
+
+/// A single `WITH RECURSIVE name[(cols)] AS ( base UNION [ALL]
+/// recursive )` CTE, split into its parts. Shared by the recursive-CTE
+/// rule family (sql769-sql773) -- each of those rules needs the same
+/// "where does the recursive term start/end" answer, so it lives here
+/// instead of being re-derived five times.
+pub struct RecursiveCte {
+  pub name_start: usize,
+  pub name_end: usize,
+  pub cols: Vec<String>,
+  pub term_start: usize,
+  pub term_end: usize,
+}
+
+/// Find the (single) recursive CTE in `body`, given its ASCII-
+/// uppercased twin `upper`. Returns `None` when there's no `WITH
+/// RECURSIVE`, the CTE body has no top-level `UNION`, or the shape
+/// doesn't match `name[(cols)] AS ( ... )` -- a `WITH RECURSIVE a AS
+/// (...), b AS (...)` multi-CTE list is out of scope (`None`), kept
+/// simple to stay conservative.
+pub fn find_recursive_cte(body: &str, upper: &str) -> Option<RecursiveCte> {
+  let ub = upper.as_bytes();
+  let with_rel = find_clause(ub, b"WITH RECURSIVE")?;
+  let mut i = skip_ws(ub, with_rel + "WITH RECURSIVE".len());
+  let name_start = i;
+  while i < ub.len() && is_word(ub[i] as char) {
+    i += 1;
+  }
+  let name_end = i;
+  if name_end == name_start {
+    return None;
+  }
+  i = skip_ws(ub, i);
+  let mut cols = Vec::new();
+  if ub.get(i) == Some(&b'(') {
+    let close = match_paren(ub, i)?;
+    for (c, _) in split_top_level(&body[i + 1..close]) {
+      if let Some((_, n)) = parse_simple_ident(c) {
+        cols.push(n);
+      }
+    }
+    i = skip_ws(ub, close + 1);
+  }
+  if !upper[i..].starts_with("AS") {
+    return None;
+  }
+  i = skip_ws(ub, i + 2);
+  if ub.get(i) != Some(&b'(') {
+    return None;
+  }
+  let body_open = i;
+  let body_close = match_paren(ub, body_open)?;
+  let inner = &upper[body_open + 1..body_close];
+  let union_rel = find_clause(inner.as_bytes(), b"UNION")?;
+  let mut term_start = body_open + 1 + union_rel + "UNION".len();
+  let after_union = &upper[term_start..body_close];
+  let trimmed_len = after_union.len() - after_union.trim_start().len();
+  if after_union.trim_start().starts_with("ALL") {
+    let ws_and_all = trimmed_len + "ALL".len();
+    term_start += ws_and_all;
+  }
+  Some(RecursiveCte { name_start, name_end, cols, term_start, term_end: body_close })
+}
+
+/// Strip matching wrapping parens repeatedly, e.g. `((x))` -> `x`.
+/// Used to normalize a recursive term that's fully parenthesized
+/// (`UNION ALL (SELECT ... ORDER BY ...)`) before depth-0 scans.
+pub fn unwrap_parens(ub: &[u8], start: usize, end: usize) -> (usize, usize) {
+  let mut s = start;
+  let mut e = end;
+  while s < e && ub[s].is_ascii_whitespace() {
+    s += 1;
+  }
+  while e > s && ub[e - 1].is_ascii_whitespace() {
+    e -= 1;
+  }
+  if s < e
+    && ub[s] == b'('
+    && let Some(close) = match_paren(ub, s)
+    && close == e - 1
+  {
+    return unwrap_parens(ub, s + 1, e - 1);
+  }
+  (s, e)
+}
+
+fn match_paren(ub: &[u8], open: usize) -> Option<usize> {
+  let mut depth = 0i32;
+  let mut i = open;
+  while i < ub.len() {
+    match ub[i] {
+      b'(' => depth += 1,
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          return Some(i);
+        }
+      },
+      b'\'' => {
+        i += 1;
+        while i < ub.len() && ub[i] != b'\'' {
+          i += 1;
+        }
+      },
+      _ => {},
+    }
+    i += 1;
+  }
+  None
+}
+
+fn skip_ws(ub: &[u8], mut i: usize) -> usize {
+  while i < ub.len() && ub[i].is_ascii_whitespace() {
+    i += 1;
+  }
+  i
+}

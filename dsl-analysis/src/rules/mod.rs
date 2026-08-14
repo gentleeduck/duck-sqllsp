@@ -668,6 +668,11 @@ pub mod json_query_wrapper_conflict;
 pub mod json_table_duplicate_column_name;
 pub mod is_json_redundant_with_jsonb_column;
 pub mod is_json_scalar_object_conflict;
+pub mod recursive_cte_cycle_column_reused;
+pub mod recursive_cte_missing_base_union;
+pub mod recursive_term_has_aggregate;
+pub mod recursive_term_has_order_or_limit;
+pub mod recursive_cte_outer_join_recursive_side;
 
 use crate::LintRule;
 
@@ -1346,5 +1351,10 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(json_table_duplicate_column_name::Rule),
     Box::new(is_json_redundant_with_jsonb_column::Rule),
     Box::new(is_json_scalar_object_conflict::Rule),
+    Box::new(recursive_cte_cycle_column_reused::Rule),
+    Box::new(recursive_cte_missing_base_union::Rule),
+    Box::new(recursive_term_has_aggregate::Rule),
+    Box::new(recursive_term_has_order_or_limit::Rule),
+    Box::new(recursive_cte_outer_join_recursive_side::Rule),
   ]
 }
