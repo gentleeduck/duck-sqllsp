@@ -225,15 +225,19 @@ rule project.
   with total buffer/statement count: `perf_scaling_is_position_
   independent_not_size_independent`'s per-call numbers at n=3000
   should drop toward the n=200 numbers, not stay at ~8ms.
-- Phase C (batch 1 done, 2026-08-18; more batches expected): every
-  newly added completion case has a test and was verified against the
-  real engine before being called done. Batch 1 covered "advanced SQL
-  surface" candidates -- see
-  `dsl-completion/docs/plans/2026-08-18-phase-c-batch-1-aggregate-json-table-fn-syntax.md`
-  for the probe findings, fixes (FILTER, WITH ORDINALITY, JSON_TABLE
-  COLUMNS fresh-slot, catalog-backed JSON key completion wired in) and
-  the remaining known gaps. Deeper phase-awareness and cross-file
-  intelligence themes not yet systematically audited.
+- Phase C (batches 1-2 done, 2026-08-18): every newly added completion
+  case has a test and was verified against the real engine before
+  being called done. Batch 1 covered "advanced SQL surface" (FILTER,
+  WITH ORDINALITY, JSON_TABLE COLUMNS fresh-slot, catalog-backed JSON
+  key completion wired in) --
+  `dsl-completion/docs/plans/2026-08-18-phase-c-batch-1-aggregate-json-table-fn-syntax.md`.
+  Batch 2 covered deeper phase-awareness (a multi-window-definition
+  paren-tracking bug) and cross-file intelligence (completion now sees
+  tables/types defined in other open documents, not just on-save) --
+  `dsl-completion/docs/plans/2026-08-18-phase-c-batch-2-phase-awareness-cross-file.md`.
+  All three original coverage themes have now had at least one probe
+  round; both plan docs list lower-confidence/deferred observations
+  for a future batch if warranted.
 - Phase D (done, 2026-08-18): both `perf_bench.rs` tests re-run and
   numbers recorded; the whole-buffer scaling is gone -- see "Phase D
   findings" below for the root cause, the fix, and before/after

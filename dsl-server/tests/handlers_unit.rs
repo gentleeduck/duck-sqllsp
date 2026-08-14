@@ -2150,3 +2150,38 @@ fn r5_201_perf_derived_catalog_cache_avoids_redundant_rescans() {
   let _ = dsl_completion::source_tables::from_source(&cache.file, &doc.text);
   eprintln!("standalone from_source call at n_stmts={n}: {:?}", t1.elapsed());
 }
+
+#[test]
+fn r5_202_completion_sees_table_defined_in_another_open_document() {
+  // A CREATE TABLE in one open (unsaved) buffer should be completable
+  // from another open buffer immediately -- the same cross-document
+  // visibility `workspace/symbol` already has -- rather than only
+  // appearing after the file is saved and the workspace rescanned.
+  // Regression coverage for a gap found during the Phase C cross-file
+  // intelligence probe: `completion::run` used to merge in only the
+  // *current* document's derived catalog.
+  let state = ServerState::new();
+  let url_a: Url = "file:///a.sql".parse().unwrap();
+  let url_b: Url = "file:///b.sql".parse().unwrap();
+  state.documents.open(url_a, "CREATE TABLE widgets (id int, name text);".into(), 1);
+  state.documents.open(url_b.clone(), "SELECT * FROM widg".into(), 1);
+  let resp = completion::run(
+    &state,
+    CompletionParams {
+      text_document_position: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url_b },
+        position: Position { line: 0, character: 18 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+      context: None,
+    },
+  )
+  .expect("completion result");
+  let items = match resp {
+    CompletionResponse::Array(v) => v,
+    CompletionResponse::List(l) => l.items,
+  };
+  let labels: Vec<String> = items.iter().map(|i| i.label.clone()).collect();
+  assert!(labels.contains(&"widgets".to_string()), "expected `widgets` from the other open document; got {labels:?}");
+}

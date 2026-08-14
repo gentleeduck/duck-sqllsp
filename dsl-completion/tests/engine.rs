@@ -2079,6 +2079,28 @@ fn window_clause_partition_by_offers_columns() {
 }
 
 #[test]
+fn second_window_def_in_comma_list_offers_subclause_menu() {
+  // `WINDOW w1 AS (PARTITION BY id), w2 AS (<cursor>` -- w1's body is
+  // already closed; the cursor sits inside w2's, which should get the
+  // same PARTITION BY / ORDER BY / frame menu as a first (and only)
+  // window definition does. Previously fell through to the wrong
+  // FROM-item-finished menu (JOIN/WHERE/...) because the detector
+  // located the *first* window's paren instead of the innermost
+  // still-open one.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM users WINDOW w1 AS (PARTITION BY id), w2 AS (";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
+  for kw in &["PARTITION BY", "ORDER BY"] {
+    assert!(labels.iter().any(|l| l == kw), "w2 AS ( should suggest `{kw}`; got {labels:?}");
+  }
+  assert!(
+    !labels.iter().any(|l| l == "INNER JOIN" || l == "CROSS JOIN"),
+    "w2 AS ( wrongly listed JOIN keywords: {labels:?}"
+  );
+}
+
+#[test]
 fn aggregate_call_offers_filter_keyword() {
   // `SELECT count(*) <cursor>` -- FILTER (WHERE ...) is a legal
   // continuation after any aggregate call, same slot as OVER.

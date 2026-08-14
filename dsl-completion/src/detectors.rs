@@ -194,23 +194,38 @@ pub(crate) fn window_clause_paren_expects_subclause(source: &str, offset: TextSi
   if !after.to_ascii_uppercase().contains(" AS ") {
     return false;
   }
-  // Find the opening `(` after AS and verify the paren is still open.
-  let Some(open) = after.find('(') else { return false };
-  let body = &after[open + 1..];
-  let mut depth = 1i32;
-  for c in body.chars() {
-    match c {
-      '(' => depth += 1,
-      ')' => depth -= 1,
+  // Track paren depth across every window def in this (possibly
+  // comma-separated `w1 AS (...), w2 AS (...)`) WINDOW clause up to
+  // the cursor, remembering where the innermost still-open paren
+  // started. A plain `after.find('(')` only finds the *first*
+  // definition's paren -- wrong once w1's body has already closed and
+  // a second `w2 AS (` follows. Nested calls inside a body (`PARTITION
+  // BY foo(x)`) don't confuse this: `open_at` only updates on the
+  // depth 0->1 transition, so it tracks the outer window-body paren,
+  // not `foo`'s.
+  let mut depth = 0i32;
+  let mut open_at: Option<usize> = None;
+  for (i, b) in after.bytes().enumerate() {
+    match b {
+      b'(' => {
+        if depth == 0 {
+          open_at = Some(i);
+        }
+        depth += 1;
+      },
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          open_at = None;
+        }
+      },
       _ => {},
     }
   }
-  if depth <= 0 {
-    return false;
-  }
+  let Some(open) = open_at else { return false };
   // Cursor is inside the paren. Only fire when no sub-clause keyword
   // has been typed yet -- so the FIRST thing in the body is the slot.
-  let body_trim = body.trim();
+  let body_trim = after[open + 1..].trim();
   body_trim.is_empty()
     || !["PARTITION", "ORDER", "ROWS", "RANGE", "GROUPS"]
       .iter()
@@ -233,18 +248,31 @@ pub(crate) fn window_clause_partition_or_order_by_expects_column(source: &str, o
   if !after.contains(" AS ") {
     return false;
   }
-  // Paren depth check: must still be unclosed.
-  let Some(open) = after.find('(') else { return false };
-  let body = &after[open + 1..];
-  let mut depth = 1i32;
-  for c in body.chars() {
-    match c {
-      '(' => depth += 1,
-      ')' => depth -= 1,
+  // Find the innermost still-open paren (same reasoning as
+  // `window_clause_paren_expects_subclause` above -- a plain
+  // `after.find('(')` only finds the *first* window definition's
+  // paren, wrong once a second `w2 AS (` follows a closed `w1 AS
+  // (...)` body).
+  let mut depth = 0i32;
+  let mut open_at: Option<usize> = None;
+  for (i, b) in after.bytes().enumerate() {
+    match b {
+      b'(' => {
+        if depth == 0 {
+          open_at = Some(i);
+        }
+        depth += 1;
+      },
+      b')' => {
+        depth -= 1;
+        if depth == 0 {
+          open_at = None;
+        }
+      },
       _ => {},
     }
   }
-  if depth <= 0 {
+  if open_at.is_none() {
     return false;
   }
   // Trailing PARTITION BY / ORDER BY / comma after one of them.

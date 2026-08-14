@@ -19,15 +19,27 @@ pub fn run(state: &ServerState, params: CompletionParams) -> Option<CompletionRe
   let offset = position::to_offset(&doc.rope, params.text_document_position.position);
   let cache = doc.parsed();
   // Workspace-scan catalog (every .sql in the project) merged on top
-  // of the live catalog snapshot, then the current buffer's own
-  // derived tables / sequences / types / etc -- cached per document
-  // version via `Document::derived_catalog` rather than re-scanning
-  // the whole buffer on every request. Live wins on collisions
-  // because merge keeps the first-seen entry.
+  // of the live catalog snapshot, then every OPEN document's own
+  // derived tables / sequences / types / etc -- not just this one, so
+  // an unsaved sibling buffer's CREATE TABLE is completable the same
+  // way workspace_symbol already treats it, rather than only showing
+  // up after a save + workspace rescan. Cached per document version
+  // via `Document::derived_catalog` rather than re-scanning on every
+  // request; huge sibling docs are skipped the same as `too_large()`
+  // guards the current one. Live wins on collisions because merge
+  // keeps the first-seen entry; this document's own derived catalog
+  // wins over other open documents' in case of a same-name clash.
   let live = state.catalog.read().clone();
   let ws_offline = state.workspace_offline_snapshot();
   let cat = dsl_completion::source_tables::merge(&live, &ws_offline);
-  let derived = doc.derived_catalog();
+  let derived = state
+    .documents
+    .snapshot()
+    .into_iter()
+    .filter(|(u, d)| *u != uri && !d.too_large())
+    .fold(doc.derived_catalog(), |acc, (_, other)| {
+      std::sync::Arc::new(dsl_completion::source_tables::merge(&acc, &other.derived_catalog()))
+    });
   let items = complete_with_derived(&doc.text, &cache.file, &cache.scopes, &cat, &derived, offset);
 
   let style = state.config_snapshot().style;
