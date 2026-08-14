@@ -136,277 +136,13 @@ pub fn complete_with_derived(
   // hints, not just same-buffer literal examples.
   let cat = source_tables::merge(catalog, derived);
 
-  // Hard-suppress completion when the cursor sits at the "fresh
-  // name" slot after a `CREATE [OR REPLACE] <KIND>` keyword. The
-  // user is naming a brand-new object; no existing catalog symbol or
-  // keyword is a sensible suggestion there. Exception: when nothing
-  // has been typed yet AND the class supports `IF NOT EXISTS`, emit
-  // that single optional clarifier so the user can pick it before
-  // typing the name.
-  if at_fresh_name_slot(source, offset) {
-    if let Some(label) = fresh_name_slot_optional_keyword(source, offset) {
-      return vec![crate::item::Item {
-        label: label.into(),
-        kind: crate::item::ItemKind::Keyword,
-        detail: Some("optional clarifier before the new object name".into()),
-        insert_text: label.into(),
-        sort_priority: 0,
-        ..Default::default()
-      }];
+  // Every pre-phase check, in the exact order they used to run as a
+  // chain of `if`/`if let` statements -- see `PRE_PHASE_DETECTORS`'s
+  // doc comment for the full list and why it's shaped this way.
+  for detector in PRE_PHASE_DETECTORS {
+    if let Some(items) = detector(source, offset, file, scopes, &cat) {
+      return items;
     }
-    // `PREPARE TRANSACTION` overrides the fresh-name-slot suppression
-    // because TRANSACTION is a literal kw, not a fresh statement name.
-    if let Some(kws) = txn_followup_next_keyword(source, offset) {
-      let mut out = Vec::with_capacity(kws.len());
-      push_keyword_kvs(&mut out, kws);
-      return out;
-    }
-    // FETCH / MOVE -- direction keyword set is more useful than the
-    // fresh-name suppression (cursor name comes after FROM/IN).
-    if let Some(kws) = fetch_move_direction_keyword(source, offset) {
-      let mut out = Vec::with_capacity(kws.len());
-      push_keyword_kvs(&mut out, kws);
-      return out;
-    }
-    // CREATE TRANSFORM -- post-keyword slot is FOR TYPE, not a name.
-    if let Some(kws) = create_transform_next_keyword(source, offset) {
-      let mut out = Vec::with_capacity(kws.len());
-      push_keyword_kvs(&mut out, kws);
-      return out;
-    }
-    // CREATE/ALTER USER MAPPING -- post-keyword slot is FOR/IF NOT EXISTS,
-    // not a brand-new identifier.
-    if let Some(kws) = create_user_mapping_next_keyword(source, offset) {
-      let mut out = Vec::with_capacity(kws.len());
-      push_keyword_kvs(&mut out, kws);
-      return out;
-    }
-    if let Some(kws) = alter_user_mapping_next_keyword(source, offset) {
-      let mut out = Vec::with_capacity(kws.len());
-      push_keyword_kvs(&mut out, kws);
-      return out;
-    }
-    // `SELECT ... FETCH` / `... FIRST` / `... ROW(S)`: not a cursor
-    // command, it's the SELECT trailing FETCH clause. Fresh-name guard
-    // misfires because `FETCH` is in the cursor pattern list.
-    if let Some(kws) = select_fetch_offset_next_keyword(source, offset) {
-      let mut out = Vec::with_capacity(kws.len());
-      push_keyword_kvs(&mut out, kws);
-      return out;
-    }
-    // `CREATE TABLE child PARTITION OF parent FOR VALUES ` -- the
-    // trailing VALUES is part of the partition spec, not a top-level
-    // VALUES (...) statement, so the partition menu (IN/FROM/WITH/
-    // DEFAULT) wins over the fresh-name suppression.
-    if let Some(kws) = partition_next_keyword(source, offset) {
-      let mut out = Vec::with_capacity(kws.len());
-      push_keyword_kvs(&mut out, kws);
-      return out;
-    }
-    return Vec::new();
-  }
-
-  // JSON-path key slot: `data->'<cursor>` or `data->>'<cursor>`.
-  // Surface keys observed in same-buffer jsonb literal defaults / CHECK
-  // constraints, falling back to catalog-recorded `Column.json_keys`
-  // when the buffer has no example literal to harvest. Highest
-  // priority -- we don't want to drown the menu in catalog table names
-  // when the user is clearly typing a JSON key. (Runs BEFORE the
-  // inert-span bailout so JSON key completion still works while the
-  // cursor sits inside the `'...'` literal.)
-  if let Some(keys) = json_path::json_path_keys_at_with_catalog(source, offset, &cat) {
-    let mut out = Vec::with_capacity(keys.len());
-    for k in keys {
-      out.push(crate::item::Item {
-        label: k.clone(),
-        kind: crate::item::ItemKind::Variable,
-        detail: Some("JSON key".into()),
-        description: Some("known JSON key".into()),
-        documentation_md: None,
-        insert_text: k,
-        is_snippet: false,
-        sort_priority: 0,
-      });
-    }
-    return out;
-  }
-
-  // Cursor inside a string literal or comment? Suggesting keywords /
-  // tables / columns there is just noise -- the user is typing string
-  // content. Dollar-quoted bodies (PL/pgSQL) are NOT inert -- recurse
-  // into them so completion still works inside function bodies.
-  if cursor_in_inert_span(source, u32::from(offset) as usize) {
-    return Vec::new();
-  }
-
-  // Dot context first: highest priority, beats any phase result.
-  if let Some(alias) = dot_alias(source, offset) {
-    let mut out = Vec::new();
-    // NEW / OLD virtual aliases inside trigger-function bodies.
-    // Resolution order:
-    //   1. Look for `CREATE TRIGGER ... ON <table>` in the buffer.
-    //   2. If the cursor sits inside a CREATE FUNCTION body, find
-    //      the function name, then search the buffer + live catalog
-    //      for `CREATE TRIGGER ... EXECUTE [FUNCTION|PROCEDURE]
-    //      <fn>` and read the table off that trigger.
-    // Return WITHOUT completion when we can't pin down a single
-    // target -- guessing leads to broken hints.
-    let alias_upper = alias.to_ascii_uppercase();
-    if alias_upper == "NEW" || alias_upper == "OLD" {
-      let pos: usize = u32::from(offset) as usize;
-      let target = trigger_target_table(source).or_else(|| enclosing_fn_trigger_table(source, pos, &cat));
-      if let Some(t) = target {
-        sources::columns_of_table(&cat, None, &t, &mut out);
-        return out;
-      }
-      // No table known -- emit nothing so the user doesn't get a
-      // misleading global column dump.
-      return out;
-    }
-    // `EXCLUDED.<col>` (inside INSERT ... ON CONFLICT DO UPDATE SET ...):
-    // virtual row that mirrors the rejected INSERT row, so its column
-    // shape matches the INSERT target table.
-    if alias_upper == "EXCLUDED" {
-      if let Some(t) = insert_target_table_name_only(source) {
-        sources::columns_of_table(&cat, None, &t, &mut out);
-      }
-      return out;
-    }
-    let stmt_scope = scope_for_offset(file, scopes, offset);
-    let count = stmt_scope.map(|s| sources::columns_of_alias(&cat, s, &alias, &mut out)).unwrap_or(0);
-    if count == 0
-      && let Some(fb) = fallback::scope_from_text(current_statement_span(source, offset))
-    {
-      sources::columns_of_alias(&cat, &fb, &alias, &mut out);
-    }
-    // CTE alias: surface columns the resolver extracted from the
-    // CTE body projection. `cte_columns_of(alias)` returns
-    // `Some(empty)` when the CTE is declared but the body was not
-    // parsed -- in that case we have nothing useful to add.
-    if out.is_empty()
-      && let Some(s) = stmt_scope
-      && let Some(cols) = s.cte_columns_of(&alias)
-    {
-      for col in cols {
-        out.push(crate::item::Item {
-          label: col.clone(),
-          kind: crate::item::ItemKind::Column,
-          detail: Some(format!("CTE {alias}")),
-          description: None,
-          documentation_md: None,
-          insert_text: col.clone(),
-          is_snippet: false,
-          sort_priority: 0,
-        });
-      }
-    }
-    // Fallback: when pg_query refused the outer statement (typical
-    // mid-typing `WITH t AS (...) SELECT t.`), the resolver never
-    // ran -- so cte_columns_of returns None even though the CTE
-    // is plainly declared. Text-scan the *current statement* for its
-    // leading WITH and surface that CTE's projected columns. Must be
-    // scoped to this statement: `cte_columns_from_text` only looks at
-    // its argument's own prefix, so the whole buffer would check
-    // statement #1 instead of the one under the cursor.
-    if out.is_empty()
-      && let Some(cols) = fallback::cte_columns_from_text(current_statement_span(source, offset), &alias)
-    {
-      for col in cols {
-        out.push(crate::item::Item {
-          label: col.clone(),
-          kind: crate::item::ItemKind::Column,
-          detail: Some(format!("CTE {alias}")),
-          description: None,
-          documentation_md: None,
-          insert_text: col.clone(),
-          is_snippet: false,
-          sort_priority: 0,
-        });
-      }
-    }
-    // PL/pgSQL local typed as a catalog table (row variable).
-    // `DECLARE r users; ... r.<TAB>` should list users' columns.
-    if out.is_empty() {
-      let pos: usize = u32::from(offset) as usize;
-      let locals = crate::plpgsql_locals::extract(source, pos);
-      if let Some(ty) = crate::plpgsql_locals::type_of(&locals, &alias) {
-        // Strip `%ROWTYPE` suffix if present.
-        let bare = ty.split('%').next().unwrap_or(&ty).trim().trim_end_matches(';').trim();
-        if cat.find_table(None, bare).is_some() {
-          sources::columns_of_table(&cat, None, bare, &mut out);
-        }
-      }
-    }
-    // Schema-qualified relation slot: `FROM <schema>.<TAB>` /
-    // `SELECT * FROM <schema>.|`. The alias here is the schema name,
-    // not an in-scope alias; surface the tables/views that schema
-    // exposes so the user can pick one. Emit nothing when the name
-    // is neither a schema nor an alias -- a global dump would be wrong.
-    if out.is_empty() {
-      sources::tables_in_schema(&cat, &alias, &mut out);
-      // Also surface functions declared in this schema: `app.<TAB>`
-      // should offer `app.current_user_id()`, `app.user_in_org(...)`,
-      // etc., not just tables.
-      sources::functions_in_schema(&cat, &alias, &mut out);
-    }
-    // Last-resort: the alias names a real table in the live or derived
-    // catalog (case-insensitive), even though it has no binding in the
-    // current scope. Common when the user types `SELECT USERS.<cursor>`
-    // before the FROM clause exists. pg_query rejects the prefix and
-    // the fallback scope is empty, but the table is still resolvable.
-    if out.is_empty() && cat.find_table(None, &alias).is_some() {
-      sources::columns_of_table(&cat, None, &alias, &mut out);
-    }
-    // Filter columns already used in the same clause -- even in dot
-    // context, typing `SELECT u.id, u.|` should not re-offer `id`.
-    let used = used_columns_in_clause(source, offset);
-    if !used.is_empty() {
-      out.retain(|it| !is_column_listed(it, &used));
-    }
-    return out;
-  }
-
-  // GROUP BY GROUPING SETS ((<cursor>...)) -- inner tuple is a column
-  // list slot. Must beat contexts::detect (which sees the inner paren
-  // as a function-call expression context) and every Phase variant.
-  if grouping_sets_inner_paren_expects_column(source, offset) {
-    let mut out = Vec::new();
-    // Pull catalog columns directly off whatever the resolver or
-    // text-fallback found in FROM. Skip the aliased-table hide rule
-    // used by push_scope_columns -- inside GROUPING SETS the user
-    // wants bare column names since each entry is part of a tuple,
-    // not a free expression.
-    let mut tables: Vec<(Option<String>, String)> = Vec::new();
-    if let Some(scope) = scope_for_offset(file, scopes, offset) {
-      for b in scope.tables() {
-        tables.push((b.table.schema.clone(), b.table.name.clone()));
-      }
-    }
-    if tables.is_empty()
-      && let Some(fb) = fallback::scope_from_text(current_statement_span(source, offset))
-    {
-      for b in fb.tables() {
-        tables.push((b.table.schema.clone(), b.table.name.clone()));
-      }
-    }
-    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for (schema, name) in tables {
-      let key = format!("{}.{}", schema.as_deref().unwrap_or(""), name.to_ascii_lowercase());
-      if !seen.insert(key) {
-        continue;
-      }
-      sources::columns_of_table(&cat, schema.as_deref(), &name, &mut out);
-    }
-    push_aliases(file, scopes, source, offset, &mut out);
-    return out;
-  }
-  // Special context completions (INDEX USING method, TRIGGER EXECUTE
-  // FUNCTION, CALL procedure, CREATE POLICY FOR/TO, ALTER COLUMN TYPE,
-  // index opclass slot, trigger event slot, trigger ON table). All
-  // run *before* the index/table phases because they're more specific
-  // than the column dump those phases would emit.
-  if let Some(items) = crate::contexts::detect(source, offset, &cat) {
-    return items;
   }
 
   // CREATE INDEX scoped context wins before CREATE TABLE / generic
@@ -425,6 +161,356 @@ pub fn complete_with_derived(
   let ph = phase::detect(source, offset);
   route_phase(ph, file, scopes, source, &cat, offset)
 }
+
+/// Hard-suppress completion when the cursor sits at the "fresh name"
+/// slot after a `CREATE [OR REPLACE] <KIND>` keyword. The user is
+/// naming a brand-new object; no existing catalog symbol or keyword
+/// is a sensible suggestion there, with several overrides for
+/// contexts that only *look* like a fresh-name slot (PREPARE
+/// TRANSACTION, FETCH/MOVE direction, CREATE TRANSFORM, [ALTER] USER
+/// MAPPING, the SELECT-trailing-FETCH chain, PARTITION OF ... FOR
+/// VALUES). Always claims the slot once the gate matches -- even the
+/// "none of the overrides apply" case commits to an empty menu rather
+/// than falling through, since guessing at a brand-new name is worse
+/// than suggesting nothing.
+fn detect_fresh_name_slot(
+  source: &str,
+  offset: TextSize,
+  _file: &ParsedFile,
+  _scopes: &[Scope],
+  _cat: &Catalog,
+) -> Option<Vec<Item>> {
+  if !at_fresh_name_slot(source, offset) {
+    return None;
+  }
+  if let Some(label) = fresh_name_slot_optional_keyword(source, offset) {
+    return Some(vec![crate::item::Item {
+      label: label.into(),
+      kind: crate::item::ItemKind::Keyword,
+      detail: Some("optional clarifier before the new object name".into()),
+      insert_text: label.into(),
+      sort_priority: 0,
+      ..Default::default()
+    }]);
+  }
+  // `PREPARE TRANSACTION` overrides the fresh-name-slot suppression
+  // because TRANSACTION is a literal kw, not a fresh statement name.
+  if let Some(kws) = txn_followup_next_keyword(source, offset) {
+    let mut out = Vec::with_capacity(kws.len());
+    push_keyword_kvs(&mut out, kws);
+    return Some(out);
+  }
+  // FETCH / MOVE -- direction keyword set is more useful than the
+  // fresh-name suppression (cursor name comes after FROM/IN).
+  if let Some(kws) = fetch_move_direction_keyword(source, offset) {
+    let mut out = Vec::with_capacity(kws.len());
+    push_keyword_kvs(&mut out, kws);
+    return Some(out);
+  }
+  // CREATE TRANSFORM -- post-keyword slot is FOR TYPE, not a name.
+  if let Some(kws) = create_transform_next_keyword(source, offset) {
+    let mut out = Vec::with_capacity(kws.len());
+    push_keyword_kvs(&mut out, kws);
+    return Some(out);
+  }
+  // CREATE/ALTER USER MAPPING -- post-keyword slot is FOR/IF NOT EXISTS,
+  // not a brand-new identifier.
+  if let Some(kws) = create_user_mapping_next_keyword(source, offset) {
+    let mut out = Vec::with_capacity(kws.len());
+    push_keyword_kvs(&mut out, kws);
+    return Some(out);
+  }
+  if let Some(kws) = alter_user_mapping_next_keyword(source, offset) {
+    let mut out = Vec::with_capacity(kws.len());
+    push_keyword_kvs(&mut out, kws);
+    return Some(out);
+  }
+  // `SELECT ... FETCH` / `... FIRST` / `... ROW(S)`: not a cursor
+  // command, it's the SELECT trailing FETCH clause. Fresh-name guard
+  // misfires because `FETCH` is in the cursor pattern list.
+  if let Some(kws) = select_fetch_offset_next_keyword(source, offset) {
+    let mut out = Vec::with_capacity(kws.len());
+    push_keyword_kvs(&mut out, kws);
+    return Some(out);
+  }
+  // `CREATE TABLE child PARTITION OF parent FOR VALUES ` -- the
+  // trailing VALUES is part of the partition spec, not a top-level
+  // VALUES (...) statement, so the partition menu (IN/FROM/WITH/
+  // DEFAULT) wins over the fresh-name suppression.
+  if let Some(kws) = partition_next_keyword(source, offset) {
+    let mut out = Vec::with_capacity(kws.len());
+    push_keyword_kvs(&mut out, kws);
+    return Some(out);
+  }
+  Some(Vec::new())
+}
+
+/// JSON-path key slot: `data->'<cursor>` or `data->>'<cursor>`.
+/// Surface keys observed in same-buffer jsonb literal defaults / CHECK
+/// constraints, falling back to catalog-recorded `Column.json_keys`
+/// when the buffer has no example literal to harvest. Highest
+/// priority -- we don't want to drown the menu in catalog table names
+/// when the user is clearly typing a JSON key. (Runs before the
+/// inert-span bailout so JSON key completion still works while the
+/// cursor sits inside the `'...'` literal.)
+fn detect_json_path_key(
+  source: &str,
+  offset: TextSize,
+  _file: &ParsedFile,
+  _scopes: &[Scope],
+  cat: &Catalog,
+) -> Option<Vec<Item>> {
+  let keys = json_path::json_path_keys_at_with_catalog(source, offset, cat)?;
+  let mut out = Vec::with_capacity(keys.len());
+  for k in keys {
+    out.push(crate::item::Item {
+      label: k.clone(),
+      kind: crate::item::ItemKind::Variable,
+      detail: Some("JSON key".into()),
+      description: Some("known JSON key".into()),
+      documentation_md: None,
+      insert_text: k,
+      is_snippet: false,
+      sort_priority: 0,
+    });
+  }
+  Some(out)
+}
+
+/// Cursor inside a string literal or comment? Suggesting keywords /
+/// tables / columns there is just noise -- the user is typing string
+/// content. Dollar-quoted bodies (PL/pgSQL) are NOT inert -- recurse
+/// into them so completion still works inside function bodies. Claims
+/// the position with an empty menu (`Some(Vec::new())`) rather than
+/// declining (`None`) -- declining would let later detectors and the
+/// phase match compute a real, wrong answer for a cursor sitting
+/// inside a literal.
+fn detect_inert_span(
+  source: &str,
+  offset: TextSize,
+  _file: &ParsedFile,
+  _scopes: &[Scope],
+  _cat: &Catalog,
+) -> Option<Vec<Item>> {
+  if cursor_in_inert_span(source, u32::from(offset) as usize) { Some(Vec::new()) } else { None }
+}
+
+/// Dot context: `<alias>.<cursor>` -- highest priority once past the
+/// fresh-name-slot / JSON-path / inert-span checks above, beats every
+/// phase result. Resolution order for the alias's columns: NEW/OLD
+/// virtual trigger-body aliases, `EXCLUDED` (ON CONFLICT DO UPDATE),
+/// in-scope table/CTE binding (AST-resolved, falling back to a
+/// text-scan when the resolver didn't run), a PL/pgSQL local typed as
+/// a catalog table (row variable), a schema-qualified relation, and
+/// finally a bare table name with no scope binding at all. Always
+/// claims the slot once `dot_alias` matches -- even "found nothing"
+/// is a deliberate empty menu, not a fall-through, since a global
+/// column dump would be wrong once we know the user typed `x.`.
+fn detect_dot_context(
+  source: &str,
+  offset: TextSize,
+  file: &ParsedFile,
+  scopes: &[Scope],
+  cat: &Catalog,
+) -> Option<Vec<Item>> {
+  let alias = dot_alias(source, offset)?;
+  let mut out = Vec::new();
+  // NEW / OLD virtual aliases inside trigger-function bodies.
+  // Resolution order:
+  //   1. Look for `CREATE TRIGGER ... ON <table>` in the buffer.
+  //   2. If the cursor sits inside a CREATE FUNCTION body, find
+  //      the function name, then search the buffer + live catalog
+  //      for `CREATE TRIGGER ... EXECUTE [FUNCTION|PROCEDURE]
+  //      <fn>` and read the table off that trigger.
+  // Return WITHOUT completion when we can't pin down a single
+  // target -- guessing leads to broken hints.
+  let alias_upper = alias.to_ascii_uppercase();
+  if alias_upper == "NEW" || alias_upper == "OLD" {
+    let pos: usize = u32::from(offset) as usize;
+    let target = trigger_target_table(source).or_else(|| enclosing_fn_trigger_table(source, pos, cat));
+    if let Some(t) = target {
+      sources::columns_of_table(cat, None, &t, &mut out);
+      return Some(out);
+    }
+    // No table known -- emit nothing so the user doesn't get a
+    // misleading global column dump.
+    return Some(out);
+  }
+  // `EXCLUDED.<col>` (inside INSERT ... ON CONFLICT DO UPDATE SET ...):
+  // virtual row that mirrors the rejected INSERT row, so its column
+  // shape matches the INSERT target table.
+  if alias_upper == "EXCLUDED" {
+    if let Some(t) = insert_target_table_name_only(source) {
+      sources::columns_of_table(cat, None, &t, &mut out);
+    }
+    return Some(out);
+  }
+  let stmt_scope = scope_for_offset(file, scopes, offset);
+  let count = stmt_scope.map(|s| sources::columns_of_alias(cat, s, &alias, &mut out)).unwrap_or(0);
+  if count == 0
+    && let Some(fb) = fallback::scope_from_text(current_statement_span(source, offset))
+  {
+    sources::columns_of_alias(cat, &fb, &alias, &mut out);
+  }
+  // CTE alias: surface columns the resolver extracted from the
+  // CTE body projection. `cte_columns_of(alias)` returns
+  // `Some(empty)` when the CTE is declared but the body was not
+  // parsed -- in that case we have nothing useful to add.
+  if out.is_empty()
+    && let Some(s) = stmt_scope
+    && let Some(cols) = s.cte_columns_of(&alias)
+  {
+    for col in cols {
+      out.push(crate::item::Item {
+        label: col.clone(),
+        kind: crate::item::ItemKind::Column,
+        detail: Some(format!("CTE {alias}")),
+        description: None,
+        documentation_md: None,
+        insert_text: col.clone(),
+        is_snippet: false,
+        sort_priority: 0,
+      });
+    }
+  }
+  // Fallback: when pg_query refused the outer statement (typical
+  // mid-typing `WITH t AS (...) SELECT t.`), the resolver never
+  // ran -- so cte_columns_of returns None even though the CTE
+  // is plainly declared. Text-scan the *current statement* for its
+  // leading WITH and surface that CTE's projected columns. Must be
+  // scoped to this statement: `cte_columns_from_text` only looks at
+  // its argument's own prefix, so the whole buffer would check
+  // statement #1 instead of the one under the cursor.
+  if out.is_empty()
+    && let Some(cols) = fallback::cte_columns_from_text(current_statement_span(source, offset), &alias)
+  {
+    for col in cols {
+      out.push(crate::item::Item {
+        label: col.clone(),
+        kind: crate::item::ItemKind::Column,
+        detail: Some(format!("CTE {alias}")),
+        description: None,
+        documentation_md: None,
+        insert_text: col.clone(),
+        is_snippet: false,
+        sort_priority: 0,
+      });
+    }
+  }
+  // PL/pgSQL local typed as a catalog table (row variable).
+  // `DECLARE r users; ... r.<TAB>` should list users' columns.
+  if out.is_empty() {
+    let pos: usize = u32::from(offset) as usize;
+    let locals = crate::plpgsql_locals::extract(source, pos);
+    if let Some(ty) = crate::plpgsql_locals::type_of(&locals, &alias) {
+      // Strip `%ROWTYPE` suffix if present.
+      let bare = ty.split('%').next().unwrap_or(&ty).trim().trim_end_matches(';').trim();
+      if cat.find_table(None, bare).is_some() {
+        sources::columns_of_table(cat, None, bare, &mut out);
+      }
+    }
+  }
+  // Schema-qualified relation slot: `FROM <schema>.<TAB>` /
+  // `SELECT * FROM <schema>.|`. The alias here is the schema name,
+  // not an in-scope alias; surface the tables/views that schema
+  // exposes so the user can pick one. Emit nothing when the name
+  // is neither a schema nor an alias -- a global dump would be wrong.
+  if out.is_empty() {
+    sources::tables_in_schema(cat, &alias, &mut out);
+    // Also surface functions declared in this schema: `app.<TAB>`
+    // should offer `app.current_user_id()`, `app.user_in_org(...)`,
+    // etc., not just tables.
+    sources::functions_in_schema(cat, &alias, &mut out);
+  }
+  // Last-resort: the alias names a real table in the live or derived
+  // catalog (case-insensitive), even though it has no binding in the
+  // current scope. Common when the user types `SELECT USERS.<cursor>`
+  // before the FROM clause exists. pg_query rejects the prefix and
+  // the fallback scope is empty, but the table is still resolvable.
+  if out.is_empty() && cat.find_table(None, &alias).is_some() {
+    sources::columns_of_table(cat, None, &alias, &mut out);
+  }
+  // Filter columns already used in the same clause -- even in dot
+  // context, typing `SELECT u.id, u.|` should not re-offer `id`.
+  let used = used_columns_in_clause(source, offset);
+  if !used.is_empty() {
+    out.retain(|it| !is_column_listed(it, &used));
+  }
+  Some(out)
+}
+
+/// GROUP BY GROUPING SETS ((<cursor>...)) -- inner tuple is a column
+/// list slot. Must beat `contexts::detect` (which sees the inner
+/// paren as a function-call expression context) and every Phase
+/// variant.
+fn detect_grouping_sets_inner_paren(
+  source: &str,
+  offset: TextSize,
+  file: &ParsedFile,
+  scopes: &[Scope],
+  cat: &Catalog,
+) -> Option<Vec<Item>> {
+  if !grouping_sets_inner_paren_expects_column(source, offset) {
+    return None;
+  }
+  let mut out = Vec::new();
+  // Pull catalog columns directly off whatever the resolver or
+  // text-fallback found in FROM. Skip the aliased-table hide rule
+  // used by push_scope_columns -- inside GROUPING SETS the user
+  // wants bare column names since each entry is part of a tuple,
+  // not a free expression.
+  let mut tables: Vec<(Option<String>, String)> = Vec::new();
+  if let Some(scope) = scope_for_offset(file, scopes, offset) {
+    for b in scope.tables() {
+      tables.push((b.table.schema.clone(), b.table.name.clone()));
+    }
+  }
+  if tables.is_empty()
+    && let Some(fb) = fallback::scope_from_text(current_statement_span(source, offset))
+  {
+    for b in fb.tables() {
+      tables.push((b.table.schema.clone(), b.table.name.clone()));
+    }
+  }
+  let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+  for (schema, name) in tables {
+    let key = format!("{}.{}", schema.as_deref().unwrap_or(""), name.to_ascii_lowercase());
+    if !seen.insert(key) {
+      continue;
+    }
+    sources::columns_of_table(cat, schema.as_deref(), &name, &mut out);
+  }
+  push_aliases(file, scopes, source, offset, &mut out);
+  Some(out)
+}
+
+/// Special context completions (INDEX USING method, TRIGGER EXECUTE
+/// FUNCTION, CALL procedure, CREATE POLICY FOR/TO, ALTER COLUMN TYPE,
+/// index opclass slot, trigger event slot, trigger ON table). All run
+/// *before* the index/table phases because they're more specific than
+/// the column dump those phases would emit.
+fn detect_contexts(source: &str, offset: TextSize, _file: &ParsedFile, _scopes: &[Scope], cat: &Catalog) -> Option<Vec<Item>> {
+  crate::contexts::detect(source, offset, cat)
+}
+
+/// Every pre-phase check, in the exact precedence order they used to
+/// run as a chain of `if`/`if let` statements at the top of
+/// `complete_with_derived` -- this array is now the only place that
+/// order lives. `complete_with_derived` runs them in sequence right
+/// after normalising the offset and merging the catalog; the first
+/// `Some` wins. Falling through every entry means none of these
+/// higher-priority contexts apply, so control moves on to the
+/// `create_index::detect` / `create_table::detect` phase overrides
+/// and finally `phase::detect` + `route_phase`'s own
+/// `POST_PHASE_DETECTORS` registry.
+const PRE_PHASE_DETECTORS: &[Detector] = &[
+  detect_fresh_name_slot,
+  detect_json_path_key,
+  detect_inert_span,
+  detect_dot_context,
+  detect_grouping_sets_inner_paren,
+  detect_contexts,
+];
 
 /// A post-phase detector: given the same `(source, offset, file,
 /// scopes, cat)` `route_phase` receives, either claims the slot
