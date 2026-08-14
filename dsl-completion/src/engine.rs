@@ -426,6 +426,208 @@ pub fn complete_with_derived(
   route_phase(ph, file, scopes, source, &cat, offset)
 }
 
+/// A post-phase detector: given the same `(source, offset, file,
+/// scopes, cat)` `route_phase` receives, either claims the slot
+/// (`Some`, short-circuiting every remaining detector and the `Phase`
+/// match) or declines (`None`, falls through to the next entry).
+/// Unused parameters are intentional -- most detectors are pure text
+/// checks and only need `source`/`offset`, but the type must be
+/// uniform across every entry in [`POST_PHASE_DETECTORS`].
+type Detector = fn(&str, TextSize, &ParsedFile, &[Scope], &Catalog) -> Option<Vec<Item>>;
+
+/// UNION/INTERSECT/EXCEPT trailing slot expects ALL/DISTINCT/SELECT/
+/// VALUES, never an expression-list dump.
+fn detect_set_op_followup(
+  source: &str,
+  offset: TextSize,
+  _file: &ParsedFile,
+  _scopes: &[Scope],
+  _cat: &Catalog,
+) -> Option<Vec<Item>> {
+  let kws = set_op_followup_next_keyword(source, offset)?;
+  let mut out = Vec::new();
+  push_keyword_kvs(&mut out, kws);
+  Some(out)
+}
+
+/// JSON_TABLE(... COLUMNS (<cursor> at a fresh column-def slot -- a
+/// brand-new name, not a catalog entity, so must beat the generic
+/// table/column dump every phase would otherwise emit.
+fn detect_json_table_fresh_column_slot(
+  source: &str,
+  offset: TextSize,
+  _file: &ParsedFile,
+  _scopes: &[Scope],
+  _cat: &Catalog,
+) -> Option<Vec<Item>> {
+  if !json_table_fresh_column_slot(source, offset) {
+    return None;
+  }
+  let mut out = Vec::new();
+  push_keyword_kvs(&mut out, &[("FOR", "<name> FOR ORDINALITY -- 1-based row-number column")]);
+  Some(out)
+}
+
+/// CREATE TRANSFORM ... otherwise gets swallowed by the Phase::Start
+/// statement-keyword dump.
+fn detect_create_transform(
+  source: &str,
+  offset: TextSize,
+  _file: &ParsedFile,
+  _scopes: &[Scope],
+  _cat: &Catalog,
+) -> Option<Vec<Item>> {
+  let kws = create_transform_next_keyword(source, offset)?;
+  let mut out = Vec::new();
+  push_keyword_kvs(&mut out, kws);
+  Some(out)
+}
+
+/// TABLESAMPLE REPEATABLE chain must beat the SELECT trailing-clause
+/// menu (which would emit JOIN/WHERE/ORDER BY).
+fn detect_tablesample_after_paren(
+  source: &str,
+  offset: TextSize,
+  _file: &ParsedFile,
+  _scopes: &[Scope],
+  _cat: &Catalog,
+) -> Option<Vec<Item>> {
+  let kws = tablesample_after_paren_next_keyword(source, offset)?;
+  let mut out = Vec::new();
+  push_keyword_kvs(&mut out, kws);
+  Some(out)
+}
+
+/// `agg(...) FILTER (<cursor>` -- only WHERE is legal, must beat the
+/// expression/column dump every phase would otherwise emit.
+fn detect_filter_clause(
+  source: &str,
+  offset: TextSize,
+  _file: &ParsedFile,
+  _scopes: &[Scope],
+  _cat: &Catalog,
+) -> Option<Vec<Item>> {
+  let kws = filter_clause_next_keyword(source, offset)?;
+  let mut out = Vec::new();
+  push_keyword_kvs(&mut out, kws);
+  Some(out)
+}
+
+/// `<table-fn>(...) WITH <cursor>` in FROM/JOIN -- only ORDINALITY is
+/// legal, must beat the JOIN/WHERE/ORDER BY clause-continuation menu
+/// the FROM-item-just-finished phase would otherwise emit.
+fn detect_table_function_with_ordinality(
+  source: &str,
+  offset: TextSize,
+  _file: &ParsedFile,
+  _scopes: &[Scope],
+  _cat: &Catalog,
+) -> Option<Vec<Item>> {
+  let kws = table_function_with_ordinality_next_keyword(source, offset)?;
+  let mut out = Vec::new();
+  push_keyword_kvs(&mut out, kws);
+  Some(out)
+}
+
+/// `SELECT ... FETCH FIRST/NEXT <n> ROW(S) <cursor>` -- only fires
+/// when the last token before the cursor is actually part of that
+/// chain (`select_fetch_offset_next_keyword` alone over-matches).
+fn detect_select_fetch_offset(
+  source: &str,
+  offset: TextSize,
+  _file: &ParsedFile,
+  _scopes: &[Scope],
+  _cat: &Catalog,
+) -> Option<Vec<Item>> {
+  let kws = select_fetch_offset_next_keyword(source, offset)?;
+  let (_, upper) = stmt_slice_upper(source, offset);
+  let words: Vec<&str> = upper.split_ascii_whitespace().collect();
+  let last = words.last().copied();
+  if !matches!(last, Some("FETCH") | Some("FIRST") | Some("NEXT") | Some("ROW") | Some("ROWS")) {
+    return None;
+  }
+  let mut out = Vec::new();
+  push_keyword_kvs(&mut out, kws);
+  Some(out)
+}
+
+/// CREATE VIEW / MATERIALIZED VIEW trailing WITH clauses (CHECK
+/// OPTION, WITH DATA) must beat the SELECT-body phase that otherwise
+/// emits join/order kws after `WITH `.
+fn detect_create_view_post_name(
+  source: &str,
+  offset: TextSize,
+  _file: &ParsedFile,
+  _scopes: &[Scope],
+  _cat: &Catalog,
+) -> Option<Vec<Item>> {
+  let kws = create_view_post_name_next_keyword(source, offset)?;
+  let (_, upper) = stmt_slice_upper(source, offset);
+  let words: Vec<&str> = upper.split_ascii_whitespace().collect();
+  let last = words.last().copied();
+  if !matches!(last, Some("WITH") | Some("NO") | Some("CASCADED") | Some("LOCAL")) {
+    return None;
+  }
+  let mut out = Vec::new();
+  push_keyword_kvs(&mut out, kws);
+  Some(out)
+}
+
+/// WINDOW frame-bound sub-chain only -- the fresh-slot and
+/// PARTITION/ORDER BY column-list paths must keep flowing to the
+/// catalog so existing tests stay green, so this only fires when the
+/// last token before the cursor is a frame-family keyword.
+fn detect_window_clause_frame_bound(
+  source: &str,
+  offset: TextSize,
+  _file: &ParsedFile,
+  _scopes: &[Scope],
+  _cat: &Catalog,
+) -> Option<Vec<Item>> {
+  if window_clause_partition_or_order_by_expects_column(source, offset) {
+    return None;
+  }
+  let kws = window_clause_as_paren_keyword(source, offset)?;
+  let pos: usize = (u32::from(offset) as usize).min(source.len());
+  let pre = &source[..pos];
+  let stmt_start_idx = pre.rfind(';').map(|i| i + 1).unwrap_or(0);
+  let words: Vec<&str> = pre[stmt_start_idx..].split_ascii_whitespace().collect();
+  let last_up = words.last().map(|s| s.to_ascii_uppercase()).unwrap_or_default();
+  if !matches!(
+    last_up.as_str(),
+    "RANGE" | "ROWS" | "GROUPS" | "BETWEEN" | "AND" | "PRECEDING" | "FOLLOWING" | "UNBOUNDED" | "CURRENT" | "EXCLUDE"
+  ) {
+    return None;
+  }
+  let mut out = Vec::new();
+  push_keyword_kvs(&mut out, kws);
+  Some(out)
+}
+
+/// Every post-phase shortcut, in the exact precedence order they used
+/// to run as a chain of `if`/`if let` statements at the top of
+/// `route_phase` -- this array is now the only place that order
+/// lives. `route_phase` runs them in sequence; the first `Some` wins.
+///
+/// Dropped rather than migrated: a `grouping_sets_inner_paren_expects_
+/// column` check used to sit here too, but it's dead code -- `complete_
+/// with_derived` already checks the identical `(source, offset)` pair
+/// earlier and returns unconditionally when true (see the dot-context
+/// block above), and `source`/`offset` are unmodified between that
+/// check and every call into `route_phase`, so the condition is
+/// guaranteed false by the time any of these detectors run.
+const POST_PHASE_DETECTORS: &[Detector] = &[
+  detect_set_op_followup,
+  detect_json_table_fresh_column_slot,
+  detect_create_transform,
+  detect_tablesample_after_paren,
+  detect_filter_clause,
+  detect_table_function_with_ordinality,
+  detect_select_fetch_offset,
+  detect_create_view_post_name,
+  detect_window_clause_frame_bound,
+];
+
 fn route_phase(
   ph: Phase,
   file: &ParsedFile,
@@ -434,95 +636,12 @@ fn route_phase(
   cat: &Catalog,
   offset: TextSize,
 ) -> Vec<Item> {
+  for detector in POST_PHASE_DETECTORS {
+    if let Some(items) = detector(source, offset, file, scopes, cat) {
+      return items;
+    }
+  }
   let mut out = Vec::new();
-  // Slot-keyword shortcuts that beat every Phase variant. UNION/INTERSECT/
-  // EXCEPT trailing slot expects ALL/DISTINCT/SELECT/VALUES, never an
-  // expression-list dump; WINDOW <name> AS ( ... ROWS BETWEEN <cursor> )
-  // wants the frame-bound kw menu, not catalog columns.
-  if let Some(kws) = set_op_followup_next_keyword(source, offset) {
-    push_keyword_kvs(&mut out, kws);
-    return out;
-  }
-  // GROUP BY GROUPING SETS ((<cursor>...)) -- inner tuple is a column-
-  // list slot. Phase machine sees the double paren as expression /
-  // function-call context and otherwise dumps the function library.
-  // This must beat every phase variant.
-  if grouping_sets_inner_paren_expects_column(source, offset) {
-    push_scope_columns_or_all(file, scopes, source, cat, offset, &mut out);
-    push_aliases(file, scopes, source, offset, &mut out);
-    return out;
-  }
-  // JSON_TABLE(... COLUMNS (<cursor> at a fresh column-def slot -- a
-  // brand-new name, not a catalog entity, so must beat the generic
-  // table/column dump every phase would otherwise emit.
-  if json_table_fresh_column_slot(source, offset) {
-    push_keyword_kvs(&mut out, &[("FOR", "<name> FOR ORDINALITY -- 1-based row-number column")]);
-    return out;
-  }
-  // CREATE TRANSFORM ... otherwise gets swallowed by the Phase::Start
-  // statement-keyword dump.
-  if let Some(kws) = create_transform_next_keyword(source, offset) {
-    push_keyword_kvs(&mut out, kws);
-    return out;
-  }
-  // TABLESAMPLE REPEATABLE / SELECT FETCH chain must beat the SELECT
-  // trailing-clause menu (which would emit JOIN/WHERE/ORDER BY).
-  if let Some(kws) = tablesample_after_paren_next_keyword(source, offset) {
-    push_keyword_kvs(&mut out, kws);
-    return out;
-  }
-  // `agg(...) FILTER (<cursor>` -- only WHERE is legal, must beat the
-  // expression/column dump every phase would otherwise emit.
-  if let Some(kws) = filter_clause_next_keyword(source, offset) {
-    push_keyword_kvs(&mut out, kws);
-    return out;
-  }
-  // `<table-fn>(...) WITH <cursor>` in FROM/JOIN -- only ORDINALITY is
-  // legal, must beat the JOIN/WHERE/ORDER BY clause-continuation menu
-  // the FROM-item-just-finished phase would otherwise emit.
-  if let Some(kws) = table_function_with_ordinality_next_keyword(source, offset) {
-    push_keyword_kvs(&mut out, kws);
-    return out;
-  }
-  if let Some(kws) = select_fetch_offset_next_keyword(source, offset) {
-    let (_, upper) = stmt_slice_upper(source, offset);
-    let words: Vec<&str> = upper.split_ascii_whitespace().collect();
-    let last = words.last().copied();
-    if matches!(last, Some("FETCH") | Some("FIRST") | Some("NEXT") | Some("ROW") | Some("ROWS")) {
-      push_keyword_kvs(&mut out, kws);
-      return out;
-    }
-  }
-  // CREATE VIEW / MATERIALIZED VIEW trailing WITH clauses (CHECK OPTION,
-  // WITH DATA) must beat the SELECT-body phase that otherwise emits
-  // join/order kws after `WITH `.
-  if let Some(kws) = create_view_post_name_next_keyword(source, offset) {
-    let (_, upper) = stmt_slice_upper(source, offset);
-    let words: Vec<&str> = upper.split_ascii_whitespace().collect();
-    let last = words.last().copied();
-    if matches!(last, Some("WITH") | Some("NO") | Some("CASCADED") | Some("LOCAL")) {
-      push_keyword_kvs(&mut out, kws);
-      return out;
-    }
-  }
-  // Only short-circuit on the frame-bound sub-chain. The fresh-slot
-  // and PARTITION/ORDER BY column-list paths must keep flowing to the
-  // catalog so existing tests stay green.
-  if !window_clause_partition_or_order_by_expects_column(source, offset)
-    && let Some(kws) = window_clause_as_paren_keyword(source, offset)
-  {
-    // Use a token sniff: only short-circuit when last word is a frame-
-    // family kw (RANGE/ROWS/GROUPS/BETWEEN/AND/PRECEDING/FOLLOWING).
-    let pos: usize = (u32::from(offset) as usize).min(source.len());
-    let pre = &source[..pos];
-    let stmt_start_idx = pre.rfind(';').map(|i| i + 1).unwrap_or(0);
-    let words: Vec<&str> = pre[stmt_start_idx..].split_ascii_whitespace().collect();
-    let last_up = words.last().map(|s| s.to_ascii_uppercase()).unwrap_or_default();
-    if matches!(last_up.as_str(), "RANGE" | "ROWS" | "GROUPS" | "BETWEEN" | "AND" | "PRECEDING" | "FOLLOWING" | "UNBOUNDED" | "CURRENT" | "EXCLUDE") {
-      push_keyword_kvs(&mut out, kws);
-      return out;
-    }
-  }
   match ph {
     Phase::Start => {
       // `CREATE VIEW v AS <cursor>` -- the body must start with
