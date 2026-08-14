@@ -1,11 +1,32 @@
 //! Completion engine.
 //!
-//! Two-phase routing:
-//!   1. Look for an immediate "dot context" (`<alias>.<cursor>`); when
-//!      present, emit only the columns of that alias.
-//!   2. Otherwise classify the cursor by walking the current statement's
-//!      tokens through a state machine ([`phase::detect`]) and emit the
-//!      set of items appropriate to the resulting [`phase::Phase`].
+//! Routing runs through two ordered detector registries, each an
+//! array of `(source, offset, file, scopes, catalog) -> Option<Vec<Item>>`
+//! functions walked in order -- first `Some` wins, `None` falls
+//! through to the next entry. This is the *only* place precedence
+//! order lives; every entry's doc comment explains why it needs to
+//! run where it does relative to its neighbors.
+//!
+//!   1. [`PRE_PHASE_DETECTORS`], run by [`complete_with_derived`]
+//!      before the cursor's phase is even determined: fresh-name-slot
+//!      suppression, JSON-path key slot, inert-span bailout, dot
+//!      context (`<alias>.<cursor>`), grouping-sets-inner-paren, and
+//!      `contexts::detect` (index/trigger/policy/etc special cases
+//!      the phase state machine doesn't model).
+//!   2. Falling through all of those, the phase is determined --
+//!      `create_index::detect` / `create_table::detect` narrow it
+//!      when applicable, otherwise [`phase::Phase`] via
+//!      [`phase::detect`] -- and handed to `route_phase`, which runs
+//!      [`POST_PHASE_DETECTORS`] (slot-keyword shortcuts too specific
+//!      for the phase match: `FILTER (`, `WITH ORDINALITY`, window
+//!      frame bounds, etc), then falls through to the `Phase`-driven
+//!      `match` for the "ordinary, no special case" menu per phase.
+//!
+//! This two-registry split (rather than one flat list) mirrors the
+//! algorithm's actual shape: stage 1 runs pre-phase, stage 2 runs
+//! post-phase, and unifying them into one list would mean reordering
+//! stage-1 checks relative to the phase-determination step in between
+//! -- a real behavior change, not just reorganization.
 //!
 //! This is what makes the menu context-aware: after `SELECT *` we
 //! surface `FROM`, not more SELECT keywords; after a table we surface
