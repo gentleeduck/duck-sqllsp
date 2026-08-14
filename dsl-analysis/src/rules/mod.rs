@@ -673,6 +673,9 @@ pub mod recursive_cte_missing_base_union;
 pub mod recursive_term_has_aggregate;
 pub mod recursive_term_has_order_or_limit;
 pub mod recursive_cte_outer_join_recursive_side;
+pub mod exclude_using_duplicate_column;
+pub mod exclude_using_btree_index_type;
+pub mod exclude_using_single_column_eq;
 
 use crate::LintRule;
 
@@ -1356,5 +1359,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(recursive_term_has_aggregate::Rule),
     Box::new(recursive_term_has_order_or_limit::Rule),
     Box::new(recursive_cte_outer_join_recursive_side::Rule),
+    Box::new(exclude_using_duplicate_column::Rule),
+    Box::new(exclude_using_btree_index_type::Rule),
+    Box::new(exclude_using_single_column_eq::Rule),
   ]
 }
