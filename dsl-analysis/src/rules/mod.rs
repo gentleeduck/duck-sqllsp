@@ -676,6 +676,9 @@ pub mod recursive_cte_outer_join_recursive_side;
 pub mod exclude_using_duplicate_column;
 pub mod exclude_using_btree_index_type;
 pub mod exclude_using_single_column_eq;
+pub mod domain_check_references_value_missing;
+pub mod domain_default_violates_check;
+pub mod composite_type_dup_field;
 
 use crate::LintRule;
 
@@ -1362,5 +1365,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(exclude_using_duplicate_column::Rule),
     Box::new(exclude_using_btree_index_type::Rule),
     Box::new(exclude_using_single_column_eq::Rule),
+    Box::new(domain_check_references_value_missing::Rule),
+    Box::new(domain_default_violates_check::Rule),
+    Box::new(composite_type_dup_field::Rule),
   ]
 }
