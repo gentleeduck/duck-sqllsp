@@ -216,15 +216,27 @@ rule project.
   10k statements, and confirmed the cause is whole-buffer-size
   scaling, not cursor-position scaling -- see the spec update above
   and the commit history for exact numbers.
-- Phase B: `engine.rs` no longer contains the three-layer informal
-  short-circuit structure; priority order lives in one place; full
-  test suite green and clippy clean after every migration batch; zero
-  behavior change (no test assertions rewritten to match new output --
-  only moved/reorganized). Additionally -- since the refactor is the
-  natural place to fix this -- `complete()`'s cost should stop scaling
-  with total buffer/statement count: `perf_scaling_is_position_
-  independent_not_size_independent`'s per-call numbers at n=3000
-  should drop toward the n=200 numbers, not stay at ~8ms.
+- Phase B (done, 2026-08-18): `engine.rs` no longer contains the
+  three-layer informal short-circuit structure; priority order lives
+  in one place. Landed as two registries rather than one flat list --
+  `PRE_PHASE_DETECTORS` (6 entries, run by `complete_with_derived`
+  before the phase is determined) and `POST_PHASE_DETECTORS` (9
+  entries, run by `route_phase` after) -- because the algorithm is
+  genuinely two-staged and forcing one list would mean reordering
+  pre-phase checks relative to the phase-determination step, a real
+  behavior change. Three batches
+  (`dsl-completion/docs/plans/2026-08-18-phase-b-registry-overview.md`
+  and its batch-1/2/3 notes), full test suite green (identical count,
+  2040, after every batch) and clippy clean throughout; zero behavior
+  change confirmed, plus one dead-code short-circuit removed
+  (`route_phase`'s own `grouping_sets_inner_paren_expects_column`
+  check was unreachable, shadowed by an identical earlier check).
+  `contexts::detect()`'s 9 internal cases deliberately left as one
+  wrapped registry entry rather than decomposed further -- see batch
+  3's note for why. The buffer-size-scaling fix landed separately in
+  Phase D below (root cause wasn't in this refactor's scope, but the
+  numbers hold after the registry landed too -- re-verified, no
+  regression: n=10,000 `complete()` still ~2.9ms/call uncached).
 - Phase C (batches 1-2 done, 2026-08-18): every newly added completion
   case has a test and was verified against the real engine before
   being called done. Batch 1 covered "advanced SQL surface" (FILTER,
