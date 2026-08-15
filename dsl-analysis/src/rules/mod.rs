@@ -679,6 +679,10 @@ pub mod exclude_using_single_column_eq;
 pub mod domain_check_references_value_missing;
 pub mod domain_default_violates_check;
 pub mod composite_type_dup_field;
+pub mod jsonb_path_exists_static_false;
+pub mod jsonb_array_length_on_object_literal;
+pub mod jsonb_minus_integer_on_object;
+pub mod jsonb_build_object_null_key;
 
 use crate::LintRule;
 
@@ -1368,5 +1372,9 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(domain_check_references_value_missing::Rule),
     Box::new(domain_default_violates_check::Rule),
     Box::new(composite_type_dup_field::Rule),
+    Box::new(jsonb_path_exists_static_false::Rule),
+    Box::new(jsonb_array_length_on_object_literal::Rule),
+    Box::new(jsonb_minus_integer_on_object::Rule),
+    Box::new(jsonb_build_object_null_key::Rule),
   ]
 }
