@@ -242,7 +242,11 @@ rule project.
   being called done. Batch 1 covered "advanced SQL surface" (FILTER,
   WITH ORDINALITY, JSON_TABLE COLUMNS fresh-slot, catalog-backed JSON
   key completion wired in) --
-  `dsl-completion/docs/plans/2026-08-18-phase-c-batch-1-aggregate-json-table-fn-syntax.md`.
+  `dsl-completion/docs/plans/2026-08-18-phase-c-batch-1-aggregate-json-table-fn-syntax.md`
+  (updated same day: the batch's one deferred gap, JSON_TABLE's fuller
+  column grammar -- type slot, FOR ORDINALITY, PATH/FORMAT/EXISTS --
+  was filled on user request; see the plan doc's "known remaining
+  gaps" section for the final state).
   Batch 2 covered deeper phase-awareness (a multi-window-definition
   paren-tracking bug) and cross-file intelligence (completion now sees
   tables/types defined in other open documents, not just on-save) --

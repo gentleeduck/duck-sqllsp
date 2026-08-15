@@ -8,10 +8,11 @@
 //! worry about, only internal reorganization within one file.
 //!
 //! Depends on `engine::{stmt_slice_upper, cursor_not_at_ws_boundary,
-//! current_statement_span}` for statement-slice extraction -- the
-//! low-level helpers shared across every detector.
+//! current_statement_span, push_keyword_kvs}` for statement-slice
+//! extraction and keyword-item building -- the low-level helpers
+//! shared across every detector.
 
-use crate::engine::{current_statement_span, cursor_not_at_ws_boundary, stmt_slice_upper};
+use crate::engine::{current_statement_span, cursor_not_at_ws_boundary, push_keyword_kvs, stmt_slice_upper};
 use crate::fallback;
 use crate::item::Item;
 use crate::sources;
@@ -2444,6 +2445,118 @@ pub(crate) fn json_table_fresh_column_slot(source: &str, offset: TextSize) -> bo
   }
   let trimmed = after.trim_end();
   trimmed.ends_with('(') || trimmed.ends_with(',')
+}
+
+/// Curated data types offered at a JSON_TABLE column's type slot
+/// (`<name> <cursor>`). Not exhaustive -- these are the types that
+/// actually show up in JSON_TABLE column lists in practice; a fuller
+/// list would just be noise. Multi-word types (`double precision`,
+/// `character varying`) are intentionally omitted, same reasoning as
+/// `json_table_column_slot_items`'s own doc comment.
+const JSON_TABLE_COLUMN_TYPES: &[(&str, &str)] = &[
+  ("text", "arbitrary text -- the most common JSON_TABLE column type"),
+  ("int", "32-bit integer"),
+  ("bigint", "64-bit integer"),
+  ("numeric", "exact decimal"),
+  ("boolean", "true / false"),
+  ("timestamp", "date + time, no time zone"),
+  ("timestamptz", "date + time, with time zone"),
+  ("date", "date only"),
+  ("uuid", "UUID"),
+  ("jsonb", "nested JSON -- usually paired with FORMAT JSON"),
+];
+
+/// JSON_TABLE column-def grammar completion beyond the fresh-slot
+/// case (`json_table_fresh_column_slot` above, which fires when
+/// nothing has been typed yet for this column). Handles the rest of
+/// `column_name type [FORMAT JSON] [PATH ...] | column_name FOR
+/// ORDINALITY | column_name type EXISTS [PATH ...]`:
+///   - `<name> <cursor>` (1 word typed) -> data types + FOR
+///   - `<name> FOR <cursor>` -> ORDINALITY
+///   - `<name> <type> <cursor>` (2 words, 2nd isn't a grammar
+///     keyword) -> PATH / FORMAT / EXISTS
+///   - `... FORMAT <cursor>` -> JSON (the only valid value)
+///   - `... EXISTS <cursor>` -> PATH (optional)
+///
+/// Doesn't attempt multi-word types (`double precision`, `character
+/// varying`) -- past the 2-word mark this falls through to the
+/// generic menu, an acceptable miss rather than a wrong guess, same
+/// carve-out `json_table_fresh_column_slot` makes for nested COLUMNS
+/// lists.
+pub(crate) fn json_table_column_slot_items(source: &str, offset: TextSize) -> Option<Vec<Item>> {
+  if cursor_not_at_ws_boundary(source, offset) {
+    return None;
+  }
+  let words = json_table_current_column_entry_words(source, offset)?;
+  let mut out = Vec::new();
+  match words.len() {
+    1 => {
+      for (ty, doc) in JSON_TABLE_COLUMN_TYPES {
+        out.push(Item {
+          label: (*ty).into(),
+          kind: crate::item::ItemKind::Type,
+          detail: Some((*doc).into()),
+          description: Some("JSON_TABLE column type".into()),
+          documentation_md: None,
+          insert_text: (*ty).into(),
+          is_snippet: false,
+          sort_priority: 1,
+        });
+      }
+      push_keyword_kvs(&mut out, &[("FOR", "<name> FOR ORDINALITY -- 1-based row-number column")]);
+    },
+    2 if words[1] == "FOR" => {
+      push_keyword_kvs(&mut out, &[("ORDINALITY", "FOR ORDINALITY -- 1-based row-number column")]);
+    },
+    2 if !matches!(
+      words[1].as_str(),
+      "FOR" | "PATH" | "FORMAT" | "EXISTS" | "WRAPPER" | "QUOTES" | "KEEP" | "OMIT" | "DEFAULT" | "NULL" | "ON" | "ERROR" | "NESTED"
+    ) =>
+    {
+      push_keyword_kvs(&mut out, &[
+        ("PATH", "PATH '<json-path>' -- explicit path into the JSON document"),
+        ("FORMAT", "FORMAT JSON -- treat the column value as a nested JSON document"),
+        ("EXISTS", "EXISTS [PATH ...] -- boolean: does the path match anything"),
+      ]);
+    },
+    _ if words.last().map(String::as_str) == Some("FORMAT") => {
+      push_keyword_kvs(&mut out, &[("JSON", "FORMAT JSON -- the only valid FORMAT value")]);
+    },
+    _ if words.last().map(String::as_str) == Some("EXISTS") => {
+      push_keyword_kvs(&mut out, &[("PATH", "EXISTS PATH '<json-path>' -- optional, defaults to the column name")]);
+    },
+    _ => return None,
+  }
+  if out.is_empty() { None } else { Some(out) }
+}
+
+/// Words (whitespace-split, uppercased) typed so far in the current
+/// JSON_TABLE column-def entry -- from the last depth-1 comma or the
+/// `COLUMNS (` itself, up to the cursor. `None` unless the cursor
+/// sits directly inside a `COLUMNS (...)` list at depth 1 (same scope
+/// `json_table_fresh_column_slot` checks -- see its own comment for
+/// why depth 1, not nested `NESTED ... COLUMNS (...)` lists).
+fn json_table_current_column_entry_words(source: &str, offset: TextSize) -> Option<Vec<String>> {
+  let (_, upper) = stmt_slice_upper(source, offset);
+  if !upper.contains("JSON_TABLE") {
+    return None;
+  }
+  let columns_at = upper.rfind("COLUMNS")?;
+  let after = &upper[columns_at + "COLUMNS".len()..];
+  let mut depth = 0i32;
+  let mut entry_start = 0usize;
+  for (i, b) in after.bytes().enumerate() {
+    match b {
+      b'(' => depth += 1,
+      b')' => depth -= 1,
+      b',' if depth == 1 => entry_start = i + 1,
+      _ => {},
+    }
+  }
+  if depth != 1 {
+    return None;
+  }
+  Some(after[entry_start..].split_whitespace().map(String::from).collect())
 }
 
 pub(crate) fn group_by_set_op_next_keyword(

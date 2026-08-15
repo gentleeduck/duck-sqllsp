@@ -84,11 +84,17 @@ findings and fixes are recorded here instead.
 
 ## Known remaining gaps (not fixed this batch)
 
-- `JSON_TABLE(... COLUMNS (id <cursor>` (after a name is typed, before
-  a type) -- falls through to the generic FROM-item-finished menu
-  (JOIN/WHERE/...), not type-name completion. Modelling the rest of
-  the column grammar (type / PATH / FORMAT / EXISTS / NESTED) is a
-  larger, separate effort -- deferred to a future batch if warranted.
+- ~~`JSON_TABLE(... COLUMNS (id <cursor>` (after a name is typed,
+  before a type) -- falls through to the generic FROM-item-finished
+  menu, not type-name completion.~~ **Fixed later** (2026-08-18, same
+  day, on user request): `detectors::json_table_column_slot_items` +
+  `engine::detect_json_table_column_slot` now cover
+  name-typed -> types + FOR, `FOR` -> ORDINALITY, type-typed -> PATH/
+  FORMAT/EXISTS, `FORMAT` -> JSON, `EXISTS` -> PATH. Still doesn't
+  attempt multi-word types (`double precision`) or `NESTED ... COLUMNS`
+  sub-lists' own grammar -- same "acceptable miss, not a wrong guess"
+  scoping as the rest of this project. 6 new tests in
+  `dsl-completion/tests/engine.rs`.
 - Phase C's other two coverage themes (deeper phase-awareness beyond
   what this batch's probes happened to touch, and cross-file
   intelligence) are not yet systematically audited -- this batch

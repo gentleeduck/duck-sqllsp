@@ -103,7 +103,7 @@ pub(crate) fn cursor_not_at_ws_boundary(source: &str, offset: TextSize) -> bool 
 /// Append every `(label, detail)` pair as a fresh `Keyword` item with
 /// default sort priority. Used by every per-statement phase emitter
 /// (CREATE TABLE / TRIGGER / TYPE / ALTER ROLE / ...).
-fn push_keyword_kvs(out: &mut Vec<Item>, kws: &[(&'static str, &'static str)]) {
+pub(crate) fn push_keyword_kvs(out: &mut Vec<Item>, kws: &[(&'static str, &'static str)]) {
   for (kw, doc) in kws {
     out.push(Item {
       label: (*kw).into(),
@@ -575,6 +575,21 @@ fn detect_json_table_fresh_column_slot(
   Some(out)
 }
 
+/// JSON_TABLE column-def grammar beyond the fresh-slot case above --
+/// type slot, FOR ORDINALITY, PATH/FORMAT/EXISTS, FORMAT JSON, EXISTS
+/// PATH. See `json_table_column_slot_items`'s doc comment for the
+/// exact slot-by-slot breakdown; must beat the generic table/column
+/// dump the same way the fresh-slot case does.
+fn detect_json_table_column_slot(
+  source: &str,
+  offset: TextSize,
+  _file: &ParsedFile,
+  _scopes: &[Scope],
+  _cat: &Catalog,
+) -> Option<Vec<Item>> {
+  json_table_column_slot_items(source, offset)
+}
+
 /// CREATE TRANSFORM ... otherwise gets swallowed by the Phase::Start
 /// statement-keyword dump.
 fn detect_create_transform(
@@ -726,6 +741,7 @@ fn detect_window_clause_frame_bound(
 const POST_PHASE_DETECTORS: &[Detector] = &[
   detect_set_op_followup,
   detect_json_table_fresh_column_slot,
+  detect_json_table_column_slot,
   detect_create_transform,
   detect_tablesample_after_paren,
   detect_filter_clause,

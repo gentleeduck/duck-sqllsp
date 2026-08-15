@@ -2171,6 +2171,78 @@ fn json_table_columns_fresh_slot_after_comma() {
 }
 
 #[test]
+fn json_table_column_name_typed_offers_types_and_for() {
+  // `JSON_TABLE(... COLUMNS (id <cursor>` -- one word typed (the
+  // name). Expects data types (the column's type comes next) plus FOR
+  // (-> `<name> FOR ORDINALITY`).
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM JSON_TABLE(data, '$' COLUMNS (id ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  for expect in ["text", "int", "numeric", "boolean", "jsonb", "FOR"] {
+    assert!(labels.contains(&expect), "expected `{expect}`; got {labels:?}");
+  }
+  assert!(!labels.contains(&"users"), "should not fall through to the catalog dump; got {labels:?}");
+}
+
+#[test]
+fn json_table_for_typed_offers_only_ordinality() {
+  // `<name> FOR <cursor>` -- ORDINALITY is the only legal next token.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM JSON_TABLE(data, '$' COLUMNS (id FOR ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert_eq!(labels, vec!["ORDINALITY"], "expected only ORDINALITY; got {labels:?}");
+}
+
+#[test]
+fn json_table_type_typed_offers_path_format_exists() {
+  // `<name> <type> <cursor>` -- PATH / FORMAT / EXISTS are the legal
+  // continuations for a typed (non-ordinality) column.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM JSON_TABLE(data, '$' COLUMNS (id text ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert_eq!(
+    labels.into_iter().collect::<std::collections::HashSet<_>>(),
+    ["PATH", "FORMAT", "EXISTS"].into_iter().collect(),
+    "expected exactly PATH/FORMAT/EXISTS"
+  );
+}
+
+#[test]
+fn json_table_format_typed_offers_only_json() {
+  // `... FORMAT <cursor>` -- JSON is the only valid FORMAT value.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM JSON_TABLE(data, '$' COLUMNS (meta jsonb FORMAT ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert_eq!(labels, vec!["JSON"], "expected only JSON; got {labels:?}");
+}
+
+#[test]
+fn json_table_exists_typed_offers_path() {
+  // `... EXISTS <cursor>` -- PATH is the optional next token.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM JSON_TABLE(data, '$' COLUMNS (flag boolean EXISTS ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert_eq!(labels, vec!["PATH"], "expected only PATH; got {labels:?}");
+}
+
+#[test]
+fn json_table_second_column_name_typed_after_comma() {
+  // The type-slot detection applies to every column entry, not just
+  // the first -- `id int, name <cursor>` is a fresh name in the
+  // *second* entry, one word typed.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM JSON_TABLE(data, '$' COLUMNS (id int, name ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"text") && labels.contains(&"FOR"), "expected types + FOR; got {labels:?}");
+}
+
+#[test]
 fn create_table_as_with_data_not_shadowed_by_ordinality() {
   // `CREATE TABLE t AS SELECT ... FROM users WITH <cursor>` also ends
   // in `) WITH`, but this is the WITH [NO] DATA clause, not a table
