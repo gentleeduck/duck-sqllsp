@@ -362,6 +362,21 @@ fn classify_entry(_source: &str, entry: &Entry<'_>, enclosing: Option<&str>) -> 
     // Identifier + type-word committed (or more). Past the type
     // stage: expecting column constraints next.
     _ => {
+      // Column-level CHECK (...) / GENERATED ALWAYS AS (...): same
+      // "arbitrary expression over this table's columns" need the
+      // table-level CHECK entry above already gets right, but a
+      // column-level one (no comma before it -- it's a modifier
+      // directly after the column's type, not its own list entry)
+      // never reached that check. Whatever was typed after CHECK(/
+      // GENERATED...AS( just fell into the generic column-constraint
+      // keyword phase below regardless of being mid-expression.
+      if inside_paren(committed)
+        && (upper.contains("CHECK(")
+          || upper.contains("CHECK (")
+          || (upper.contains("GENERATED") && (upper.contains("AS(") || upper.contains("AS ("))))
+      {
+        return Phase::CtlCheckExpr { table: enclosing.map(str::to_string) };
+      }
       let second = committed_tokens[1].as_str();
       if is_complete_type_token(second) || committed_tokens.len() > 2 {
         Phase::CtlExpectColumnConstraint

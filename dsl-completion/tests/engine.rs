@@ -2243,6 +2243,31 @@ fn json_table_second_column_name_typed_after_comma() {
 }
 
 #[test]
+fn column_level_check_expression_offers_columns() {
+  // `id int CHECK (id > <cursor>` -- column-level CHECK (no comma
+  // before it, unlike the already-working table-level case), mid
+  // expression. Should offer this table's columns, not column-def
+  // constraint keywords.
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE TABLE users2 (id int, org_id int CHECK (org_id > ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(!labels.contains(&"NOT NULL"), "should not offer column-def keywords mid-expression; got {labels:?}");
+}
+
+#[test]
+fn generated_always_as_offers_sibling_columns() {
+  // GENERATED ALWAYS AS (<expr>) STORED -- the whole point is
+  // referencing sibling columns; currently offers nothing useful.
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE TABLE t (id int, org_id int, full_name text GENERATED ALWAYS AS (";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"id") && labels.contains(&"org_id"), "expected sibling columns; got {labels:?}");
+  assert!(!labels.contains(&"NOT NULL"), "should not offer column-def keywords; got {labels:?}");
+}
+
+#[test]
 fn create_table_as_with_data_not_shadowed_by_ordinality() {
   // `CREATE TABLE t AS SELECT ... FROM users WITH <cursor>` also ends
   // in `) WITH`, but this is the WITH [NO] DATA clause, not a table
