@@ -2243,6 +2243,37 @@ fn json_table_second_column_name_typed_after_comma() {
 }
 
 #[test]
+fn plpgsql_body_from_slot_offers_tables_not_kitchen_sink() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN SELECT id FROM ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"users"), "expected `users`; got {labels:?}");
+  assert!(!labels.contains(&"BEGIN"), "FROM slot should not re-offer BEGIN; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_where_slot_offers_columns_not_kitchen_sink() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN SELECT id FROM users WHERE ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"id"), "expected `id`; got {labels:?}");
+  assert!(!labels.contains(&"BEGIN"), "WHERE slot should not re-offer BEGIN; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_other_position_keeps_kitchen_sink() {
+  // Not a FROM/WHERE slot -- the broad fallback (PL/pgSQL keywords
+  // included) must still work, unchanged, for everything else.
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"DECLARE") || labels.contains(&"IF"), "expected PL/pgSQL keywords still offered here; got {labels:?}");
+}
+
+#[test]
 fn rls_policy_using_expr_offers_target_table_columns() {
   let cat = catalog_with_users_and_orders();
   let src = "CREATE POLICY p ON users USING (";

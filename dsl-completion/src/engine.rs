@@ -1296,18 +1296,22 @@ fn route_phase(
 
     // PL/pgSQL body --------------------------------------------------
     Phase::PlpgsqlBody => {
-      // Function parameters and DECLARE'd locals first so they
-      // sort above the broader keyword / function lists.
-      let locals = crate::plpgsql_locals::extract(source, u32::from(offset) as usize);
-      crate::plpgsql_locals::push_items(&locals, &mut out);
-      // PL/pgSQL flow keywords + standard built-ins + NEW / OLD
-      // identifiers + any FROM/JOIN aliases inside the body.
-      sources::plpgsql_keywords(&mut out);
-      push_aliases(file, scopes, source, offset, &mut out);
-      push_all_functions(cat, &mut out);
-      sources::new_old_aliases(&mut out);
-      sources::tables(cat, &mut out);
-      sources::columns(cat, &mut out);
+      if let Some(items) = plpgsql_body_from_or_where_items(source, offset, file, scopes, cat) {
+        out = items;
+      } else {
+        // Function parameters and DECLARE'd locals first so they
+        // sort above the broader keyword / function lists.
+        let locals = crate::plpgsql_locals::extract(source, u32::from(offset) as usize);
+        crate::plpgsql_locals::push_items(&locals, &mut out);
+        // PL/pgSQL flow keywords + standard built-ins + NEW / OLD
+        // identifiers + any FROM/JOIN aliases inside the body.
+        sources::plpgsql_keywords(&mut out);
+        push_aliases(file, scopes, source, offset, &mut out);
+        push_all_functions(cat, &mut out);
+        sources::new_old_aliases(&mut out);
+        sources::tables(cat, &mut out);
+        sources::columns(cat, &mut out);
+      }
     },
     // Right-hand side of an assignment -- expression only. Skip the
     // statement-starter keywords (SELECT / CREATE / DELETE / ...).

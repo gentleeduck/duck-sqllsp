@@ -8248,6 +8248,70 @@ pub(crate) fn policy_expr_items(source: &str, offset: TextSize, cat: &Catalog) -
   Some(out)
 }
 
+/// Text since the nearest PL/pgSQL statement/block boundary before
+/// `pos` -- the last `;`, or the last occurrence of a block keyword
+/// (BEGIN/THEN/ELSE/LOOP/DECLARE), whichever is closer to `pos`.
+/// Scoped to `source[..pos]` only.
+fn plpgsql_inner_stmt_span(source: &str, pos: usize) -> &str {
+  let before = &source[..pos];
+  let upper = before.to_ascii_uppercase();
+  let mut boundary = upper.rfind(';').map(|p| p + 1).unwrap_or(0);
+  for kw in ["BEGIN", "THEN", "ELSE", "LOOP", "DECLARE"] {
+    if let Some(p) = upper.rfind(kw) {
+      let after = p + kw.len();
+      if after > boundary {
+        boundary = after;
+      }
+    }
+  }
+  &source[boundary..pos]
+}
+
+/// `Phase::PlpgsqlBody` sub-detection: the current inner PL/pgSQL
+/// statement is itself a SELECT/UPDATE/DELETE at its FROM or WHERE
+/// slot, so offer the same targeted menu the top-level phase would --
+/// tables at FROM/JOIN, columns + expression keywords at WHERE/AND/OR
+/// -- instead of the kitchen-sink fallback. Returns `None` (falls
+/// through to the kitchen sink) for every other position -- this only
+/// narrows the two clearest, highest-value slots, it doesn't attempt
+/// full clause-by-clause parity with top-level SQL.
+pub(crate) fn plpgsql_body_from_or_where_items(
+  source: &str,
+  offset: TextSize,
+  file: &ParsedFile,
+  scopes: &[Scope],
+  cat: &Catalog,
+) -> Option<Vec<Item>> {
+  let pos: usize = u32::from(offset) as usize;
+  let pos = pos.min(source.len());
+  let span = plpgsql_inner_stmt_span(source, pos);
+  let upper = span.to_ascii_uppercase();
+  let has_dml_verb = ["SELECT", "UPDATE", "DELETE"].iter().any(|kw| upper.contains(kw));
+  if !has_dml_verb {
+    return None;
+  }
+  let trimmed = upper.trim_end();
+  let mut words: Vec<&str> = trimmed.split_ascii_whitespace().collect();
+  // Strip a trailing partial identifier the user is still typing.
+  if pos > 0 && source.as_bytes().get(pos - 1).is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_') {
+    words.pop();
+  }
+  let last = words.last().copied();
+  let mut out = Vec::new();
+  if matches!(last, Some("FROM") | Some("JOIN")) {
+    sources::tables(cat, &mut out);
+    return Some(out);
+  }
+  if matches!(last, Some("WHERE") | Some("AND") | Some("OR")) {
+    push_scope_columns_or_all(file, scopes, source, cat, offset, &mut out);
+    push_aliases(file, scopes, source, offset, &mut out);
+    push_all_functions(cat, &mut out);
+    sources::expression_keywords(&mut out);
+    return Some(out);
+  }
+  None
+}
+
 /// Quick dot detection: returns the alias before the cursor's `.`.
 pub(crate) fn dot_alias(source: &str, offset: TextSize) -> Option<String> {
   let pos: usize = offset.into();
