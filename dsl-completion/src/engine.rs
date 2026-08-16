@@ -635,6 +635,20 @@ fn detect_filter_clause(
   Some(out)
 }
 
+/// `CREATE POLICY ... USING (⏵` / `... WITH CHECK (⏵` -- must beat
+/// the generic phase's ~2300-item fallback dump the same way the
+/// other slot-keyword shortcuts beat the generic menu for their
+/// narrower contexts.
+fn detect_policy_expr(
+  source: &str,
+  offset: TextSize,
+  _file: &ParsedFile,
+  _scopes: &[Scope],
+  cat: &Catalog,
+) -> Option<Vec<Item>> {
+  policy_expr_items(source, offset, cat)
+}
+
 /// `<table-fn>(...) WITH <cursor>` in FROM/JOIN -- only ORDINALITY is
 /// legal, must beat the JOIN/WHERE/ORDER BY clause-continuation menu
 /// the FROM-item-just-finished phase would otherwise emit.
@@ -745,6 +759,7 @@ const POST_PHASE_DETECTORS: &[Detector] = &[
   detect_create_transform,
   detect_tablesample_after_paren,
   detect_filter_clause,
+  detect_policy_expr,
   detect_table_function_with_ordinality,
   detect_select_fetch_offset,
   detect_create_view_post_name,

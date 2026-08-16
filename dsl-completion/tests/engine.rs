@@ -2243,6 +2243,35 @@ fn json_table_second_column_name_typed_after_comma() {
 }
 
 #[test]
+fn rls_policy_using_expr_offers_target_table_columns() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE POLICY p ON users USING (";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"id"), "expected users' columns; got {} items, sample {:?}", labels.len(), &labels[..labels.len().min(10)]);
+  // A scoped menu here (this table's columns + all functions +
+  // expression keywords) lands around ~790 items -- matching every
+  // other WHERE-clause-equivalent context measured this session (the
+  // function library alone is the bulk of that). The discriminator
+  // against the *broken* state is ~2300+ (this table's columns get
+  // buried among irrelevant top-level statement keywords too).
+  assert!(labels.len() < 1000, "menu should be scoped, not the ~2300-item generic dump; got {}", labels.len());
+}
+
+#[test]
+fn rls_policy_with_check_expr_offers_target_table_columns() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE POLICY p ON users WITH CHECK (";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"id"), "expected users' columns; got {} items", labels.len());
+  // `id` alone isn't a strong enough check -- it's buried in the
+  // current ~2300-item generic dump too. See the sibling USING test
+  // for why ~1000 (not a much smaller number) is the right threshold.
+  assert!(labels.len() < 1000, "menu should be scoped, not the ~2300-item generic dump; got {} items", labels.len());
+}
+
+#[test]
 fn column_level_check_expression_offers_columns() {
   // `id int CHECK (id > <cursor>` -- column-level CHECK (no comma
   // before it, unlike the already-working table-level case), mid

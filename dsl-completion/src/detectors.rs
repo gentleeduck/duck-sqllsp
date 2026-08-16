@@ -8176,6 +8176,78 @@ pub(crate) fn trigger_target_table(source: &str) -> Option<String> {
   Some(tok.split('.').next_back().unwrap_or(tok).trim_matches('"').to_string())
 }
 
+/// Find the target table of the `CREATE POLICY <name> ON <table>`
+/// statement enclosing the cursor -- mirrors `trigger_target_table`'s
+/// approach for `CREATE TRIGGER ... ON <table>` above (no `ONLY`
+/// handling needed here -- CREATE POLICY's grammar doesn't accept it,
+/// unlike statements that operate over a table hierarchy).
+pub(crate) fn policy_target_table(source: &str) -> Option<String> {
+  let upper = source.to_uppercase();
+  let idx = upper.rfind("CREATE POLICY")?;
+  let rest_upper = &upper[idx..];
+  let on_idx = rest_upper.find(" ON ")?;
+  let after = &source[idx + on_idx + 4..];
+  let tok = after
+    .trim_start()
+    .split(|c: char| c.is_whitespace() || c == '(' || c == ';' || c == ',')
+    .find(|s| !s.is_empty())?;
+  Some(tok.split('.').next_back().unwrap_or(tok).trim_matches('"').to_string())
+}
+
+/// `CREATE POLICY ... USING (⏵` or `... WITH CHECK (⏵` -- the policy's
+/// boolean expression is scoped to the target table's columns, same
+/// completion need `Phase::CtlCheckExpr`'s handler already serves for
+/// CHECK constraints (see `engine.rs`'s `route_phase`). CREATE POLICY
+/// has no AST representation and isn't routed through
+/// `create_table::detect`, so this is its own detector rather than
+/// reusing either existing mechanism -- but it calls the exact same
+/// column-lookup building blocks `CtlCheckExpr` does.
+pub(crate) fn policy_expr_items(source: &str, offset: TextSize, cat: &Catalog) -> Option<Vec<Item>> {
+  let (_, upper) = stmt_slice_upper(source, offset);
+  if !upper.contains("POLICY") {
+    return None;
+  }
+  let mut open_at = None;
+  for kw in ["USING (", "WITH CHECK ("] {
+    if let Some(rel) = upper.rfind(kw) {
+      let candidate = rel + kw.len();
+      let mut depth = 1i32;
+      for b in upper[candidate..].bytes() {
+        match b {
+          b'(' => depth += 1,
+          b')' => depth -= 1,
+          _ => {},
+        }
+      }
+      if depth >= 1 && open_at.is_none_or(|o: usize| candidate > o) {
+        open_at = Some(candidate);
+      }
+    }
+  }
+  open_at?;
+  let mut out = Vec::new();
+  if let Some(t) = policy_target_table(source) {
+    sources::columns_of_table(cat, None, &t, &mut out);
+    if out.is_empty() {
+      for name in crate::source_tables::buffer_column_names(source, &t) {
+        out.push(crate::item::Item {
+          label: name.clone(),
+          kind: crate::item::ItemKind::Column,
+          detail: Some(format!("column of `{t}` (buffer)")),
+          description: None,
+          documentation_md: None,
+          insert_text: name,
+          is_snippet: false,
+          sort_priority: 0,
+        });
+      }
+    }
+  }
+  push_all_functions(cat, &mut out);
+  sources::expression_keywords(&mut out);
+  Some(out)
+}
+
 /// Quick dot detection: returns the alias before the cursor's `.`.
 pub(crate) fn dot_alias(source: &str, offset: TextSize) -> Option<String> {
   let pos: usize = offset.into();
