@@ -686,6 +686,9 @@ pub mod jsonb_build_object_null_key;
 pub mod grouping_sets_duplicate_set;
 pub mod grouping_function_arg_not_in_group_by;
 pub mod rollup_cube_duplicate_column;
+pub mod correlated_subquery_select_no_limit1_no_agg;
+pub mod lateral_join_references_later_table;
+pub mod full_outer_join_where_defeats;
 
 use crate::LintRule;
 
@@ -1382,5 +1385,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(grouping_sets_duplicate_set::Rule),
     Box::new(grouping_function_arg_not_in_group_by::Rule),
     Box::new(rollup_cube_duplicate_column::Rule),
+    Box::new(correlated_subquery_select_no_limit1_no_agg::Rule),
+    Box::new(lateral_join_references_later_table::Rule),
+    Box::new(full_outer_join_where_defeats::Rule),
   ]
 }
