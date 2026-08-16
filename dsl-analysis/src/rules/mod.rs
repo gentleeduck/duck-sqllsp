@@ -683,6 +683,9 @@ pub mod jsonb_path_exists_static_false;
 pub mod jsonb_array_length_on_object_literal;
 pub mod jsonb_minus_integer_on_object;
 pub mod jsonb_build_object_null_key;
+pub mod grouping_sets_duplicate_set;
+pub mod grouping_function_arg_not_in_group_by;
+pub mod rollup_cube_duplicate_column;
 
 use crate::LintRule;
 
@@ -1376,5 +1379,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(jsonb_array_length_on_object_literal::Rule),
     Box::new(jsonb_minus_integer_on_object::Rule),
     Box::new(jsonb_build_object_null_key::Rule),
+    Box::new(grouping_sets_duplicate_set::Rule),
+    Box::new(grouping_function_arg_not_in_group_by::Rule),
+    Box::new(rollup_cube_duplicate_column::Rule),
   ]
 }
