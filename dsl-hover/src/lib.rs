@@ -1536,8 +1536,13 @@ fn near_role_slot(source: &str, pos: usize) -> bool {
     end -= 1;
   }
   let window = source[start..end].to_ascii_uppercase();
-  // Bare role-introducing keyword phrases.
-  for kw in ["OWNER TO", "GRANT", "REVOKE", "SET ROLE", "RESET ROLE", "POLICY", " TO "] {
+  // Bare role-introducing keyword phrases. Deliberately does NOT
+  // include a bare "POLICY" -- CREATE POLICY's role slot is `TO
+  // <role>`, already caught by " TO " below; a bare "POLICY" used to
+  // be in this list and matched any identifier within 60 chars of the
+  // word, including columns inside a completely unrelated USING (...)
+  // / WITH CHECK (...) expression.
+  for kw in ["OWNER TO", "GRANT", "REVOKE", "SET ROLE", "RESET ROLE", " TO "] {
     if window.contains(kw) {
       return true;
     }
