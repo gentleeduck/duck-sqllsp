@@ -692,6 +692,8 @@ pub mod full_outer_join_where_defeats;
 pub mod unique_nulls_distinct_redundant;
 pub mod create_statistics_no_columns;
 pub mod create_statistics_dup_column;
+pub mod merge_when_matched_unreachable;
+pub mod merge_insert_references_target;
 
 use crate::LintRule;
 
@@ -1394,5 +1396,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(unique_nulls_distinct_redundant::Rule),
     Box::new(create_statistics_no_columns::Rule),
     Box::new(create_statistics_dup_column::Rule),
+    Box::new(merge_when_matched_unreachable::Rule),
+    Box::new(merge_insert_references_target::Rule),
   ]
 }
