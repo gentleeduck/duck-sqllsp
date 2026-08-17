@@ -689,6 +689,9 @@ pub mod rollup_cube_duplicate_column;
 pub mod correlated_subquery_select_no_limit1_no_agg;
 pub mod lateral_join_references_later_table;
 pub mod full_outer_join_where_defeats;
+pub mod unique_nulls_distinct_redundant;
+pub mod create_statistics_no_columns;
+pub mod create_statistics_dup_column;
 
 use crate::LintRule;
 
@@ -1388,5 +1391,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(correlated_subquery_select_no_limit1_no_agg::Rule),
     Box::new(lateral_join_references_later_table::Rule),
     Box::new(full_outer_join_where_defeats::Rule),
+    Box::new(unique_nulls_distinct_redundant::Rule),
+    Box::new(create_statistics_no_columns::Rule),
+    Box::new(create_statistics_dup_column::Rule),
   ]
 }
