@@ -2037,11 +2037,12 @@ fn r4_200_close_then_reopen_keeps_separate_versions() {
 /// Not a hard-threshold assertion (machine-dependent) -- prints the
 /// numbers so a regression is visible by eye.
 ///
-/// `hover::run` is NOT fixed by this and dominates the per-handler
-/// breakdown by 1-2 orders of magnitude -- unrelated pre-existing
-/// issue in `dsl-hover` (re-parses the whole buffer on every call,
-/// ignoring `ParseCache`), left untouched as out of scope. See the
-/// design doc.
+/// `hover::run` was NOT fixed by this and used to dominate the
+/// per-handler breakdown by 1-2 orders of magnitude -- a pre-existing
+/// issue in `dsl-hover` (re-parsed the whole buffer on every call,
+/// ignoring `ParseCache`), left as out of scope here. Fixed in the
+/// body-context-completion-hover project's Task 5 -- see
+/// `r5_203_perf_hover_reuses_cached_parse` below and the design doc.
 #[test]
 #[ignore]
 fn r5_201_perf_derived_catalog_cache_avoids_redundant_rescans() {
@@ -2149,6 +2150,85 @@ fn r5_201_perf_derived_catalog_cache_avoids_redundant_rescans() {
   let t1 = std::time::Instant::now();
   let _ = dsl_completion::source_tables::from_source(&cache.file, &doc.text);
   eprintln!("standalone from_source call at n_stmts={n}: {:?}", t1.elapsed());
+}
+
+/// Task 5 (body-context-completion-hover project) fix for the gap
+/// `r5_201` above flagged and left untouched: `dsl_hover::hover_with`
+/// re-parsed the whole buffer on every single call, ignoring
+/// `Document::parsed()`'s cache. Fixed by splitting it into a thin
+/// `hover_with` wrapper (parses fresh, delegates -- mirrors
+/// `complete()` / `complete_with_derived()`) plus `hover_with_parsed`,
+/// which takes an already-parsed `ParsedFile`; `hover::run` now calls
+/// `hover_with_parsed` with `doc.parsed()`'s cached file.
+///
+/// Because `hover_with` still parses fresh by design (it's the public,
+/// cache-less entry point for callers with no parse cache of their
+/// own), calling it directly reproduces exactly what `hover::run` used
+/// to pay per request -- used below as a live "before" proxy, so this
+/// benchmark compares two code paths that both still exist today
+/// rather than needing to resurrect deleted code.
+#[test]
+#[ignore]
+fn r5_203_perf_hover_reuses_cached_parse() {
+  let n = 10_000;
+  let mut text = String::with_capacity(n * 50);
+  let mut line_starts: Vec<u32> = Vec::with_capacity(n);
+  for i in 0..n {
+    line_starts.push(text.len() as u32);
+    text.push_str(&format!("SELECT id FROM users WHERE id = {i};\n"));
+  }
+  let (state, url) = state_with("file:///perf_hover.sql", &text);
+  let rounds = 20u32;
+  // Cursor lands right after each line's `WHERE id = <i>` (before the
+  // trailing `;`) -- same end-of-statement convention as r5_201.
+  let prefix_len = "SELECT id FROM users WHERE id = ".len() as u32;
+
+  // Warm the parse cache and grab a catalog once, mirroring normal LSP
+  // traffic (some earlier handler has always parsed the doc by the
+  // time hover fires) -- both loops below measure steady-state calls,
+  // not the unavoidable one-time first parse.
+  let doc = state.documents.get(&url).unwrap();
+  let cat = doc.derived_catalog();
+  let _ = doc.parsed();
+  drop(doc);
+
+  // "Before" proxy: hover_with reparses `text` on every call.
+  let mut t_before = std::time::Duration::ZERO;
+  for i in 0..rounds {
+    let line = i.min(n as u32 - 1) as usize;
+    let character = prefix_len + line.to_string().len() as u32;
+    let offset = text_size::TextSize::from(line_starts[line] + character);
+    let s = std::time::Instant::now();
+    let _ = dsl_hover::hover_with(&text, offset, &cat, dsl_hover::KeywordCase::Upper);
+    t_before += s.elapsed();
+  }
+
+  // "After": hover::run, now threading doc.parsed()'s cached file
+  // through hover_with_parsed.
+  let mut t_after = std::time::Duration::ZERO;
+  for i in 0..rounds {
+    let line = i.min(n as u32 - 1);
+    let character = prefix_len + line.to_string().len() as u32;
+    let s = std::time::Instant::now();
+    let _ = hover::run(
+      &state,
+      HoverParams {
+        text_document_position_params: TextDocumentPositionParams {
+          text_document: TextDocumentIdentifier { uri: url.clone() },
+          position: Position { line, character },
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+      },
+    );
+    t_after += s.elapsed();
+  }
+
+  eprintln!(
+    "hover before (hover_with, reparse-per-call) vs after (hover::run, cached parse) over {rounds} rounds (n_stmts={n}) -- before: {t_before:?} ({:?}/call)  after: {t_after:?} ({:?}/call)  speedup: {:.1}x",
+    t_before / rounds,
+    t_after / rounds,
+    t_before.as_secs_f64() / t_after.as_secs_f64().max(1e-9),
+  );
 }
 
 #[test]
