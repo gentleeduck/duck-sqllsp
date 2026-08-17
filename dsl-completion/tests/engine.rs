@@ -2274,6 +2274,145 @@ fn plpgsql_body_other_position_keeps_kitchen_sink() {
 }
 
 #[test]
+fn plpgsql_body_insert_into_offers_tables() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN INSERT INTO ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"users"), "expected `users`; got {labels:?}");
+  assert!(labels.contains(&"orders"), "expected `orders`; got {labels:?}");
+  assert!(!labels.contains(&"BEGIN"), "INSERT INTO slot should not re-offer BEGIN; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_select_into_variable_is_not_treated_as_insert() {
+  // PL/pgSQL's `SELECT ... INTO <var>` (assign query result to a
+  // local variable) uses the same INTO keyword as `INSERT INTO
+  // <table>` for a wholly different purpose -- the new INSERT-INTO
+  // branch must NOT fire here (it's guarded on the word immediately
+  // before INTO being literally INSERT, which "id" isn't). Falls
+  // through to the kitchen sink (which happens to include "all
+  // tables" too, among everything else, same as before this change)
+  // rather than the narrow tables-only menu the real INSERT INTO slot
+  // gets.
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN SELECT id INTO ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"BEGIN"), "expected the kitchen sink (not the narrow INSERT-INTO tables menu); got {} items", labels.len());
+}
+
+#[test]
+fn plpgsql_body_insert_column_list_offers_only_target_table_columns() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN INSERT INTO orders (";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"user_id"), "expected orders' `user_id`; got {labels:?}");
+  assert!(!labels.contains(&"email"), "users' columns should not leak into orders' column list; got {labels:?}");
+  assert!(!labels.contains(&"BEGIN"), "column-list slot should not re-offer BEGIN; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_insert_column_list_filters_already_used_columns() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN INSERT INTO orders (id, ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"user_id"), "expected orders' remaining `user_id`; got {labels:?}");
+  assert!(!labels.contains(&"id"), "already-listed `id` should be filtered out; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_update_offers_tables() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN UPDATE ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"users"), "expected `users`; got {labels:?}");
+  assert!(!labels.contains(&"BEGIN"), "UPDATE target slot should not re-offer BEGIN; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_update_set_offers_only_target_table_columns() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN UPDATE orders SET ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"user_id"), "expected orders' `user_id`; got {labels:?}");
+  assert!(!labels.contains(&"email"), "users' columns should not leak into orders' SET list; got {labels:?}");
+  assert!(!labels.contains(&"BEGIN"), "SET column-lhs slot should not re-offer BEGIN; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_update_set_second_slot_offers_columns_not_values() {
+  // After the first assignment's value, a second `,`-separated LHS
+  // slot -- must still resolve to the target table's columns (not
+  // fall into the value-expression branch, and not re-offer `id`
+  // since it's already used).
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN UPDATE orders SET id = 1, ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"user_id"), "expected orders' remaining `user_id`; got {labels:?}");
+  assert!(!labels.contains(&"id"), "already-assigned `id` should be filtered out; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_returning_offers_target_table_columns() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN UPDATE orders SET user_id = 1 WHERE id = 1 RETURNING ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"user_id"), "expected orders' `user_id`; got {labels:?}");
+  assert!(!labels.contains(&"BEGIN"), "RETURNING slot should not re-offer BEGIN; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_returning_second_column_still_offers_full_menu() {
+  // Regression guard: a bare last-word match (`last == "RETURNING"`)
+  // only catches the *first* RETURNING column -- `RETURNING id,` is
+  // one whitespace-delimited token ("ID,"), so the comma glues onto
+  // the previous column name with no space. Worse, leaving the
+  // SET-column-slot check to run first for this position was actively
+  // wrong (not just incomplete): its backward scan for SET's last
+  // `=`/`,` doesn't know to stop at RETURNING, so it misread the `,`
+  // in `RETURNING id,` as still belonging to the SET list, collapsing
+  // the menu down to just the target table's unused columns (losing
+  // aliases/functions/expression keywords a RETURNING expression
+  // legitimately wants, e.g. `RETURNING id, left(name, 10)`).
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN UPDATE users SET name = 'x' WHERE id = 1 RETURNING id, ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"email"), "expected users' remaining `email`; got {} items, sample {:?}", labels.len(), &labels[..labels.len().min(10)]);
+  assert!(!labels.contains(&"id"), "already-listed `id` should be filtered out; got {labels:?}");
+  // Full RETURNING menu (columns + aliases + all functions + expression
+  // keywords), not the narrow ~2-item column-only menu the SET-slot
+  // shadow bug produced -- same ~786-790 baseline as every other
+  // WHERE-equivalent context measured this session.
+  assert!(labels.len() > 500, "expected the full RETURNING menu, not a narrow column-only one; got {} items", labels.len());
+}
+
+#[test]
+fn plpgsql_body_second_statement_target_does_not_leak_first_statements_table() {
+  // A PL/pgSQL body with two inner statements -- the second
+  // statement's target-table resolution must not pick up the first
+  // statement's table. Regression guard for the boundary-safety
+  // reasoning behind reusing `insert_target_table` / `dml_target_table`
+  // / `update_set_at_column_slot` as-is (they self-bound at the
+  // nearest real `;`, which coincides with PL/pgSQL inner-statement
+  // boundaries in raw text).
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN UPDATE users SET name = 'x' WHERE id = 1; INSERT INTO orders (";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"user_id"), "expected orders' `user_id` (2nd stmt's target); got {labels:?}");
+  assert!(!labels.contains(&"email"), "must not leak users' columns from the 1st statement; got {labels:?}");
+  assert!(!labels.contains(&"name"), "must not leak users' columns from the 1st statement; got {labels:?}");
+}
+
+#[test]
 fn rls_policy_using_expr_offers_target_table_columns() {
   let cat = catalog_with_users_and_orders();
   let src = "CREATE POLICY p ON users USING (";

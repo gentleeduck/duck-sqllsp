@@ -8268,14 +8268,34 @@ fn plpgsql_inner_stmt_span(source: &str, pos: usize) -> &str {
 }
 
 /// `Phase::PlpgsqlBody` sub-detection: the current inner PL/pgSQL
-/// statement is itself a SELECT/UPDATE/DELETE at its FROM or WHERE
-/// slot, so offer the same targeted menu the top-level phase would --
-/// tables at FROM/JOIN, columns + expression keywords at WHERE/AND/OR
-/// -- instead of the kitchen-sink fallback. Returns `None` (falls
-/// through to the kitchen sink) for every other position -- this only
-/// narrows the two clearest, highest-value slots, it doesn't attempt
-/// full clause-by-clause parity with top-level SQL.
-pub(crate) fn plpgsql_body_from_or_where_items(
+/// statement is itself a SELECT/INSERT/UPDATE/DELETE at one of its
+/// targeted slots, so offer the same menu the top-level phase would --
+/// instead of the kitchen-sink fallback. Returns `None` (falls through
+/// to the kitchen sink) for every other position -- this only narrows
+/// the clearest, highest-value slots, it doesn't attempt full
+/// clause-by-clause parity with top-level SQL.
+///
+/// Slots covered: FROM/JOIN (tables), WHERE/AND/OR (columns +
+/// expression keywords), `INSERT INTO <table>` (tables), `INSERT INTO
+/// t (<cols>)` (that table's columns only), `UPDATE <table>` (tables),
+/// `UPDATE t SET <col> = ...` (that table's columns only, at any
+/// position in the assignment list), `... RETURNING <cols/expr>`.
+/// `DELETE FROM` is covered by the generic FROM branch already.
+/// `EXECUTE '...'` dynamic-SQL string bodies are NOT covered -- SQL
+/// text inside a string literal is a different, larger problem
+/// (completion inside a string, not a bare-expression clause) and out
+/// of scope here.
+///
+/// The four lower-level helpers this reuses (`insert_target_table`,
+/// `dml_target_table`, `update_set_at_column_slot`,
+/// `used_columns_in_clause`) each self-bound at the nearest real `;`
+/// (or, for `update_set_at_column_slot`, bail outright on crossing
+/// one) -- which coincides with PL/pgSQL inner-statement boundaries in
+/// the raw text, so a later inner statement's target-table resolution
+/// won't leak an earlier inner statement's table (verified by
+/// `plpgsql_body_second_statement_target_does_not_leak_first_statements_table`
+/// in `tests/engine.rs`).
+pub(crate) fn plpgsql_body_targeted_items(
   source: &str,
   offset: TextSize,
   file: &ParsedFile,
@@ -8286,10 +8306,73 @@ pub(crate) fn plpgsql_body_from_or_where_items(
   let pos = pos.min(source.len());
   let span = plpgsql_inner_stmt_span(source, pos);
   let upper = span.to_ascii_uppercase();
-  let has_dml_verb = ["SELECT", "UPDATE", "DELETE"].iter().any(|kw| upper.contains(kw));
+  let has_dml_verb = ["SELECT", "UPDATE", "DELETE", "INSERT"].iter().any(|kw| upper.contains(kw));
   if !has_dml_verb {
     return None;
   }
+
+  // RETURNING is always the last clause in INSERT/UPDATE/DELETE, so
+  // once it appears anywhere in the current inner statement's span,
+  // every position after it -- the first column, or any later
+  // comma-separated one -- is the RETURNING slot. Checked before
+  // everything else: a bare last-word match (`last == "RETURNING"`)
+  // only catches the *first* column, since a trailing comma glues
+  // onto the previous column name with no space (`RETURNING id,` is
+  // one whitespace-delimited token, "ID,"); worse, leaving the
+  // SET-column-slot check below to run first for a 2nd+ RETURNING
+  // column is actively wrong, not just incomplete -- its backward scan
+  // for SET's last `=`/`,` doesn't know to stop at RETURNING (only at
+  // `;` or an unbalanced paren), so `UPDATE t SET x=1 RETURNING a, `
+  // was misread as if the `,` still belonged to the SET list.
+  if upper.contains("RETURNING") {
+    let trimmed = upper.trim_end();
+    let words: Vec<&str> = trimmed.split_ascii_whitespace().collect();
+    if words.last().copied() == Some("AS") {
+      // `RETURNING <expr> AS <cursor>` -- free-form alias name, no
+      // menu (matches Phase::ReturningClause's own AS handling).
+      return Some(Vec::new());
+    }
+    let mut out = Vec::new();
+    if let Some(target) = dml_target_table(source, offset) {
+      sources::columns_of_table(cat, None, &target, &mut out);
+    } else {
+      push_scope_columns_or_all(file, scopes, source, cat, offset, &mut out);
+    }
+    push_aliases(file, scopes, source, offset, &mut out);
+    push_all_functions(cat, &mut out);
+    sources::expression_keywords(&mut out);
+    let used = used_columns_in_clause(source, offset);
+    if !used.is_empty() {
+      out.retain(|it| !is_column_listed(it, &used));
+    }
+    return Some(out);
+  }
+
+  // Paren-content slots -- checked next, since inside a paren list
+  // the *last bare word* before the cursor is often part of an
+  // expression, not a real clause keyword, so the bare-word matching
+  // below would misfire.
+  if let Some(target) = insert_target_table(source, offset) {
+    let mut out = Vec::new();
+    sources::columns_of_table(cat, None, &target, &mut out);
+    let used = used_columns_in_clause(source, offset);
+    if !used.is_empty() {
+      out.retain(|it| !is_column_listed(it, &used));
+    }
+    return Some(out);
+  }
+  if update_set_at_column_slot(source, offset)
+    && let Some(target) = dml_target_table(source, offset)
+  {
+    let mut out = Vec::new();
+    sources::columns_of_table(cat, None, &target, &mut out);
+    let used = used_columns_in_clause(source, offset);
+    if !used.is_empty() {
+      out.retain(|it| !is_column_listed(it, &used));
+    }
+    return Some(out);
+  }
+
   let trimmed = upper.trim_end();
   let mut words: Vec<&str> = trimmed.split_ascii_whitespace().collect();
   // Strip a trailing partial identifier the user is still typing.
@@ -8297,6 +8380,7 @@ pub(crate) fn plpgsql_body_from_or_where_items(
     words.pop();
   }
   let last = words.last().copied();
+  let prev = if words.len() >= 2 { words.get(words.len() - 2).copied() } else { None };
   let mut out = Vec::new();
   if matches!(last, Some("FROM") | Some("JOIN")) {
     sources::tables(cat, &mut out);
@@ -8307,6 +8391,20 @@ pub(crate) fn plpgsql_body_from_or_where_items(
     push_aliases(file, scopes, source, offset, &mut out);
     push_all_functions(cat, &mut out);
     sources::expression_keywords(&mut out);
+    return Some(out);
+  }
+  // `INSERT INTO <cursor>` -- table target. Guarded on the *previous*
+  // word being INSERT specifically: PL/pgSQL's `SELECT ... INTO <var>`
+  // (assign a query result to a local variable) uses the same INTO
+  // keyword for a wholly different purpose -- that case must NOT offer
+  // tables, so it falls through to the kitchen sink instead (which
+  // already includes PL/pgSQL locals).
+  if last == Some("INTO") && prev == Some("INSERT") {
+    sources::tables(cat, &mut out);
+    return Some(out);
+  }
+  if last == Some("UPDATE") {
+    sources::tables(cat, &mut out);
     return Some(out);
   }
   None

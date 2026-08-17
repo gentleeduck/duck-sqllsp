@@ -1296,7 +1296,7 @@ fn route_phase(
 
     // PL/pgSQL body --------------------------------------------------
     Phase::PlpgsqlBody => {
-      if let Some(items) = plpgsql_body_from_or_where_items(source, offset, file, scopes, cat) {
+      if let Some(items) = plpgsql_body_targeted_items(source, offset, file, scopes, cat) {
         out = items;
       } else {
         // Function parameters and DECLARE'd locals first so they
