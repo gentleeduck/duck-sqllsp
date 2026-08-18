@@ -3,7 +3,7 @@
 use crate::config::Case;
 use crate::handlers::position;
 use crate::state::ServerState;
-use dsl_hover::{KeywordCase, hover_with};
+use dsl_hover::{KeywordCase, hover_with_parsed};
 use tower_lsp::lsp_types::{
   Hover, HoverContents, HoverParams, LanguageString, MarkedString, MarkupContent, MarkupKind,
 };
@@ -16,12 +16,15 @@ pub fn run(state: &ServerState, params: HoverParams) -> Option<Hover> {
     return None;
   }
   let offset = position::to_offset(&doc.rope, params.text_document_position_params.position);
+  // Reuse the document's cached parse (built once per version by
+  // whichever handler needs it first) instead of hover re-parsing the
+  // whole buffer on every request -- see dsl_hover::hover_with_parsed.
+  let cache = doc.parsed();
   // Offline-mode enrichment: merge live + buffer-derived catalogs so
   // hover finds sequences / types / extensions / roles defined only
   // in the buffer (no DB connection required).
   let live = state.catalog.read().clone();
-  let cache = doc.parsed();
-  let derived = dsl_completion::source_tables::from_source(&cache.file, &doc.text);
+  let derived = doc.derived_catalog();
   let ws_offline = state.workspace_offline_snapshot();
   let cat = dsl_completion::source_tables::merge(&dsl_completion::source_tables::merge(&live, &derived), &ws_offline);
   let case = match state.config_snapshot().style.keyword {
@@ -29,7 +32,7 @@ pub fn run(state: &ServerState, params: HoverParams) -> Option<Hover> {
     Case::Lower => KeywordCase::Lower,
     Case::Preserve => KeywordCase::Preserve,
   };
-  let md = hover_with(&doc.text, offset, &cat, case)?;
+  let md = hover_with_parsed(&doc.text, offset, &cache.file, &cat, case)?;
   let range = hover_range_for(&doc.text, &doc.rope, offset);
   Some(Hover { contents: split_markdown_fences(&md), range })
 }

@@ -3,7 +3,7 @@
 use crate::config::{Case, Style};
 use crate::handlers::position;
 use crate::state::ServerState;
-use dsl_completion::{Item, ItemKind, complete as engine_complete};
+use dsl_completion::{Item, ItemKind, complete_with_derived};
 use tower_lsp::lsp_types::{
   CompletionItem, CompletionItemKind, CompletionItemLabelDetails, CompletionParams, CompletionResponse, Documentation,
   InsertTextFormat, MarkupContent, MarkupKind,
@@ -19,13 +19,28 @@ pub fn run(state: &ServerState, params: CompletionParams) -> Option<CompletionRe
   let offset = position::to_offset(&doc.rope, params.text_document_position.position);
   let cache = doc.parsed();
   // Workspace-scan catalog (every .sql in the project) merged on top
-  // of the live catalog snapshot. The engine then folds in the
-  // current buffer's own CREATE TABLE bodies inside complete(). Live
-  // wins on collisions because merge keeps the first-seen entry.
+  // of the live catalog snapshot, then every OPEN document's own
+  // derived tables / sequences / types / etc -- not just this one, so
+  // an unsaved sibling buffer's CREATE TABLE is completable the same
+  // way workspace_symbol already treats it, rather than only showing
+  // up after a save + workspace rescan. Cached per document version
+  // via `Document::derived_catalog` rather than re-scanning on every
+  // request; huge sibling docs are skipped the same as `too_large()`
+  // guards the current one. Live wins on collisions because merge
+  // keeps the first-seen entry; this document's own derived catalog
+  // wins over other open documents' in case of a same-name clash.
   let live = state.catalog.read().clone();
   let ws_offline = state.workspace_offline_snapshot();
   let cat = dsl_completion::source_tables::merge(&live, &ws_offline);
-  let items = engine_complete(&doc.text, &cache.file, &cache.scopes, &cat, offset);
+  let derived = state
+    .documents
+    .snapshot()
+    .into_iter()
+    .filter(|(u, d)| *u != uri && !d.too_large())
+    .fold(doc.derived_catalog(), |acc, (_, other)| {
+      std::sync::Arc::new(dsl_completion::source_tables::merge(&acc, &other.derived_catalog()))
+    });
+  let items = complete_with_derived(&doc.text, &cache.file, &cache.scopes, &cat, &derived, offset);
 
   let style = state.config_snapshot().style;
   let lsp_items: Vec<CompletionItem> = items.into_iter().map(|it| to_lsp_item(it, &style)).collect();
@@ -66,10 +81,33 @@ fn to_lsp_item(it: Item, style: &Style) -> CompletionItem {
   // single ASCII digit prefix (0..9) so lower `sort_priority` wins.
   // The label tail breaks ties alphabetically within the same prio.
   let sort_text = format!("{}{}", it.sort_priority.min(9), label);
-  // For snippet items, prepend an "Expands to:" preview to the
-  // documentation so users can see the final scaffold (with $1 / $0
-  // placeholders cleaned out) before they pick it.
-  let documentation = build_documentation(&it.documentation_md, it.is_snippet, &it.insert_text);
+  // Documentation is deferred to `completionItem/resolve` whenever we
+  // can rebuild it there -- knowledge-base entries (rebuilt from label
+  // + kind) and snippets (rebuilt from the insert text). That keeps
+  // ~2700 `render_markdown` calls out of every keystroke. Catalog-
+  // derived markdown has no cheaper key than itself, so it still ships
+  // inline. See `handlers/completion_resolve.rs`.
+  let deferrable = it.kb_entry.is_some() || it.is_snippet;
+  let documentation = if deferrable {
+    None
+  } else {
+    it.documentation_md
+      .as_ref()
+      .map(|m| Documentation::MarkupContent(MarkupContent { kind: MarkupKind::Markdown, value: m.clone() }))
+  };
+  let data = if deferrable {
+    serde_json::to_value(crate::handlers::completion_resolve::ResolveData {
+      l: it.label.clone(),
+      k: crate::handlers::completion_resolve::kind_code(it.kind),
+      s: if it.is_snippet { Some(it.insert_text.clone()) } else { None },
+      // Only snippets carry a hand-written blurb that resolve cannot
+      // look up; keyword/type/function prose comes from the KB.
+      d: if it.is_snippet { it.documentation_md.clone() } else { None },
+    })
+    .ok()
+  } else {
+    None
+  };
   // For snippet items, also surface a one-line preview right next to
   // the label via `label_details.detail` so the user sees the
   // rendered expansion in the menu without opening the doc panel.
@@ -93,25 +131,9 @@ fn to_lsp_item(it: Item, style: &Style) -> CompletionItem {
     insert_text: Some(insert),
     insert_text_format: if it.is_snippet { Some(InsertTextFormat::SNIPPET) } else { None },
     sort_text: Some(sort_text),
+    data,
     ..Default::default()
   }
-}
-
-fn build_documentation(md: &Option<String>, is_snippet: bool, insert_text: &str) -> Option<Documentation> {
-  if !is_snippet {
-    return md
-      .as_ref()
-      .map(|m| Documentation::MarkupContent(MarkupContent { kind: MarkupKind::Markdown, value: m.clone() }));
-  }
-  // Replace `${n:placeholder}` -> `placeholder`,
-  // `${n|a,b,c|}` -> `a`, and bare `$n` / `$0` -> ``.
-  let preview = render_snippet_preview(insert_text);
-  let header = format!("**Expands to:**\n\n```sql\n{preview}\n```\n");
-  let value = match md {
-    Some(m) if !m.trim().is_empty() => format!("{header}\n---\n\n{m}"),
-    _ => header,
-  };
-  Some(Documentation::MarkupContent(MarkupContent { kind: MarkupKind::Markdown, value }))
 }
 
 /// Render an LSP snippet string as a previewable SQL fragment.

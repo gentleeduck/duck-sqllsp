@@ -3,15 +3,16 @@
 use dsl_server::{
   documents::DocumentStore,
   handlers::{
-    call_hierarchy, code_action, code_lens, completion, definition, document_highlight, document_symbol,
-    folding_range, formatting, hover, inlay_hints, linked_editing, on_type_formatting, references, rename,
-    selection_range, semantic_tokens, signature_help, type_definition, workspace_symbol,
+    call_hierarchy, code_action, code_lens, completion, completion_resolve, definition, diagnostic, document_highlight,
+    document_link, document_symbol, folding_range, formatting, hover, inlay_hints, linked_editing, on_type_formatting,
+    range_formatting, references, rename, selection_range, semantic_tokens, signature_help, type_definition,
+    workspace_symbol,
   },
   state::ServerState,
 };
 use tower_lsp::lsp_types::{
-  CompletionParams, CompletionResponse, HoverParams, PartialResultParams, Position, TextDocumentIdentifier,
-  TextDocumentPositionParams, Url, WorkDoneProgressParams,
+  CompletionParams, CompletionResponse, HoverParams, InlayHintParams, PartialResultParams, Position, Range,
+  TextDocumentIdentifier, TextDocumentPositionParams, Url, WorkDoneProgressParams, WorkspaceSymbolParams,
 };
 
 fn state_with(uri: &str, text: &str) -> (ServerState, Url) {
@@ -1047,7 +1048,13 @@ fn completion_snippet_item_has_expands_to_preview() {
     CompletionResponse::List(l) => l.items,
   };
   let it = items.iter().find(|i| i.label.eq_ignore_ascii_case("ctable")).expect("ctable snippet");
-  let doc = it.documentation.as_ref().expect("snippet doc set");
+  // The list response defers documentation -- it must carry the resolve
+  // payload instead, and resolving it must produce the same preview the
+  // eager path used to inline.
+  assert!(it.documentation.is_none(), "snippet docs should be deferred to completionItem/resolve");
+  assert!(it.data.is_some(), "a deferred item must carry resolve data");
+  let resolved = completion_resolve::run(it.clone());
+  let doc = resolved.documentation.as_ref().expect("snippet doc set after resolve");
   let text = match doc {
     Documentation::MarkupContent(m) => m.value.clone(),
     Documentation::String(s) => s.clone(),
@@ -2012,4 +2019,987 @@ fn r4_200_close_then_reopen_keeps_separate_versions() {
   let doc = state.documents.get(&url).expect("doc");
   assert_eq!(doc.version, 2);
   assert_eq!(doc.text, "v2");
+}
+
+/// Phase D re-measurement of the Phase A finding (`complete()` at
+/// ~25ms/call at 10k statements, 5x over the < 5ms p50 target -- see
+/// `dsl-completion/tests/perf_bench.rs`). Opens one large document and
+/// fires completion + hover + inlay_hints + workspace_symbol `rounds`
+/// times each against it (one version, no edits), cursor at end-of-
+/// statement to match `perf_bench.rs`'s cursor convention.
+///
+/// Two fixes landed: `Document::derived_catalog` caches
+/// `source_tables::from_source` per document version instead of every
+/// handler re-deriving it (small win, ~1.6ms/call at n=10,000); the
+/// dominant fix is `engine::current_statement_span`, which scopes
+/// `fallback::{scope_from_text, cte_names_from_text,
+/// cte_columns_from_text}` to the current statement instead of the
+/// whole buffer -- those used to scan the entire file for every
+/// FROM/JOIN regardless of cursor position, which was the real O(buffer
+/// size) cost (details + numbers in the design doc's "Phase D
+/// findings" section and in `perf_bench.rs`'s doc comments).
+///
+/// At n=10,000: completion cold (round 0, first call after open) ~74ms
+/// one-time; warm (every cache hit after) ~1.6ms/call, under target.
+/// Not a hard-threshold assertion (machine-dependent) -- prints the
+/// numbers so a regression is visible by eye.
+///
+/// `hover::run` was NOT fixed by this and used to dominate the
+/// per-handler breakdown by 1-2 orders of magnitude -- a pre-existing
+/// issue in `dsl-hover` (re-parsed the whole buffer on every call,
+/// ignoring `ParseCache`), left as out of scope here. Fixed in the
+/// body-context-completion-hover project's Task 5 -- see
+/// `r5_203_perf_hover_reuses_cached_parse` below and the design doc.
+#[test]
+#[ignore]
+fn r5_201_perf_derived_catalog_cache_avoids_redundant_rescans() {
+  let n = 10_000;
+  let mut text = String::with_capacity(n * 50);
+  for i in 0..n {
+    text.push_str(&format!("SELECT id FROM users WHERE id = {i};\n"));
+  }
+  let (state, url) = state_with("file:///perf_cache.sql", &text);
+  let rounds = 20u32;
+
+  // "Cached": completion + hover + inlay_hints fired `rounds` times each
+  // against the SAME open document (one version, zero edits between
+  // calls) -- derived_catalog() should pay the buffer scan once, not
+  // 3 * rounds times. Timed per-handler-type to isolate which one
+  // dominates rather than only seeing a combined total.
+  let mut t_completion = std::time::Duration::ZERO;
+  let mut t_completion_first = std::time::Duration::ZERO;
+  let mut t_hover = std::time::Duration::ZERO;
+  let mut t_inlay = std::time::Duration::ZERO;
+  let mut t_wsym = std::time::Duration::ZERO;
+  // Cursor lands right after each line's `WHERE id = <i>` (before the
+  // trailing `;`) -- end-of-statement, matching the cursor placement
+  // `dsl-completion/tests/perf_bench.rs`'s `build_buffer` uses. A
+  // mid-keyword position (e.g. character 5, inside "SELECT") hits a
+  // much cheaper, earlier phase-detection short-circuit and would
+  // *not* be a fair comparison against Phase A's original numbers.
+  let prefix_len = "SELECT id FROM users WHERE id = ".len() as u32;
+  let t0 = std::time::Instant::now();
+  for i in 0..rounds {
+    let line = i.min(n as u32 - 1);
+    let character = prefix_len + line.to_string().len() as u32;
+    let pos = Position { line, character };
+    let s = std::time::Instant::now();
+    let _ = completion::run(
+      &state,
+      CompletionParams {
+        text_document_position: TextDocumentPositionParams {
+          text_document: TextDocumentIdentifier { uri: url.clone() },
+          position: pos,
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+        context: None,
+      },
+    );
+    let e = s.elapsed();
+    t_completion += e;
+    if i == 0 {
+      t_completion_first = e;
+    }
+    let s = std::time::Instant::now();
+    let _ = hover::run(
+      &state,
+      HoverParams {
+        text_document_position_params: TextDocumentPositionParams {
+          text_document: TextDocumentIdentifier { uri: url.clone() },
+          position: pos,
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+      },
+    );
+    t_hover += s.elapsed();
+    let s = std::time::Instant::now();
+    let _ = inlay_hints::run(
+      &state,
+      InlayHintParams {
+        text_document: TextDocumentIdentifier { uri: url.clone() },
+        range: Range { start: Position { line: 0, character: 0 }, end: Position { line: i + 1, character: 0 } },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+      },
+    );
+    t_inlay += s.elapsed();
+    let s = std::time::Instant::now();
+    let _ = workspace_symbol::run(
+      &state,
+      WorkspaceSymbolParams {
+        query: String::new(),
+        partial_result_params: PartialResultParams::default(),
+        work_done_progress_params: WorkDoneProgressParams::default(),
+      },
+    );
+    t_wsym += s.elapsed();
+  }
+  let _ = t0.elapsed(); // combined wall time isn't meaningful here -- hover's unrelated cost (see doc comment) would dominate and mislead; per-handler numbers below are the honest comparison.
+  let rest = rounds - 1;
+  eprintln!(
+    "per-handler totals over {rounds} rounds (n_stmts={n}) -- completion: {t_completion:?} ({:?}/call)  hover: {t_hover:?} ({:?}/call)  inlay_hints: {t_inlay:?} ({:?}/call)  workspace_symbol: {t_wsym:?} ({:?}/call)",
+    t_completion / rounds,
+    t_hover / rounds,
+    t_inlay / rounds,
+    t_wsym / rounds
+  );
+  eprintln!(
+    "completion cold-vs-warm split -- round 0 (cold derived_catalog cache): {t_completion_first:?}  rounds 1..{rounds} avg (warm cache): {:?}",
+    (t_completion - t_completion_first) / rest
+  );
+
+  // Reference point: a single standalone `from_source` call at this
+  // buffer size, for scale against the cold-cache number above (round 0
+  // pays this once, plus parse + resolve + complete_with_derived's own
+  // work; warm rounds pay none of it).
+  let doc = state.documents.get(&url).unwrap();
+  let cache = doc.parsed();
+  let t1 = std::time::Instant::now();
+  let _ = dsl_completion::source_tables::from_source(&cache.file, &doc.text);
+  eprintln!("standalone from_source call at n_stmts={n}: {:?}", t1.elapsed());
+}
+
+/// Task 5 (body-context-completion-hover project) fix for the gap
+/// `r5_201` above flagged and left untouched: `dsl_hover::hover_with`
+/// re-parsed the whole buffer on every single call, ignoring
+/// `Document::parsed()`'s cache. Fixed by splitting it into a thin
+/// `hover_with` wrapper (parses fresh, delegates -- mirrors
+/// `complete()` / `complete_with_derived()`) plus `hover_with_parsed`,
+/// which takes an already-parsed `ParsedFile`; `hover::run` now calls
+/// `hover_with_parsed` with `doc.parsed()`'s cached file.
+///
+/// Because `hover_with` still parses fresh by design (it's the public,
+/// cache-less entry point for callers with no parse cache of their
+/// own), calling it directly reproduces exactly what `hover::run` used
+/// to pay per request -- used below as a live "before" proxy, so this
+/// benchmark compares two code paths that both still exist today
+/// rather than needing to resurrect deleted code.
+#[test]
+#[ignore]
+fn r5_203_perf_hover_reuses_cached_parse() {
+  let n = 10_000;
+  let mut text = String::with_capacity(n * 50);
+  let mut line_starts: Vec<u32> = Vec::with_capacity(n);
+  for i in 0..n {
+    line_starts.push(text.len() as u32);
+    text.push_str(&format!("SELECT id FROM users WHERE id = {i};\n"));
+  }
+  let (state, url) = state_with("file:///perf_hover.sql", &text);
+  let rounds = 20u32;
+  // Cursor lands right after each line's `WHERE id = <i>` (before the
+  // trailing `;`) -- same end-of-statement convention as r5_201.
+  let prefix_len = "SELECT id FROM users WHERE id = ".len() as u32;
+
+  // Warm the parse cache and grab a catalog once, mirroring normal LSP
+  // traffic (some earlier handler has always parsed the doc by the
+  // time hover fires) -- both loops below measure steady-state calls,
+  // not the unavoidable one-time first parse.
+  let doc = state.documents.get(&url).unwrap();
+  let cat = doc.derived_catalog();
+  let _ = doc.parsed();
+  drop(doc);
+
+  // "Before" proxy: hover_with reparses `text` on every call.
+  let mut t_before = std::time::Duration::ZERO;
+  for i in 0..rounds {
+    let line = i.min(n as u32 - 1) as usize;
+    let character = prefix_len + line.to_string().len() as u32;
+    let offset = text_size::TextSize::from(line_starts[line] + character);
+    let s = std::time::Instant::now();
+    let _ = dsl_hover::hover_with(&text, offset, &cat, dsl_hover::KeywordCase::Upper);
+    t_before += s.elapsed();
+  }
+
+  // "After": hover::run, now threading doc.parsed()'s cached file
+  // through hover_with_parsed.
+  let mut t_after = std::time::Duration::ZERO;
+  for i in 0..rounds {
+    let line = i.min(n as u32 - 1);
+    let character = prefix_len + line.to_string().len() as u32;
+    let s = std::time::Instant::now();
+    let _ = hover::run(
+      &state,
+      HoverParams {
+        text_document_position_params: TextDocumentPositionParams {
+          text_document: TextDocumentIdentifier { uri: url.clone() },
+          position: Position { line, character },
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+      },
+    );
+    t_after += s.elapsed();
+  }
+
+  eprintln!(
+    "hover before (hover_with, reparse-per-call) vs after (hover::run, cached parse) over {rounds} rounds (n_stmts={n}) -- before: {t_before:?} ({:?}/call)  after: {t_after:?} ({:?}/call)  speedup: {:.1}x",
+    t_before / rounds,
+    t_after / rounds,
+    t_before.as_secs_f64() / t_after.as_secs_f64().max(1e-9),
+  );
+}
+
+#[test]
+fn r5_202_completion_sees_table_defined_in_another_open_document() {
+  // A CREATE TABLE in one open (unsaved) buffer should be completable
+  // from another open buffer immediately -- the same cross-document
+  // visibility `workspace/symbol` already has -- rather than only
+  // appearing after the file is saved and the workspace rescanned.
+  // Regression coverage for a gap found during the Phase C cross-file
+  // intelligence probe: `completion::run` used to merge in only the
+  // *current* document's derived catalog.
+  let state = ServerState::new();
+  let url_a: Url = "file:///a.sql".parse().unwrap();
+  let url_b: Url = "file:///b.sql".parse().unwrap();
+  state.documents.open(url_a, "CREATE TABLE widgets (id int, name text);".into(), 1);
+  state.documents.open(url_b.clone(), "SELECT * FROM widg".into(), 1);
+  let resp = completion::run(
+    &state,
+    CompletionParams {
+      text_document_position: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url_b },
+        position: Position { line: 0, character: 18 },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+      context: None,
+    },
+  )
+  .expect("completion result");
+  let items = match resp {
+    CompletionResponse::Array(v) => v,
+    CompletionResponse::List(l) => l.items,
+  };
+  let labels: Vec<String> = items.iter().map(|i| i.label.clone()).collect();
+  assert!(labels.contains(&"widgets".to_string()), "expected `widgets` from the other open document; got {labels:?}");
+}
+
+// ---------------------------------------------------------------------
+// textDocument/rangeFormatting -- format-selection support.
+// The selection snaps outward to whole top-level statements, so the
+// deterministic contract these tests pin down is the *edit range*, not
+// the formatter output (which varies with whether the sql-formatter CLI
+// is installed on the machine running the suite).
+// ---------------------------------------------------------------------
+
+fn range_fmt(state: &ServerState, url: &Url, range: Range) -> Option<Vec<tower_lsp::lsp_types::TextEdit>> {
+  use tower_lsp::lsp_types::{DocumentRangeFormattingParams, FormattingOptions};
+  range_formatting::run(
+    state,
+    DocumentRangeFormattingParams {
+      text_document: TextDocumentIdentifier { uri: url.clone() },
+      range,
+      options: FormattingOptions::default(),
+      work_done_progress_params: WorkDoneProgressParams::default(),
+    },
+  )
+}
+
+#[test]
+fn range_formatting_snaps_selection_to_the_touched_statement() {
+  let src = "SELECT 1;\n\nCREATE TABLE t (\nid int,\nname text\n);\n";
+  let (state, url) = state_with("file:///rf.sql", src);
+  // Caret parked on the `id int,` line -- well inside statement two.
+  let edits = range_fmt(
+    &state,
+    &url,
+    Range { start: Position { line: 3, character: 2 }, end: Position { line: 3, character: 2 } },
+  )
+  .expect("an edit for the CREATE TABLE");
+  assert_eq!(edits.len(), 1);
+  let e = &edits[0];
+  assert_eq!(e.range.start, Position { line: 2, character: 0 }, "should start at CREATE, not at SELECT 1");
+  assert_eq!(e.range.end, Position { line: 5, character: 2 }, "should end just past the terminating `;`");
+  assert!(!e.new_text.contains("SELECT 1"), "must not rewrite the untouched neighbour: {:?}", e.new_text);
+}
+
+#[test]
+fn range_formatting_spanning_two_statements_covers_both() {
+  let src = "CREATE TABLE a (\nid int\n);\nCREATE TABLE b (\nid int\n);\n";
+  let (state, url) = state_with("file:///rf2.sql", src);
+  let edits = range_fmt(
+    &state,
+    &url,
+    Range { start: Position { line: 1, character: 0 }, end: Position { line: 4, character: 0 } },
+  )
+  .expect("an edit covering both statements");
+  let e = &edits[0];
+  assert_eq!(e.range.start, Position { line: 0, character: 0 });
+  assert_eq!(e.range.end, Position { line: 5, character: 2 });
+}
+
+#[test]
+fn range_formatting_whitespace_only_selection_is_a_no_op() {
+  let src = "SELECT 1;\n\n\nSELECT 2;\n";
+  let (state, url) = state_with("file:///rf3.sql", src);
+  let edits = range_fmt(
+    &state,
+    &url,
+    Range { start: Position { line: 1, character: 0 }, end: Position { line: 2, character: 0 } },
+  );
+  assert!(edits.is_none(), "selecting the gap between statements must not emit an edit: {edits:?}");
+}
+
+#[test]
+fn range_formatting_out_of_bounds_range_does_not_panic() {
+  let (state, url) = state_with("file:///rf4.sql", "SELECT 1;");
+  let _ = range_fmt(
+    &state,
+    &url,
+    Range { start: Position { line: 9_999, character: 9_999 }, end: Position { line: 10_000, character: 0 } },
+  );
+}
+
+#[test]
+fn range_formatting_reversed_range_is_normalised() {
+  let src = "CREATE TABLE t (\nid int\n);\n";
+  let (state, url) = state_with("file:///rf5.sql", src);
+  // end before start -- some clients send visual selections backwards.
+  let edits = range_fmt(
+    &state,
+    &url,
+    Range { start: Position { line: 2, character: 0 }, end: Position { line: 0, character: 0 } },
+  );
+  if let Some(edits) = edits {
+    assert_eq!(edits[0].range.start, Position { line: 0, character: 0 });
+  }
+}
+
+#[test]
+fn range_formatting_on_broken_sql_does_not_panic() {
+  let (state, url) = state_with("file:///rf6.sql", "SELECT ((( ;\nCREATE TABLE");
+  let _ = range_fmt(
+    &state,
+    &url,
+    Range { start: Position { line: 0, character: 0 }, end: Position { line: 1, character: 12 } },
+  );
+}
+
+#[test]
+fn range_formatting_empty_document_is_a_no_op() {
+  let (state, url) = state_with("file:///rf7.sql", "");
+  let edits = range_fmt(
+    &state,
+    &url,
+    Range { start: Position { line: 0, character: 0 }, end: Position { line: 0, character: 0 } },
+  );
+  assert!(edits.is_none());
+}
+
+// ---------------------------------------------------------------------
+// textDocument/diagnostic -- LSP 3.17 pull diagnostics.
+// ---------------------------------------------------------------------
+
+fn pull_diagnostics(
+  state: &ServerState,
+  url: &Url,
+  previous: Option<String>,
+) -> tower_lsp::lsp_types::DocumentDiagnosticReportResult {
+  use tower_lsp::lsp_types::DocumentDiagnosticParams;
+  diagnostic::run(
+    state,
+    DocumentDiagnosticParams {
+      text_document: TextDocumentIdentifier { uri: url.clone() },
+      identifier: Some("duck-sqllsp".into()),
+      previous_result_id: previous,
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  )
+}
+
+/// `(result_id, item_count)` from a Full report; panics on Unchanged.
+fn expect_full(report: &tower_lsp::lsp_types::DocumentDiagnosticReportResult) -> (Option<String>, usize) {
+  use tower_lsp::lsp_types::{DocumentDiagnosticReport, DocumentDiagnosticReportResult};
+  match report {
+    DocumentDiagnosticReportResult::Report(DocumentDiagnosticReport::Full(r)) => {
+      (r.full_document_diagnostic_report.result_id.clone(), r.full_document_diagnostic_report.items.len())
+    },
+    other => panic!("expected a Full report, got {other:?}"),
+  }
+}
+
+fn is_unchanged(report: &tower_lsp::lsp_types::DocumentDiagnosticReportResult) -> bool {
+  use tower_lsp::lsp_types::{DocumentDiagnosticReport, DocumentDiagnosticReportResult};
+  matches!(report, DocumentDiagnosticReportResult::Report(DocumentDiagnosticReport::Unchanged(_)))
+}
+
+#[test]
+fn pull_diagnostics_returns_a_full_report_with_a_result_id() {
+  let (state, url) = state_with("file:///pull.sql", "SELECT a FROM t WHERE x = NULL;");
+  let report = pull_diagnostics(&state, &url, None);
+  let (id, count) = expect_full(&report);
+  assert!(id.is_some(), "a full report must carry a result id or the client can never cache");
+  assert!(count > 0, "`= NULL` (sql015) should produce at least one diagnostic");
+}
+
+#[test]
+fn pull_diagnostics_agrees_with_the_push_path() {
+  // Both channels run the same `compute`, so an inconsistency here
+  // means a user would see different results depending on their client.
+  let (state, url) = state_with("file:///pull2.sql", "SELECT a FROM t WHERE x = NULL;");
+  let (_, pulled) = expect_full(&pull_diagnostics(&state, &url, None));
+  let pushed = dsl_server::diagnostics::compute(&state, &url).expect("computed").0.len();
+  assert_eq!(pulled, pushed);
+}
+
+#[test]
+fn pull_diagnostics_second_call_with_same_result_id_is_unchanged() {
+  let (state, url) = state_with("file:///pull3.sql", "SELECT a FROM t WHERE x = NULL;");
+  let (id, _) = expect_full(&pull_diagnostics(&state, &url, None));
+  let again = pull_diagnostics(&state, &url, id);
+  assert!(is_unchanged(&again), "unchanged buffer + unchanged catalog must short-circuit: {again:?}");
+}
+
+#[test]
+fn pull_diagnostics_result_id_changes_when_the_buffer_changes() {
+  let (state, url) = state_with("file:///pull4.sql", "SELECT 1;");
+  let (first, _) = expect_full(&pull_diagnostics(&state, &url, None));
+  state.documents.update(&url, "SELECT 2;".into(), 2);
+  let second = pull_diagnostics(&state, &url, first.clone());
+  let (second_id, _) = expect_full(&second);
+  assert_ne!(first, second_id, "edited buffer must invalidate the client's cached report");
+}
+
+#[test]
+fn pull_diagnostics_result_id_changes_when_analysis_inputs_move() {
+  // A catalog swap / config reload can flip sql001 without the buffer
+  // changing a byte. The generation counter is what makes that visible.
+  let (state, url) = state_with("file:///pull5.sql", "SELECT 1;");
+  let (first, _) = expect_full(&pull_diagnostics(&state, &url, None));
+  state.bump_analysis_generation();
+  let (second_id, _) = expect_full(&pull_diagnostics(&state, &url, first.clone()));
+  assert_ne!(first, second_id, "catalog/config change must invalidate the cached report");
+}
+
+#[test]
+fn pull_diagnostics_for_an_unopened_document_is_an_empty_full_report() {
+  let state = ServerState::new();
+  let url: Url = "file:///never-opened.sql".parse().unwrap();
+  let (id, count) = expect_full(&pull_diagnostics(&state, &url, None));
+  assert_eq!(count, 0);
+  assert!(id.is_none(), "no document, no cacheable id");
+}
+
+#[test]
+fn pull_diagnostics_honours_rule_severity_overrides() {
+  use dsl_server::config::DuckSqllspConfig;
+  let (state, url) = state_with("file:///pull6.sql", "SELECT a FROM t WHERE x = NULL;");
+  let (_, before) = expect_full(&pull_diagnostics(&state, &url, None));
+  assert!(before > 0);
+  let mut cfg = DuckSqllspConfig::default();
+  cfg.rules.insert("sql015".to_string(), "off".to_string());
+  state.set_config(cfg);
+  let (_, after) = expect_full(&pull_diagnostics(&state, &url, None));
+  assert!(after < before, "silencing sql015 should drop findings: {before} -> {after}");
+}
+
+#[test]
+fn push_is_the_default_and_pull_mode_is_opt_in() {
+  let state = ServerState::new();
+  assert!(!state.client_pulls_diagnostics(), "clients that never advertise pull must keep getting pushes");
+  state.set_client_pull_diagnostics(true);
+  assert!(state.client_pulls_diagnostics());
+}
+
+// ---------------------------------------------------------------------
+// semanticTokens/range + token modifiers.
+// ---------------------------------------------------------------------
+
+/// Undo the LSP delta encoding so two token streams produced from
+/// different starting points can be compared directly.
+fn absolute_tokens(data: &[tower_lsp::lsp_types::SemanticToken]) -> Vec<(u32, u32, u32, u32, u32)> {
+  let (mut line, mut ch) = (0u32, 0u32);
+  let mut out = Vec::with_capacity(data.len());
+  for t in data {
+    if t.delta_line == 0 {
+      ch += t.delta_start;
+    } else {
+      line += t.delta_line;
+      ch = t.delta_start;
+    }
+    out.push((line, ch, t.length, t.token_type, t.token_modifiers_bitset));
+  }
+  out
+}
+
+fn full_tokens(state: &ServerState, url: &Url) -> Vec<(u32, u32, u32, u32, u32)> {
+  use tower_lsp::lsp_types::{SemanticTokensParams, SemanticTokensResult};
+  match semantic_tokens::run(
+    state,
+    SemanticTokensParams {
+      text_document: TextDocumentIdentifier { uri: url.clone() },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  ) {
+    Some(SemanticTokensResult::Tokens(t)) => absolute_tokens(&t.data),
+    other => panic!("expected full tokens, got {other:?}"),
+  }
+}
+
+fn range_tokens(state: &ServerState, url: &Url, range: Range) -> Vec<(u32, u32, u32, u32, u32)> {
+  use tower_lsp::lsp_types::{SemanticTokensRangeParams, SemanticTokensRangeResult};
+  match semantic_tokens::run_range(
+    state,
+    SemanticTokensRangeParams {
+      text_document: TextDocumentIdentifier { uri: url.clone() },
+      range,
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  ) {
+    Some(SemanticTokensRangeResult::Tokens(t)) => absolute_tokens(&t.data),
+    other => panic!("expected range tokens, got {other:?}"),
+  }
+}
+
+#[test]
+fn semantic_tokens_range_matches_the_full_pass_for_the_same_lines() {
+  let src = "SELECT 1;\nCREATE TABLE t (id int, email text);\nSELECT now();\n";
+  let (state, url) = state_with("file:///st_range.sql", src);
+  let full = full_tokens(&state, &url);
+  let ranged = range_tokens(
+    &state,
+    &url,
+    Range { start: Position { line: 1, character: 0 }, end: Position { line: 2, character: 0 } },
+  );
+  let expected: Vec<_> = full.into_iter().filter(|(line, ..)| *line == 1).collect();
+  assert!(!expected.is_empty(), "line 1 should have tokens at all");
+  assert_eq!(ranged, expected, "range must agree with the full pass, byte for byte");
+}
+
+#[test]
+fn semantic_tokens_range_over_a_dollar_quoted_body_still_lexes_from_the_top() {
+  // The body is only known to be a string because of context above the
+  // range -- a range request that started lexing at the range would
+  // classify these bytes as identifiers.
+  let src = "CREATE FUNCTION f() RETURNS int AS $$\n  SELECT FROM WHERE;\n$$ LANGUAGE sql;\n";
+  let (state, url) = state_with("file:///st_dollar.sql", src);
+  let ranged = range_tokens(
+    &state,
+    &url,
+    Range { start: Position { line: 1, character: 0 }, end: Position { line: 2, character: 0 } },
+  );
+  // Everything overlapping line 1 belongs to the one big string token
+  // that starts on line 0.
+  assert!(ranged.iter().all(|(_, _, _, ty, _)| *ty == 7), "expected only STRING tokens, got {ranged:?}");
+}
+
+#[test]
+fn semantic_tokens_range_outside_the_document_is_empty() {
+  let (state, url) = state_with("file:///st_empty_range.sql", "SELECT 1;\n");
+  let ranged = range_tokens(
+    &state,
+    &url,
+    Range { start: Position { line: 50, character: 0 }, end: Position { line: 60, character: 0 } },
+  );
+  assert!(ranged.is_empty(), "got {ranged:?}");
+}
+
+#[test]
+fn semantic_tokens_emit_declaration_modifiers_for_created_names() {
+  let src = "CREATE TABLE users (id int);";
+  let (state, url) = state_with("file:///st_mods.sql", src);
+  let full = full_tokens(&state, &url);
+  // `users` at line 0, char 13, type 3 (class), declaration|definition.
+  assert!(
+    full.iter().any(|(l, c, _, ty, m)| *l == 0 && *c == 13 && *ty == 3 && *m == 0b011),
+    "expected a declared+defined class token for `users`, got {full:?}"
+  );
+  // `id` -- property with the declaration bit only.
+  assert!(
+    full.iter().any(|(_, _, _, ty, m)| *ty == 4 && *m == 0b001),
+    "expected a declared property token for `id`, got {full:?}"
+  );
+}
+
+#[test]
+fn every_emitted_modifier_bit_is_covered_by_the_advertised_legend() {
+  // A bit the client's legend does not name is silently dropped (or
+  // worse, mapped to the wrong modifier), so the widest bit we ever
+  // emit must fit inside SEMANTIC_MODIFIERS.
+  use dsl_server::capabilities::SEMANTIC_MODIFIERS;
+  let src = "CREATE TABLE users (id int);\nCREATE FUNCTION f(a int) RETURNS int AS $$ SELECT 1 $$ LANGUAGE sql;\nSELECT count(a)::int FROM users;";
+  let (state, url) = state_with("file:///st_legend.sql", src);
+  let max_bit = full_tokens(&state, &url).iter().map(|(.., m)| *m).fold(0u32, |a, b| a | b);
+  let allowed = if SEMANTIC_MODIFIERS.is_empty() { 0 } else { (1u32 << SEMANTIC_MODIFIERS.len()) - 1 };
+  assert_eq!(max_bit & !allowed, 0, "emitted modifier bits {max_bit:#b} exceed legend of {}", SEMANTIC_MODIFIERS.len());
+  assert!(max_bit > 0, "the fixture should exercise at least one modifier");
+}
+
+#[test]
+fn every_emitted_token_type_is_covered_by_the_advertised_legend() {
+  use dsl_server::capabilities::SEMANTIC_LEGEND;
+  let src = "-- doc\nCREATE FUNCTION f(a int) RETURNS int AS $$ SELECT 1 $$ LANGUAGE sql;\nSELECT count(a)::int, 'x', 1 FROM users WHERE a > 1;";
+  let (state, url) = state_with("file:///st_types.sql", src);
+  for (.., ty, _) in full_tokens(&state, &url) {
+    assert!((ty as usize) < SEMANTIC_LEGEND.len(), "token type {ty} outside legend of {}", SEMANTIC_LEGEND.len());
+  }
+}
+
+// ---------------------------------------------------------------------
+// completionItem/resolve -- deferred documentation.
+// ---------------------------------------------------------------------
+
+fn complete_at(state: &ServerState, url: &Url, line: u32, character: u32) -> Vec<tower_lsp::lsp_types::CompletionItem> {
+  match completion::run(
+    state,
+    CompletionParams {
+      text_document_position: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url.clone() },
+        position: Position { line, character },
+      },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+      context: None,
+    },
+  )
+  .expect("completion result")
+  {
+    CompletionResponse::Array(a) => a,
+    CompletionResponse::List(l) => l.items,
+  }
+}
+
+#[test]
+fn completion_list_ships_no_builtin_documentation() {
+  // The whole point of resolve: the per-keystroke response must not
+  // carry ~2700 rendered markdown blobs.
+  let (state, url) = state_with("file:///res1.sql", "SEL");
+  let items = complete_at(&state, &url, 0, 3);
+  assert!(!items.is_empty());
+  let with_docs = items.iter().filter(|i| i.documentation.is_some()).count();
+  assert_eq!(with_docs, 0, "{with_docs} items shipped eager documentation");
+}
+
+#[test]
+fn keyword_item_resolves_to_real_documentation() {
+  let (state, url) = state_with("file:///res2.sql", "SEL");
+  let items = complete_at(&state, &url, 0, 3);
+  let select = items.iter().find(|i| i.label.eq_ignore_ascii_case("SELECT")).expect("SELECT item");
+  assert!(select.data.is_some(), "deferred item must carry resolve data");
+  let resolved = completion_resolve::run(select.clone());
+  let doc = match resolved.documentation.expect("resolved documentation") {
+    tower_lsp::lsp_types::Documentation::MarkupContent(m) => m.value,
+    tower_lsp::lsp_types::Documentation::String(s) => s,
+  };
+  assert!(doc.contains("Retrieve"), "expected the knowledge-base blurb, got {doc:?}");
+}
+
+#[test]
+fn resolve_is_idempotent() {
+  // Clients re-send already-resolved items; resolving twice must not
+  // stack a second copy of the docs.
+  let (state, url) = state_with("file:///res3.sql", "SEL");
+  let items = complete_at(&state, &url, 0, 3);
+  let select = items.iter().find(|i| i.label.eq_ignore_ascii_case("SELECT")).expect("SELECT item");
+  let once = completion_resolve::run(select.clone());
+  let twice = completion_resolve::run(once.clone());
+  assert_eq!(format!("{:?}", once.documentation), format!("{:?}", twice.documentation));
+}
+
+#[test]
+fn resolve_survives_the_style_config_recasing_labels() {
+  // `style.keyword = lower` rewrites the label we send out; resolve
+  // must still find the uppercase-keyed knowledge-base entry.
+  use dsl_server::config::DuckSqllspConfig;
+  let (state, url) = state_with("file:///res4.sql", "sel");
+  let mut cfg = DuckSqllspConfig::default();
+  cfg.style.keyword = dsl_server::config::Case::Lower;
+  state.set_config(cfg);
+  let items = complete_at(&state, &url, 0, 3);
+  let select = items.iter().find(|i| i.label.eq_ignore_ascii_case("SELECT")).expect("SELECT item");
+  let resolved = completion_resolve::run(select.clone());
+  assert!(resolved.documentation.is_some(), "recased label must still resolve");
+}
+
+#[test]
+fn every_deferred_item_carries_resolvable_data() {
+  // An item with no documentation and no `data` is a dead end -- the
+  // user highlights it and gets a blank doc panel forever.
+  let (state, url) = state_with("file:///res5.sql", "SEL");
+  for it in complete_at(&state, &url, 0, 3) {
+    if it.documentation.is_none() {
+      assert!(it.data.is_some(), "item {:?} has neither documentation nor resolve data", it.label);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------
+// textDocument/documentLink -- psql includes, COPY paths, URLs.
+// File links are only emitted for paths that actually resolve, so these
+// tests write real files into a temp dir.
+// ---------------------------------------------------------------------
+
+fn doc_links(state: &ServerState, url: &Url) -> Vec<tower_lsp::lsp_types::DocumentLink> {
+  use tower_lsp::lsp_types::DocumentLinkParams;
+  document_link::run(
+    state,
+    DocumentLinkParams {
+      text_document: TextDocumentIdentifier { uri: url.clone() },
+      work_done_progress_params: WorkDoneProgressParams::default(),
+      partial_result_params: PartialResultParams::default(),
+    },
+  )
+  .unwrap_or_default()
+}
+
+/// Unique temp dir under the OS temp root, created fresh per test.
+fn temp_dir(tag: &str) -> std::path::PathBuf {
+  let dir = std::env::temp_dir().join(format!("duck-sqllsp-doclink-{tag}-{}", std::process::id()));
+  let _ = std::fs::remove_dir_all(&dir);
+  std::fs::create_dir_all(&dir).expect("temp dir");
+  dir
+}
+
+#[test]
+fn document_link_resolves_an_existing_include_relative_to_the_file() {
+  let dir = temp_dir("inc");
+  std::fs::write(dir.join("schema.sql"), "CREATE TABLE t (id int);").unwrap();
+  let main = dir.join("main.sql");
+  std::fs::write(&main, "\\ir schema.sql\n").unwrap();
+
+  let state = ServerState::new();
+  let url = Url::from_file_path(&main).unwrap();
+  state.documents.open(url.clone(), "\\ir schema.sql\n".into(), 1);
+
+  let links = doc_links(&state, &url);
+  assert_eq!(links.len(), 1, "expected one include link, got {links:?}");
+  let target = links[0].target.as_ref().expect("target");
+  assert!(target.path().ends_with("schema.sql"), "got {target}");
+  let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn document_link_skips_includes_that_do_not_exist() {
+  // A link that always fails to open is worse than no link.
+  let dir = temp_dir("missing");
+  let main = dir.join("main.sql");
+  let text = "\\ir nope_not_here.sql\n";
+  std::fs::write(&main, text).unwrap();
+
+  let state = ServerState::new();
+  let url = Url::from_file_path(&main).unwrap();
+  state.documents.open(url.clone(), text.into(), 1);
+
+  assert!(doc_links(&state, &url).is_empty());
+  let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn document_link_resolves_a_copy_path_that_exists() {
+  let dir = temp_dir("copy");
+  std::fs::write(dir.join("data.csv"), "a,b\n1,2\n").unwrap();
+  let main = dir.join("load.sql");
+  let text = "COPY t FROM 'data.csv' WITH (FORMAT csv);";
+  std::fs::write(&main, text).unwrap();
+
+  let state = ServerState::new();
+  let url = Url::from_file_path(&main).unwrap();
+  state.documents.open(url.clone(), text.into(), 1);
+
+  let links = doc_links(&state, &url);
+  assert_eq!(links.len(), 1, "got {links:?}");
+  assert!(links[0].target.as_ref().unwrap().path().ends_with("data.csv"));
+  assert!(links[0].tooltip.as_deref().unwrap_or("").contains("COPY"));
+  let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn document_link_emits_urls_without_touching_the_filesystem() {
+  // URLs are unverifiable, so they are always linked -- and the
+  // document need not exist on disk at all.
+  let (state, url) = state_with("file:///virtual.sql", "-- docs: https://example.com/guide\nSELECT 1;");
+  let links = doc_links(&state, &url);
+  assert_eq!(links.len(), 1, "got {links:?}");
+  assert_eq!(links[0].target.as_ref().unwrap().as_str(), "https://example.com/guide");
+}
+
+#[test]
+fn document_link_range_covers_exactly_the_url() {
+  let src = "-- see https://example.com/x now";
+  let (state, url) = state_with("file:///rng.sql", src);
+  let links = doc_links(&state, &url);
+  let r = links[0].range;
+  assert_eq!(r.start.line, 0);
+  assert_eq!(r.start.character as usize, src.find("https://").unwrap());
+  assert_eq!(r.end.character as usize, src.find(" now").unwrap());
+}
+
+#[test]
+fn document_link_on_a_document_with_nothing_linkable_returns_none() {
+  let (state, url) = state_with("file:///plain.sql", "SELECT a FROM t WHERE b = 1;");
+  assert!(doc_links(&state, &url).is_empty());
+}
+
+// ---------------------------------------------------------------------
+// Resource hygiene: closing a document must not leak state, and
+// oversized buffers must not be analysed.
+// ---------------------------------------------------------------------
+
+/// A buffer just over `MAX_DOC_BYTES`.
+fn oversized_sql() -> String {
+  let unit = "SELECT id FROM users WHERE id = 1;\n";
+  let reps = (dsl_server::documents::MAX_DOC_BYTES / unit.len()) + 2;
+  unit.repeat(reps)
+}
+
+#[test]
+fn oversized_documents_short_circuit_every_heavy_handler() {
+  use tower_lsp::lsp_types::{
+    CodeLensParams, DocumentHighlightParams, DocumentSymbolParams, FoldingRangeParams, InlayHintParams,
+    LinkedEditingRangeParams, SelectionRangeParams, SemanticTokensParams, SemanticTokensRangeParams,
+  };
+  let text = oversized_sql();
+  assert!(text.len() > dsl_server::documents::MAX_DOC_BYTES);
+  let (state, url) = state_with("file:///huge.sql", &text);
+  let td = || TextDocumentIdentifier { uri: url.clone() };
+  let origin = Position { line: 0, character: 8 };
+  let range = Range { start: Position { line: 0, character: 0 }, end: Position { line: 1, character: 0 } };
+
+  assert!(
+    semantic_tokens::run(
+      &state,
+      SemanticTokensParams {
+        text_document: td(),
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+      }
+    )
+    .is_none(),
+    "semantic_tokens"
+  );
+  assert!(
+    semantic_tokens::run_range(
+      &state,
+      SemanticTokensRangeParams {
+        text_document: td(),
+        range,
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+      }
+    )
+    .is_none(),
+    "semantic_tokens_range"
+  );
+  assert!(
+    document_symbol::run(
+      &state,
+      DocumentSymbolParams {
+        text_document: td(),
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+      }
+    )
+    .is_none(),
+    "document_symbol"
+  );
+  assert!(
+    folding_range::run(
+      &state,
+      FoldingRangeParams {
+        text_document: td(),
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+      }
+    )
+    .is_none(),
+    "folding_range"
+  );
+  assert!(
+    code_lens::run(
+      &state,
+      CodeLensParams {
+        text_document: td(),
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+      }
+    )
+    .is_none(),
+    "code_lens"
+  );
+  assert!(
+    inlay_hints::run(
+      &state,
+      InlayHintParams { text_document: td(), range, work_done_progress_params: WorkDoneProgressParams::default() }
+    )
+    .is_none(),
+    "inlay_hints"
+  );
+  assert!(
+    document_highlight::run(
+      &state,
+      DocumentHighlightParams {
+        text_document_position_params: TextDocumentPositionParams { text_document: td(), position: origin },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+      }
+    )
+    .is_none(),
+    "document_highlight"
+  );
+  assert!(
+    linked_editing::run(
+      &state,
+      LinkedEditingRangeParams {
+        text_document_position_params: TextDocumentPositionParams { text_document: td(), position: origin },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+      }
+    )
+    .is_none(),
+    "linked_editing"
+  );
+  assert!(
+    selection_range::run(
+      &state,
+      SelectionRangeParams {
+        text_document: td(),
+        positions: vec![origin],
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+      }
+    )
+    .is_none(),
+    "selection_range"
+  );
+}
+
+#[test]
+fn normal_sized_documents_are_still_served_by_those_handlers() {
+  // Guard against a guard that is always on.
+  use tower_lsp::lsp_types::DocumentSymbolParams;
+  let (state, url) = state_with("file:///normal.sql", "CREATE TABLE t (id int);");
+  assert!(
+    document_symbol::run(
+      &state,
+      DocumentSymbolParams {
+        text_document: TextDocumentIdentifier { uri: url },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+      }
+    )
+    .is_some(),
+    "a normal document must still produce symbols"
+  );
+}
+
+#[test]
+fn closing_a_document_evicts_its_format_cache_entry() {
+  use tower_lsp::lsp_types::{DocumentFormattingParams, FormattingOptions};
+  let (state, url) = state_with("file:///fmtcache.sql", "select   1;");
+  let _ = formatting::run(
+    &state,
+    DocumentFormattingParams {
+      text_document: TextDocumentIdentifier { uri: url.clone() },
+      options: FormattingOptions::default(),
+      work_done_progress_params: WorkDoneProgressParams::default(),
+    },
+  );
+  assert!(state.format_cache.read().contains_key(&url.to_string()), "format should populate the cache");
+  state.documents.close(&url);
+  state.forget_document(&url);
+  assert!(
+    !state.format_cache.read().contains_key(&url.to_string()),
+    "closing must drop the cached copy of the buffer"
+  );
 }

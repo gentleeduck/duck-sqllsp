@@ -111,6 +111,7 @@ fn index_using_method(upper: &str) -> Option<Vec<Item>> {
       documentation_md: None,
       insert_text: m.into(),
       is_snippet: false,
+      kb_entry: None,
       sort_priority: 1,
     });
   }
@@ -175,6 +176,7 @@ fn index_opclass(upper: &str, stmt: &str) -> Option<Vec<Item>> {
       documentation_md: None,
       insert_text: op.into(),
       is_snippet: false,
+      kb_entry: None,
       sort_priority: 1,
     });
   }
@@ -211,6 +213,7 @@ fn trigger_event(upper: &str) -> Option<Vec<Item>> {
       documentation_md: None,
       insert_text: ev.into(),
       is_snippet: false,
+      kb_entry: None,
       sort_priority: 1,
     });
   }
@@ -264,6 +267,7 @@ fn trigger_execute_function(upper: &str, stmt: &str, cat: &Catalog) -> Option<Ve
       documentation_md: None,
       insert_text: format!("{}()", f.name),
       is_snippet: false,
+      kb_entry: None,
       sort_priority: 1,
     });
   }
@@ -287,6 +291,7 @@ fn trigger_execute_function(upper: &str, stmt: &str, cat: &Catalog) -> Option<Ve
           documentation_md: None,
           insert_text: format!("{name}()"),
           is_snippet: false,
+          kb_entry: None,
           sort_priority: 1,
         });
       }
@@ -325,6 +330,7 @@ fn call_procedure(upper: &str, cat: &Catalog) -> Option<Vec<Item>> {
       documentation_md: None,
       insert_text: if f.arguments.is_empty() { format!("{}()", f.name) } else { format!("{}($0)", f.name) },
       is_snippet: !f.arguments.is_empty(),
+      kb_entry: None,
       sort_priority: 1,
     });
   }
@@ -348,6 +354,7 @@ fn policy_for_command(upper: &str) -> Option<Vec<Item>> {
       documentation_md: None,
       insert_text: cmd.into(),
       is_snippet: false,
+      kb_entry: None,
       sort_priority: 1,
     });
   }
@@ -373,6 +380,7 @@ fn policy_to_role(upper: &str, cat: &Catalog) -> Option<Vec<Item>> {
     documentation_md: None,
     insert_text: "PUBLIC".into(),
     is_snippet: false,
+    kb_entry: None,
     sort_priority: 1,
   });
   for role in &cat.roles {
@@ -384,6 +392,7 @@ fn policy_to_role(upper: &str, cat: &Catalog) -> Option<Vec<Item>> {
       documentation_md: None,
       insert_text: role.clone(),
       is_snippet: false,
+      kb_entry: None,
       sort_priority: 2,
     });
   }
@@ -395,7 +404,7 @@ fn alter_column_type(upper: &str) -> Option<Vec<Item>> {
   let after = if let Some(at) = upper.rfind(" SET DATA TYPE ") {
     &upper[at + 15..]
   } else {
-      let at = upper.rfind(" TYPE ")?;
+    let at = upper.rfind(" TYPE ")?;
     &upper[at + 6..]
   };
   if after.contains("USING") || after.contains(';') {
@@ -439,6 +448,7 @@ fn alter_column_type(upper: &str) -> Option<Vec<Item>> {
       documentation_md: None,
       insert_text: ty.into(),
       is_snippet: false,
+      kb_entry: None,
       sort_priority: 1,
     });
   }

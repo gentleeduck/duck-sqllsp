@@ -15,6 +15,11 @@ use tower_lsp::lsp_types::{DocumentSymbol, DocumentSymbolParams, DocumentSymbolR
 pub fn run(state: &ServerState, params: DocumentSymbolParams) -> Option<DocumentSymbolResponse> {
   let _g = crate::handlers::perf::Guard::with_uri("document_symbol", &params.text_document.uri);
   let doc = state.documents.get(&params.text_document.uri)?;
+  // Oversized buffer: bail rather than block the editor. See
+  // `documents::MAX_DOC_BYTES`.
+  if doc.too_large() {
+    return None;
+  }
   let cache = doc.parsed();
   let mut out = Vec::new();
   for s in &cache.file.statements {

@@ -18,6 +18,11 @@ pub fn run(state: &ServerState, params: FoldingRangeParams) -> Option<Vec<Foldin
   let uri = &params.text_document.uri;
   let _g = crate::handlers::perf::Guard::with_uri("folding_range", uri);
   let doc = state.documents.get(uri)?;
+  // Oversized buffer: bail rather than block the editor. See
+  // `documents::MAX_DOC_BYTES`.
+  if doc.too_large() {
+    return None;
+  }
 
   let mut ranges: Vec<FoldingRange> = Vec::new();
 

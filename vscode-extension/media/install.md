@@ -4,12 +4,12 @@ The VS Code extension is a thin client; the real work happens in the
 `duck-sqllsp` server binary. Install it with:
 
 ```bash
-cargo install --git https://github.com/gentleeduck/duck-sqllsp duck-sqllsp
+cargo install duck-sqllsp
 ```
 
-The binary lands in `~/.cargo/bin/duck-sqllsp` (or `~/.local/bin/`
-depending on your toolchain). The extension probes both paths
-automatically.
+The binary lands in `~/.cargo/bin/duck-sqllsp` (`%USERPROFILE%\.cargo\bin\duck-sqllsp.exe`
+on Windows) -- the extension probes that location, a few other common
+install paths, and `$PATH` automatically.
 
 If the binary is somewhere else, set **`duckSqllsp.serverPath`** in
 your settings (User or Workspace) to the absolute path.

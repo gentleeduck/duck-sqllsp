@@ -144,7 +144,11 @@ fn items_carry_documentation_for_keywords() {
   let scopes = resolve_with_source(&file.statements, src);
   let items = complete(src, &file, &scopes, &cat, TextSize::from(3));
   let select = items.iter().find(|i| i.label == "SELECT").unwrap();
-  let doc = select.documentation_md.as_ref().expect("doc set");
+  // Knowledge-base docs are rendered on demand via `documentation()`;
+  // `documentation_md` stays None so completion responses don't pay for
+  // ~2700 markdown renders per keystroke.
+  assert!(select.documentation_md.is_none(), "KB docs must not be eagerly rendered");
+  let doc = select.documentation().expect("doc set");
   assert!(doc.contains("Retrieve"));
   // Match the new render header (capital P).
   assert!(doc.contains("[Postgres docs]"));
@@ -1014,6 +1018,32 @@ fn json_path_completion_works_for_double_arrow() {
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   assert!(labels.contains(&"a"), "got: {labels:?}");
+}
+
+#[test]
+fn json_path_completion_falls_back_to_catalog_json_keys() {
+  // No example jsonb literal anywhere in the buffer to harvest from --
+  // the only source of keys is the catalog's `Column.json_keys` (e.g.
+  // populated from a live DB's observed key survey). Confirms
+  // `json_path_keys_at_with_catalog` is actually wired into
+  // `complete()`, not just implemented and unused.
+  let meta = Column {
+    name: "meta".into(),
+    data_type: "jsonb".into(),
+    nullable: true,
+    default: None,
+    comment: None,
+    generated: None,
+    json_keys: Some(vec!["theme".into(), "locale".into()]),
+  };
+  let mut cat = catalog_with_users_and_orders();
+  cat.schemas[0].tables[0].columns.push(meta);
+  let src = "SELECT meta->'' FROM users;";
+  let cur = src.rfind("''").unwrap() + 1;
+  let items = complete_at(src, cur, &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"theme"), "expected `theme` from catalog json_keys; got: {labels:?}");
+  assert!(labels.contains(&"locale"), "expected `locale` from catalog json_keys; got: {labels:?}");
 }
 
 #[test]
@@ -2050,6 +2080,484 @@ fn window_clause_partition_by_offers_columns() {
     !labels.contains(&"INNER JOIN"),
     "PARTITION BY slot wrongly listed JOIN keywords: {labels:?}"
   );
+}
+
+#[test]
+fn second_window_def_in_comma_list_offers_subclause_menu() {
+  // `WINDOW w1 AS (PARTITION BY id), w2 AS (<cursor>` -- w1's body is
+  // already closed; the cursor sits inside w2's, which should get the
+  // same PARTITION BY / ORDER BY / frame menu as a first (and only)
+  // window definition does. Previously fell through to the wrong
+  // FROM-item-finished menu (JOIN/WHERE/...) because the detector
+  // located the *first* window's paren instead of the innermost
+  // still-open one.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM users WINDOW w1 AS (PARTITION BY id), w2 AS (";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
+  for kw in &["PARTITION BY", "ORDER BY"] {
+    assert!(labels.iter().any(|l| l == kw), "w2 AS ( should suggest `{kw}`; got {labels:?}");
+  }
+  assert!(
+    !labels.iter().any(|l| l == "INNER JOIN" || l == "CROSS JOIN"),
+    "w2 AS ( wrongly listed JOIN keywords: {labels:?}"
+  );
+}
+
+#[test]
+fn aggregate_call_offers_filter_keyword() {
+  // `SELECT count(*) <cursor>` -- FILTER (WHERE ...) is a legal
+  // continuation after any aggregate call, same slot as OVER.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT count(*) ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"FILTER"), "expected FILTER; got {labels:?}");
+}
+
+#[test]
+fn filter_paren_offers_only_where() {
+  // `count(*) FILTER (<cursor>` -- FILTER's entire grammar is
+  // `FILTER (WHERE <cond>)`, so WHERE is the only legal token; the
+  // full expression/function menu is noise here.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT count(*) FILTER (";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert_eq!(labels, vec!["WHERE"], "FILTER ( should offer only WHERE; got {labels:?}");
+}
+
+#[test]
+fn filter_where_falls_through_to_normal_expression_menu() {
+  // Once WHERE has actually been typed, the narrow FILTER( slot no
+  // longer applies -- normal column/function completion resumes.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT count(*) FILTER (WHERE ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"id"), "expected column `id`; got a menu of {} items", labels.len());
+}
+
+#[test]
+fn table_function_offers_with_ordinality() {
+  // `FROM unnest(...) WITH <cursor>` -- ORDINALITY is the only legal
+  // token directly after WITH here (a leading WITH is the CTE
+  // keyword, which can't appear mid-FROM).
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM unnest(ARRAY[1,2]) WITH ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert_eq!(labels, vec!["ORDINALITY"], "expected only ORDINALITY; got {labels:?}");
+}
+
+#[test]
+fn json_table_columns_fresh_slot_offers_for_not_catalog_dump() {
+  // `JSON_TABLE(data, '$' COLUMNS (<cursor>` -- a brand-new column
+  // name is expected, not a catalog entity. Before this fix the
+  // generic phase's table/column dump fired here (including an
+  // irrelevant `users` table suggestion); it should now suppress that
+  // and offer only FOR (-> `<name> FOR ORDINALITY`).
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM JSON_TABLE(data, '$' COLUMNS (";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert_eq!(labels, vec!["FOR"], "expected only FOR at a fresh column slot; got {labels:?}");
+}
+
+#[test]
+fn json_table_columns_fresh_slot_after_comma() {
+  // Same fresh-slot suppression after a `,` between column defs.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM JSON_TABLE(data, '$' COLUMNS (id INT PATH '$.id', ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert_eq!(labels, vec!["FOR"], "expected only FOR after a comma; got {labels:?}");
+}
+
+#[test]
+fn json_table_column_name_typed_offers_types_and_for() {
+  // `JSON_TABLE(... COLUMNS (id <cursor>` -- one word typed (the
+  // name). Expects data types (the column's type comes next) plus FOR
+  // (-> `<name> FOR ORDINALITY`).
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM JSON_TABLE(data, '$' COLUMNS (id ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  for expect in ["text", "int", "numeric", "boolean", "jsonb", "FOR"] {
+    assert!(labels.contains(&expect), "expected `{expect}`; got {labels:?}");
+  }
+  assert!(!labels.contains(&"users"), "should not fall through to the catalog dump; got {labels:?}");
+}
+
+#[test]
+fn json_table_for_typed_offers_only_ordinality() {
+  // `<name> FOR <cursor>` -- ORDINALITY is the only legal next token.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM JSON_TABLE(data, '$' COLUMNS (id FOR ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert_eq!(labels, vec!["ORDINALITY"], "expected only ORDINALITY; got {labels:?}");
+}
+
+#[test]
+fn json_table_type_typed_offers_path_format_exists() {
+  // `<name> <type> <cursor>` -- PATH / FORMAT / EXISTS are the legal
+  // continuations for a typed (non-ordinality) column.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM JSON_TABLE(data, '$' COLUMNS (id text ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert_eq!(
+    labels.into_iter().collect::<std::collections::HashSet<_>>(),
+    ["PATH", "FORMAT", "EXISTS"].into_iter().collect(),
+    "expected exactly PATH/FORMAT/EXISTS"
+  );
+}
+
+#[test]
+fn json_table_format_typed_offers_only_json() {
+  // `... FORMAT <cursor>` -- JSON is the only valid FORMAT value.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM JSON_TABLE(data, '$' COLUMNS (meta jsonb FORMAT ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert_eq!(labels, vec!["JSON"], "expected only JSON; got {labels:?}");
+}
+
+#[test]
+fn json_table_exists_typed_offers_path() {
+  // `... EXISTS <cursor>` -- PATH is the optional next token.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM JSON_TABLE(data, '$' COLUMNS (flag boolean EXISTS ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert_eq!(labels, vec!["PATH"], "expected only PATH; got {labels:?}");
+}
+
+#[test]
+fn json_table_second_column_name_typed_after_comma() {
+  // The type-slot detection applies to every column entry, not just
+  // the first -- `id int, name <cursor>` is a fresh name in the
+  // *second* entry, one word typed.
+  let cat = catalog_with_users_and_orders();
+  let src = "SELECT * FROM JSON_TABLE(data, '$' COLUMNS (id int, name ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"text") && labels.contains(&"FOR"), "expected types + FOR; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_from_slot_offers_tables_not_kitchen_sink() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN SELECT id FROM ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"users"), "expected `users`; got {labels:?}");
+  assert!(!labels.contains(&"BEGIN"), "FROM slot should not re-offer BEGIN; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_where_slot_offers_columns_not_kitchen_sink() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN SELECT id FROM users WHERE ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"id"), "expected `id`; got {labels:?}");
+  assert!(!labels.contains(&"BEGIN"), "WHERE slot should not re-offer BEGIN; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_other_position_keeps_kitchen_sink() {
+  // Not a FROM/WHERE slot -- the broad fallback (PL/pgSQL keywords
+  // included) must still work, unchanged, for everything else.
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"DECLARE") || labels.contains(&"IF"), "expected PL/pgSQL keywords still offered here; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_insert_into_offers_tables() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN INSERT INTO ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"users"), "expected `users`; got {labels:?}");
+  assert!(labels.contains(&"orders"), "expected `orders`; got {labels:?}");
+  assert!(!labels.contains(&"BEGIN"), "INSERT INTO slot should not re-offer BEGIN; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_select_into_variable_is_not_treated_as_insert() {
+  // PL/pgSQL's `SELECT ... INTO <var>` (assign query result to a
+  // local variable) uses the same INTO keyword as `INSERT INTO
+  // <table>` for a wholly different purpose -- the new INSERT-INTO
+  // branch must NOT fire here (it's guarded on the word immediately
+  // before INTO being literally INSERT, which "id" isn't). Falls
+  // through to the kitchen sink (which happens to include "all
+  // tables" too, among everything else, same as before this change)
+  // rather than the narrow tables-only menu the real INSERT INTO slot
+  // gets.
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN SELECT id INTO ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"BEGIN"), "expected the kitchen sink (not the narrow INSERT-INTO tables menu); got {} items", labels.len());
+}
+
+#[test]
+fn plpgsql_body_insert_column_list_offers_only_target_table_columns() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN INSERT INTO orders (";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"user_id"), "expected orders' `user_id`; got {labels:?}");
+  assert!(!labels.contains(&"email"), "users' columns should not leak into orders' column list; got {labels:?}");
+  assert!(!labels.contains(&"BEGIN"), "column-list slot should not re-offer BEGIN; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_insert_column_list_filters_already_used_columns() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN INSERT INTO orders (id, ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"user_id"), "expected orders' remaining `user_id`; got {labels:?}");
+  assert!(!labels.contains(&"id"), "already-listed `id` should be filtered out; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_update_offers_tables() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN UPDATE ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"users"), "expected `users`; got {labels:?}");
+  assert!(!labels.contains(&"BEGIN"), "UPDATE target slot should not re-offer BEGIN; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_update_set_offers_only_target_table_columns() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN UPDATE orders SET ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"user_id"), "expected orders' `user_id`; got {labels:?}");
+  assert!(!labels.contains(&"email"), "users' columns should not leak into orders' SET list; got {labels:?}");
+  assert!(!labels.contains(&"BEGIN"), "SET column-lhs slot should not re-offer BEGIN; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_update_set_second_slot_offers_columns_not_values() {
+  // After the first assignment's value, a second `,`-separated LHS
+  // slot -- must still resolve to the target table's columns (not
+  // fall into the value-expression branch, and not re-offer `id`
+  // since it's already used).
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN UPDATE orders SET id = 1, ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"user_id"), "expected orders' remaining `user_id`; got {labels:?}");
+  assert!(!labels.contains(&"id"), "already-assigned `id` should be filtered out; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_returning_offers_target_table_columns() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN UPDATE orders SET user_id = 1 WHERE id = 1 RETURNING ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"user_id"), "expected orders' `user_id`; got {labels:?}");
+  assert!(!labels.contains(&"BEGIN"), "RETURNING slot should not re-offer BEGIN; got {labels:?}");
+}
+
+#[test]
+fn plpgsql_body_returning_second_column_still_offers_full_menu() {
+  // Regression guard: a bare last-word match (`last == "RETURNING"`)
+  // only catches the *first* RETURNING column -- `RETURNING id,` is
+  // one whitespace-delimited token ("ID,"), so the comma glues onto
+  // the previous column name with no space. Worse, leaving the
+  // SET-column-slot check to run first for this position was actively
+  // wrong (not just incomplete): its backward scan for SET's last
+  // `=`/`,` doesn't know to stop at RETURNING, so it misread the `,`
+  // in `RETURNING id,` as still belonging to the SET list, collapsing
+  // the menu down to just the target table's unused columns (losing
+  // aliases/functions/expression keywords a RETURNING expression
+  // legitimately wants, e.g. `RETURNING id, left(name, 10)`).
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN UPDATE users SET name = 'x' WHERE id = 1 RETURNING id, ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"email"), "expected users' remaining `email`; got {} items, sample {:?}", labels.len(), &labels[..labels.len().min(10)]);
+  assert!(!labels.contains(&"id"), "already-listed `id` should be filtered out; got {labels:?}");
+  // Full RETURNING menu (columns + aliases + all functions + expression
+  // keywords), not the narrow ~2-item column-only menu the SET-slot
+  // shadow bug produced -- same ~786-790 baseline as every other
+  // WHERE-equivalent context measured this session.
+  assert!(labels.len() > 500, "expected the full RETURNING menu, not a narrow column-only one; got {} items", labels.len());
+}
+
+#[test]
+fn plpgsql_body_second_statement_target_does_not_leak_first_statements_table() {
+  // A PL/pgSQL body with two inner statements -- the second
+  // statement's target-table resolution must not pick up the first
+  // statement's table. Regression guard for the boundary-safety
+  // reasoning behind reusing `insert_target_table` / `dml_target_table`
+  // / `update_set_at_column_slot` as-is (they self-bound at the
+  // nearest real `;`, which coincides with PL/pgSQL inner-statement
+  // boundaries in raw text).
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN UPDATE users SET name = 'x' WHERE id = 1; INSERT INTO orders (";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"user_id"), "expected orders' `user_id` (2nd stmt's target); got {labels:?}");
+  assert!(!labels.contains(&"email"), "must not leak users' columns from the 1st statement; got {labels:?}");
+  assert!(!labels.contains(&"name"), "must not leak users' columns from the 1st statement; got {labels:?}");
+}
+
+#[test]
+fn execute_dynamic_sql_select_from_offers_tables() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE 'SELECT * FROM ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"users"), "expected `users`; got {} items, sample {:?}", labels.len(), &labels[..labels.len().min(10)]);
+  assert!(labels.contains(&"orders"), "expected `orders`; got {labels:?}");
+}
+
+#[test]
+fn execute_dynamic_sql_where_offers_columns() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE 'SELECT * FROM users WHERE ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"id"), "expected `id`; got {} items", labels.len());
+  assert!(labels.contains(&"email"), "expected `email`; got {labels:?}");
+}
+
+#[test]
+fn execute_dynamic_sql_dollar_quoted_offers_tables() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE $sql$ SELECT * FROM ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"users"), "expected `users`; got {} items, sample {:?}", labels.len(), &labels[..labels.len().min(10)]);
+}
+
+#[test]
+fn execute_dynamic_sql_escaped_quote_offers_columns() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE 'SELECT * FROM users WHERE name = ''foo'' AND ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"id"), "expected `id` (proves the `''`-unescape + offset-mapping is correct, not just that some completion fired); got {} items", labels.len());
+}
+
+#[test]
+fn execute_dynamic_sql_does_not_affect_unrelated_string_literal() {
+  let cat = catalog_with_users_and_orders();
+  let src = "INSERT INTO users (email) VALUES ('";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.is_empty(), "a plain (non-EXECUTE) string literal must stay inert; got {} items: {labels:?}", labels.len());
+}
+
+#[test]
+fn execute_dynamic_sql_concatenation_stays_inert() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE 'SELECT * FROM ' || tbl_name; END; $$ LANGUAGE plpgsql;";
+  let cursor = src.find("FROM ").unwrap() + "FROM ".len();
+  let items = complete_at(src, cursor, &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.is_empty(), "concatenated EXECUTE should stay inert (0 items), matching today's behavior; got {} items: {labels:?}", labels.len());
+}
+
+#[test]
+fn execute_dynamic_sql_format_wrapped_stays_inert() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE format('SELECT * FROM %I', tbl); END; $$ LANGUAGE plpgsql;";
+  let cursor = src.find("SELECT").unwrap();
+  let items = complete_at(src, cursor, &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.is_empty(), "format()-wrapped EXECUTE should stay inert (0 items); got {} items: {labels:?}", labels.len());
+}
+
+#[test]
+fn execute_dynamic_sql_using_clause_still_offers_completion() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE 'SELECT * FROM users WHERE id = $1 AND ' USING 5; END; $$ LANGUAGE plpgsql;";
+  let cursor = src.find("' USING").unwrap();
+  let items = complete_at(src, cursor, &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"id"), "a trailing USING clause should not disqualify the string; expected `id`, got {} items", labels.len());
+}
+
+#[test]
+fn rls_policy_using_expr_offers_target_table_columns() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE POLICY p ON users USING (";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"id"), "expected users' columns; got {} items, sample {:?}", labels.len(), &labels[..labels.len().min(10)]);
+  // A scoped menu here (this table's columns + all functions +
+  // expression keywords) lands around ~790 items -- matching every
+  // other WHERE-clause-equivalent context measured this session (the
+  // function library alone is the bulk of that). The discriminator
+  // against the *broken* state is ~2300+ (this table's columns get
+  // buried among irrelevant top-level statement keywords too).
+  assert!(labels.len() < 1000, "menu should be scoped, not the ~2300-item generic dump; got {}", labels.len());
+}
+
+#[test]
+fn rls_policy_with_check_expr_offers_target_table_columns() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE POLICY p ON users WITH CHECK (";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"id"), "expected users' columns; got {} items", labels.len());
+  // `id` alone isn't a strong enough check -- it's buried in the
+  // current ~2300-item generic dump too. See the sibling USING test
+  // for why ~1000 (not a much smaller number) is the right threshold.
+  assert!(labels.len() < 1000, "menu should be scoped, not the ~2300-item generic dump; got {} items", labels.len());
+}
+
+#[test]
+fn column_level_check_expression_offers_columns() {
+  // `id int CHECK (id > <cursor>` -- column-level CHECK (no comma
+  // before it, unlike the already-working table-level case), mid
+  // expression. Should offer this table's columns, not column-def
+  // constraint keywords.
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE TABLE users2 (id int, org_id int CHECK (org_id > ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(!labels.contains(&"NOT NULL"), "should not offer column-def keywords mid-expression; got {labels:?}");
+}
+
+#[test]
+fn generated_always_as_offers_sibling_columns() {
+  // GENERATED ALWAYS AS (<expr>) STORED -- the whole point is
+  // referencing sibling columns; currently offers nothing useful.
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE TABLE t (id int, org_id int, full_name text GENERATED ALWAYS AS (";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"id") && labels.contains(&"org_id"), "expected sibling columns; got {labels:?}");
+  assert!(!labels.contains(&"NOT NULL"), "should not offer column-def keywords; got {labels:?}");
+}
+
+#[test]
+fn create_table_as_with_data_not_shadowed_by_ordinality() {
+  // `CREATE TABLE t AS SELECT ... FROM users WITH <cursor>` also ends
+  // in `) WITH`, but this is the WITH [NO] DATA clause, not a table
+  // function modifier -- the ORDINALITY detector must not fire here.
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE TABLE t2 AS SELECT * FROM users WITH ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"DATA") && labels.contains(&"NO DATA"), "expected DATA/NO DATA; got {labels:?}");
+  assert!(!labels.contains(&"ORDINALITY"), "ORDINALITY should not apply to CREATE TABLE AS; got {labels:?}");
 }
 
 #[test]
@@ -19240,4 +19748,51 @@ fn r27_strong_0033() {
   let src = "-- v2\nSELECT * FROM users u FOR SHARE OF u WHERE ";
   let items = complete_at(src, src.len(), &catalog_with_users_and_orders());
   assert!(items.iter().any(|i| i.label == "id"));
+}
+
+#[test]
+fn multibyte_characters_do_not_panic_the_source_scanner() {
+  // Regression: the column-DEFAULT / ALTER / INSERT scanners walk a
+  // byte cursor and used to slice the &str with it, so any multi-byte
+  // character in the buffer blew up with "byte index is not a char
+  // boundary" and took the whole workspace scan down with it.
+  for src in [
+    "-- 空テーブル\nCREATE TABLE t (id int DEFAULT 1);",
+    "CREATE TABLE t (\n  naïve text DEFAULT 'café',\n  id int NOT NULL\n);",
+    "CREATE TABLE t (msg text DEFAULT '🦆 quack');",
+    "ALTER TABLE ONLY 空 ADD COLUMN a int;",
+    "INSERT INTO t (a) VALUES ('日本語');",
+    "-- ✅ done\nALTER TABLE t ALTER COLUMN c SET DEFAULT 'ü';",
+  ] {
+    let file = parse(src, Dialect::Postgres);
+    // Must not panic.
+    let _ = dsl_completion::source_tables::from_source(&file, src);
+  }
+}
+
+#[test]
+fn multibyte_stress_across_every_scanner_shape() {
+  // Broader sweep: every construct the source scanners special-case,
+  // each carrying a multi-byte character somewhere.
+  let cases = [
+    "CREATE TABLE IF NOT EXISTS 日本 (id int);",
+    "CREATE UNLOGGED TABLE ünlogged (id int DEFAULT 0);",
+    "CREATE TEMP TABLE tmp_✓ (a text DEFAULT 'x' NOT NULL);",
+    "ALTER TABLE ONLY \"tëst\" ADD CONSTRAINT c CHECK (a > 0);",
+    "INSERT INTO t (a, b) VALUES ('α', 'β'), ('γ', 'δ');",
+    "COMMENT ON TABLE t IS 'ünicode comment';",
+    "CREATE TYPE mood AS ENUM ('😀', '😢');",
+    "CREATE FUNCTION f() RETURNS int AS $$ SELECT 1 -- 中文\n$$ LANGUAGE sql;",
+    "CREATE INDEX idx ON t (col) WHERE col <> 'ü';",
+    "CREATE TABLE t (a int GENERATED ALWAYS AS (1) STORED, b text COLLATE \"tr_TR\");",
+    "-- ✅\n-- 🦆\nCREATE SEQUENCE s START 1;",
+  ];
+  for src in cases {
+    let file = parse(src, Dialect::Postgres);
+    let _ = dsl_completion::source_tables::from_source(&file, src);
+    // The full completion path too -- it fans out to the same scanners.
+    let scopes = resolve_with_source(&file.statements, src);
+    let cat = Catalog::default();
+    let _ = complete(src, &file, &scopes, &cat, TextSize::from(src.len().min(5) as u32));
+  }
 }

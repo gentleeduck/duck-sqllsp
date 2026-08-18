@@ -19,6 +19,19 @@
 //! same object, the live catalog wins because it has richer metadata
 //! (constraints, indexes, comments).
 
+/// Byte-safe `s[i..].starts_with(pat)`.
+///
+/// Every scanner in this module walks `i` over raw bytes, so slicing the
+/// `str` directly panics the instant a buffer holds a multi-byte
+/// character -- one CJK comment or accented identifier anywhere in a
+/// workspace `.sql` file was enough to take the whole scan down with
+/// "byte index is not a char boundary". Comparing bytes sidesteps the
+/// boundary question entirely, and every pattern here is ASCII.
+fn starts_with_at(s: &str, i: usize, pat: &str) -> bool {
+  s.as_bytes().get(i..).is_some_and(|b| b.starts_with(pat.as_bytes()))
+}
+
+
 use dsl_catalog::{
   CATALOG_VERSION, Catalog, Column, Constraint, ConstraintKind, ConstraintRef, Extension, Function, FunctionArg,
   IndexDef, Policy, Schema, Sequence, Table, TableKind, Trigger, Type, TypeKind,
@@ -412,7 +425,7 @@ fn recover_failed_create_tables(cat: &mut Catalog, src: &str) {
       while k < n && bytes[k].is_ascii_whitespace() {
         k += 1;
       }
-      if k + kw.len() <= n && upper[k..k + kw.len()] == *kw {
+      if k + kw.len() <= n && upper.as_bytes()[k..k + kw.len()] == *kw.as_bytes() {
         k += kw.len();
       }
     }
@@ -688,7 +701,7 @@ fn inherit_partition_columns(cat: &mut Catalog, src: &str) {
     while k < n && bytes[k].is_ascii_whitespace() {
       k += 1
     }
-    if upper[k..].starts_with("IF NOT EXISTS") {
+    if starts_with_at(&upper, k, "IF NOT EXISTS") {
       k += "IF NOT EXISTS".len();
       while k < n && bytes[k].is_ascii_whitespace() {
         k += 1
@@ -703,7 +716,7 @@ fn inherit_partition_columns(cat: &mut Catalog, src: &str) {
     while k < n && bytes[k].is_ascii_whitespace() {
       k += 1
     }
-    if !upper[k..].starts_with("PARTITION OF") {
+    if !starts_with_at(&upper, k, "PARTITION OF") {
       continue;
     }
     k += "PARTITION OF".len();
@@ -877,7 +890,7 @@ fn scan_table_comments(src: &str) -> std::collections::HashMap<String, String> {
     while k < bytes.len() && bytes[k].is_ascii_whitespace() {
       k += 1;
     }
-    if k + 2 > bytes.len() || !upper[k..].starts_with("IS") {
+    if k + 2 > bytes.len() || !starts_with_at(&upper, k, "IS") {
       from = after;
       continue;
     }
@@ -930,7 +943,7 @@ fn scan_indexes(src: &str) -> std::collections::HashMap<String, Vec<IndexDef>> {
       while k < bytes.len() && bytes[k].is_ascii_whitespace() {
         k += 1;
       }
-      if upper[k..].starts_with("ON ") {
+      if starts_with_at(&upper, k, "ON ") {
         k += 3;
       } else {
         from = after;
@@ -1098,7 +1111,7 @@ fn scan_column_comments(src: &str) -> std::collections::HashMap<String, String> 
     while k < bytes.len() && bytes[k].is_ascii_whitespace() {
       k += 1;
     }
-    if k + 2 > bytes.len() || !upper[k..].starts_with("IS") {
+    if k + 2 > bytes.len() || !starts_with_at(&upper, k, "IS") {
       from = after;
       continue;
     }
@@ -1207,13 +1220,13 @@ fn scan_owner_for(src: &str, name: &str) -> Option<String> {
     while k < bytes.len() && bytes[k].is_ascii_whitespace() {
       k += 1;
     }
-    if upper[k..].starts_with("IF EXISTS") {
+    if starts_with_at(&upper, k, "IF EXISTS") {
       k += 9;
       while k < bytes.len() && bytes[k].is_ascii_whitespace() {
         k += 1;
       }
     }
-    if upper[k..].starts_with("ONLY") {
+    if starts_with_at(&upper, k, "ONLY") {
       k += 4;
       while k < bytes.len() && bytes[k].is_ascii_whitespace() {
         k += 1;
@@ -1319,7 +1332,7 @@ fn scan_defaults_for(src: &str, name: &str) -> std::collections::HashMap<String,
             _ => {},
           }
           if depth == 0
-            && upper_line[i..].starts_with("DEFAULT")
+            && starts_with_at(&upper_line, i, "DEFAULT")
             && (i == 0 || !line_bytes[i - 1].is_ascii_alphanumeric() && line_bytes[i - 1] != b'_')
             && i + 7 < line_bytes.len()
             && line_bytes[i + 7].is_ascii_whitespace()
@@ -1353,20 +1366,14 @@ fn scan_defaults_for(src: &str, name: &str) -> std::collections::HashMap<String,
             },
             _ => {},
           }
-          if depth == 0 {
-            let tail_upper = &upper_line[j..];
-            if line_bytes[j] == b','
-              || tail_upper.starts_with(" NOT NULL")
-              || tail_upper.starts_with(" CHECK")
-              || tail_upper.starts_with(" REFERENCES")
-              || tail_upper.starts_with(" UNIQUE")
-              || tail_upper.starts_with(" PRIMARY KEY")
-              || tail_upper.starts_with(" GENERATED")
-              || tail_upper.starts_with(" COLLATE")
-            {
-              expr_end = j;
-              break;
-            }
+          if depth == 0
+            && (line_bytes[j] == b','
+              || [" NOT NULL", " CHECK", " REFERENCES", " UNIQUE", " PRIMARY KEY", " GENERATED", " COLLATE"]
+                .iter()
+                .any(|kw| starts_with_at(&upper_line, j, kw)))
+          {
+            expr_end = j;
+            break;
           }
           j += 1;
         }
@@ -2005,7 +2012,7 @@ fn find_function_end(src: &str, start: usize) -> usize {
   let mut in_dollar: Option<String> = None;
   while i < n {
     if let Some(tag) = &in_dollar {
-      if i + tag.len() <= n && &src[i..i + tag.len()] == tag.as_str() {
+      if i + tag.len() <= n && src.as_bytes()[i..i + tag.len()] == *tag.as_bytes() {
         i += tag.len();
         in_dollar = None;
         continue;
@@ -2113,14 +2120,14 @@ fn scan_clears(src: &str) -> Vec<(usize, String, ClearKind)> {
     while i < n && bytes[i].is_ascii_whitespace() {
       i += 1;
     }
-    if upper[i..].starts_with("TABLE") && i + 5 < n && bytes[i + 5].is_ascii_whitespace() {
+    if starts_with_at(&upper, i, "TABLE") && i + 5 < n && bytes[i + 5].is_ascii_whitespace() {
       i += 5;
       while i < n && bytes[i].is_ascii_whitespace() {
         i += 1;
       }
     }
     loop {
-      if upper[i..].starts_with("ONLY") && i + 4 < n && bytes[i + 4].is_ascii_whitespace() {
+      if starts_with_at(&upper, i, "ONLY") && i + 4 < n && bytes[i + 4].is_ascii_whitespace() {
         i += 4;
         while i < n && bytes[i].is_ascii_whitespace() {
           i += 1;
@@ -2164,7 +2171,7 @@ fn scan_clears(src: &str) -> Vec<(usize, String, ClearKind)> {
     while i < n && bytes[i].is_ascii_whitespace() {
       i += 1;
     }
-    if !upper[i..].starts_with("FROM") {
+    if !starts_with_at(&upper, i, "FROM") {
       from = at + 6;
       continue;
     }
@@ -2172,7 +2179,7 @@ fn scan_clears(src: &str) -> Vec<(usize, String, ClearKind)> {
     while i < n && bytes[i].is_ascii_whitespace() {
       i += 1;
     }
-    if upper[i..].starts_with("ONLY") && i + 4 < n && bytes[i + 4].is_ascii_whitespace() {
+    if starts_with_at(&upper, i, "ONLY") && i + 4 < n && bytes[i + 4].is_ascii_whitespace() {
       i += 4;
       while i < n && bytes[i].is_ascii_whitespace() {
         i += 1;
@@ -2225,7 +2232,7 @@ fn scan_insert_inserts(src: &str) -> Vec<(usize, String, i64)> {
     while i < n && bytes[i].is_ascii_whitespace() {
       i += 1;
     }
-    if upper[i..].starts_with("ONLY") && i + 4 < n && bytes[i + 4].is_ascii_whitespace() {
+    if starts_with_at(&upper, i, "ONLY") && i + 4 < n && bytes[i + 4].is_ascii_whitespace() {
       i += 4;
       while i < n && bytes[i].is_ascii_whitespace() {
         i += 1;
@@ -2258,7 +2265,7 @@ fn scan_insert_inserts(src: &str) -> Vec<(usize, String, i64)> {
     }
     // Find end-of-statement for this INSERT for the generate_series scan.
     let stmt_end = src[i..].find(';').map(|p| i + p).unwrap_or(n);
-    if upper[i..].starts_with("VALUES") {
+    if starts_with_at(&upper, i, "VALUES") {
       i += "VALUES".len();
       let mut tuples = 0i64;
       loop {
@@ -2371,7 +2378,7 @@ fn scan_insert_tuple_counts(src: &str) -> std::collections::HashMap<String, usiz
       i += 1;
     }
     // Optional `ONLY` keyword.
-    if upper[i..].starts_with("ONLY") && i + 4 < n && (bytes[i + 4] as char).is_whitespace() {
+    if starts_with_at(&upper, i, "ONLY") && i + 4 < n && (bytes[i + 4] as char).is_whitespace() {
       i += 4;
       while i < n && bytes[i].is_ascii_whitespace() {
         i += 1;
@@ -2403,7 +2410,7 @@ fn scan_insert_tuple_counts(src: &str) -> std::collections::HashMap<String, usiz
       i += 1;
     }
     // Look for VALUES; bail if next token is SELECT (INSERT ... SELECT).
-    if !upper[i..].starts_with("VALUES") {
+    if !starts_with_at(&upper, i, "VALUES") {
       from = i;
       continue;
     }
@@ -2532,7 +2539,7 @@ pub fn buffer_column_names(source: &str, table: &str) -> Vec<String> {
     let after_str = &source[rest_start..];
     let trim_lead = after_str.len() - after_str.trim_start().len();
     rest_start += trim_lead;
-    if upper[rest_start..].starts_with("IF NOT EXISTS") {
+    if starts_with_at(&upper, rest_start, "IF NOT EXISTS") {
       rest_start += "IF NOT EXISTS".len();
       let after2 = &source[rest_start..];
       rest_start += after2.len() - after2.trim_start().len();

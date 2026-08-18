@@ -11,14 +11,17 @@ pub mod context;
 pub mod contexts;
 pub mod create_index;
 pub mod create_table;
+pub mod detectors;
 pub mod engine;
 pub mod fallback;
 pub mod item;
+pub mod json_path;
+pub mod merge;
 pub mod phase;
 pub mod plpgsql_locals;
 pub mod render;
 pub mod source_tables;
 pub mod sources;
 
-pub use engine::complete;
+pub use engine::{complete, complete_with_derived};
 pub use item::{Item, ItemKind};

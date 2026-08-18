@@ -107,18 +107,20 @@ pub async fn refresh_catalog(state: ServerState, client: Client) {
       let cols: usize = cat.tables().map(|t| t.columns.len()).sum();
       let funcs = cat.functions.len();
       state.catalog.replace(cat);
+      // New schema = new analysis inputs; invalidate every cached
+      // `textDocument/diagnostic` result id.
+      state.bump_analysis_generation();
       let msg = format!("schema loaded: {tables} tables / {cols} columns / {funcs} functions");
       client.log_message(MessageType::INFO, &msg).await;
       end_progress(&client, &token, Some(msg)).await;
 
       // Diagnostics that previously fired against an empty catalog
       // (sql001 unresolved table, sql002 unknown column) clear once
-      // the live schema is known, so we re-run analysis on every
-      // open buffer. This must happen here -- the language server
-      // never gets a didChange to retrigger it.
-      for (uri, _) in state.documents.snapshot() {
-        crate::diagnostics::publish_for(&client, &state, &uri).await;
-      }
+      // the live schema is known, so every open buffer needs a fresh
+      // verdict. This must happen here -- the language server never
+      // gets a didChange to retrigger it. Push clients get a new
+      // publish per document; pull clients get one refresh request.
+      crate::diagnostics::invalidate_all(&client, &state).await;
     },
     Err(e) => {
       // WARNING (not ERROR) so editors don't pop a modal. The

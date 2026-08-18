@@ -56,6 +56,15 @@ pub fn hover(source: &str, offset: TextSize, catalog: &Catalog) -> Option<String
 /// Like `hover` but applies the caller's preferred keyword casing to
 /// every synthesised DDL fragment.
 pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: KeywordCase) -> Option<String> {
+  let file = dsl_parse::parse(source, dsl_parse::Dialect::Postgres);
+  hover_with_parsed(source, offset, &file, catalog, case)
+}
+
+/// Like `hover_with` but takes an already-parsed `file`, so a caller
+/// that maintains a per-document parse cache (dsl-server's
+/// `ParseCache`) can skip re-parsing the whole buffer on every hover
+/// request. `hover_with` itself parses fresh and delegates here.
+pub fn hover_with_parsed(source: &str, offset: TextSize, file: &dsl_parse::ParsedFile, catalog: &Catalog, case: KeywordCase) -> Option<String> {
   KW_CASE.with(|c| c.set(case));
   // Respect lexical boundaries: cursor inside `'...'` / `"..."` /
   // `-- comment` / `/* ... */` / `$$ ... $$` body for a non-PL/pgSQL
@@ -96,8 +105,7 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
   if let Some(card) = numeric_literal_hover(source, pos, catalog) {
     return Some(card);
   }
-  let parsed = dsl_parse::parse(source, dsl_parse::Dialect::Postgres);
-  if let Some(md) = ddl::column_decl_at(&parsed, source, offset) {
+  if let Some(md) = ddl::column_decl_at(file, source, offset) {
     return Some(md);
   }
   // Sequence reference inside `nextval('seq_name')` / `currval(...)`
@@ -151,7 +159,7 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
   // Cursor on a `*` token (SELECT projection / `u.*` / `count(*)`).
   // The lexer-based token_at skips non-word chars so the star never
   // makes it to the normal lookup path. Handle it explicitly.
-  if let Some(md) = star_hover(source, offset, catalog) {
+  if let Some(md) = star_hover(source, offset, file, catalog) {
     return Some(md);
   }
 
@@ -182,7 +190,7 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
       let last_seg = tok.rsplit('.').next().unwrap_or("");
       let on_right = part == last_seg;
       if on_right {
-        if let Some(md) = scope_column_lookup(source, offset, &tok, catalog) {
+        if let Some(md) = scope_column_lookup(source, offset, file, &tok, catalog) {
           return Some(md);
         }
         if let Some(md) = catalog_lookup(&part, catalog) {
@@ -196,7 +204,7 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
           return Some(md);
         }
       } else {
-        if let Some(md) = alias_lookup(source, offset, &part, catalog) {
+        if let Some(md) = alias_lookup(source, offset, file, &part, catalog) {
           return Some(md);
         }
         if let Some(md) = catalog_lookup(&part, catalog) {
@@ -227,21 +235,21 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
     }
     // Alias resolution -- if the cursor sits on `u` in `FROM users u`
     // or `JOIN orders AS o`, hover the underlying table.
-    if let Some(md) = alias_lookup(source, offset, &tok, catalog) {
+    if let Some(md) = alias_lookup(source, offset, file, &tok, catalog) {
       return Some(md);
     }
     // Cursor inside a CREATE TABLE body? Resolve the column against
     // just that table to avoid the "this column lives in 11 tables"
     // ambiguity card -- inside `pk_users_id PRIMARY KEY (id)` the
     // `id` means `users.id`, full stop.
-    if let Some(md) = enclosing_table_column(source, offset, &tok, catalog) {
+    if let Some(md) = enclosing_table_column(offset, file, &tok, catalog) {
       return Some(md);
     }
     // Same scoping for CREATE INDEX ... ON <table> (col), UPDATE
     // <table> SET col, DELETE FROM <table> WHERE col, INSERT INTO
     // <table> (col, ...) -- if we can name the single target table
     // from the surrounding text, narrow the hover to that table.
-    if let Some(md) = scoped_column_in_text(source, offset, &tok, catalog) {
+    if let Some(md) = scoped_column_in_text(source, offset, file, &tok, catalog) {
       return Some(md);
     }
     if let Some(md) = constraint_id::render_for(&tok, catalog) {
@@ -251,7 +259,7 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
     // `ur.id` inside a SELECT / UPDATE / DELETE, resolve via the
     // statement's FROM/JOIN bindings so the hover names the actual
     // origin table instead of a "lives in N tables" card.
-    if let Some(md) = scope_column_lookup(source, offset, &tok, catalog) {
+    if let Some(md) = scope_column_lookup(source, offset, file, &tok, catalog) {
       return Some(md);
     }
     // Role hover -- only resolves when the cursor sits in a role-name
@@ -1346,7 +1354,7 @@ fn cursor_on_double_colon(source: &str, offset: TextSize) -> bool {
 ///     card explaining the implicit-all semantics.
 ///
 /// Returns None when the cursor is not on a star.
-fn star_hover(source: &str, offset: TextSize, catalog: &Catalog) -> Option<String> {
+fn star_hover(source: &str, offset: TextSize, file: &dsl_parse::ParsedFile, catalog: &Catalog) -> Option<String> {
   let pos: usize = u32::from(offset) as usize;
   let bytes = source.as_bytes();
   if pos >= bytes.len() || bytes[pos] != b'*' {
@@ -1371,7 +1379,7 @@ fn star_hover(source: &str, offset: TextSize, catalog: &Catalog) -> Option<Strin
     }
     if id_start < id_end {
       let qualifier = source[id_start..id_end].trim_matches('"');
-      if let Some(md) = qualified_star_hover(source, offset, qualifier, catalog) {
+      if let Some(md) = qualified_star_hover(offset, file, qualifier, catalog) {
         return Some(md);
       }
     }
@@ -1414,17 +1422,16 @@ fn star_hover(source: &str, offset: TextSize, catalog: &Catalog) -> Option<Strin
     }
   }
   // Bare `*` in a SELECT projection.
-  unqualified_star_hover(source, offset, catalog)
+  unqualified_star_hover(offset, file, catalog)
 }
 
-fn qualified_star_hover(source: &str, offset: TextSize, alias: &str, catalog: &Catalog) -> Option<String> {
+fn qualified_star_hover(offset: TextSize, file: &dsl_parse::ParsedFile, alias: &str, catalog: &Catalog) -> Option<String> {
   // Resolve alias -> bound table via the existing alias_lookup path,
   // but we want the column list, not the table card. Find the
   // binding directly.
   let pos: usize = u32::from(offset) as usize;
-  let parsed = dsl_parse::parse(source, dsl_parse::Dialect::Postgres);
-  let scopes = dsl_resolve::resolve(&parsed.statements);
-  let idx = parsed.statements.iter().position(|s| {
+  let scopes = dsl_resolve::resolve(&file.statements);
+  let idx = file.statements.iter().position(|s| {
     let lo: u32 = s.range.start().into();
     let hi: u32 = s.range.end().into();
     pos >= lo as usize && pos <= hi as usize
@@ -1456,11 +1463,10 @@ fn qualified_star_hover(source: &str, offset: TextSize, alias: &str, catalog: &C
   ))
 }
 
-fn unqualified_star_hover(source: &str, offset: TextSize, catalog: &Catalog) -> Option<String> {
+fn unqualified_star_hover(offset: TextSize, file: &dsl_parse::ParsedFile, catalog: &Catalog) -> Option<String> {
   let pos: usize = u32::from(offset) as usize;
-  let parsed = dsl_parse::parse(source, dsl_parse::Dialect::Postgres);
   // Find the enclosing SELECT statement.
-  let stmt = parsed.statements.iter().find(|s| {
+  let stmt = file.statements.iter().find(|s| {
     let lo: u32 = s.range.start().into();
     let hi: u32 = s.range.end().into();
     pos >= lo as usize && pos <= hi as usize
@@ -1536,8 +1542,13 @@ fn near_role_slot(source: &str, pos: usize) -> bool {
     end -= 1;
   }
   let window = source[start..end].to_ascii_uppercase();
-  // Bare role-introducing keyword phrases.
-  for kw in ["OWNER TO", "GRANT", "REVOKE", "SET ROLE", "RESET ROLE", "POLICY", " TO "] {
+  // Bare role-introducing keyword phrases. Deliberately does NOT
+  // include a bare "POLICY" -- CREATE POLICY's role slot is `TO
+  // <role>`, already caught by " TO " below; a bare "POLICY" used to
+  // be in this list and matched any identifier within 60 chars of the
+  // word, including columns inside a completely unrelated USING (...)
+  // / WITH CHECK (...) expression.
+  for kw in ["OWNER TO", "GRANT", "REVOKE", "SET ROLE", "RESET ROLE", " TO "] {
     if window.contains(kw) {
       return true;
     }
@@ -1553,10 +1564,9 @@ fn near_role_slot(source: &str, pos: usize) -> bool {
 /// Find the CREATE TABLE body that encloses `offset` and resolve the
 /// column reference against it (using either the live catalog row when
 /// available, or the parsed buffer ColumnDef when not).
-fn enclosing_table_column(source: &str, offset: TextSize, token: &str, catalog: &Catalog) -> Option<String> {
+fn enclosing_table_column(offset: TextSize, file: &dsl_parse::ParsedFile, token: &str, catalog: &Catalog) -> Option<String> {
   let pos: usize = u32::from(offset) as usize;
-  let parsed = dsl_parse::parse(source, dsl_parse::Dialect::Postgres);
-  for stmt in &parsed.statements {
+  for stmt in &file.statements {
     let s: u32 = stmt.range.start().into();
     let e: u32 = stmt.range.end().into();
     if pos < s as usize || pos > e as usize {
@@ -1583,17 +1593,25 @@ fn enclosing_table_column(source: &str, offset: TextSize, token: &str, catalog: 
 /// the hover for the actual underlying table instead of "no match". When
 /// the cursor sits inside a `$$ ... $$` function body, the body text is
 /// re-parsed standalone so the alias resolves against its inner SELECT.
-fn alias_lookup(source: &str, offset: TextSize, token: &str, catalog: &Catalog) -> Option<String> {
+fn alias_lookup(source: &str, offset: TextSize, file: &dsl_parse::ParsedFile, token: &str, catalog: &Catalog) -> Option<String> {
   let pos: usize = u32::from(offset) as usize;
-  // First try resolving in the top-level statement at this offset.
-  if let Some(t) = resolve_alias_in(source, pos, token, catalog) {
+  // First try resolving in the top-level statement at this offset --
+  // uses the caller's already-parsed `file`, no parse of its own.
+  if let Some(t) = resolve_alias_in(source, pos, file, token, catalog) {
     return Some(t);
   }
-  // Fallback: re-parse the dollar-quoted body the cursor sits in.
+  // Fallback: re-parse the dollar-quoted body the cursor sits in. This
+  // is a genuinely different (and much smaller) parse target than
+  // `file` (parsed from the whole buffer), so it can't reuse `file`
+  // and still needs its own dsl_parse::parse call -- but it's only
+  // reached when the top-level resolution above (now free of any
+  // parse of its own) doesn't find anything, and only parses the body
+  // substring, not the whole buffer.
   if let Some((body_start, body_end)) = enclosing_dollar_body(source, pos) {
     let body = &source[body_start..body_end];
     let body_pos = pos.saturating_sub(body_start);
-    if let Some(t) = resolve_alias_in(body, body_pos, token, catalog) {
+    let body_file = dsl_parse::parse(body, dsl_parse::Dialect::Postgres);
+    if let Some(t) = resolve_alias_in(body, body_pos, &body_file, token, catalog) {
       return Some(t);
     }
   }
@@ -1653,11 +1671,10 @@ fn dotted_part_under_cursor(source: &str, offset: TextSize, tok: &str) -> Option
 /// when the column belongs to exactly one in-scope table. Falls back to
 /// `None` so the catalog-wide hover (which shows the "in N tables"
 /// table when ambiguous) still runs.
-fn scope_column_lookup(source: &str, offset: TextSize, tok: &str, catalog: &Catalog) -> Option<String> {
+fn scope_column_lookup(source: &str, offset: TextSize, file: &dsl_parse::ParsedFile, tok: &str, catalog: &Catalog) -> Option<String> {
   let pos: usize = u32::from(offset) as usize;
-  let parsed = dsl_parse::parse(source, dsl_parse::Dialect::Postgres);
-  let scopes = dsl_resolve::resolve_with_source(&parsed.statements, source);
-  let idx = parsed.statements.iter().position(|s| {
+  let scopes = dsl_resolve::resolve_with_source(&file.statements, source);
+  let idx = file.statements.iter().position(|s| {
     let lo: u32 = s.range.start().into();
     let hi: u32 = s.range.end().into();
     pos >= lo as usize && pos <= hi as usize
@@ -1725,13 +1742,12 @@ fn scope_column_lookup(source: &str, offset: TextSize, tok: &str, catalog: &Cata
   hit.map(|(t, c)| render::column(t, c))
 }
 
-/// Run the parse / resolve pipeline against `src`, find the statement
-/// containing `pos`, and return the underlying-table hover for `token`
-/// when it's an alias in that statement.
-fn resolve_alias_in(src: &str, pos: usize, token: &str, catalog: &Catalog) -> Option<String> {
-  let parsed = dsl_parse::parse(src, dsl_parse::Dialect::Postgres);
-  let scopes = dsl_resolve::resolve_with_source(&parsed.statements, src);
-  let idx = parsed.statements.iter().position(|s| {
+/// Run the resolve pipeline against `src`'s pre-parsed `file`, find the
+/// statement containing `pos`, and return the underlying-table hover
+/// for `token` when it's an alias in that statement.
+fn resolve_alias_in(src: &str, pos: usize, file: &dsl_parse::ParsedFile, token: &str, catalog: &Catalog) -> Option<String> {
+  let scopes = dsl_resolve::resolve_with_source(&file.statements, src);
+  let idx = file.statements.iter().position(|s| {
     let lo: u32 = s.range.start().into();
     let hi: u32 = s.range.end().into();
     pos >= lo as usize && pos <= hi as usize
@@ -1836,7 +1852,7 @@ fn enclosing_dollar_body(source: &str, pos: usize) -> Option<(usize, usize)> {
 /// Find the target table for the statement enclosing the cursor when
 /// it's a CREATE INDEX / UPDATE / DELETE FROM / INSERT INTO -- and look
 /// up `token` as a column of that single table.
-fn scoped_column_in_text(source: &str, offset: TextSize, token: &str, catalog: &Catalog) -> Option<String> {
+fn scoped_column_in_text(source: &str, offset: TextSize, file: &dsl_parse::ParsedFile, token: &str, catalog: &Catalog) -> Option<String> {
   let pos: usize = u32::from(offset) as usize;
   // Walk back to the last `;` (or start) to bound the current statement.
   let stmt_start = source[..pos].rfind(';').map(|i| i + 1).unwrap_or(0);
@@ -1875,8 +1891,7 @@ fn scoped_column_in_text(source: &str, offset: TextSize, token: &str, catalog: &
     return Some(render::column(t, c));
   }
   // Buffer-defined fallback (table being declared in same file).
-  let parsed = dsl_parse::parse(source, dsl_parse::Dialect::Postgres);
-  for stmt in &parsed.statements {
+  for stmt in &file.statements {
     if let dsl_parse::StatementKind::CreateTable(ct) = &stmt.kind
       && ct.table.name.eq_ignore_ascii_case(&table)
       && let Some(col) = ct.columns.iter().find(|c| c.name.eq_ignore_ascii_case(token))

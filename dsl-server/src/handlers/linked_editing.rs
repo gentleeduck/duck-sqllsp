@@ -17,6 +17,11 @@ pub fn run(state: &ServerState, params: LinkedEditingRangeParams) -> Option<Link
   let uri = &params.text_document_position_params.text_document.uri;
   let _g = crate::handlers::perf::Guard::with_uri("linked_editing", uri);
   let doc = state.documents.get(uri)?;
+  // Oversized buffer: bail rather than block the editor. See
+  // `documents::MAX_DOC_BYTES`.
+  if doc.too_large() {
+    return None;
+  }
   let offset = position::to_offset(&doc.rope, params.text_document_position_params.position);
   let pos: usize = u32::from(offset) as usize;
   let token = token_at(&doc.text, pos)?;

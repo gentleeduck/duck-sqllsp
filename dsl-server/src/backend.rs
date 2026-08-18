@@ -28,6 +28,14 @@ impl LanguageServer for Backend {
     // (`Run` / `EXPLAIN` CodeLens needs a VS Code-only client handler).
     self.state.set_client_name(params.client_info.as_ref().map(|c| c.name.clone()));
 
+    // Pull vs push diagnostics. A client that advertises
+    // `textDocument.diagnostic` will call `textDocument/diagnostic` on
+    // its own schedule; if we *also* keep pushing, both channels render
+    // and every finding shows up twice. Record the choice once here --
+    // `diagnostics::publish_for` honours it.
+    let pulls_diagnostics = params.capabilities.text_document.as_ref().and_then(|td| td.diagnostic.as_ref()).is_some();
+    self.state.set_client_pull_diagnostics(pulls_diagnostics);
+
     // Layer 1: initializationOptions from the editor.
     let mut effective = if let Some(opts) = params.initialization_options.clone() {
       config::parse(opts).duck_sqllsp
@@ -148,9 +156,7 @@ impl LanguageServer for Backend {
   }
 
   async fn did_change(&self, params: DidChangeTextDocumentParams) {
-    if let Some(change) = params.content_changes.into_iter().next() {
-      self.state.documents.update(&params.text_document.uri, change.text, params.text_document.version);
-    }
+    self.state.documents.apply_changes(&params.text_document.uri, params.content_changes, params.text_document.version);
     crate::diagnostics::publish_for(&self.client, &self.state, &params.text_document.uri).await;
     // Nudge clients to re-fetch inlay hints + code lenses + semantic
     // tokens. VS Code caches each per-document until told otherwise;
@@ -162,7 +168,14 @@ impl LanguageServer for Backend {
   }
 
   async fn did_close(&self, params: DidCloseTextDocumentParams) {
-    self.state.documents.close(&params.text_document.uri);
+    let uri = params.text_document.uri;
+    self.state.documents.close(&uri);
+    // Drop the format cache entry -- it holds a full copy of the
+    // buffer and nothing else ever evicts it.
+    self.state.forget_document(&uri);
+    // Retract published diagnostics. Without this the client keeps
+    // showing findings for a file that is no longer open.
+    crate::diagnostics::clear_for(&self.client, &self.state, &uri).await;
   }
 
   async fn did_save(&self, _params: DidSaveTextDocumentParams) {
@@ -187,8 +200,16 @@ impl LanguageServer for Backend {
     Ok(handlers::completion::run(&self.state, params))
   }
 
+  async fn completion_resolve(&self, item: CompletionItem) -> Result<CompletionItem> {
+    Ok(handlers::completion_resolve::run(item))
+  }
+
   async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
     Ok(handlers::hover::run(&self.state, params))
+  }
+
+  async fn diagnostic(&self, params: DocumentDiagnosticParams) -> Result<DocumentDiagnosticReportResult> {
+    Ok(handlers::diagnostic::run(&self.state, params))
   }
 
   async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
@@ -207,8 +228,16 @@ impl LanguageServer for Backend {
     Ok(handlers::formatting::run(&self.state, params))
   }
 
+  async fn range_formatting(&self, params: DocumentRangeFormattingParams) -> Result<Option<Vec<TextEdit>>> {
+    Ok(handlers::range_formatting::run(&self.state, params))
+  }
+
   async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
     Ok(handlers::references::run(&self.state, params))
+  }
+
+  async fn document_link(&self, params: DocumentLinkParams) -> Result<Option<Vec<DocumentLink>>> {
+    Ok(handlers::document_link::run(&self.state, params))
   }
 
   async fn document_highlight(&self, params: DocumentHighlightParams) -> Result<Option<Vec<DocumentHighlight>>> {
@@ -266,6 +295,13 @@ impl LanguageServer for Backend {
 
   async fn semantic_tokens_full(&self, params: SemanticTokensParams) -> Result<Option<SemanticTokensResult>> {
     Ok(handlers::semantic_tokens::run(&self.state, params))
+  }
+
+  async fn semantic_tokens_range(
+    &self,
+    params: SemanticTokensRangeParams,
+  ) -> Result<Option<SemanticTokensRangeResult>> {
+    Ok(handlers::semantic_tokens::run_range(&self.state, params))
   }
 
   async fn signature_help(&self, params: SignatureHelpParams) -> Result<Option<SignatureHelp>> {

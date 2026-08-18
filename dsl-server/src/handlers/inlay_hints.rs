@@ -18,13 +18,18 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
   let uri = params.text_document.uri;
   let _g = crate::handlers::perf::Guard::with_uri("inlay_hints", &uri);
   let doc = state.documents.get(&uri)?;
+  // Oversized buffer: bail rather than block the editor. See
+  // `documents::MAX_DOC_BYTES`.
+  if doc.too_large() {
+    return None;
+  }
   let live = state.catalog.read().clone();
   let cache = doc.parsed();
   let parsed = &cache.file;
   // Merge live catalog + buffer-derived tables + workspace .sql scan
   // so JOIN-on heuristics and SELECT * expansion see every CREATE
   // TABLE in the project, not just the open files.
-  let derived = dsl_completion::source_tables::from_source(parsed, &doc.text);
+  let derived = doc.derived_catalog();
   let ws_offline = state.workspace_offline_snapshot();
   let cat = dsl_completion::source_tables::merge(&dsl_completion::source_tables::merge(&live, &derived), &ws_offline);
 

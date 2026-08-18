@@ -25,8 +25,7 @@ pub fn run(state: &ServerState, params: WorkspaceSymbolParams) -> Option<Vec<Sym
   // show up in workspace symbol search too.
   let live = state.catalog.read().clone();
   let open_merged = state.documents.snapshot().into_iter().fold(live, |acc, (_, doc)| {
-    let cache = doc.parsed();
-    let derived = dsl_completion::source_tables::from_source(&cache.file, &doc.text);
+    let derived = doc.derived_catalog();
     dsl_completion::source_tables::merge(&acc, &derived)
   });
   // Also fold in the on-disk workspace scan so symbols hit objects

@@ -220,7 +220,7 @@ fn insert_values_signature(
       })
       .collect()
   } else {
-      let t = t?;
+    let t = t?;
     t.columns.iter().map(|c| (c.name.clone(), dsl_catalog::display_type(&c.data_type).to_string())).collect()
   };
   if params.is_empty() {

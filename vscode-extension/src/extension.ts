@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
 import { ExtensionContext, commands, window, workspace } from "vscode";
@@ -225,35 +226,95 @@ async function startClient(context: ExtensionContext) {
   }
 }
 
+/// Windows executables need an explicit `.exe` for both `fs.existsSync`
+/// and (without a shell) `child_process.spawn` -- Node doesn't
+/// replicate `cmd.exe`'s PATHEXT-based extension resolution on its
+/// own, and Cargo always produces `<name>.exe` on Windows. Returns
+/// `[name]` unchanged on every other platform, or when `name` already
+/// ends in `.exe`. `platform` is injectable (defaults to
+/// `process.platform`) so this stays a pure, directly-testable
+/// function even without a running VS Code host.
+export function executableCandidates(name: string, platform: NodeJS.Platform = process.platform): string[] {
+  if (platform === "win32" && !name.toLowerCase().endsWith(".exe")) {
+    return [name, `${name}.exe`];
+  }
+  return [name];
+}
+
 /// Try to locate the duck-sqllsp binary.
-///   * Absolute path -> check it exists.
+///   * Absolute path -> check it (and, on Windows, `<path>.exe`) exists.
 ///   * Bare name -> probe ~/.local/bin, ~/.cargo/bin, /usr/local/bin,
-///     /usr/bin, and finally trust the configured name (PATH-resolved
-///     at spawn time).
+///     /opt/homebrew/bin, /usr/bin (each with Windows `.exe` variants
+///     where applicable), then scan `$PATH` directly, and finally
+///     trust the configured name (PATH-resolved at spawn time) as a
+///     last resort.
+///
+/// `os.homedir()` (not `process.env.HOME`) throughout, so this
+/// resolves correctly on Windows too -- `HOME` isn't guaranteed to be
+/// set there, but `os.homedir()` reads `USERPROFILE` under the hood.
+/// The explicit `$PATH` scan exists because Node's `child_process.spawn`
+/// (which `vscode-languageclient` uses under the hood, without a
+/// shell) doesn't apply Windows' PATHEXT-based extension resolution
+/// the way a real shell would -- a bare name that's genuinely on PATH
+/// can otherwise silently fail to spawn on Windows even though it
+/// resolves fine from a terminal.
 async function resolveServerBin(configured: string): Promise<string | undefined> {
   // Expand `~` and `${env:VAR}`.
+  const home = os.homedir();
   const expand = (p: string) =>
-    p.replace(/^~(?=$|\/|\\)/, process.env.HOME ?? "~")
+    p.replace(/^~(?=$|\/|\\)/, home)
       .replace(/\$\{env:([A-Za-z_][A-Za-z_0-9]*)\}/g, (_, k) => process.env[k] ?? "");
   const candidate = expand(configured);
+
   if (path.isAbsolute(candidate)) {
-    return fs.existsSync(candidate) ? candidate : undefined;
+    for (const c of executableCandidates(candidate)) {
+      if (fs.existsSync(c)) return c;
+    }
+    return undefined;
   }
-  // Already on PATH? Try a quick `which`-style probe.
-  const probe = [
-    path.join(process.env.HOME ?? "", ".local", "bin", candidate),
-    path.join(process.env.HOME ?? "", ".cargo", "bin", candidate),
-    "/usr/local/bin/" + candidate,
-    "/opt/homebrew/bin/" + candidate,
-    "/usr/bin/" + candidate,
+
+  // Already on PATH? Try a quick `which`-style probe. `.cargo/bin` is
+  // the one that matters most in practice -- it's where the project's
+  // documented install method (`cargo install duck-sqllsp`) lands on
+  // every platform, including Windows.
+  const probeDirs = [
+    path.join(home, ".local", "bin"),
+    path.join(home, ".cargo", "bin"),
+    "/usr/local/bin",
+    "/opt/homebrew/bin",
+    "/usr/bin",
   ];
-  for (const p of probe) {
-    if (fs.existsSync(p)) {
-      outputChannel?.appendLine(`[ext] resolved bare \`${configured}\` -> ${p}`);
-      return p;
+  for (const dir of probeDirs) {
+    for (const name of executableCandidates(candidate)) {
+      const p = path.join(dir, name);
+      if (fs.existsSync(p)) {
+        outputChannel?.appendLine(`[ext] resolved bare \`${configured}\` -> ${p}`);
+        return p;
+      }
     }
   }
-  // Fall back to the bare name; OS PATH lookup might still succeed.
+
+  // Not in any of the well-known install locations -- scan $PATH
+  // directly for a definitive answer instead of just trusting
+  // spawn-time resolution (see the doc comment above for why that
+  // matters on Windows). `process.env.Path` covers the mixed-case
+  // spelling Windows sometimes uses for this variable.
+  const envPath = process.env.PATH ?? process.env.Path ?? "";
+  for (const dir of envPath.split(path.delimiter)) {
+    if (!dir) continue;
+    for (const name of executableCandidates(candidate)) {
+      const p = path.join(dir, name);
+      if (fs.existsSync(p)) {
+        outputChannel?.appendLine(`[ext] resolved bare \`${configured}\` from $PATH -> ${p}`);
+        return p;
+      }
+    }
+  }
+
+  // Fall back to the bare name; OS PATH lookup at spawn time might
+  // still succeed (e.g. a non-`.exe` shim on Windows the scan above
+  // didn't account for) -- same last resort as before this change, so
+  // this can only add coverage, never regress a case that used to work.
   return candidate;
 }
 

@@ -4,25 +4,30 @@
 //! [`dsl_format::format`], wrap the result in a whole-document TextEdit.
 //! All real work lives in `dsl-format`.
 
+use crate::documents::Document;
 use crate::state::ServerState;
-use tower_lsp::lsp_types::{DocumentFormattingParams, Position, Range, TextEdit};
+use tower_lsp::lsp_types::{DocumentFormattingParams, FormattingOptions, Position, Range, TextEdit};
 
-pub fn run(state: &ServerState, params: DocumentFormattingParams) -> Option<Vec<TextEdit>> {
-  let uri = &params.text_document.uri;
-  let _g = crate::handlers::perf::Guard::with_uri("formatting", uri);
-  let doc = state.documents.get(uri)?;
-  let original = doc.text.clone();
-  let cfg = state.config_snapshot();
-
+/// Resolve the effective [`dsl_format::FormatterStyle`] for one format
+/// request: global config, overlaid with the editor-sent
+/// `FormattingOptions`, then dialect-adjusted.
+///
+/// Shared by `textDocument/formatting` and
+/// `textDocument/rangeFormatting` so both honor the same knobs.
+pub(crate) fn resolve_style(
+  state: &ServerState,
+  doc: &Document,
+  options: &FormattingOptions,
+) -> dsl_format::FormatterStyle {
   // Honor the LSP-standard FormattingOptions the editor sent. tab_size
   // overrides the formatter's tabWidth (per-buffer wins over global
   // config) so the editor's `:set tabstop=2` is respected for this one
   // format request. insert_spaces is informational for now; sql-
   // formatter always emits spaces. trim_trailing_whitespace and
   // insert_final_newline are normalised already by the post-pass.
-  let mut formatter_style = cfg.style.formatter.clone();
-  if params.options.tab_size > 0 {
-    formatter_style.tab_width = params.options.tab_size as usize;
+  let mut style = state.config_snapshot().style.formatter.clone();
+  if options.tab_size > 0 {
+    style.tab_width = options.tab_size as usize;
   }
 
   // Dialect-aware formatter language. When the user hasn't pinned
@@ -30,8 +35,8 @@ pub fn run(state: &ServerState, params: DocumentFormattingParams) -> Option<Vec<
   // open buffer's dialect drive sql-formatter's `-l` flag so it
   // tokenises `\`backticks\`` (mysql) or `[brackets]` (mssql) instead
   // of treating them as garbage.
-  if formatter_style.language == "postgresql" {
-    formatter_style.language = match doc.dialect {
+  if style.language == "postgresql" {
+    style.language = match doc.dialect {
       dsl_parse::Dialect::Postgres => "postgresql".into(),
       dsl_parse::Dialect::MySql => "mysql".into(),
       dsl_parse::Dialect::SQLite => "sqlite".into(),
@@ -39,6 +44,16 @@ pub fn run(state: &ServerState, params: DocumentFormattingParams) -> Option<Vec<
       dsl_parse::Dialect::Generic => "sql".into(),
     };
   }
+  style
+}
+
+pub fn run(state: &ServerState, params: DocumentFormattingParams) -> Option<Vec<TextEdit>> {
+  let uri = &params.text_document.uri;
+  let _g = crate::handlers::perf::Guard::with_uri("formatting", uri);
+  let doc = state.documents.get(uri)?;
+  let original = doc.text.clone();
+  let cfg = state.config_snapshot();
+  let formatter_style = resolve_style(state, &doc, &params.options);
 
   // Format cache: hash (input + style key) to skip the sql-formatter +
   // align pipeline when nothing changed since the last call. The hash

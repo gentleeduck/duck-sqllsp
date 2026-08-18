@@ -68,7 +68,11 @@ pub fn split_statements(src: &str) -> Vec<(String, TextRange)> {
 
     if let Some(tag) = &dollar_tag {
       let closer = format!("${tag}$");
-      if src[i..].starts_with(&closer) {
+      // Byte comparison, not `src[i..]`: inside a dollar-quoted body
+      // the cursor advances one byte at a time, so it lands mid-
+      // character on any multi-byte content and slicing the `str`
+      // panics with "byte index is not a char boundary".
+      if src.as_bytes()[i..].starts_with(closer.as_bytes()) {
         i += closer.len();
         dollar_tag = None;
         continue;

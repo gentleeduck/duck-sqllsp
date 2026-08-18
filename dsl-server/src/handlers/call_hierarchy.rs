@@ -26,6 +26,11 @@ pub fn prepare(state: &ServerState, params: CallHierarchyPrepareParams) -> Optio
   let uri = &params.text_document_position_params.text_document.uri;
   let _g = perf::Guard::with_uri("call_hierarchy_prepare", uri);
   let doc = state.documents.get(uri)?;
+  // Oversized buffer: bail rather than block the editor. See
+  // `documents::MAX_DOC_BYTES`.
+  if doc.too_large() {
+    return None;
+  }
   let offset = position::to_offset(&doc.rope, params.text_document_position_params.position);
   let pos: usize = u32::from(offset) as usize;
   let name = token_at(&doc.text, pos)?;
