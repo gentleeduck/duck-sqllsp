@@ -697,6 +697,9 @@ pub mod merge_insert_references_target;
 pub mod publication_duplicate_schema;
 pub mod subscription_no_slot_name_with_create_false;
 pub mod publication_duplicate_table;
+pub mod loop_no_exit;
+pub mod for_loop_variable_shadows_column;
+pub mod exception_block_swallows_all;
 
 use crate::LintRule;
 
@@ -1404,5 +1407,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(publication_duplicate_schema::Rule),
     Box::new(subscription_no_slot_name_with_create_false::Rule),
     Box::new(publication_duplicate_table::Rule),
+    Box::new(loop_no_exit::Rule),
+    Box::new(for_loop_variable_shadows_column::Rule),
+    Box::new(exception_block_swallows_all::Rule),
   ]
 }
