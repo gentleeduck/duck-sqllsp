@@ -65,7 +65,7 @@ fn to_lsp_item(it: Item, style: &Style) -> CompletionItem {
   // `sortText` is a string; clients compare lexicographically. Use a
   // single ASCII digit prefix (0..9) so lower `sort_priority` wins.
   // The label tail breaks ties alphabetically within the same prio.
-  let sort_text = format!("{}{}", it.sort_priority.min(9), &label);
+  let sort_text = format!("{}{}", it.sort_priority.min(9), label);
   // For snippet items, prepend an "Expands to:" preview to the
   // documentation so users can see the final scaffold (with $1 / $0
   // placeholders cleaned out) before they pick it.

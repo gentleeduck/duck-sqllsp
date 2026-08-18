@@ -394,10 +394,9 @@ fn alter_column_type(upper: &str) -> Option<Vec<Item>> {
   // `ALTER COLUMN c TYPE <here>` (with or without `SET DATA`).
   let after = if let Some(at) = upper.rfind(" SET DATA TYPE ") {
     &upper[at + 15..]
-  } else if let Some(at) = upper.rfind(" TYPE ") {
-    &upper[at + 6..]
   } else {
-    return None;
+      let at = upper.rfind(" TYPE ")?;
+    &upper[at + 6..]
   };
   if after.contains("USING") || after.contains(';') {
     return None;
