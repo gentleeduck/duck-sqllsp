@@ -6,16 +6,25 @@ all-features = true
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "warn"
-# Transitive deps from `syntect` 5.x with no safe upgrade. Re-evaluate
-# whenever syntect bumps. None expose user-controlled input on the dmc
-# code path:
-# - bincode 1.3.3: used by syntect for serialised dump format, not on
-#   the parse path.
-# - yaml-rust 0.4.5: used by syntect for sublime-syntax YAML loading at
-#   build time, no user-controlled YAML at runtime.
 ignore = [
-  "RUSTSEC-2025-0141", # bincode unmaintained
-  "RUSTSEC-2024-0320", # yaml-rust unmaintained
+  # RUSTSEC-2023-0071 -- "Marvin Attack" timing sidechannel in `rsa`.
+  #
+  # Reached only through sqlx-mysql, which uses RSA to encrypt the
+  # password during the MySQL `sha256_password` /
+  # `caching_sha2_password` handshake:
+  #
+  #     rsa v0.9.10 <- sqlx-mysql <- sqlx
+  #
+  # The advisory states outright that no safe upgrade is available, and
+  # the only workaround offered is to avoid the crate where an attacker
+  # can observe timing -- which is not something a schema-introspection
+  # client can arrange. It is unreachable unless the user configures a
+  # MySQL connection, and MySQL is a first-class dialect here, so
+  # dropping the driver is not an option either.
+  #
+  # Re-evaluate whenever RustCrypto/RSA#626 lands a constant-time
+  # implementation.
+  "RUSTSEC-2023-0071",
 ]
 
 [licenses]
@@ -31,6 +40,9 @@ allow = [
   "MPL-2.0",
   "0BSD",
   "CC0-1.0",
+  # webpki-roots ships Mozilla's CA certificate bundle as data under the
+  # Community Data License Agreement. Pulled in by sqlx's rustls TLS.
+  "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.8
 
