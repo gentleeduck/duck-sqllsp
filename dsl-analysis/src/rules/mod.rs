@@ -656,6 +656,54 @@ pub mod where_true_placeholder;
 pub mod where_type_literal;
 pub mod window_frame_reversed;
 pub mod window_no_order;
+pub mod partition_by_no_key_in_pk;
+pub mod partition_range_bound_reversed;
+pub mod partition_by_expression_volatile;
+pub mod partition_by_duplicate_column;
+pub mod detach_partition_concurrently_in_tx;
+pub mod hash_partition_modulus_remainder;
+pub mod json_exists_bad_path;
+pub mod json_value_returning_without_on_error;
+pub mod json_query_wrapper_conflict;
+pub mod json_table_duplicate_column_name;
+pub mod is_json_redundant_with_jsonb_column;
+pub mod is_json_scalar_object_conflict;
+pub mod recursive_cte_cycle_column_reused;
+pub mod recursive_cte_missing_base_union;
+pub mod recursive_term_has_aggregate;
+pub mod recursive_term_has_order_or_limit;
+pub mod recursive_cte_outer_join_recursive_side;
+pub mod exclude_using_duplicate_column;
+pub mod exclude_using_btree_index_type;
+pub mod exclude_using_single_column_eq;
+pub mod domain_check_references_value_missing;
+pub mod domain_default_violates_check;
+pub mod composite_type_dup_field;
+pub mod jsonb_path_exists_static_false;
+pub mod jsonb_array_length_on_object_literal;
+pub mod jsonb_minus_integer_on_object;
+pub mod jsonb_build_object_null_key;
+pub mod grouping_sets_duplicate_set;
+pub mod grouping_function_arg_not_in_group_by;
+pub mod rollup_cube_duplicate_column;
+pub mod correlated_subquery_select_no_limit1_no_agg;
+pub mod lateral_join_references_later_table;
+pub mod full_outer_join_where_defeats;
+pub mod unique_nulls_distinct_redundant;
+pub mod create_statistics_no_columns;
+pub mod create_statistics_dup_column;
+pub mod merge_when_matched_unreachable;
+pub mod merge_insert_references_target;
+pub mod publication_duplicate_schema;
+pub mod subscription_no_slot_name_with_create_false;
+pub mod publication_duplicate_table;
+pub mod loop_no_exit;
+pub mod for_loop_variable_shadows_column;
+pub mod exception_block_swallows_all;
+pub mod execute_using_arg_count_mismatch;
+pub mod execute_into_arity_mismatch;
+pub mod raise_notice_in_hot_loop;
+pub mod variable_declared_unused;
 
 use crate::LintRule;
 
@@ -1322,5 +1370,53 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(dml_where_unknown_column::Rule),
     Box::new(function_arg_validation::Rule),
     Box::new(empty_expression_paren::Rule),
+    Box::new(partition_by_no_key_in_pk::Rule),
+    Box::new(partition_range_bound_reversed::Rule),
+    Box::new(partition_by_expression_volatile::Rule),
+    Box::new(partition_by_duplicate_column::Rule),
+    Box::new(detach_partition_concurrently_in_tx::Rule),
+    Box::new(hash_partition_modulus_remainder::Rule),
+    Box::new(json_exists_bad_path::Rule),
+    Box::new(json_value_returning_without_on_error::Rule),
+    Box::new(json_query_wrapper_conflict::Rule),
+    Box::new(json_table_duplicate_column_name::Rule),
+    Box::new(is_json_redundant_with_jsonb_column::Rule),
+    Box::new(is_json_scalar_object_conflict::Rule),
+    Box::new(recursive_cte_cycle_column_reused::Rule),
+    Box::new(recursive_cte_missing_base_union::Rule),
+    Box::new(recursive_term_has_aggregate::Rule),
+    Box::new(recursive_term_has_order_or_limit::Rule),
+    Box::new(recursive_cte_outer_join_recursive_side::Rule),
+    Box::new(exclude_using_duplicate_column::Rule),
+    Box::new(exclude_using_btree_index_type::Rule),
+    Box::new(exclude_using_single_column_eq::Rule),
+    Box::new(domain_check_references_value_missing::Rule),
+    Box::new(domain_default_violates_check::Rule),
+    Box::new(composite_type_dup_field::Rule),
+    Box::new(jsonb_path_exists_static_false::Rule),
+    Box::new(jsonb_array_length_on_object_literal::Rule),
+    Box::new(jsonb_minus_integer_on_object::Rule),
+    Box::new(jsonb_build_object_null_key::Rule),
+    Box::new(grouping_sets_duplicate_set::Rule),
+    Box::new(grouping_function_arg_not_in_group_by::Rule),
+    Box::new(rollup_cube_duplicate_column::Rule),
+    Box::new(correlated_subquery_select_no_limit1_no_agg::Rule),
+    Box::new(lateral_join_references_later_table::Rule),
+    Box::new(full_outer_join_where_defeats::Rule),
+    Box::new(unique_nulls_distinct_redundant::Rule),
+    Box::new(create_statistics_no_columns::Rule),
+    Box::new(create_statistics_dup_column::Rule),
+    Box::new(merge_when_matched_unreachable::Rule),
+    Box::new(merge_insert_references_target::Rule),
+    Box::new(publication_duplicate_schema::Rule),
+    Box::new(subscription_no_slot_name_with_create_false::Rule),
+    Box::new(publication_duplicate_table::Rule),
+    Box::new(loop_no_exit::Rule),
+    Box::new(for_loop_variable_shadows_column::Rule),
+    Box::new(exception_block_swallows_all::Rule),
+    Box::new(execute_using_arg_count_mismatch::Rule),
+    Box::new(execute_into_arity_mismatch::Rule),
+    Box::new(raise_notice_in_hot_loop::Rule),
+    Box::new(variable_declared_unused::Rule),
   ]
 }
