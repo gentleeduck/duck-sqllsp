@@ -2413,6 +2413,83 @@ fn plpgsql_body_second_statement_target_does_not_leak_first_statements_table() {
 }
 
 #[test]
+fn execute_dynamic_sql_select_from_offers_tables() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE 'SELECT * FROM ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"users"), "expected `users`; got {} items, sample {:?}", labels.len(), &labels[..labels.len().min(10)]);
+  assert!(labels.contains(&"orders"), "expected `orders`; got {labels:?}");
+}
+
+#[test]
+fn execute_dynamic_sql_where_offers_columns() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE 'SELECT * FROM users WHERE ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"id"), "expected `id`; got {} items", labels.len());
+  assert!(labels.contains(&"email"), "expected `email`; got {labels:?}");
+}
+
+#[test]
+fn execute_dynamic_sql_dollar_quoted_offers_tables() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE $sql$ SELECT * FROM ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"users"), "expected `users`; got {} items, sample {:?}", labels.len(), &labels[..labels.len().min(10)]);
+}
+
+#[test]
+fn execute_dynamic_sql_escaped_quote_offers_columns() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE 'SELECT * FROM users WHERE name = ''foo'' AND ";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"id"), "expected `id` (proves the `''`-unescape + offset-mapping is correct, not just that some completion fired); got {} items", labels.len());
+}
+
+#[test]
+fn execute_dynamic_sql_does_not_affect_unrelated_string_literal() {
+  let cat = catalog_with_users_and_orders();
+  let src = "INSERT INTO users (email) VALUES ('";
+  let items = complete_at(src, src.len(), &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.is_empty(), "a plain (non-EXECUTE) string literal must stay inert; got {} items: {labels:?}", labels.len());
+}
+
+#[test]
+fn execute_dynamic_sql_concatenation_stays_inert() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE 'SELECT * FROM ' || tbl_name; END; $$ LANGUAGE plpgsql;";
+  let cursor = src.find("FROM ").unwrap() + "FROM ".len();
+  let items = complete_at(src, cursor, &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.is_empty(), "concatenated EXECUTE should stay inert (0 items), matching today's behavior; got {} items: {labels:?}", labels.len());
+}
+
+#[test]
+fn execute_dynamic_sql_format_wrapped_stays_inert() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE format('SELECT * FROM %I', tbl); END; $$ LANGUAGE plpgsql;";
+  let cursor = src.find("SELECT").unwrap();
+  let items = complete_at(src, cursor, &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.is_empty(), "format()-wrapped EXECUTE should stay inert (0 items); got {} items: {labels:?}", labels.len());
+}
+
+#[test]
+fn execute_dynamic_sql_using_clause_still_offers_completion() {
+  let cat = catalog_with_users_and_orders();
+  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE 'SELECT * FROM users WHERE id = $1 AND ' USING 5; END; $$ LANGUAGE plpgsql;";
+  let cursor = src.find("' USING").unwrap();
+  let items = complete_at(src, cursor, &cat);
+  let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+  assert!(labels.contains(&"id"), "a trailing USING clause should not disqualify the string; expected `id`, got {} items", labels.len());
+}
+
+#[test]
 fn rls_policy_using_expr_offers_target_table_columns() {
   let cat = catalog_with_users_and_orders();
   let src = "CREATE POLICY p ON users USING (";

@@ -298,6 +298,40 @@ fn detect_json_path_key(
   Some(out)
 }
 
+/// `PRE_PHASE_DETECTORS` entry: cursor inside a PL/pgSQL `EXECUTE`
+/// statement's dynamic-SQL string. Extracts and (for single-quoted
+/// strings) unescapes the content, then recursively calls `complete`
+/// on it as an independent tiny buffer -- giving full phase parity
+/// with the top-level engine "for free" rather than re-implementing a
+/// subset of it. Positioned before `detect_inert_span` below so it
+/// wins the race for this specific case while every other string
+/// literal keeps that detector's inert-suppression behavior
+/// unchanged. `file`/`scopes` (the *outer* buffer's parse) are
+/// unused: this builds its own parse for the extracted substring,
+/// same as any other pure-text-check `Detector`. `Dialect::Postgres`
+/// is hardcoded -- `EXECUTE` and dollar-quoting are themselves
+/// Postgres-specific syntax.
+fn detect_execute_dynamic_sql(
+  source: &str,
+  offset: TextSize,
+  _file: &ParsedFile,
+  _scopes: &[Scope],
+  cat: &Catalog,
+) -> Option<Vec<Item>> {
+  let pos: usize = u32::from(offset) as usize;
+  let span = execute_dynamic_sql_span(source, pos)?;
+  let raw = &source[span.content_start..span.content_end];
+  let raw_cursor = pos - span.content_start;
+  let (content, inner_offset) = if span.dollar_quoted {
+    (raw.to_string(), raw_cursor)
+  } else {
+    unescape_single_quoted(raw, raw_cursor)
+  };
+  let inner_file = dsl_parse::parse(&content, dsl_parse::Dialect::Postgres);
+  let inner_scopes = dsl_resolve::resolve_with_source(&inner_file.statements, &content);
+  Some(complete(&content, &inner_file, &inner_scopes, cat, TextSize::from(inner_offset as u32)))
+}
+
 /// Cursor inside a string literal or comment? Suggesting keywords /
 /// tables / columns there is just noise -- the user is typing string
 /// content. Dollar-quoted bodies (PL/pgSQL) are NOT inert -- recurse
@@ -527,6 +561,7 @@ fn detect_contexts(source: &str, offset: TextSize, _file: &ParsedFile, _scopes: 
 const PRE_PHASE_DETECTORS: &[Detector] = &[
   detect_fresh_name_slot,
   detect_json_path_key,
+  detect_execute_dynamic_sql,
   detect_inert_span,
   detect_dot_context,
   detect_grouping_sets_inner_paren,

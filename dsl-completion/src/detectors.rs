@@ -8547,6 +8547,227 @@ pub(crate) fn cursor_in_inert_span(source: &str, offset: usize) -> bool {
   state != 0
 }
 
+pub(crate) struct ExecuteStringSpan {
+  /// Byte range of the string's content, excluding delimiters.
+  pub content_start: usize,
+  pub content_end: usize,
+  pub dollar_quoted: bool,
+}
+
+/// Word-boundary check: does `source[..pos]`, skipping trailing
+/// whitespace, end with `word` (case-insensitive)?
+fn preceded_by_word(source: &str, pos: usize, word: &str) -> bool {
+  let bytes = source.as_bytes();
+  let mut i = pos.min(bytes.len());
+  while i > 0 && bytes[i - 1].is_ascii_whitespace() {
+    i -= 1;
+  }
+  let word_end = i;
+  let mut word_start = i;
+  while word_start > 0 && (bytes[word_start - 1].is_ascii_alphanumeric() || bytes[word_start - 1] == b'_') {
+    word_start -= 1;
+  }
+  if word_start == word_end {
+    return false;
+  }
+  source[word_start..word_end].eq_ignore_ascii_case(word)
+}
+
+/// Does `source[pos..]`, skipping leading whitespace, start with `||`?
+fn followed_by_concat(source: &str, pos: usize) -> bool {
+  let bytes = source.as_bytes();
+  let mut i = pos;
+  while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+    i += 1;
+  }
+  bytes.get(i) == Some(&b'|') && bytes.get(i + 1) == Some(&b'|')
+}
+
+/// Byte span of the string literal (single- or dollar-quoted) that
+/// `offset` sits inside, when that string is the un-concatenated SQL
+/// text argument of a PL/pgSQL `EXECUTE` statement -- e.g. `EXECUTE
+/// 'SELECT * FROM <cursor>'` or `EXECUTE $sql$ SELECT * FROM <cursor>
+/// $sql$`. Mirrors `cursor_in_inert_span`'s state-machine walk (same
+/// string / comment / dollar-quote tracking, same recursion into a
+/// dollar-quoted body to reach a string nested inside it -- necessary
+/// because `EXECUTE` only appears inside such bodies) but returns the
+/// matched string's own span instead of a bool, and only when it's
+/// EXECUTE's target: the nearest word before its opening delimiter
+/// must be `EXECUTE` (word-boundary checked, so `format('...'` and
+/// other non-EXECUTE strings never match), and the nearest token
+/// after its closing delimiter must not be `||` (ruling out a
+/// concatenated segment).
+pub(crate) fn execute_dynamic_sql_span(source: &str, offset: usize) -> Option<ExecuteStringSpan> {
+  let bytes = source.as_bytes();
+  let n = bytes.len();
+  let limit = offset.min(n);
+  let mut i = 0usize;
+  // 0 = code, 1 = single-quoted string, 2 = line comment, 3 = block comment.
+  let mut state: u8 = 0;
+  let mut string_start = 0usize;
+  while i < limit {
+    match state {
+      0 => {
+        if bytes[i] == b'$' {
+          let mut t = i + 1;
+          while t < n && (bytes[t].is_ascii_alphanumeric() || bytes[t] == b'_') {
+            t += 1;
+          }
+          if t < n && bytes[t] == b'$' {
+            let tag_end = t + 1;
+            let tag = &bytes[i..tag_end];
+            let mut k = tag_end;
+            let mut close = None;
+            while k + tag.len() <= n {
+              if &bytes[k..k + tag.len()] == tag {
+                close = Some(k);
+                break;
+              }
+              k += 1;
+            }
+            let body_end = close.unwrap_or(n);
+            let body_close_end = close.map(|p| p + tag.len()).unwrap_or(n);
+            // Is this dollar-quoted string itself EXECUTE's target?
+            if offset >= tag_end
+              && offset <= body_end
+              && preceded_by_word(source, i, "EXECUTE")
+              && !followed_by_concat(source, body_close_end)
+            {
+              return Some(ExecuteStringSpan { content_start: tag_end, content_end: body_end, dollar_quoted: true });
+            }
+            // Cursor inside the body but not (directly) EXECUTE's own
+            // target -- recurse to look for a match nested deeper
+            // (the common case: this is the outer PL/pgSQL function
+            // body, and the real EXECUTE string is somewhere inside).
+            if offset > tag_end && offset <= body_end {
+              let body_off = offset - tag_end;
+              let body_src = &source[tag_end..body_end];
+              return execute_dynamic_sql_span(body_src, body_off).map(|s| ExecuteStringSpan {
+                content_start: s.content_start + tag_end,
+                content_end: s.content_end + tag_end,
+                dollar_quoted: s.dollar_quoted,
+              });
+            }
+            i = body_close_end;
+            continue;
+          }
+        }
+        match bytes[i] {
+          b'\'' => {
+            state = 1;
+            string_start = i;
+            i += 1;
+            continue;
+          },
+          b'-' if i + 1 < n && bytes[i + 1] == b'-' => {
+            state = 2;
+            i += 2;
+            continue;
+          },
+          b'/' if i + 1 < n && bytes[i + 1] == b'*' => {
+            state = 3;
+            i += 2;
+            continue;
+          },
+          _ => {
+            i += 1;
+          },
+        }
+      },
+      1 => {
+        if bytes[i] == b'\'' {
+          if i + 1 < n && bytes[i + 1] == b'\'' {
+            i += 2;
+            continue;
+          }
+          state = 0;
+          i += 1;
+          continue;
+        }
+        i += 1;
+      },
+      2 => {
+        if bytes[i] == b'\n' {
+          state = 0;
+        }
+        i += 1;
+      },
+      3 => {
+        if bytes[i] == b'*' && i + 1 < n && bytes[i + 1] == b'/' {
+          state = 0;
+          i += 2;
+          continue;
+        }
+        i += 1;
+      },
+      _ => break,
+    }
+  }
+  if state != 1 {
+    return None;
+  }
+  // Cursor is inside a single-quoted string that started at
+  // `string_start`. Find its closing quote (handling `''` escapes) to
+  // get the full span, then check it's EXECUTE's un-concatenated
+  // target. An unterminated string (no closing `'` anywhere in
+  // `source` -- the common live-completion case: the user hasn't
+  // typed the closing quote yet) falls back to extending through the
+  // end of `source`, mirroring the dollar-quote branch's own
+  // `close.unwrap_or(n)` fallback above.
+  let content_start = string_start + 1;
+  let mut k = limit;
+  let content_end = loop {
+    match bytes.get(k) {
+      None => break n,
+      Some(b'\'') => {
+        if bytes.get(k + 1) == Some(&b'\'') {
+          k += 2;
+          continue;
+        }
+        break k;
+      },
+      Some(_) => k += 1,
+    }
+  };
+  let close_end = (content_end + 1).min(n);
+  if !preceded_by_word(source, string_start, "EXECUTE") || followed_by_concat(source, close_end) {
+    return None;
+  }
+  Some(ExecuteStringSpan { content_start, content_end, dollar_quoted: false })
+}
+
+/// Un-escape a single-quoted EXECUTE string's raw content (`''` ->
+/// `'`) and map `cursor_in_raw` (a byte offset into `raw`, as returned
+/// by `execute_dynamic_sql_span`) to the corresponding offset in the
+/// unescaped output. Dollar-quoted content needs no unescaping and
+/// must not be passed through this -- callers check
+/// `ExecuteStringSpan::dollar_quoted` first.
+pub(crate) fn unescape_single_quoted(raw: &str, cursor_in_raw: usize) -> (String, usize) {
+  let bytes = raw.as_bytes();
+  let n = bytes.len();
+  let cursor_in_raw = cursor_in_raw.min(n);
+  let mut out = String::with_capacity(raw.len());
+  let mut mapped_cursor = cursor_in_raw;
+  let mut i = 0usize;
+  while i < n {
+    if bytes[i] == b'\'' && i + 1 < n && bytes[i + 1] == b'\'' {
+      // Collapsing `''` -> `'` removes one byte. Every collapse that
+      // finishes strictly before the raw cursor shifts the mapped
+      // cursor left by one.
+      if i + 1 < cursor_in_raw {
+        mapped_cursor -= 1;
+      }
+      out.push('\'');
+      i += 2;
+      continue;
+    }
+    let ch_len = raw[i..].chars().next().map(|c| c.len_utf8()).unwrap_or(1);
+    out.push_str(&raw[i..i + ch_len]);
+    i += ch_len;
+  }
+  (out, mapped_cursor)
+}
+
 /// True when the cursor is at a "fresh name" slot -- i.e. immediately
 /// after a `CREATE [OR REPLACE] <KIND> [IF NOT EXISTS]` keyword (or
 /// while typing the name itself). SQL DDL invents these names, so the
