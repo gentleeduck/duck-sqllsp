@@ -49,3 +49,49 @@ dmc = "dmc"
 mdx = "mdx"
 napi = "napi"
 gentleduck = "gentleduck"
+
+# SQL keyword prefixes and deliberately-misspelled identifiers used as
+# test fixtures. The completion engine is tested by feeding it partial
+# keywords (`SELEC`, `WHER`, ...), and several analysis rules are tested
+# with the very typos they exist to catch (`emial`, `tre`).
+CHEC = "CHEC"
+COMMEN = "COMMEN"
+DELET = "DELET"
+EXECUT = "EXECUT"
+FUNCTIO = "FUNCTIO"
+INSER = "INSER"
+RETUR = "RETUR"
+SAV = "SAV"
+SELEC = "SELEC"
+SELEKT = "SELEKT"
+UNIQU = "UNIQU"
+UPDAT = "UPDAT"
+WHE = "WHE"
+WHER = "WHER"
+emial = "emial"
+tre = "tre"
+
+# Real SQL / PostgreSQL vocabulary that looks like a typo.
+brin = "brin"
+iif = "iif"
+tru = "tru"
+PARMS = "PARMS"
+
+# Hyphenated prose prefixes ("mis-parse", "mis-identify") and word
+# fragments the checker splits out of larger identifiers ("RETURNed" ->
+# "Ned", "rest_after_ine" for IF-NOT-EXISTS).
+mis = "mis"
+Ned = "Ned"
+ine = "ine"
+# `hom` is verbatim from the PostgreSQL docs example for OVERLAY.
+hom = "hom"
+# Short local bindings and a test fixture filename.
+pn = "pn"
+ot = "ot"
+
+# Identifiers from dependencies and local code.
+# `larg` is pg_query's own field name for a join's left argument.
+larg = "larg"
+clen = "clen"
+crypted = "crypted"
+unparseable = "unparseable"

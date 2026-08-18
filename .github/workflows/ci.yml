@@ -61,7 +61,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ${{ github.job }}-${{ matrix.os }}
-      - run: cargo test --workspace --features pretty-code
+      - run: cargo test --workspace --all-features
 
   feature-matrix:
     name: cargo check (feature combos)
