@@ -1,5 +1,3 @@
-//! SQL keyword table. Each entry has a doc, example, and canonical
-//! Postgres docs URL. New keywords are added by appending to the `k!`
 //! sequence below.
 
 use crate::entry::{Entry, Kind, pg};
@@ -9,10 +7,18 @@ pub fn build() -> HashMap<&'static str, Entry> {
   let mut m = HashMap::new();
   macro_rules! k {
     ($label:expr, $doc:expr, $example:expr, $url:expr) => {
-      m.insert(
+      // Panic on a duplicate label rather than silently overwriting --
+      // a HashMap::insert collision here means a second entry for the
+      // same keyword was added without noticing the first, and
+      // whichever one lost would go permanently dead with no warning.
+      // See the 2026-08-18 dedup commit, which found and removed 63
+      // pre-existing duplicates this same way.
+      if let Some(prev) = m.insert(
         $label,
         Entry { label: $label, kind: Kind::Keyword, doc: $doc, signature: None, example: $example, url: $url },
-      );
+      ) {
+        panic!("duplicate dsl-knowledge keyword entry {:?}: new doc {:?} would silently replace existing doc {:?}", $label, $doc, prev.doc);
+      }
     };
   }
 
@@ -211,18 +217,7 @@ pub fn build() -> HashMap<&'static str, Entry> {
   );
 
   // Constraints
-  k!(
-    "PRIMARY KEY",
-    "Implicit UNIQUE + NOT NULL.",
-    "id UUID PRIMARY KEY DEFAULT gen_random_uuid()",
-    pg("ddl-constraints.html#DDL-CONSTRAINTS-PRIMARY-KEYS")
-  );
-  k!(
-    "FOREIGN KEY",
-    "Constrain a column to match the PRIMARY KEY of another table.",
-    "CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE",
-    pg("ddl-constraints.html#DDL-CONSTRAINTS-FK")
-  );
+
   k!(
     "REFERENCES",
     "Short form of FOREIGN KEY when used inline on a column.",
@@ -242,12 +237,7 @@ pub fn build() -> HashMap<&'static str, Entry> {
     pg("ddl-constraints.html#DDL-CONSTRAINTS-CHECK-CONSTRAINTS")
   );
   k!("NOT NULL", "Column may never be NULL.", "name TEXT NOT NULL", pg("ddl-constraints.html#id-1.5.4.6.6"));
-  k!(
-    "DEFAULT",
-    "Value inserted when the column is omitted.",
-    "created_at TIMESTAMPTZ NOT NULL DEFAULT now()",
-    pg("ddl-default.html")
-  );
+
   k!(
     "CASCADE",
     "ON DELETE / ON UPDATE action: also delete / update referencing rows.",
@@ -330,15 +320,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
     "EXPLAIN ANALYZE SELECT * FROM users WHERE id = $1;",
     pg("sql-explain.html")
   );
-
-  // -----------------------------------------------------------------------
-  // Standalone single-word forms.
-  //
-  // We already cover multi-word keywords above (INNER JOIN, ON CONFLICT,
-  // CREATE TABLE, ...). When the user hovers on just one of the words,
-  // we want a docs page too -- otherwise common tokens like JOIN, INTO,
-  // BY, USING render no hover at all.
-  // -----------------------------------------------------------------------
 
   // JOIN and modifiers
   k!(
@@ -575,12 +556,7 @@ pub fn build() -> HashMap<&'static str, Entry> {
   );
 
   // Transactions and set operations
-  k!(
-    "SAVEPOINT",
-    "Marker inside a transaction. ROLLBACK TO SAVEPOINT rewinds to it.",
-    "SAVEPOINT before_update;",
-    pg("sql-savepoint.html")
-  );
+
   k!(
     "TRANSACTION",
     "Synonym block for BEGIN / COMMIT / ROLLBACK.",
@@ -635,9 +611,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   );
 
   // -----------------------------------------------------------------------
-  // Bare forms of statement starters. Cursor on the first word should
-  // still hover even when the multi-word form is covered.
-  // -----------------------------------------------------------------------
   k!(
     "INSERT",
     "Insert new rows. Combine with RETURNING to get generated columns back.",
@@ -658,8 +631,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   );
   k!("GROUP", "Group rows. GROUP BY <cols>.", "GROUP BY user_id", pg("sql-select.html#SQL-GROUPBY"));
 
-  // -----------------------------------------------------------------------
-  // PL/pgSQL function / trigger definition keywords.
   // -----------------------------------------------------------------------
   k!(
     "FUNCTION",
@@ -746,12 +717,7 @@ pub fn build() -> HashMap<&'static str, Entry> {
     "DECLARE n INT := 0; BEGIN ... END;",
     pg("plpgsql-declarations.html")
   );
-  k!(
-    "LOOP",
-    "Unconditional loop. EXIT or RETURN to leave.",
-    "LOOP n := n + 1; EXIT WHEN n > 10; END LOOP;",
-    pg("plpgsql-control-structures.html#PLPGSQL-CONTROL-STRUCTURES-LOOPS")
-  );
+
   k!(
     "FOR",
     "PL/pgSQL loop. FOR i IN 1..10 / FOR r IN SELECT ...",
@@ -829,8 +795,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("STATEMENT", "Trigger granularity: per statement (default).", "FOR EACH STATEMENT", pg("sql-createtrigger.html"));
   k!("EXECUTE", "Run a function or dynamic SQL.", "EXECUTE FUNCTION audit_change();", pg("sql-createtrigger.html"));
 
-  // -----------------------------------------------------------------------
-  // Privileges, admin, set commands
   // -----------------------------------------------------------------------
   k!("GRANT", "Grant privileges to a role.", "GRANT SELECT ON users TO readonly;", pg("sql-grant.html"));
   k!("REVOKE", "Revoke privileges from a role.", "REVOKE SELECT ON users FROM readonly;", pg("sql-revoke.html"));
@@ -950,56 +914,21 @@ pub fn build() -> HashMap<&'static str, Entry> {
   );
 
   // -----------------------------------------------------------------------
-  // Predicate / advanced grouping / windowing.
-  // -----------------------------------------------------------------------
-  k!(
-    "COLLATE",
-    "Apply a collation to a string column or expression.",
-    "name TEXT COLLATE \"en_US.utf8\"",
-    pg("collation.html")
-  );
+
   k!(
     "WITHIN",
     "Used by ordered-set aggregates: agg() WITHIN GROUP (ORDER BY ...).",
     "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY age) FROM users;",
     pg("functions-aggregate.html#FUNCTIONS-ORDEREDSET-TABLE")
   );
-  k!(
-    "GROUPING SETS",
-    "Compute multiple groupings in one query.",
-    "GROUP BY GROUPING SETS ((a, b), (a), ())",
-    pg("queries-table-expressions.html#QUERIES-GROUPING-SETS")
-  );
-  k!(
-    "ROLLUP",
-    "Hierarchical groupings ending with the empty grouping.",
-    "GROUP BY ROLLUP (year, month)",
-    pg("queries-table-expressions.html#QUERIES-GROUPING-SETS")
-  );
-  k!(
-    "CUBE",
-    "All combinations of grouping columns.",
-    "GROUP BY CUBE (year, region)",
-    pg("queries-table-expressions.html#QUERIES-GROUPING-SETS")
-  );
-  k!(
-    "ESCAPE",
-    "Custom escape character in LIKE patterns.",
-    "WHERE name LIKE '50%%' ESCAPE '%'",
-    pg("functions-matching.html#FUNCTIONS-LIKE")
-  );
+
   k!(
     "SIMILAR",
     "SIMILAR TO: SQL-standard regex-like pattern matching.",
     "WHERE name SIMILAR TO '%(foo|bar)%'",
     pg("functions-matching.html#FUNCTIONS-SIMILARTO-REGEXP")
   );
-  k!(
-    "AT TIME ZONE",
-    "Re-interpret a timestamp in a different zone.",
-    "SELECT created_at AT TIME ZONE 'UTC' FROM users;",
-    pg("functions-datetime.html#FUNCTIONS-DATETIME-ZONECONVERT")
-  );
+
   k!(
     "INTERVAL",
     "Interval literal. INTERVAL '1 day'.",
@@ -1024,12 +953,7 @@ pub fn build() -> HashMap<&'static str, Entry> {
     "DELETE FROM ONLY parent WHERE id = $1;",
     pg("ddl-inherit.html")
   );
-  k!(
-    "WITH ORDINALITY",
-    "Add a row-number column when unnesting an array in FROM.",
-    "SELECT * FROM unnest(arr) WITH ORDINALITY",
-    pg("queries-table-expressions.html#QUERIES-TABLEFUNCTIONS")
-  );
+
   k!(
     "FETCH",
     "SQL-standard alternative to LIMIT. FETCH FIRST n ROWS ONLY.",
@@ -1129,12 +1053,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
     "CREATE TABLE big (...) TABLESPACE fast_ssd;",
     pg("manage-ag-tablespaces.html")
   );
-  k!(
-    "INHERITS",
-    "Single-parent table inheritance. Largely superseded by declarative partitioning.",
-    "CREATE TABLE child () INHERITS (parent);",
-    pg("ddl-inherit.html")
-  );
 
   // --- Partitioning ------------------------------------------------------
   k!(
@@ -1181,34 +1099,11 @@ pub fn build() -> HashMap<&'static str, Entry> {
     "SELECT * FROM accounts WHERE id = $1 FOR UPDATE;",
     pg("sql-select.html#SQL-FOR-UPDATE-SHARE")
   );
-  k!(
-    "FOR NO KEY UPDATE",
-    "Weaker than FOR UPDATE -- still blocks DELETE but not concurrent FK lookups.",
-    "SELECT * FROM accounts FOR NO KEY UPDATE;",
-    pg("sql-select.html#SQL-FOR-UPDATE-SHARE")
-  );
+
   k!(
     "FOR SHARE",
     "Share lock -- multiple readers, blocks writers.",
     "SELECT * FROM accounts FOR SHARE;",
-    pg("sql-select.html#SQL-FOR-UPDATE-SHARE")
-  );
-  k!(
-    "FOR KEY SHARE",
-    "Weakest row lock -- only prevents key/PK change.",
-    "SELECT * FROM accounts FOR KEY SHARE;",
-    pg("sql-select.html#SQL-FOR-UPDATE-SHARE")
-  );
-  k!(
-    "NOWAIT",
-    "Abort immediately if the row lock is held elsewhere.",
-    "SELECT * FROM job WHERE id = $1 FOR UPDATE NOWAIT;",
-    pg("sql-select.html#SQL-FOR-UPDATE-SHARE")
-  );
-  k!(
-    "SKIP LOCKED",
-    "Skip rows that are already locked rather than waiting -- ideal for queue tables.",
-    "SELECT * FROM job WHERE state='ready' FOR UPDATE SKIP LOCKED LIMIT 10;",
     pg("sql-select.html#SQL-FOR-UPDATE-SHARE")
   );
 
@@ -1222,12 +1117,7 @@ pub fn build() -> HashMap<&'static str, Entry> {
   );
 
   // --- Constraints: timing / IDENTITY ------------------------------------
-  k!(
-    "DEFERRABLE",
-    "Constraint can be checked at end of transaction; pair with INITIALLY DEFERRED/IMMEDIATE.",
-    "ALTER TABLE x ADD CONSTRAINT c CHECK (...) DEFERRABLE INITIALLY DEFERRED;",
-    pg("sql-set-constraints.html")
-  );
+
   k!(
     "INITIALLY DEFERRED",
     "Default mode of a DEFERRABLE constraint -- check at commit.",
@@ -1239,18 +1129,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
     "Constraint checked per statement (default for non-deferrable).",
     "DEFERRABLE INITIALLY IMMEDIATE",
     pg("sql-set-constraints.html")
-  );
-  k!(
-    "GENERATED ALWAYS AS",
-    "Stored or virtual generated column; the value comes from the expression on write.",
-    "GENERATED ALWAYS AS (price * qty) STORED",
-    pg("ddl-generated-columns.html")
-  );
-  k!(
-    "GENERATED BY DEFAULT AS",
-    "Sequence-backed identity column that the user MAY override at INSERT.",
-    "id BIGINT GENERATED BY DEFAULT AS IDENTITY",
-    pg("sql-createtable.html")
   );
 
   // --- Async / utility ---------------------------------------------------
@@ -1290,12 +1168,7 @@ pub fn build() -> HashMap<&'static str, Entry> {
     "CONTINUE WHEN should_skip(row);",
     pg("plpgsql-control-structures.html")
   );
-  k!(
-    "PERFORM",
-    "Execute a SELECT and discard its result (used inside PL/pgSQL).",
-    "PERFORM trigger_side_effect();",
-    pg("plpgsql-statements.html")
-  );
+
   k!(
     "FOUND",
     "Boolean set after the most recent SQL command (UPDATE/INSERT/SELECT INTO etc.).",
@@ -1454,7 +1327,7 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("DAY", "EXTRACT(DAY FROM <ts|interval>) -- day-of-month for timestamps; total days for intervals.", "SELECT EXTRACT(DAY FROM now());", pg("functions-datetime.html#FUNCTIONS-DATETIME-EXTRACT"));
   k!("DEC", "SQL-standard short form of DECIMAL. Same precision/scale rules.", "amount DEC(12,2)", pg("datatype-numeric.html#DATATYPE-NUMERIC-DECIMAL"));
   k!("DECIMAL", "Exact arbitrary-precision number. Alias `NUMERIC`. Use for money/measurements; never `float`.", "price DECIMAL(12,2) NOT NULL CHECK (price >= 0)", pg("datatype-numeric.html#DATATYPE-NUMERIC-DECIMAL"));
-  k!("DEFAULTS", "CREATE TABLE ... LIKE parent INCLUDING DEFAULTS -- copy column default expressions from the parent table.", "CREATE TABLE child (LIKE parent INCLUDING DEFAULTS);", pg("sql-createtable.html"));
+
   k!("DELIMITERS", "Legacy keyword for delimiter list in `CREATE OPERATOR` AST -- in modern PG superseded by `COPY DELIMITER '<c>'`.", "COPY t FROM '/tmp/d.csv' WITH (DELIMITER ',');", pg("sql-copy.html"));
   k!("DEPENDS", "ALTER ... DEPENDS ON EXTENSION <name> -- mark object as dependent on extension; DROP EXTENSION cascades.", "ALTER FUNCTION my_fn() DEPENDS ON EXTENSION my_ext;", pg("sql-alterfunction.html"));
   k!("DEPTH", "WITH RECURSIVE ... SEARCH DEPTH FIRST BY <cols> SET <out> -- DFS traversal annotation for recursive CTEs (PG14+).", "WITH RECURSIVE t AS (...) SEARCH DEPTH FIRST BY id SET ord SELECT * FROM t ORDER BY ord;", pg("queries-with.html#QUERIES-WITH-SEARCH"));
@@ -1467,7 +1340,7 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("ENCRYPTED", "CREATE/ALTER ROLE ... [ENCRYPTED] PASSWORD '<pw>' -- store password hashed (now always true; raw text retained for syntax compat).", "ALTER ROLE alice ENCRYPTED PASSWORD 'secret';", pg("sql-createrole.html"));
   k!("ENUM", "CREATE TYPE <t> AS ENUM ('a','b',...) -- fixed list of string values stored compactly. Add new labels with `ALTER TYPE ... ADD VALUE`.", "CREATE TYPE mood AS ENUM ('sad','ok','happy');", pg("datatype-enum.html"));
   k!("EVENT", "CREATE/ALTER/DROP EVENT TRIGGER -- fires on DDL events (ddl_command_start, ddl_command_end, table_rewrite, sql_drop).", "CREATE EVENT TRIGGER no_drops ON sql_drop EXECUTE FUNCTION block_drops();", pg("sql-createeventtrigger.html"));
-  k!("EXCLUDING", "CREATE TABLE ... LIKE parent EXCLUDING { ALL | COMMENTS | CONSTRAINTS | DEFAULTS | IDENTITY | INDEXES | STATISTICS | STORAGE | GENERATED | COMPRESSION } -- inverse of INCLUDING.", "CREATE TABLE child (LIKE parent INCLUDING ALL EXCLUDING INDEXES);", pg("sql-createtable.html"));
+
   k!("EXPRESSION", "ALTER TABLE ... ALTER COLUMN <c> { SET | DROP } EXPRESSION -- swap or remove the generated-column expression (PG16+).", "ALTER TABLE t ALTER COLUMN full_name SET EXPRESSION AS (first || ' ' || last);", pg("sql-altertable.html"));
   k!("EXTENSION", "CREATE / ALTER / DROP EXTENSION <name> -- packaged set of objects (tables, fns, ops) installed/upgraded as a unit.", "CREATE EXTENSION IF NOT EXISTS pg_trgm;", pg("sql-createextension.html"));
   k!("EXTERNAL", "ALTER TABLE ... ALTER COLUMN <c> SET STORAGE EXTERNAL -- TOAST out-of-line but uncompressed.", "ALTER TABLE t ALTER COLUMN body SET STORAGE EXTERNAL;", pg("sql-altertable.html"));
@@ -1598,7 +1471,7 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("SUBSTRING", "SUBSTRING(<s> FROM <pos> [FOR <len>]) | SUBSTRING(<s> FROM <pattern>) -- SQL-standard substring or POSIX-regex extract.", "SELECT SUBSTRING('Postgres' FROM 5 FOR 3), SUBSTRING('abc123', '[0-9]+');", pg("functions-string.html#FUNCTIONS-STRING-SQL"));
   k!("SUPPORT", "CREATE FUNCTION ... SUPPORT <fn> -- planner support function: gives row estimates / index info to the planner (PG12+, C only).", "CREATE FUNCTION my_fn(int) RETURNS int LANGUAGE c SUPPORT my_fn_support AS 'libfn', 'my_fn';", pg("sql-createfunction.html"));
   k!("SYMMETRIC", "BETWEEN SYMMETRIC <a> AND <b> -- swap operands if a > b, so the test always picks min..max.", "WHERE x BETWEEN SYMMETRIC 10 AND 1", pg("functions-comparison.html"));
-  k!("SYSID", "Legacy CREATE/ALTER USER ... SYSID <n> -- set role OID. Removed long ago; PG ignores it. Kept for parse compat.", "-- removed", pg("sql-createrole.html"));
+
   k!("SYSTEM", "ALTER SYSTEM SET <param> = <val> -- writes to postgresql.auto.conf; takes effect after `SELECT pg_reload_conf()` (or restart for some params).", "ALTER SYSTEM SET shared_buffers = '4GB';", pg("sql-altersystem.html"));
   k!("TABLES", "GRANT/REVOKE ... ON ALL TABLES IN SCHEMA / ALTER DEFAULT PRIVILEGES ... ON TABLES -- bulk privilege ops on tables (also covers views).", "GRANT SELECT ON ALL TABLES IN SCHEMA app TO readonly;", pg("sql-grant.html"));
   k!("TABLESAMPLE", "FROM <t> TABLESAMPLE <method> (<pct>) -- statistical sampling. Built-ins: BERNOULLI (per-row coin flip), SYSTEM (block-level, cheaper).", "SELECT * FROM big TABLESAMPLE BERNOULLI (1);", pg("sql-select.html#SQL-FROM"));
@@ -1615,7 +1488,7 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("TYPES", "ALTER DEFAULT PRIVILEGES ... ON TYPES -- ALTER DEFAULT PRIVILEGES target covering CREATE/USAGE on types.", "ALTER DEFAULT PRIVILEGES IN SCHEMA app GRANT USAGE ON TYPES TO svc;", pg("sql-alterdefaultprivileges.html"));
   k!("UESCAPE", "U&'<text>' UESCAPE '<c>' -- Unicode string literal with custom backslash. Same for identifiers: U&\"...\" UESCAPE '<c>'.", "SELECT U&'d\\0061t\\0061' UESCAPE '\\\\';", pg("sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-UESCAPE"));
   k!("UNCOMMITTED", "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED -- accepted for compat; PG silently upgrades to READ COMMITTED (no dirty reads).", "BEGIN ISOLATION LEVEL READ UNCOMMITTED;", pg("transaction-iso.html"));
-  k!("UNENCRYPTED", "Legacy `CREATE/ALTER ROLE ... UNENCRYPTED PASSWORD '<pw>'` -- PG10+ rejects this; passwords are always hashed.", "-- removed; use ENCRYPTED (or omit -- it's the default)", pg("sql-createrole.html"));
+
   k!("UNKNOWN", "Three-valued-logic third value (NULL in boolean context). `<bool> IS UNKNOWN` true when expression is NULL.", "WHERE active IS UNKNOWN", pg("functions-comparison.html"));
   k!("UNTIL", "CREATE/ALTER ROLE ... VALID UNTIL '<ts>' -- role password expiry; after that, login is refused.", "ALTER ROLE alice VALID UNTIL '2027-01-01';", pg("sql-createrole.html"));
   k!("USAGE", "GRANT USAGE ON { SCHEMA | SEQUENCE | DOMAIN | FDW | SERVER | TYPE | LANGUAGE } -- needed in addition to per-object privileges.", "GRANT USAGE ON SCHEMA app TO svc;", pg("sql-grant.html"));
@@ -1631,7 +1504,7 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("WHITESPACE", "xmlserialize(... [PRESERVE | STRIP] WHITESPACE) -- whether the serializer keeps insignificant whitespace (PG16+).", "SELECT xmlserialize(DOCUMENT x AS text PRESERVE WHITESPACE);", pg("functions-xml.html"));
   k!("WITHOUT", "Part of `TIMESTAMP/TIME WITHOUT TIME ZONE` and `WITHOUT OVERLAPS` (period FKs, PG17+).", "ts TIMESTAMP WITHOUT TIME ZONE", pg("datatype-datetime.html"));
   k!("WORK", "Noise word in `COMMIT [WORK]` / `ROLLBACK [WORK]` / `BEGIN [WORK]` -- SQL-standard, no effect.", "COMMIT WORK;", pg("sql-commit.html"));
-  k!("WRAPPER", "CREATE/ALTER/DROP FOREIGN DATA WRAPPER -- FDW handler that knows how to talk to remote data sources.", "CREATE FOREIGN DATA WRAPPER postgres_fdw HANDLER postgres_fdw_handler VALIDATOR postgres_fdw_validator;", pg("sql-createforeigndatawrapper.html"));
+
   k!("WRITE", "SET TRANSACTION READ WRITE -- default; allow writes for the current xact. Inverse of READ ONLY.", "BEGIN READ WRITE;", pg("sql-set-transaction.html"));
   k!("XML", "PG XML data type. Stores well-formed XML documents or content fragments; query with `XMLEXISTS`, `XMLTABLE`, `xpath()`.", "doc XML NOT NULL CHECK (xpath_exists('/root', doc))", pg("datatype-xml.html"));
   k!("XMLATTRIBUTES", "Part of `XMLELEMENT(NAME tag, XMLATTRIBUTES(<expr> AS <name>, ...), <content>)` -- build element attribute list.", "SELECT XMLELEMENT(NAME a, XMLATTRIBUTES(id, ts AS created), body);", pg("functions-xml.html#FUNCTIONS-PRODUCING-XML"));
@@ -1691,11 +1564,9 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("ILIKE ESCAPE", "<expr> ILIKE '<pattern>' ESCAPE '<char>' -- case-insensitive LIKE with custom escape.", "WHERE name ILIKE 'A/_' ESCAPE '/'", pg("functions-matching.html#FUNCTIONS-LIKE"));
   k!("ESCAPE", "Escape-char clause: LIKE / ILIKE / SIMILAR TO ... ESCAPE '<char>'. Default is the single backslash.", "name LIKE 'a\\%b' ESCAPE '\\\\'", pg("functions-matching.html#FUNCTIONS-LIKE"));
   // ---- POSITION / OVERLAY remaining bits ----
-  k!("OVERLAY PLACING", "OVERLAY(<s> PLACING <r> FROM <pos> [FOR <len>]) -- SQL-standard substring replacement.", "SELECT OVERLAY('Postgres' PLACING 'SQL' FROM 5);", pg("functions-string.html#FUNCTIONS-STRING-OTHER"));
+
   k!("OVERLAY FROM", "Trailing part of OVERLAY(... FROM <pos>) -- start position is 1-based.", "OVERLAY('abc' PLACING 'X' FROM 2)", pg("functions-string.html#FUNCTIONS-STRING-OTHER"));
   k!("OVERLAY FOR", "Optional length: OVERLAY(... FROM <pos> FOR <len>).", "OVERLAY('abcdef' PLACING 'XY' FROM 2 FOR 3)", pg("functions-string.html#FUNCTIONS-STRING-OTHER"));
-  // ---- TRIM standard syntax variants ----
-  k!("TRIM FROM", "TRIM([{LEADING|TRAILING|BOTH}] [<chars>] FROM <text>) -- explicit chars argument.", "TRIM(LEADING '0' FROM '0042')", pg("functions-string.html"));
   // ---- SQL standard INTERVAL field qualifiers ----
   k!("YEAR TO MONTH", "INTERVAL '<n>' YEAR TO MONTH -- SQL-standard year-month interval qualifier; constrains the precision.", "SELECT INTERVAL '1-6' YEAR TO MONTH;", pg("datatype-datetime.html#DATATYPE-INTERVAL-INPUT"));
   k!("DAY TO HOUR", "INTERVAL '<n>' DAY TO HOUR -- restrict to day+hour precision.", "INTERVAL '2 3' DAY TO HOUR", pg("datatype-datetime.html#DATATYPE-INTERVAL-INPUT"));
@@ -1721,19 +1592,16 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("NATIONAL CHARACTER VARYING", "NATIONAL CHARACTER VARYING(<n>) -- SQL-standard alias of VARCHAR(n).", "name NATIONAL CHARACTER VARYING(64)", pg("datatype-character.html"));
   k!("CHARACTER SET", "CHARACTER SET <name> -- SQL-standard; PG accepts the syntax but ignores it (encoding is per-database).", "name VARCHAR(64) CHARACTER SET utf8", pg("datatype-character.html"));
   // ---- SQL standard CAST helpers ----
-  k!("AS BIGINT", "CAST(... AS BIGINT) -- 8-byte signed integer.", "SELECT CAST(x AS BIGINT);", pg("sql-expressions.html#SQL-SYNTAX-TYPE-CASTS"));
+
   k!("AS SMALLINT", "CAST(... AS SMALLINT) -- 2-byte signed integer.", "SELECT CAST(x AS SMALLINT);", pg("sql-expressions.html#SQL-SYNTAX-TYPE-CASTS"));
   k!("AS INTEGER", "CAST(... AS INTEGER) -- 4-byte signed integer.", "SELECT CAST(x AS INTEGER);", pg("sql-expressions.html#SQL-SYNTAX-TYPE-CASTS"));
-  k!("AS NUMERIC", "CAST(... AS NUMERIC(p, s)) -- exact decimal with precision/scale.", "SELECT CAST(price AS NUMERIC(10,2));", pg("sql-expressions.html#SQL-SYNTAX-TYPE-CASTS"));
+
   k!("AS REAL", "CAST(... AS REAL) -- 4-byte float.", "SELECT CAST(x AS REAL);", pg("sql-expressions.html#SQL-SYNTAX-TYPE-CASTS"));
   k!("AS DOUBLE PRECISION", "CAST(... AS DOUBLE PRECISION) -- 8-byte float.", "SELECT CAST(x AS DOUBLE PRECISION);", pg("sql-expressions.html#SQL-SYNTAX-TYPE-CASTS"));
-  k!("AS DATE", "CAST(... AS DATE) -- calendar date, no time/zone.", "SELECT CAST(ts AS DATE);", pg("sql-expressions.html#SQL-SYNTAX-TYPE-CASTS"));
-  k!("AS TIME", "CAST(... AS TIME) -- time of day, no zone.", "SELECT CAST(ts AS TIME);", pg("sql-expressions.html#SQL-SYNTAX-TYPE-CASTS"));
-  k!("AS TIMESTAMPTZ", "CAST(... AS TIMESTAMPTZ) -- with time zone (PG stores as UTC).", "SELECT CAST(ts AS TIMESTAMPTZ);", pg("sql-expressions.html#SQL-SYNTAX-TYPE-CASTS"));
-  k!("AS BOOLEAN", "CAST(... AS BOOLEAN) -- accepts 't','f','yes','no',1,0.", "SELECT CAST(flag AS BOOLEAN);", pg("sql-expressions.html#SQL-SYNTAX-TYPE-CASTS"));
+
   // ---- ORDER BY collation helpers (SQL standard) ----
   k!("COLLATE", "ORDER BY <col> COLLATE \"<collation>\" -- pick a non-default collation for ordering / comparisons.", "ORDER BY name COLLATE \"de-DE-x-icu\"", pg("collation.html"));
-  k!("WITH ORDINALITY", "FROM <set-returning-fn>(...) WITH ORDINALITY -- append an `ordinality` bigint column starting at 1.", "SELECT * FROM unnest(ARRAY['a','b']) WITH ORDINALITY AS t(v, ord);", pg("queries-table-expressions.html"));
+
   // ---- Aggregate / window-function modifier syntax ----
   k!("FILTER", "<agg>(...) FILTER (WHERE <pred>) -- conditionally include rows in the aggregate.", "SELECT count(*) FILTER (WHERE flag) FROM t;", pg("sql-expressions.html#SYNTAX-AGGREGATES"));
   k!("FILTER (WHERE", "Same as FILTER WHERE -- aggregate-only WHERE predicate.", "count(*) FILTER (WHERE active)", pg("sql-expressions.html#SYNTAX-AGGREGATES"));
@@ -1807,22 +1675,18 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("MAPPING REPLACE", "ALTER TEXT SEARCH CONFIGURATION <c> ALTER MAPPING REPLACE <old_dict> WITH <new_dict> -- swap a dictionary without re-listing token types.", "ALTER TEXT SEARCH CONFIGURATION en ALTER MAPPING REPLACE simple WITH english_stem;", pg("sql-altertsconfig.html"));
   // ---- RULE INSTEAD WITH ----
   k!("RULE INSTEAD", "CREATE RULE <name> AS ON <event> TO <rel> DO INSTEAD <action> -- replace the original DML with the rule's action.", "CREATE RULE no_delete AS ON DELETE TO t DO INSTEAD NOTHING;", pg("sql-createrule.html"));
-  k!("DO INSTEAD NOTHING", "CREATE RULE ... DO INSTEAD NOTHING -- suppress the original DML entirely.", "CREATE RULE block_ins AS ON INSERT TO t DO INSTEAD NOTHING;", pg("sql-createrule.html"));
-  k!("DO INSTEAD", "CREATE RULE ... DO INSTEAD <action> -- replace the original DML.", "DO INSTEAD INSERT INTO log VALUES (...)", pg("sql-createrule.html"));
+
   // ---- GENERATED column extras ----
   k!("GENERATED ALWAYS AS STORED", "PG12+ stored generated column: computed expression materialised on disk (only STORED was supported pre-PG18; VIRTUAL added in PG18).", "amount_with_tax NUMERIC GENERATED ALWAYS AS (amount * 1.2) STORED", pg("ddl-generated-columns.html"));
   k!("GENERATED ALWAYS AS", "Generic prefix used by both identity (`AS IDENTITY`) and computed (`AS (<expr>) STORED|VIRTUAL`) generated columns.", "GENERATED ALWAYS AS (amount * 1.2) STORED", pg("ddl-generated-columns.html"));
   k!("GENERATED BY DEFAULT AS", "Identity-only prefix: GENERATED BY DEFAULT AS IDENTITY -- user can override; only valid with IDENTITY (not computed expressions).", "id int GENERATED BY DEFAULT AS IDENTITY", pg("sql-createtable.html"));
-  k!("AS IDENTITY", "GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY [ (<sequence options>) ] -- modern identity column (preferred over SERIAL).", "id int GENERATED ALWAYS AS IDENTITY (START WITH 1000)", pg("sql-createtable.html"));
+
   k!("IDENTITY (", "AS IDENTITY ( <sequence_options> ) -- supply optional sequence parameters (INCREMENT/MINVALUE/MAXVALUE/CACHE/CYCLE).", "AS IDENTITY (INCREMENT 5 START 100 CACHE 20)", pg("sql-createtable.html"));
   // ---- INHERITS / OF / TYPED tables ----
   k!("INHERITS", "CREATE TABLE child () INHERITS (<parent>[, ...]) -- multiple-inheritance table; rows of children visible from parent unless ONLY is used.", "CREATE TABLE cars () INHERITS (vehicles);", pg("ddl-inherit.html"));
   k!("CREATE TABLE OF", "CREATE TABLE <name> OF <composite_type> -- typed table whose columns mirror the composite type.", "CREATE TABLE my_t OF address_t;", pg("sql-createtable.html"));
   k!("OF TYPE", "Generic spelling of `OF <composite_type>` -- table inherits its column shape from a composite type.", "CREATE TABLE t OF address_t (PRIMARY KEY (id));", pg("sql-createtable.html"));
   k!("NOT OF", "ALTER TABLE <name> NOT OF -- detach a typed table from its composite type (PG13+).", "ALTER TABLE my_t NOT OF;", pg("sql-altertable.html"));
-  // ---- FK NULLS NOT DISTINCT ----
-  k!("NULLS NOT DISTINCT", "UNIQUE / PRIMARY KEY / EXCLUDE constraint modifier (PG15+): treat NULLs as equal, so duplicate NULLs are rejected.", "UNIQUE NULLS NOT DISTINCT (email)", pg("sql-createtable.html"));
-  k!("NULLS DISTINCT", "Default for UNIQUE constraints -- NULLs are considered distinct (multiple NULLs allowed).", "UNIQUE NULLS DISTINCT (col)", pg("sql-createtable.html"));
   // ---- Index OPCLASS specifics ----
   k!("OPERATOR CLASS", "CREATE INDEX ix ON t USING gin (<col> <opclass>) -- choose the operator class explicitly; needed for non-default ops (e.g. jsonb_path_ops, gin_trgm_ops).", "CREATE INDEX ix_doc ON docs USING gin (data jsonb_path_ops);", pg("sql-createopclass.html"));
   k!("jsonb_path_ops", "GIN opclass for jsonb that indexes only path -> value pairs. Faster + smaller than jsonb_ops but loses the `?` `?|` `?&` ops.", "USING gin (data jsonb_path_ops)", pg("datatype-json.html#JSON-INDEXING"));
@@ -1883,16 +1747,7 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("CONNECTION LIMIT", "CREATE/ALTER ROLE ... CONNECTION LIMIT <n> -- cap concurrent sessions per role (-1 = unlimited, default).", "ALTER ROLE bob CONNECTION LIMIT 5;", pg("sql-createrole.html"));
   k!("ENCRYPTED PASSWORD", "CREATE/ALTER ROLE ... ENCRYPTED PASSWORD '<plaintext>' -- SCRAM-hash on the way in (default behavior).", "CREATE ROLE bob LOGIN ENCRYPTED PASSWORD 'secret';", pg("sql-createrole.html"));
   k!("UNENCRYPTED", "CREATE/ALTER ROLE ... UNENCRYPTED PASSWORD '...' -- deprecated; PG13+ rejects this form.", "-- avoid: ALTER ROLE bob UNENCRYPTED PASSWORD '...'", pg("sql-createrole.html"));
-  k!("SUPERUSER", "CREATE/ALTER ROLE ... SUPERUSER -- bypass every permission check. Reserve for admin role only.", "ALTER ROLE admin SUPERUSER;", pg("sql-createrole.html"));
-  k!("NOSUPERUSER", "Default for new roles -- explicit denial of SUPERUSER.", "CREATE ROLE app LOGIN NOSUPERUSER;", pg("sql-createrole.html"));
-  k!("CREATEDB", "CREATE/ALTER ROLE ... CREATEDB -- allow database creation.", "CREATE ROLE app CREATEDB;", pg("sql-createrole.html"));
-  k!("NOCREATEDB", "Default for new roles -- explicit denial of CREATEDB.", "CREATE ROLE app NOCREATEDB;", pg("sql-createrole.html"));
-  k!("CREATEROLE", "CREATE/ALTER ROLE ... CREATEROLE -- allow creating + managing other roles.", "CREATE ROLE admin CREATEROLE;", pg("sql-createrole.html"));
-  k!("NOCREATEROLE", "Default for new roles -- explicit denial of CREATEROLE.", "CREATE ROLE app NOCREATEROLE;", pg("sql-createrole.html"));
-  k!("REPLICATION", "CREATE/ALTER ROLE ... REPLICATION -- allow connections in replication mode (logical/physical).", "CREATE ROLE rep_user LOGIN REPLICATION PASSWORD '...';", pg("sql-createrole.html"));
-  k!("NOREPLICATION", "Default for new roles -- explicit denial of REPLICATION.", "CREATE ROLE app NOREPLICATION;", pg("sql-createrole.html"));
-  k!("BYPASSRLS", "CREATE/ALTER ROLE ... BYPASSRLS -- skip every row-level security policy.", "ALTER ROLE migrator BYPASSRLS;", pg("sql-createrole.html"));
-  k!("NOBYPASSRLS", "Default for new roles -- explicit denial of BYPASSRLS.", "CREATE ROLE app NOBYPASSRLS;", pg("sql-createrole.html"));
+
   k!("INHERIT ROLE", "CREATE/ALTER ROLE ... INHERIT -- automatically gain privileges of granted roles (default).", "ALTER ROLE bob INHERIT;", pg("sql-createrole.html"));
   k!("NOINHERIT", "CREATE/ALTER ROLE ... NOINHERIT -- require explicit SET ROLE to use granted role's privileges.", "ALTER ROLE app NOINHERIT;", pg("sql-createrole.html"));
   k!("IN ROLE", "CREATE ROLE ... IN ROLE <existing>[, ...] -- add the new role as a member of these.", "CREATE ROLE alice LOGIN IN ROLE app_users;", pg("sql-createrole.html"));
@@ -1921,15 +1776,13 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("COMMENT ON OPERATOR FAMILY", "COMMENT ON OPERATOR FAMILY <name> USING <am> IS '<text>'.", "COMMENT ON OPERATOR FAMILY of USING btree IS '';", pg("sql-comment.html"));
   k!("COMMENT ON AGGREGATE", "COMMENT ON AGGREGATE <name>(args) IS '<text>'.", "COMMENT ON AGGREGATE my_sum(int) IS 'sum impl';", pg("sql-comment.html"));
   k!("COMMENT ON RULE", "COMMENT ON RULE <name> ON <table> IS '<text>'.", "COMMENT ON RULE r ON t IS 'redirect insert';", pg("sql-comment.html"));
-  k!("COMMENT ON DOMAIN", "COMMENT ON DOMAIN <name> IS '<text>'.", "COMMENT ON DOMAIN positive_int IS 'check > 0';", pg("sql-comment.html"));
-  k!("COMMENT ON TYPE", "COMMENT ON TYPE <name> IS '<text>'.", "COMMENT ON TYPE mood IS 'enum';", pg("sql-comment.html"));
-  k!("COMMENT ON SCHEMA", "COMMENT ON SCHEMA <name> IS '<text>'.", "COMMENT ON SCHEMA public IS 'main';", pg("sql-comment.html"));
+
   k!("COMMENT ON CAST", "COMMENT ON CAST (<src_type> AS <tgt_type>) IS '<text>'.", "COMMENT ON CAST (text AS int) IS 'implicit';", pg("sql-comment.html"));
   k!("COMMENT ON TEXT SEARCH CONFIGURATION", "COMMENT ON TEXT SEARCH CONFIGURATION <name> IS '<text>'.", "COMMENT ON TEXT SEARCH CONFIGURATION en IS 'english';", pg("sql-comment.html"));
   k!("COMMENT ON TEXT SEARCH DICTIONARY", "COMMENT ON TEXT SEARCH DICTIONARY <name> IS '<text>'.", "COMMENT ON TEXT SEARCH DICTIONARY english_stem IS 'snowball';", pg("sql-comment.html"));
   k!("COMMENT ON TEXT SEARCH PARSER", "COMMENT ON TEXT SEARCH PARSER <name> IS '<text>'.", "COMMENT ON TEXT SEARCH PARSER my_parser IS '';", pg("sql-comment.html"));
   k!("COMMENT ON TEXT SEARCH TEMPLATE", "COMMENT ON TEXT SEARCH TEMPLATE <name> IS '<text>'.", "COMMENT ON TEXT SEARCH TEMPLATE my_tmpl IS '';", pg("sql-comment.html"));
-  k!("COMMENT ON POLICY", "COMMENT ON POLICY <name> ON <table> IS '<text>'.", "COMMENT ON POLICY own_rows ON users IS 'tenant isolation';", pg("sql-comment.html"));
+
   k!("COMMENT ON TRANSFORM", "COMMENT ON TRANSFORM FOR <type> LANGUAGE <lang> IS '<text>'.", "COMMENT ON TRANSFORM FOR hstore LANGUAGE plperl IS 'hstore<->perl hash';", pg("sql-comment.html"));
   // ---- SET ROLE / SET SESSION AUTHORIZATION subtleties ----
   k!("SET LOCAL ROLE", "SET LOCAL ROLE <role> -- transaction-scoped role switch (reverts at COMMIT/ROLLBACK).", "BEGIN; SET LOCAL ROLE readonly; SELECT 1; COMMIT;", pg("sql-set-role.html"));
@@ -1977,18 +1830,16 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("LOCK TABLE IN", "LOCK TABLE <t> IN <mode> MODE [NOWAIT] -- acquire an explicit relation lock.", "LOCK TABLE big IN ACCESS EXCLUSIVE MODE NOWAIT;", pg("sql-lock.html"));
   k!("NOWAIT", "Lock acquisition modifier: don't block; raise 55P03 if the lock isn't immediately available.", "LOCK TABLE t IN ACCESS EXCLUSIVE MODE NOWAIT;", pg("sql-lock.html"));
   // ---- Transaction modes ----
-  k!("ISOLATION LEVEL", "BEGIN ISOLATION LEVEL { READ UNCOMMITTED | READ COMMITTED | REPEATABLE READ | SERIALIZABLE }", "BEGIN ISOLATION LEVEL REPEATABLE READ;", pg("sql-set-transaction.html"));
+
   k!("READ COMMITTED", "Default PG isolation: each statement sees a fresh snapshot. No phantom protection across statements.", "BEGIN ISOLATION LEVEL READ COMMITTED;", pg("transaction-iso.html#XACT-READ-COMMITTED"));
   k!("REPEATABLE READ", "PG isolation: each transaction sees a single snapshot at start; rejects concurrent updates with 40001.", "BEGIN ISOLATION LEVEL REPEATABLE READ;", pg("transaction-iso.html#XACT-REPEATABLE-READ"));
   k!("READ UNCOMMITTED", "Accepted spelling, treated as READ COMMITTED in PG -- there are no dirty reads.", "BEGIN ISOLATION LEVEL READ UNCOMMITTED;", pg("transaction-iso.html"));
   k!("DEFERRABLE", "Transaction mode: DEFERRABLE -- valid only with ISOLATION LEVEL SERIALIZABLE READ ONLY; the txn may wait at start instead of failing with 40001.", "BEGIN ISOLATION LEVEL SERIALIZABLE READ ONLY DEFERRABLE;", pg("sql-set-transaction.html"));
-  k!("NOT DEFERRABLE", "Transaction mode: NOT DEFERRABLE (default).", "BEGIN NOT DEFERRABLE;", pg("sql-set-transaction.html"));
+
   // ---- VACUUM new options (PG17+) ----
   k!("ONLY_DATABASE_STATS", "VACUUM (ONLY_DATABASE_STATS) -- skip the per-relation pass and only refresh per-DB stats (PG17+).", "VACUUM (ONLY_DATABASE_STATS);", pg("sql-vacuum.html"));
   k!("SKIP_DATABASE_STATS", "VACUUM (SKIP_DATABASE_STATS) -- skip the per-DB stats refresh (PG17+); useful from cron loops.", "VACUUM (SKIP_DATABASE_STATS);", pg("sql-vacuum.html"));
-  k!("BUFFER_USAGE_LIMIT", "VACUUM (BUFFER_USAGE_LIMIT '<size>') -- per-vacuum shared-buffer ring cap (PG16+).", "VACUUM (BUFFER_USAGE_LIMIT '32MB') big;", pg("sql-vacuum.html"));
-  k!("PROCESS_MAIN", "VACUUM (PROCESS_MAIN [true|false]) -- skip the main relation pass and only vacuum the TOAST table (PG16+).", "VACUUM (PROCESS_MAIN false) toast_heavy;", pg("sql-vacuum.html"));
-  k!("PROCESS_TOAST", "VACUUM (PROCESS_TOAST [true|false]) -- skip the TOAST companion table.", "VACUUM (PROCESS_TOAST false) t;", pg("sql-vacuum.html"));
+
   k!("INDEX_CLEANUP", "VACUUM (INDEX_CLEANUP { AUTO | ON | OFF }) -- override index cleanup heuristic.", "VACUUM (INDEX_CLEANUP off) big;", pg("sql-vacuum.html"));
   k!("DISABLE_PAGE_SKIPPING", "VACUUM (DISABLE_PAGE_SKIPPING) -- visit every page even when the visibility map says skip.", "VACUUM (DISABLE_PAGE_SKIPPING) t;", pg("sql-vacuum.html"));
   // ---- DECLARE cursor extras ----
@@ -2034,10 +1885,7 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("EXCEPTION WHEN", "PL/pgSQL block EXCEPTION WHEN <condition> [OR <c>...] THEN ... -- catch matching SQLSTATE / named errors.", "EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'dup'; END;", pg("plpgsql-control-structures.html#PLPGSQL-ERROR-TRAPPING"));
   k!("WHEN OTHERS", "PL/pgSQL exception handler that matches any non-already-matched error. Use sparingly -- masks programmer errors.", "EXCEPTION WHEN OTHERS THEN RAISE; END;", pg("plpgsql-control-structures.html#PLPGSQL-ERROR-TRAPPING"));
   k!("RAISE USING", "PL/pgSQL RAISE [level] '<msg>' USING ERRCODE = '<state>', DETAIL = '...', HINT = '...', ... -- attach structured exception fields.", "RAISE EXCEPTION 'bad row %', id USING ERRCODE = 'P0001', HINT = 'reload config';", pg("plpgsql-errors-and-messages.html"));
-  k!("RAISE DEBUG", "PL/pgSQL RAISE DEBUG '<msg>' -- developer log level (controlled by client_min_messages).", "RAISE DEBUG 'in helper, x=%', x;", pg("plpgsql-errors-and-messages.html"));
-  k!("RAISE LOG", "PL/pgSQL RAISE LOG '<msg>' -- write to server log only (never to client).", "RAISE LOG 'background job ran';", pg("plpgsql-errors-and-messages.html"));
-  k!("RAISE INFO", "PL/pgSQL RAISE INFO '<msg>' -- always sent to the client.", "RAISE INFO 'progress: %%', pct;", pg("plpgsql-errors-and-messages.html"));
-  k!("RAISE WARNING", "PL/pgSQL RAISE WARNING '<msg>' -- always sent to the client at WARNING level.", "RAISE WARNING 'slow path triggered';", pg("plpgsql-errors-and-messages.html"));
+
   k!("PERFORM", "PL/pgSQL PERFORM <query> -- run a query and discard its result; required when a SELECT is used for side effects only.", "PERFORM pg_notify('chan', 'hi');", pg("plpgsql-statements.html#PLPGSQL-STATEMENTS-SQL-NORESULT"));
   // ---- Savepoint + prepared transaction ----
   k!("SAVEPOINT", "SAVEPOINT <name> -- mark a sub-transaction point; later commands can be undone with ROLLBACK TO SAVEPOINT <name>.", "SAVEPOINT before_risk; -- ... -- ROLLBACK TO SAVEPOINT before_risk;", pg("sql-savepoint.html"));
@@ -2092,7 +1940,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("PROCESS_TOAST", "VACUUM PROCESS_TOAST {true|false} (PG14+).", "VACUUM (PROCESS_TOAST false) t;", pg("sql-vacuum.html"));
   k!("PROCESS_MAIN", "VACUUM PROCESS_MAIN {true|false} (PG16+).", "VACUUM (PROCESS_MAIN false) t;", pg("sql-vacuum.html"));
 
-
   // ---- round 154 multi-word PG predicates / clauses ----
   k!("DISTINCT FROM", "DISTINCT FROM <expr> -- NULL-aware inequality predicate.", "WHERE a IS DISTINCT FROM b", pg("functions-comparison.html"));
   k!("IS DISTINCT FROM", "<a> IS DISTINCT FROM <b> -- true when a != b, treating NULL as a value.", "WHERE old.x IS DISTINCT FROM new.x", pg("functions-comparison.html"));
@@ -2105,7 +1952,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("ON DELETE", "FK ON DELETE { NO ACTION | CASCADE | SET NULL | SET DEFAULT | RESTRICT }.", "REFERENCES users(id) ON DELETE SET NULL", pg("sql-createtable.html"));
   k!("FORCE NOT NULL", "COPY ... FORCE NOT NULL (cols) -- treat empty as text, not NULL.", "COPY t FROM '...' CSV FORCE NOT NULL (col1, col2);", pg("sql-copy.html"));
   k!("FORCE QUOTE", "COPY ... FORCE QUOTE { * | (cols) } -- always quote these columns.", "COPY t TO '...' CSV FORCE QUOTE *;", pg("sql-copy.html"));
-
 
   // ---- round 155 multi-word DDL/aggregate kws ----
   k!("WITHIN GROUP", "WITHIN GROUP (ORDER BY <key>) -- ordered-set aggregates (e.g. percentile_cont).", "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY salary) FROM emp;", pg("functions-aggregate.html#FUNCTIONS-ORDEREDSET-TABLE"));
@@ -2121,7 +1967,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("EXECUTE FUNCTION", "TRIGGER body: EXECUTE FUNCTION <fn>(<args>) -- preferred over EXECUTE PROCEDURE (PG11+).", "EXECUTE FUNCTION set_updated_at()", pg("sql-createtrigger.html"));
   k!("EXECUTE PROCEDURE", "TRIGGER body: EXECUTE PROCEDURE <fn>(<args>) -- legacy spelling.", "EXECUTE PROCEDURE set_updated_at()", pg("sql-createtrigger.html"));
   k!("NULLS DISTINCT", "UNIQUE / INDEX option: NULLS DISTINCT -- multiple NULLs do not conflict (default).", "CREATE UNIQUE INDEX ix ON t(col) NULLS DISTINCT;", pg("sql-createindex.html"));
-
 
   // ---- round 156 multi-word kws ----
   k!("FETCH FIRST", "SELECT ... FETCH FIRST <n> ROWS { ONLY | WITH TIES } -- SQL-standard limit.", "SELECT * FROM t ORDER BY id FETCH FIRST 10 ROWS ONLY;", pg("sql-select.html"));
@@ -2139,7 +1984,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("USING INDEX", "ADD CONSTRAINT ... USING INDEX <existing_index> -- back a PK/UNIQUE with an existing index.", "ALTER TABLE t ADD CONSTRAINT pk_t PRIMARY KEY USING INDEX ix_t_id;", pg("sql-altertable.html"));
   k!("USING INDEX TABLESPACE", "ADD CONSTRAINT ... USING INDEX TABLESPACE <space> -- create the backing index in a specific tablespace.", "ADD CONSTRAINT u UNIQUE (col) USING INDEX TABLESPACE archive", pg("sql-createtable.html"));
   k!("TABLES IN SCHEMA", "FOR / ADD / SET / DROP TABLES IN SCHEMA <name>[, ...] -- whole-schema publication target (PG15+).", "CREATE PUBLICATION p FOR TABLES IN SCHEMA public;", pg("sql-createpublication.html"));
-
 
   // ---- round 157 multi-word FK/RAISE/REPLICA kws ----
   k!("ON DELETE CASCADE", "FK ON DELETE CASCADE -- delete child rows when parent goes.", "REFERENCES users(id) ON DELETE CASCADE", pg("ddl-constraints.html#DDL-CONSTRAINTS-FK"));
@@ -2166,7 +2010,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("REPLICA IDENTITY USING INDEX", "REPLICA IDENTITY USING INDEX <ix> -- use a NON-PK unique non-partial index.", "ALTER TABLE t REPLICA IDENTITY USING INDEX ux_email;", pg("sql-altertable.html"));
   k!("REPLICA IDENTITY DEFAULT", "REPLICA IDENTITY DEFAULT -- PK-based identity (default).", "ALTER TABLE t REPLICA IDENTITY DEFAULT;", pg("sql-altertable.html"));
 
-
   // ---- round 158 window-frame + trigger event multi-word kws ----
   k!("CURRENT ROW", "WINDOW frame bound: CURRENT ROW -- include the current row only.", "RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW", pg("sql-expressions.html#SYNTAX-WINDOW-FUNCTIONS"));
   k!("UNBOUNDED PRECEDING", "WINDOW frame bound: UNBOUNDED PRECEDING -- start of the partition.", "ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW", pg("sql-expressions.html#SYNTAX-WINDOW-FUNCTIONS"));
@@ -2188,7 +2031,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("BEFORE DELETE", "CREATE TRIGGER ... BEFORE DELETE ON <table>.", "CREATE TRIGGER trg BEFORE DELETE ON users FOR EACH ROW EXECUTE FUNCTION del();", pg("sql-createtrigger.html"));
   k!("BEFORE TRUNCATE", "CREATE TRIGGER ... BEFORE TRUNCATE ON <table> (statement-level only).", "CREATE TRIGGER trg BEFORE TRUNCATE ON users FOR EACH STATEMENT EXECUTE FUNCTION before_trunc();", pg("sql-createtrigger.html"));
   k!("AFTER TRUNCATE", "CREATE TRIGGER ... AFTER TRUNCATE ON <table> (statement-level only).", "CREATE TRIGGER trg AFTER TRUNCATE ON users FOR EACH STATEMENT EXECUTE FUNCTION after_trunc();", pg("sql-createtrigger.html"));
-
 
   // ---- round 159 transaction + privilege multi-word kws ----
   k!("DEFAULT PRIVILEGES", "ALTER DEFAULT PRIVILEGES [FOR ROLE <r>] [IN SCHEMA <s>] {GRANT|REVOKE} ... -- post-creation default ACLs.", "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO readonly;", pg("sql-alterdefaultprivileges.html"));
@@ -2217,7 +2059,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("ALL TABLESPACES", "GRANT ... ON ALL TABLESPACES (only valid for CREATE).", "GRANT CREATE ON TABLESPACE archive TO writer;", pg("sql-grant.html"));
   k!("ALL SCHEMAS", "ALTER DEFAULT PRIVILEGES ... ON SCHEMAS -- privilege over future schemas.", "ALTER DEFAULT PRIVILEGES GRANT USAGE ON SCHEMAS TO readonly;", pg("sql-alterdefaultprivileges.html"));
 
-
   // ---- round 169 ROLE attribute kws ----
   k!("LOGIN", "Role attribute: can authenticate.", "CREATE ROLE alice LOGIN PASSWORD '...';", pg("sql-createrole.html"));
   k!("NOLOGIN", "Role attribute: cannot authenticate (group role).", "CREATE ROLE admins NOLOGIN;", pg("sql-createrole.html"));
@@ -2232,7 +2073,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("BYPASSRLS", "Role attribute: bypass row-level security policies.", "ALTER ROLE alice BYPASSRLS;", pg("sql-createrole.html"));
   k!("NOBYPASSRLS", "Role attribute: subject to row-level security (default).", "ALTER ROLE alice NOBYPASSRLS;", pg("sql-createrole.html"));
 
-
   // ---- round 170 session control multi-word kws ----
   k!("DISCARD ALL", "DISCARD ALL -- session reset (drops temp tables, prepared stmts, plans, cursors, etc.).", "DISCARD ALL;", pg("sql-discard.html"));
   k!("DISCARD PLANS", "DISCARD PLANS -- forget cached query plans.", "DISCARD PLANS;", pg("sql-discard.html"));
@@ -2243,7 +2083,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("RESET ROLE", "RESET ROLE -- undo a SET ROLE.", "RESET ROLE;", pg("sql-reset.html"));
 
   k!("FILLFACTOR", "Storage parameter: leaf-page fill percentage (10-100). Lower leaves room for HOT updates.", "CREATE INDEX ... WITH (fillfactor = 80);", pg("sql-createindex.html#SQL-CREATEINDEX-STORAGE-PARAMETERS"));
-
 
   // ---- round 174 multi-word DDL clarifiers ----
   k!("FOREIGN DATA WRAPPER", "CREATE/ALTER/DROP FOREIGN DATA WRAPPER <name> -- FDW plugin.", "CREATE SERVER s FOREIGN DATA WRAPPER postgres_fdw OPTIONS (...);", pg("sql-createforeigndatawrapper.html"));
@@ -2268,7 +2107,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("RETURNS TRIGGER", "CREATE FUNCTION ... RETURNS TRIGGER -- trigger function shape.", "CREATE FUNCTION upd() RETURNS TRIGGER AS $$ BEGIN RETURN NEW; END; $$ LANGUAGE plpgsql;", pg("sql-createfunction.html"));
   k!("RETURNS SETOF", "CREATE FUNCTION ... RETURNS SETOF <type> -- multi-row return.", "CREATE FUNCTION fives() RETURNS SETOF int AS $$ SELECT generate_series(1,5) $$ LANGUAGE sql;", pg("sql-createfunction.html"));
 
-
   // ---- round 175 multi-word function attribute kws ----
   k!("LANGUAGE SQL", "CREATE FUNCTION ... LANGUAGE SQL -- pure SQL function body.", "CREATE FUNCTION add(int, int) RETURNS int AS $$ SELECT $1 + $2 $$ LANGUAGE SQL;", pg("sql-createfunction.html"));
   k!("LANGUAGE PLPGSQL", "CREATE FUNCTION ... LANGUAGE plpgsql -- procedural Postgres body.", "CREATE FUNCTION up() RETURNS void AS $$ BEGIN ... END; $$ LANGUAGE plpgsql;", pg("sql-createfunction.html"));
@@ -2290,7 +2128,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("PARALLEL UNSAFE", "CREATE FUNCTION ... PARALLEL UNSAFE (default) -- forbid parallel execution.", "CREATE FUNCTION up() RETURNS int ... PARALLEL UNSAFE;", pg("sql-createfunction.html"));
   k!("RETURNS NULL ON NULL INPUT", "Synonym of STRICT in CREATE FUNCTION.", "CREATE FUNCTION ... RETURNS NULL ON NULL INPUT;", pg("sql-createfunction.html"));
   k!("CALLED ON NULL INPUT", "Default for CREATE FUNCTION -- run the body even when an argument is NULL.", "CREATE FUNCTION ... CALLED ON NULL INPUT;", pg("sql-createfunction.html"));
-
 
   // ---- round 176 multi-word clarifiers ----
   k!("AS RESTRICT", "CREATE CAST ... AS [ASSIGNMENT | IMPLICIT] -- omit for explicit-only (default).", "CREATE CAST (text AS my_t) WITH FUNCTION my_in;", pg("sql-createcast.html"));
@@ -2323,7 +2160,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("PRESERVE ROWS", "ON COMMIT PRESERVE ROWS -- keep temporary-table rows past COMMIT (default).", "CREATE TEMP TABLE staging (...) ON COMMIT PRESERVE ROWS;", pg("sql-createtable.html"));
   k!("DELETE ROWS", "ON COMMIT DELETE ROWS -- truncate temporary-table rows at COMMIT.", "CREATE TEMP TABLE staging (...) ON COMMIT DELETE ROWS;", pg("sql-createtable.html"));
 
-
   // ---- round 177 trigger transition + view check multi-word kws ----
   k!("OLD TABLE", "REFERENCING OLD TABLE AS <alias> -- statement-level trigger transition relation.", "REFERENCING OLD TABLE AS old_rows", pg("sql-createtrigger.html"));
   k!("NEW TABLE", "REFERENCING NEW TABLE AS <alias> -- statement-level trigger transition relation.", "REFERENCING NEW TABLE AS new_rows", pg("sql-createtrigger.html"));
@@ -2343,7 +2179,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("WITH CHECK OPTION", "VIEW WITH CHECK OPTION -- same as CASCADED variant (default).", "WITH CHECK OPTION", pg("sql-createview.html"));
   k!("WITH LOCAL CHECK OPTION", "VIEW WITH LOCAL CHECK OPTION -- only check this view's predicate; ignore parent views.", "WITH LOCAL CHECK OPTION", pg("sql-createview.html"));
   k!("WITH CASCADED CHECK OPTION", "VIEW WITH CASCADED CHECK OPTION -- enforce predicates of this AND parent views (default).", "WITH CASCADED CHECK OPTION", pg("sql-createview.html"));
-
 
   // ---- round 178 multi-word DML / RLS / SET kws ----
   k!("INSTEAD OF INSERT", "CREATE TRIGGER ... INSTEAD OF INSERT ON <view> -- view writability.", "CREATE TRIGGER trg INSTEAD OF INSERT ON v FOR EACH ROW EXECUTE FUNCTION ins();", pg("sql-createtrigger.html"));
@@ -2375,7 +2210,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("SELECT DISTINCT", "SELECT DISTINCT <cols> ... -- dedupe entire rows.", "SELECT DISTINCT id FROM t;", pg("sql-select.html"));
   k!("SELECT DISTINCT ON", "SELECT DISTINCT ON (<expr>[, ...]) ... -- keep first row per distinct ON expression.", "SELECT DISTINCT ON (user_id) * FROM events ORDER BY user_id, created_at DESC;", pg("sql-select.html#SQL-DISTINCT"));
 
-
   // ---- round 179 multi-word starter kws ----
   k!("CREATE OR REPLACE FUNCTION", "CREATE OR REPLACE FUNCTION <name>(args) RETURNS ... -- replace existing fn.", "CREATE OR REPLACE FUNCTION up() RETURNS void ...;", pg("sql-createfunction.html"));
   k!("CREATE OR REPLACE PROCEDURE", "CREATE OR REPLACE PROCEDURE <name>(args) -- replace existing procedure.", "CREATE OR REPLACE PROCEDURE up() ...;", pg("sql-createprocedure.html"));
@@ -2398,7 +2232,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("DROP FOREIGN TABLE", "DROP FOREIGN TABLE [IF EXISTS] <name>.", "DROP FOREIGN TABLE IF EXISTS ext;", pg("sql-dropforeigntable.html"));
   k!("DROP EVENT TRIGGER", "DROP EVENT TRIGGER [IF EXISTS] <name>.", "DROP EVENT TRIGGER trg;", pg("sql-dropeventtrigger.html"));
   k!("DROP ACCESS METHOD", "DROP ACCESS METHOD [IF EXISTS] <name>.", "DROP ACCESS METHOD heap_v2;", pg("sql-drop-access-method.html"));
-
 
   // ---- round 180 multi-word ALTER starter kws ----
   k!("ALTER TABLE IF EXISTS", "ALTER TABLE IF EXISTS <name> ... -- skip silently if missing.", "ALTER TABLE IF EXISTS t ADD COLUMN x int;", pg("sql-altertable.html"));
@@ -2425,7 +2258,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("ALTER USER MAPPING", "ALTER USER MAPPING FOR <role> SERVER <srv> OPTIONS (...).", "ALTER USER MAPPING FOR alice SERVER s OPTIONS (SET user 'a');", pg("sql-alterusermapping.html"));
   k!("ALTER SEQUENCE IF EXISTS", "ALTER SEQUENCE IF EXISTS <name> ...", "ALTER SEQUENCE IF EXISTS s RESTART;", pg("sql-altersequence.html"));
   k!("ALTER VIEW IF EXISTS", "ALTER VIEW IF EXISTS <name> ...", "ALTER VIEW IF EXISTS v RENAME TO v2;", pg("sql-alterview.html"));
-
 
   // ---- round 181 COMMENT ON + DROP starter kws ----
   k!("COMMENT ON TABLE", "COMMENT ON TABLE <name> IS '...' -- attach a comment.", "COMMENT ON TABLE users IS 'authn users';", pg("sql-comment.html"));
@@ -2459,7 +2291,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("DROP TYPE", "DROP TYPE [IF EXISTS] <name>[, ...] [CASCADE].", "DROP TYPE status;", pg("sql-droptype.html"));
   k!("DROP DOMAIN", "DROP DOMAIN [IF EXISTS] <name>[, ...] [CASCADE].", "DROP DOMAIN email_t;", pg("sql-dropdomain.html"));
   k!("DROP POLICY", "DROP POLICY [IF EXISTS] <name> ON <table>.", "DROP POLICY p ON users;", pg("sql-droppolicy.html"));
-
 
   // ---- round 182 CREATE multi-word starter kws ----
   k!("CREATE DATABASE", "CREATE DATABASE <name> [OWNER <r>] [TEMPLATE <t>] [ENCODING '<enc>'] [LOCALE '<loc>'] [TABLESPACE <ts>] [CONNECTION LIMIT <n>] [...].", "CREATE DATABASE mydb OWNER alice;", pg("sql-createdatabase.html"));
@@ -2495,7 +2326,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("CREATE TEXT SEARCH PARSER", "CREATE TEXT SEARCH PARSER <name> (START = <fn>, GETTOKEN = <fn>, END = <fn>, LEXTYPES = <fn>).", "CREATE TEXT SEARCH PARSER my_p (...);", pg("sql-createtextsearchparser.html"));
   k!("CREATE TEXT SEARCH TEMPLATE", "CREATE TEXT SEARCH TEMPLATE <name> (INIT = <fn>, LEXIZE = <fn>).", "CREATE TEXT SEARCH TEMPLATE my_t (INIT = ..., LEXIZE = ...);", pg("sql-createtextsearchtemplate.html"));
 
-
   // ---- round 183 ALTER multi-word starter kws ----
   k!("ALTER FUNCTION", "ALTER FUNCTION <name>(args) ... -- rename / owner / schema / cost / rows / volatility / strict / parallel / leakproof / depends.", "ALTER FUNCTION fn(int) RENAME TO new_fn;", pg("sql-alterfunction.html"));
   k!("ALTER PROCEDURE", "ALTER PROCEDURE <name>(args) ... -- rename / owner / schema / strict.", "ALTER PROCEDURE up() OWNER TO admins;", pg("sql-alterprocedure.html"));
@@ -2517,7 +2347,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("ALTER FOREIGN TABLE IF EXISTS", "ALTER FOREIGN TABLE IF EXISTS <name> ...", "ALTER FOREIGN TABLE IF EXISTS ext OPTIONS (ADD foo 'bar');", pg("sql-alterforeigntable.html"));
   k!("ALTER TYPE IF EXISTS", "ALTER TYPE IF EXISTS <name> ...", "ALTER TYPE IF EXISTS status ADD VALUE 'archived';", pg("sql-altertype.html"));
   k!("ALTER DOMAIN IF EXISTS", "ALTER DOMAIN IF EXISTS <name> ...", "ALTER DOMAIN IF EXISTS email_t SET DEFAULT NULL;", pg("sql-alterdomain.html"));
-
 
   // ---- round 184 GRANT / REVOKE multi-word starter kws ----
   k!("GRANT ALL", "GRANT ALL [PRIVILEGES] ON <target> TO <role> -- shorthand for all relevant privileges.", "GRANT ALL ON TABLE users TO admins;", pg("sql-grant.html"));
@@ -2546,7 +2375,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("REVOKE GRANT OPTION FOR", "REVOKE GRANT OPTION FOR <priv> ON <target> FROM <role> -- revoke ability to re-grant.", "REVOKE GRANT OPTION FOR SELECT ON users FROM bob;", pg("sql-revoke.html"));
   k!("REVOKE ADMIN OPTION FOR", "REVOKE ADMIN OPTION FOR <role> FROM <member> -- revoke ability to add members.", "REVOKE ADMIN OPTION FOR admins FROM alice;", pg("sql-revoke.html"));
 
-
   // ---- round 185 JOIN multi-word kws + inheritance ----
   k!("FROM ONLY", "SELECT/UPDATE/DELETE ... FROM ONLY <parent> -- skip inherited child tables.", "DELETE FROM ONLY parent WHERE id = 1;", pg("ddl-inherit.html"));
   k!("FULL JOIN", "FULL JOIN <table> ON <pred> -- FULL OUTER JOIN.", "SELECT * FROM a FULL JOIN b ON a.id = b.id;", pg("queries-table-expressions.html#QUERIES-FROM"));
@@ -2567,7 +2395,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("DELETE FROM ONLY", "DELETE FROM ONLY <parent> -- skip child tables in inheritance.", "DELETE FROM ONLY parent WHERE id = 1;", pg("sql-delete.html"));
   k!("UPDATE ONLY", "UPDATE ONLY <parent> SET ... -- skip child tables.", "UPDATE ONLY parent SET x = 1 WHERE id = 1;", pg("sql-update.html"));
   k!("TRUNCATE ONLY", "TRUNCATE ONLY <parent> -- skip child tables.", "TRUNCATE ONLY parent;", pg("sql-truncate.html"));
-
 
   // ---- round 186 MERGE + ON CONFLICT multi-word kws ----
   k!("MERGE INTO", "MERGE INTO <target> USING <source> ON <pred> WHEN ... THEN ... -- SQL standard upsert.", "MERGE INTO users u USING staging s ON s.id = u.id WHEN MATCHED THEN UPDATE SET email = s.email;", pg("sql-merge.html"));
@@ -2606,7 +2433,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("LARGE OBJECTS IN SCHEMA", "GRANT ... ON ALL LARGE OBJECTS IN SCHEMA <schema> -- batch grant across all LOs in a schema (PG17+).", "GRANT SELECT ON ALL LARGE OBJECTS IN SCHEMA public TO ro_role;", pg("sql-grant.html"));
   k!("ALL LARGE OBJECTS", "GRANT/REVOKE ON ALL LARGE OBJECTS -- bulk LO privilege change.", "GRANT SELECT ON ALL LARGE OBJECTS TO ro;", pg("sql-grant.html"));
 
-
   // ---- round 187 cast / identity multi-word kws ----
   k!("CAST AS", "CAST(<expr> AS <type>) -- explicit type conversion.", "SELECT CAST(price AS numeric(10,2)) FROM t;", pg("sql-expressions.html#SQL-SYNTAX-TYPE-CASTS"));
   k!("AS DECIMAL", "CAST(... AS DECIMAL(p, s)) -- alias of NUMERIC.", "SELECT CAST(x AS DECIMAL(10,2));", pg("datatype-numeric.html"));
@@ -2623,7 +2449,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("AS TIMESTAMPTZ", "CAST(... AS TIMESTAMPTZ) -- timestamp WITH time zone.", "SELECT CAST(ts AS TIMESTAMPTZ);", pg("datatype-datetime.html"));
   k!("GENERATED ALWAYS AS IDENTITY", "<col> <type> GENERATED ALWAYS AS IDENTITY -- system-generated identity, OVERRIDING SYSTEM VALUE required to override.", "id int GENERATED ALWAYS AS IDENTITY PRIMARY KEY", pg("sql-createtable.html"));
   k!("GENERATED BY DEFAULT AS IDENTITY", "<col> <type> GENERATED BY DEFAULT AS IDENTITY -- system-generated identity, user value accepted.", "id int GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY", pg("sql-createtable.html"));
-
 
   // ---- round 188 sort + predicate multi-word kws ----
   k!("ASC NULLS FIRST", "ORDER BY <col> ASC NULLS FIRST -- ascending with NULLs first.", "SELECT * FROM t ORDER BY id ASC NULLS FIRST;", pg("sql-select.html"));
@@ -2648,7 +2473,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("FIRST ROW", "FETCH FIRST <n> ROW -- SQL standard limit clause (singular form).", "SELECT * FROM t FETCH FIRST 1 ROW ONLY;", pg("sql-select.html"));
   k!("NEXT ROWS", "FETCH NEXT <n> ROWS -- SQL standard limit clause.", "SELECT * FROM t FETCH NEXT 10 ROWS ONLY;", pg("sql-select.html"));
   k!("NEXT ROW", "FETCH NEXT <n> ROW -- SQL standard limit clause (singular form).", "SELECT * FROM t FETCH NEXT 1 ROW ONLY;", pg("sql-select.html"));
-
 
   // ---- round 189 IS predicates + string builtins multi-word kws ----
   k!("IS TRUE", "<expr> IS TRUE -- handles NULL as NOT TRUE.", "WHERE flag IS TRUE", pg("functions-comparison.html"));
@@ -2675,7 +2499,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("COLLATION FOR", "COLLATION FOR (<expr>) -> text -- collation name derived from expression.", "SELECT COLLATION FOR ('hi'::text);", pg("functions-info.html"));
   k!("TYPE COERCION", "PG type coercion -- documented in the type-cast grammar; not a standalone keyword phrase.", "-- see CAST / ::", pg("typeconv.html"));
 
-
   // ---- round 190 final-stretch multi-word kws ----
   k!("XML PARSE", "XMLPARSE({DOCUMENT|CONTENT} <text>) -- parse text as XML.", "SELECT XMLPARSE(DOCUMENT '<r/>');", pg("functions-xml.html"));
   k!("XML SERIALIZE", "XMLSERIALIZE({DOCUMENT|CONTENT} <xml> AS <text_type>).", "SELECT XMLSERIALIZE(DOCUMENT payload AS text);", pg("functions-xml.html"));
@@ -2689,7 +2512,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("FETCH NEXT ROW ONLY", "FETCH NEXT 1 ROW ONLY.", "SELECT * FROM t FETCH NEXT 1 ROW ONLY;", pg("sql-select.html"));
   k!("FETCH FIRST ROWS ONLY", "FETCH FIRST <n> ROWS ONLY.", "SELECT * FROM t FETCH FIRST 10 ROWS ONLY;", pg("sql-select.html"));
   k!("FETCH NEXT ROWS ONLY", "FETCH NEXT <n> ROWS ONLY.", "SELECT * FROM t FETCH NEXT 10 ROWS ONLY;", pg("sql-select.html"));
-
 
   // ---- round 191 final multi-word kw audit ----
   k!("WITH OIDS", "CREATE TABLE ... WITH OIDS -- removed in PG12+. Modern code uses ctid.", "-- legacy: CREATE TABLE t (...) WITH OIDS;", pg("sql-createtable.html"));
@@ -2715,7 +2537,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   k!("ADD PRIMARY KEY", "ALTER TABLE ... ADD PRIMARY KEY (<cols>) -- unnamed primary key.", "ALTER TABLE t ADD PRIMARY KEY (id);", pg("sql-altertable.html"));
   k!("ADD FOREIGN KEY", "ALTER TABLE ... ADD FOREIGN KEY (<cols>) REFERENCES <other>(<cols>) -- unnamed FK.", "ALTER TABLE child ADD FOREIGN KEY (parent_id) REFERENCES parent(id);", pg("sql-altertable.html"));
   k!("ADD EXCLUDE", "ALTER TABLE ... ADD EXCLUDE USING <method> (<col> WITH <op>, ...) -- exclusion constraint.", "ALTER TABLE bookings ADD EXCLUDE USING gist (room WITH =, during WITH &&);", pg("sql-createtable.html"));
-
 
   // ---- round 192 SQL-standard spelling kws ----
   k!("BIT VARYING", "BIT VARYING(<n>) -- SQL-standard spelling of VARBIT.", "v BIT VARYING(8)", pg("datatype-bit.html"));

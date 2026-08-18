@@ -7,10 +7,18 @@ pub fn build() -> HashMap<&'static str, Entry> {
   let mut m = HashMap::new();
   macro_rules! t {
     ($label:expr, $doc:expr, $example:expr, $url:expr) => {
-      m.insert(
+      // Panic on a duplicate label rather than silently overwriting --
+      // a HashMap::insert collision here means a second entry for the
+      // same type was added without noticing the first, and whichever
+      // one lost would go permanently dead with no warning. See the
+      // 2026-08-18 dedup commit, which found and removed 7 pre-existing
+      // duplicates this same way.
+      if let Some(prev) = m.insert(
         $label,
         Entry { label: $label, kind: Kind::Type, doc: $doc, signature: None, example: $example, url: $url },
-      );
+      ) {
+        panic!("duplicate dsl-knowledge type entry {:?}: new doc {:?} would silently replace existing doc {:?}", $label, $doc, prev.doc);
+      }
     };
   }
 
@@ -52,16 +60,11 @@ pub fn build() -> HashMap<&'static str, Entry> {
     "open_at TIMETZ",
     pg("datatype-datetime.html")
   );
-  t!("CITEXT", "Case-insensitive TEXT. Requires the `citext` extension.", "email CITEXT NOT NULL", pg("citext.html"));
+
   t!("CIDR", "IPv4 / IPv6 network. Stricter than INET (no host bits).", "subnet CIDR", pg("datatype-net-types.html"));
   t!("MACADDR", "6-byte MAC address.", "mac MACADDR", pg("datatype-net-types.html"));
   t!("MACADDR8", "8-byte EUI-64 MAC address.", "mac8 MACADDR8", pg("datatype-net-types.html"));
-  t!("INT4RANGE", "Range of INTEGER values.", "ages INT4RANGE", pg("rangetypes.html"));
-  t!("INT8RANGE", "Range of BIGINT values.", "ids INT8RANGE", pg("rangetypes.html"));
-  t!("NUMRANGE", "Range of NUMERIC values.", "prices NUMRANGE", pg("rangetypes.html"));
-  t!("TSRANGE", "Range of TIMESTAMP (no zone) values.", "span TSRANGE", pg("rangetypes.html"));
-  t!("TSTZRANGE", "Range of TIMESTAMPTZ values. Most common range type.", "window TSTZRANGE", pg("rangetypes.html"));
-  t!("DATERANGE", "Range of DATE values.", "stay DATERANGE", pg("rangetypes.html"));
+
   t!("OID", "Object identifier. Internal Postgres reference type.", "ref OID", pg("datatype-oid.html"));
   t!("XML", "XML document. Stored as text; needs libxml support.", "payload XML", pg("datatype-xml.html"));
   t!("TSVECTOR", "Tokenised full-text search vector.", "search_doc TSVECTOR", pg("datatype-textsearch.html"));
@@ -174,9 +177,6 @@ pub fn build() -> HashMap<&'static str, Entry> {
   );
   t!("INET", "IPv4 / IPv6 host or network.", "client_ip INET", pg("datatype-net-types.html"));
 
-  // Range types -- built-ins added in PG 9.2. Each holds an ordered
-  // pair of bounds over the underlying subtype with inclusive/
-  // exclusive notation. Multirange types (PG 14+) hold a set of
   // disjoint ranges.
   t!(
     "INT4RANGE",
