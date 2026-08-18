@@ -28,7 +28,10 @@ impl LintRule for Rule {
 
     let mut i = 0usize;
     while i + 7 <= n {
-      if ub[i..i + 7] != *b"BETWEEN" || (i > 0 && is_word(ub[i - 1] as char)) || is_word(*ub.get(i + 7).unwrap_or(&b' ') as char) {
+      if ub[i..i + 7] != *b"BETWEEN"
+        || (i > 0 && is_word(ub[i - 1] as char))
+        || is_word(*ub.get(i + 7).unwrap_or(&b' ') as char)
+      {
         i += 1;
         continue;
       }
@@ -74,11 +77,7 @@ impl LintRule for Rule {
 
 fn operands_eq(a: &str, b: &str) -> bool {
   let (a, b) = (a.trim(), b.trim());
-  if a.contains('\'') || b.contains('\'') {
-    a == b
-  } else {
-    a.eq_ignore_ascii_case(b)
-  }
+  if a.contains('\'') || b.contains('\'') { a == b } else { a.eq_ignore_ascii_case(b) }
 }
 
 /// Read a single simple operand (number, single-quoted string, or

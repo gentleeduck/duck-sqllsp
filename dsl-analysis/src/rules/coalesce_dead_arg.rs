@@ -4,8 +4,8 @@
 //! NULL the second will too, assuming determinism) or a NULL literal
 //! never contributes. Almost always a typo.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -31,9 +31,7 @@ impl LintRule for Rule {
     let needle = b"COALESCE";
     let mut i = 0usize;
     while i + needle.len() < n {
-      if &ub[i..i + needle.len()] != needle
-        || (i > 0 && is_word(ub[i - 1] as char))
-      {
+      if &ub[i..i + needle.len()] != needle || (i > 0 && is_word(ub[i - 1] as char)) {
         i += 1;
         continue;
       }
@@ -119,4 +117,3 @@ impl LintRule for Rule {
     }
   }
 }
-

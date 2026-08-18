@@ -3,8 +3,8 @@
 //! so the whole CASE expression collapses to that value. Either the
 //! conditions are unintentional or the constant is.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -55,7 +55,11 @@ impl LintRule for Rule {
           out.push(Diagnostic {
             code: "sql416",
             severity: Severity::Hint,
-            message: format!("CASE has {} branches but all return `{}` -- the expression collapses to that constant", branches.len(), first),
+            message: format!(
+              "CASE has {} branches but all return `{}` -- the expression collapses to that constant",
+              branches.len(),
+              first
+            ),
             range: TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
           });
         }
@@ -169,4 +173,3 @@ fn word_eq(ub: &[u8], i: usize, w: &[u8]) -> bool {
 fn norm(s: &str) -> String {
   s.split_whitespace().collect::<Vec<_>>().join(" ").to_ascii_lowercase()
 }
-

@@ -50,9 +50,7 @@ impl LintRule for Rule {
     // alongside a FULL JOIN in that branch is on a nullable side.
     let has_full = find_after(ub, cte.term_start, cte.term_end, b"FULL JOIN").is_some()
       || find_after(ub, cte.term_start, cte.term_end, b"FULL OUTER JOIN").is_some();
-    if has_full
-      && let Some(pos) = find_after(ub, cte.term_start, cte.term_end, name.as_bytes())
-    {
+    if has_full && let Some(pos) = find_after(ub, cte.term_start, cte.term_end, name.as_bytes()) {
       out.push(mk_diag(start, pos, name.len()));
     }
   }

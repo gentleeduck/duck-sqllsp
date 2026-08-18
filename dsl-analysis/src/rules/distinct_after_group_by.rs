@@ -1,8 +1,8 @@
 //! sql120: `SELECT DISTINCT ... GROUP BY ...` -- GROUP BY already
 //! produces unique rows, the DISTINCT is dead weight.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -60,4 +60,3 @@ impl LintRule for Rule {
     });
   }
 }
-

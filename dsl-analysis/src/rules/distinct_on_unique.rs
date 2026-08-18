@@ -58,11 +58,8 @@ impl LintRule for Rule {
       return;
     }
     // Pull projection list and extract bare column names.
-    let proj_items: Vec<String> = after_dist
-      .split(',')
-      .map(|s| s.trim().to_string())
-      .filter(|s| !s.is_empty())
-      .collect();
+    let proj_items: Vec<String> =
+      after_dist.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
     let mut proj_cols: Vec<String> = Vec::new();
     for item in &proj_items {
       let bare = item.rsplit('.').next().unwrap_or(item);

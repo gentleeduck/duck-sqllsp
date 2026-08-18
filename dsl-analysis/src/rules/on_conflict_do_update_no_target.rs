@@ -46,7 +46,9 @@ impl LintRule for Rule {
             out.push(Diagnostic {
               code: "sql649",
               severity: Severity::Error,
-              message: "ON CONFLICT DO UPDATE needs a conflict target -- add `(column)` or `ON CONSTRAINT name` (PG 42601)".into(),
+              message:
+                "ON CONFLICT DO UPDATE needs a conflict target -- add `(column)` or `ON CONSTRAINT name` (PG 42601)"
+                  .into(),
               range: crate::range_at(start + k, start + k + 6),
             });
           }

@@ -124,7 +124,11 @@ fn r2_171_format_unterminated_string_no_panic() {
 fn r2_171_format_dollar_quote_no_panic() {
   let style = dsl_format::FormatterStyle::default();
   let ct_style = dsl_format::CreateTableStyle::default();
-  let _ = dsl_format::format("CREATE FUNCTION f() RETURNS int LANGUAGE plpgsql AS $$ BEGIN RETURN 1; END $$;", &style, &ct_style);
+  let _ = dsl_format::format(
+    "CREATE FUNCTION f() RETURNS int LANGUAGE plpgsql AS $$ BEGIN RETURN 1; END $$;",
+    &style,
+    &ct_style,
+  );
 }
 
 #[test]
@@ -192,7 +196,9 @@ fn r3_070_format_huge_select_list() {
   let ct_style = dsl_format::CreateTableStyle::default();
   let mut s = String::from("SELECT ");
   for i in 0..200 {
-    if i > 0 { s.push_str(", "); }
+    if i > 0 {
+      s.push_str(", ");
+    }
     s.push_str(&format!("col{i}"));
   }
   s.push_str(" FROM t;");
@@ -205,7 +211,9 @@ fn r3_071_format_deeply_nested_cte() {
   let ct_style = dsl_format::CreateTableStyle::default();
   let mut s = String::from("WITH ");
   for i in 0..30 {
-    if i > 0 { s.push_str(", "); }
+    if i > 0 {
+      s.push_str(", ");
+    }
     s.push_str(&format!("c{i} AS (SELECT 1)"));
   }
   s.push_str(" SELECT 1;");
@@ -245,9 +253,8 @@ fn r3_075_format_mixed_dml_ddl() {
 fn r3_376_format_xmltable_no_panic() {
   let style = dsl_format::FormatterStyle::default();
   let ct_style = dsl_format::CreateTableStyle::default();
-  let _ = dsl_format::format(
-    "SELECT * FROM xmltable('/r' PASSING d COLUMNS a int PATH 'a', b text);",
-    &style, &ct_style);
+  let _ =
+    dsl_format::format("SELECT * FROM xmltable('/r' PASSING d COLUMNS a int PATH 'a', b text);", &style, &ct_style);
 }
 
 #[test]
@@ -256,7 +263,9 @@ fn r3_377_format_json_table_no_panic() {
   let ct_style = dsl_format::CreateTableStyle::default();
   let _ = dsl_format::format(
     "SELECT * FROM json_table(data, '$' COLUMNS (id int PATH '$.id', name text PATH '$.name')) t;",
-    &style, &ct_style);
+    &style,
+    &ct_style,
+  );
 }
 
 #[test]
@@ -285,7 +294,9 @@ fn r3_380_format_repeated_caps_no_panic() {
   let ct_style = dsl_format::CreateTableStyle::default();
   let _ = dsl_format::format(
     "SELECT SELECT SELECT FROM FROM FROM WHERE WHERE WHERE GROUP GROUP HAVING HAVING ORDER ORDER LIMIT LIMIT;",
-    &style, &ct_style);
+    &style,
+    &ct_style,
+  );
 }
 
 #[test]
@@ -294,16 +305,16 @@ fn r4_041_format_dollar_quote_with_body_no_panic() {
   let ct_style = dsl_format::CreateTableStyle::default();
   let _ = dsl_format::format(
     "CREATE FUNCTION f() RETURNS int AS $body$ BEGIN RETURN 1; END $body$ LANGUAGE plpgsql;",
-    &style, &ct_style);
+    &style,
+    &ct_style,
+  );
 }
 
 #[test]
 fn r4_042_format_mixed_case_keywords() {
   let style = dsl_format::FormatterStyle::default();
   let ct_style = dsl_format::CreateTableStyle::default();
-  let _ = dsl_format::format(
-    "create table T (Id INT, Name TEXT); INSERT INTO T VALUES (1, 'a');",
-    &style, &ct_style);
+  let _ = dsl_format::format("create table T (Id INT, Name TEXT); INSERT INTO T VALUES (1, 'a');", &style, &ct_style);
 }
 
 #[test]
@@ -312,7 +323,9 @@ fn r4_043_format_window_with_frame() {
   let ct_style = dsl_format::CreateTableStyle::default();
   let _ = dsl_format::format(
     "SELECT row_number() OVER (PARTITION BY a ORDER BY b ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t;",
-    &style, &ct_style);
+    &style,
+    &ct_style,
+  );
 }
 
 #[test]
@@ -321,7 +334,9 @@ fn r4_044_format_returning_with_aliases() {
   let ct_style = dsl_format::CreateTableStyle::default();
   let _ = dsl_format::format(
     "INSERT INTO users (email) VALUES ('a') RETURNING id AS new_id, email AS new_email;",
-    &style, &ct_style);
+    &style,
+    &ct_style,
+  );
 }
 
 #[test]
@@ -330,16 +345,16 @@ fn r4_045_format_create_table_multiple_constraints() {
   let ct_style = dsl_format::CreateTableStyle::default();
   let _ = dsl_format::format(
     "CREATE TABLE t (id int PRIMARY KEY, parent_id int REFERENCES t(id) ON DELETE CASCADE, CONSTRAINT uniq_parent UNIQUE (parent_id), CHECK (id > 0));",
-    &style, &ct_style);
+    &style,
+    &ct_style,
+  );
 }
 
 #[test]
 fn r4_format_function_with_no_args_no_panic() {
   let style = dsl_format::FormatterStyle::default();
   let ct_style = dsl_format::CreateTableStyle::default();
-  let _ = dsl_format::format(
-    "CREATE FUNCTION f() RETURNS int LANGUAGE sql AS $$ SELECT 1 $$;",
-    &style, &ct_style);
+  let _ = dsl_format::format("CREATE FUNCTION f() RETURNS int LANGUAGE sql AS $$ SELECT 1 $$;", &style, &ct_style);
 }
 
 #[test]
@@ -348,7 +363,9 @@ fn r4_format_function_returning_table() {
   let ct_style = dsl_format::CreateTableStyle::default();
   let _ = dsl_format::format(
     "CREATE FUNCTION f() RETURNS TABLE (a int, b text) LANGUAGE sql AS $$ SELECT 1, 'x' $$;",
-    &style, &ct_style);
+    &style,
+    &ct_style,
+  );
 }
 
 #[test]
@@ -357,7 +374,9 @@ fn r4_format_function_with_inout_args() {
   let ct_style = dsl_format::CreateTableStyle::default();
   let _ = dsl_format::format(
     "CREATE PROCEDURE p(IN x int, OUT y int, INOUT z text) LANGUAGE plpgsql AS $$ BEGIN y := x; z := 'q'; END $$;",
-    &style, &ct_style);
+    &style,
+    &ct_style,
+  );
 }
 
 #[test]
@@ -367,7 +386,9 @@ fn r4_format_function_chained_sets_no_panic() {
   // Multiple SET clauses in function attributes.
   let _ = dsl_format::format(
     "CREATE FUNCTION f() RETURNS int LANGUAGE sql SET search_path = pg_catalog SET work_mem = '64MB' AS $$ SELECT 1 $$;",
-    &style, &ct_style);
+    &style,
+    &ct_style,
+  );
 }
 
 #[test]
@@ -376,7 +397,9 @@ fn r4_format_function_with_comment_in_body_no_panic() {
   let ct_style = dsl_format::CreateTableStyle::default();
   let _ = dsl_format::format(
     "CREATE FUNCTION f() RETURNS int LANGUAGE sql AS $$ -- comment\n SELECT 1 $$;",
-    &style, &ct_style);
+    &style,
+    &ct_style,
+  );
 }
 
 #[test]
@@ -385,7 +408,9 @@ fn r5_286_format_4kb_long_select_no_panic() {
   let ct_style = dsl_format::CreateTableStyle::default();
   let mut s = String::from("SELECT ");
   for i in 0..400 {
-    if i > 0 { s.push_str(", "); }
+    if i > 0 {
+      s.push_str(", ");
+    }
     s.push_str(&format!("'col_{i}_value'"));
   }
   s.push_str(" FROM t;");
@@ -398,7 +423,9 @@ fn r5_287_format_8kb_create_table_no_panic() {
   let ct_style = dsl_format::CreateTableStyle::default();
   let mut s = String::from("CREATE TABLE t (");
   for i in 0..200 {
-    if i > 0 { s.push_str(", "); }
+    if i > 0 {
+      s.push_str(", ");
+    }
     s.push_str(&format!("col_{i} text"));
   }
   s.push_str(");");
@@ -411,7 +438,9 @@ fn r5_288_format_deeply_nested_with_clauses() {
   let ct_style = dsl_format::CreateTableStyle::default();
   let mut s = String::from("WITH ");
   for i in 0..50 {
-    if i > 0 { s.push_str(", "); }
+    if i > 0 {
+      s.push_str(", ");
+    }
     s.push_str(&format!("c{i} AS (SELECT 1)"));
   }
   s.push_str(" SELECT 1;");
@@ -449,7 +478,9 @@ fn r5_496_format_deeply_nested_case_expr() {
     s.push_str(&format!("CASE WHEN x{i} THEN {i} ELSE "));
   }
   s.push('0');
-  for _ in 0..20 { s.push_str(" END"); }
+  for _ in 0..20 {
+    s.push_str(" END");
+  }
   s.push_str(" FROM t;");
   let _ = dsl_format::format(&s, &style, &ct_style);
 }

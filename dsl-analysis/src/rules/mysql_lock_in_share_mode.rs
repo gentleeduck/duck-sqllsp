@@ -58,7 +58,8 @@ impl LintRule for Rule {
       out.push(Diagnostic {
         code: "sql669",
         severity: Severity::Error,
-        message: "`LOCK IN SHARE MODE` is MySQL -- PostgreSQL uses `FOR SHARE` (or `FOR UPDATE` for an exclusive lock)".into(),
+        message: "`LOCK IN SHARE MODE` is MySQL -- PostgreSQL uses `FOR SHARE` (or `FOR UPDATE` for an exclusive lock)"
+          .into(),
         range: crate::range_at(start + at, start + end.min(upper.len())),
       });
     }

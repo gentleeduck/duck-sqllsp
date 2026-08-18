@@ -66,7 +66,11 @@ impl LintRule for Rule {
       let is_empty_array =
         raw_upper.starts_with("ARRAY[]") || raw_inner.starts_with("'{}'") || raw_inner.starts_with("'{}'::");
       if is_empty_array {
-        let outcome = if kw == "ANY" { "always FALSE -- no row can match an empty set" } else { "always TRUE (vacuously) -- every row satisfies the empty universal" };
+        let outcome = if kw == "ANY" {
+          "always FALSE -- no row can match an empty set"
+        } else {
+          "always TRUE (vacuously) -- every row satisfies the empty universal"
+        };
         let abs_s = start + i;
         let abs_e = start + close + 1;
         let _ = raw_bytes;

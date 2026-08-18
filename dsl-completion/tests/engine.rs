@@ -1,4 +1,10 @@
-#![allow(clippy::absurd_extreme_comparisons, unused_comparisons, clippy::eq_op, clippy::overly_complex_bool_expr, clippy::const_is_empty)]
+#![allow(
+  clippy::absurd_extreme_comparisons,
+  unused_comparisons,
+  clippy::eq_op,
+  clippy::overly_complex_bool_expr,
+  clippy::const_is_empty
+)]
 
 use dsl_catalog::{CATALOG_VERSION, Catalog, Column, Schema, Table, TableKind};
 use dsl_completion::{ItemKind, complete};
@@ -46,7 +52,10 @@ fn catalog_with_users_and_orders() -> Catalog {
     policies: vec![],
     comment: None,
     row_estimate: None,
-    owner: None, definition: None, strict: false, options: None,
+    owner: None,
+    definition: None,
+    strict: false,
+    options: None,
   };
   let orders = Table {
     schema: "public".into(),
@@ -78,7 +87,10 @@ fn catalog_with_users_and_orders() -> Catalog {
     policies: vec![],
     comment: None,
     row_estimate: None,
-    owner: None, definition: None, strict: false, options: None,
+    owner: None,
+    definition: None,
+    strict: false,
+    options: None,
   };
   Catalog {
     version: CATALOG_VERSION,
@@ -1306,7 +1318,10 @@ fn values_top_level_emits_no_catalog_items() {
   let cat = catalog_with_users_and_orders();
   let src = "VALUES ";
   let items = complete_at(src, src.len(), &cat);
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+    .count();
   assert_eq!(bad, 0, "VALUES at top-level leaked {bad} catalog items");
 }
 
@@ -1319,12 +1334,12 @@ fn with_cte_as_offers_materialized_keyword() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["MATERIALIZED", "NOT MATERIALIZED"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "WITH cte AS should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "WITH cte AS should suggest `{kw}`; got {labels:?}");
   }
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+    .count();
   assert_eq!(bad, 0, "WITH cte AS leaked {bad} catalog items");
 }
 
@@ -1335,11 +1350,11 @@ fn do_offers_language_keyword() {
   let src = "DO ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
-  assert!(
-    labels.iter().any(|l| l == "LANGUAGE"),
-    "DO should suggest `LANGUAGE`; got {labels:?}"
-  );
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+  assert!(labels.iter().any(|l| l == "LANGUAGE"), "DO should suggest `LANGUAGE`; got {labels:?}");
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+    .count();
   assert_eq!(bad, 0, "DO leaked {bad} catalog items");
 }
 
@@ -1476,12 +1491,12 @@ fn discard_offers_subcommand_keywords() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["ALL", "PLANS", "SEQUENCES", "TEMP"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "DISCARD should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "DISCARD should suggest `{kw}`; got {labels:?}");
   }
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+    .count();
   assert_eq!(bad, 0, "DISCARD leaked {bad} catalog items");
 }
 
@@ -1508,12 +1523,12 @@ fn create_sequence_after_name_offers_options() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["INCREMENT", "START", "MINVALUE", "MAXVALUE", "CACHE", "CYCLE"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "CREATE SEQUENCE s should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "CREATE SEQUENCE s should suggest `{kw}`; got {labels:?}");
   }
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+    .count();
   assert_eq!(bad, 0, "CREATE SEQUENCE s leaked {bad} catalog items");
 }
 
@@ -1526,12 +1541,12 @@ fn create_type_as_offers_kind_keywords() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["ENUM", "RANGE"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "CREATE TYPE t AS should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "CREATE TYPE t AS should suggest `{kw}`; got {labels:?}");
   }
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+    .count();
   assert_eq!(bad, 0, "CREATE TYPE t AS leaked {bad} catalog items");
 }
 
@@ -1542,11 +1557,11 @@ fn declare_cursor_for_offers_statement_keywords() {
   let src = "DECLARE c CURSOR FOR ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
-  assert!(
-    labels.iter().any(|l| l == "SELECT"),
-    "DECLARE c CURSOR FOR should suggest SELECT; got {labels:?}"
-  );
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+  assert!(labels.iter().any(|l| l == "SELECT"), "DECLARE c CURSOR FOR should suggest SELECT; got {labels:?}");
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+    .count();
   assert_eq!(bad, 0, "DECLARE CURSOR FOR leaked {bad} catalog items");
 }
 
@@ -1558,7 +1573,10 @@ fn create_index_after_name_offers_on_keyword() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   assert!(labels.iter().any(|l| l == "ON"), "CREATE INDEX foo should suggest ON; got {labels:?}");
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+    .count();
   assert_eq!(bad, 0, "CREATE INDEX foo leaked {bad} catalog items");
 }
 
@@ -1583,10 +1601,7 @@ fn comment_on_offers_class_keywords() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["TABLE", "COLUMN", "SCHEMA", "FUNCTION", "INDEX", "VIEW", "MATERIALIZED VIEW", "SEQUENCE"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "COMMENT ON should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "COMMENT ON should suggest `{kw}`; got {labels:?}");
   }
   // No catalog dump.
   let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column)).count();
@@ -1601,12 +1616,12 @@ fn raise_offers_level_keywords() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["NOTICE", "WARNING", "EXCEPTION", "DEBUG", "LOG", "INFO"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "RAISE should suggest level `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "RAISE should suggest level `{kw}`; got {labels:?}");
   }
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+    .count();
   assert_eq!(bad, 0, "RAISE leaked {bad} catalog items");
 }
 
@@ -1617,7 +1632,10 @@ fn fetch_move_close_open_emit_nothing() {
   let cat = catalog_with_users_and_orders();
   for src in ["FETCH ", "MOVE ", "CLOSE ", "OPEN "] {
     let items = complete_at(src, src.len(), &cat);
-    let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+    let bad = items
+      .iter()
+      .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+      .count();
     assert_eq!(bad, 0, "{src:?} leaked {bad} catalog items into cursor-name slot");
   }
 }
@@ -1632,12 +1650,12 @@ fn reset_offers_modifier_keywords() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["ALL", "ROLE"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "RESET should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "RESET should suggest `{kw}`; got {labels:?}");
   }
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+    .count();
   assert_eq!(bad, 0, "RESET leaked {bad} catalog items into GUC slot");
 }
 
@@ -1652,12 +1670,12 @@ fn set_offers_scope_modifiers_only() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["LOCAL", "SESSION"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "SET should suggest scope modifier `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "SET should suggest scope modifier `{kw}`; got {labels:?}");
   }
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+    .count();
   assert_eq!(bad, 0, "SET leaked {bad} catalog items into GUC slot");
 }
 
@@ -1668,7 +1686,10 @@ fn set_local_emits_no_catalog_items() {
   let cat = catalog_with_users_and_orders();
   for src in ["SET LOCAL ", "SET SESSION "] {
     let items = complete_at(src, src.len(), &cat);
-    let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+    let bad = items
+      .iter()
+      .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+      .count();
     assert_eq!(bad, 0, "{src:?} leaked {bad} catalog items into GUC slot");
   }
 }
@@ -1698,7 +1719,10 @@ fn commit_rollback_end_savepoint_emit_minimal_menu() {
   let cat = catalog_with_users_and_orders();
   for src in ["COMMIT ", "ROLLBACK ", "END ", "ABORT ", "SAVEPOINT "] {
     let items = complete_at(src, src.len(), &cat);
-    let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+    let bad = items
+      .iter()
+      .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+      .count();
     assert_eq!(bad, 0, "{src:?} leaked {bad} catalog items into a transaction-control slot");
   }
 }
@@ -1713,12 +1737,12 @@ fn explain_paren_inside_offers_option_keywords() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["ANALYZE", "VERBOSE", "FORMAT", "BUFFERS", "COSTS"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "EXPLAIN ( should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "EXPLAIN ( should suggest `{kw}`; got {labels:?}");
   }
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+    .count();
   assert_eq!(bad, 0, "EXPLAIN ( leaked {bad} catalog items");
 }
 
@@ -1732,10 +1756,7 @@ fn explain_offers_statement_keywords_only() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["SELECT", "INSERT INTO", "UPDATE", "DELETE FROM"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "EXPLAIN should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "EXPLAIN should suggest `{kw}`; got {labels:?}");
   }
   // Must not be a 600-item dump.
   let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column)).count();
@@ -1748,10 +1769,7 @@ fn explain_analyze_offers_statement_keywords_only() {
   let src = "EXPLAIN ANALYZE ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
-  assert!(
-    labels.iter().any(|l| l == "SELECT"),
-    "EXPLAIN ANALYZE should suggest SELECT; got {labels:?}"
-  );
+  assert!(labels.iter().any(|l| l == "SELECT"), "EXPLAIN ANALYZE should suggest SELECT; got {labels:?}");
   let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column)).count();
   assert_eq!(bad, 0, "EXPLAIN ANALYZE leaked {bad} non-keyword items");
 }
@@ -1764,10 +1782,7 @@ fn explain_paren_options_offers_statement_keywords_only() {
   let src = "EXPLAIN (FORMAT JSON) ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
-  assert!(
-    labels.iter().any(|l| l == "SELECT"),
-    "EXPLAIN (...) should still suggest SELECT; got {labels:?}"
-  );
+  assert!(labels.iter().any(|l| l == "SELECT"), "EXPLAIN (...) should still suggest SELECT; got {labels:?}");
 }
 
 fn catalog_with_roles() -> Catalog {
@@ -1807,11 +1822,11 @@ fn create_policy_after_name_offers_on_keyword() {
   let src = "CREATE POLICY p ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
-  assert!(
-    labels.iter().any(|l| l == "ON"),
-    "CREATE POLICY p should suggest ON; got {labels:?}"
-  );
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+  assert!(labels.iter().any(|l| l == "ON"), "CREATE POLICY p should suggest ON; got {labels:?}");
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+    .count();
   assert_eq!(bad, 0, "CREATE POLICY p slot leaked {bad} catalog items");
 }
 
@@ -1835,12 +1850,12 @@ fn create_trigger_after_name_offers_timing_keywords() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["BEFORE", "AFTER", "INSTEAD OF"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "CREATE TRIGGER tg should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "CREATE TRIGGER tg should suggest `{kw}`; got {labels:?}");
   }
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+    .count();
   assert_eq!(bad, 0, "CREATE TRIGGER tg leaked {bad} non-keyword items");
 }
 
@@ -1851,10 +1866,7 @@ fn create_or_replace_trigger_after_name_offers_timing_keywords() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["BEFORE", "AFTER"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "CREATE OR REPLACE TRIGGER tg should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "CREATE OR REPLACE TRIGGER tg should suggest `{kw}`; got {labels:?}");
   }
 }
 
@@ -1867,7 +1879,10 @@ fn alter_role_offers_catalog_roles() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   assert!(labels.contains(&"alice"), "expected catalog role `alice`; got {labels:?}");
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Table | ItemKind::Column)).count();
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Table | ItemKind::Column))
+    .count();
   assert_eq!(bad, 0, "ALTER ROLE leaked {bad} non-role items");
 }
 
@@ -1878,7 +1893,10 @@ fn drop_role_offers_catalog_roles() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   assert!(labels.contains(&"alice"), "expected `alice`; got {labels:?}");
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Table | ItemKind::Column)).count();
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Table | ItemKind::Column))
+    .count();
   assert_eq!(bad, 0, "DROP ROLE leaked {bad} non-role items");
 }
 
@@ -1925,7 +1943,10 @@ fn show_emits_no_catalog_items() {
   let cat = catalog_with_users_and_orders();
   let src = "SHOW ";
   let items = complete_at(src, src.len(), &cat);
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+    .count();
   assert_eq!(bad, 0, "SHOW (GUC slot) leaked {bad} catalog items");
 }
 
@@ -1940,12 +1961,12 @@ fn vacuum_paren_inside_offers_option_keywords() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["FULL", "FREEZE", "VERBOSE", "ANALYZE", "SKIP_LOCKED"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "VACUUM ( should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "VACUUM ( should suggest `{kw}`; got {labels:?}");
   }
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+    .count();
   assert_eq!(bad, 0, "VACUUM ( leaked {bad} catalog items");
 }
 
@@ -2009,8 +2030,7 @@ fn drop_table_emits_only_tables_not_640_items() {
   let items = complete_at(src, src.len(), &cat);
   assert!(
     items.iter().all(|i| {
-      matches!(i.kind, ItemKind::Table | ItemKind::View)
-        || (i.kind == ItemKind::Keyword && i.label == "IF EXISTS")
+      matches!(i.kind, ItemKind::Table | ItemKind::View) || (i.kind == ItemKind::Keyword && i.label == "IF EXISTS")
     }),
     "DROP TABLE menu must be tables/views + IF EXISTS; got {} items with kinds {:?}",
     items.len(),
@@ -2056,10 +2076,7 @@ fn window_clause_paren_offers_partition_by() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["PARTITION BY", "ORDER BY"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "WINDOW w AS ( should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "WINDOW w AS ( should suggest `{kw}`; got {labels:?}");
   }
   assert!(
     !labels.iter().any(|l| l == "INNER JOIN" || l == "CROSS JOIN"),
@@ -2076,10 +2093,7 @@ fn window_clause_partition_by_offers_columns() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   assert!(labels.contains(&"id"), "expected column `id`; got {labels:?}");
-  assert!(
-    !labels.contains(&"INNER JOIN"),
-    "PARTITION BY slot wrongly listed JOIN keywords: {labels:?}"
-  );
+  assert!(!labels.contains(&"INNER JOIN"), "PARTITION BY slot wrongly listed JOIN keywords: {labels:?}");
 }
 
 #[test]
@@ -2274,7 +2288,10 @@ fn plpgsql_body_other_position_keeps_kitchen_sink() {
   let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"DECLARE") || labels.contains(&"IF"), "expected PL/pgSQL keywords still offered here; got {labels:?}");
+  assert!(
+    labels.contains(&"DECLARE") || labels.contains(&"IF"),
+    "expected PL/pgSQL keywords still offered here; got {labels:?}"
+  );
 }
 
 #[test]
@@ -2303,7 +2320,11 @@ fn plpgsql_body_select_into_variable_is_not_treated_as_insert() {
   let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN SELECT id INTO ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"BEGIN"), "expected the kitchen sink (not the narrow INSERT-INTO tables menu); got {} items", labels.len());
+  assert!(
+    labels.contains(&"BEGIN"),
+    "expected the kitchen sink (not the narrow INSERT-INTO tables menu); got {} items",
+    labels.len()
+  );
 }
 
 #[test]
@@ -2389,13 +2410,22 @@ fn plpgsql_body_returning_second_column_still_offers_full_menu() {
   let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN UPDATE users SET name = 'x' WHERE id = 1 RETURNING id, ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"email"), "expected users' remaining `email`; got {} items, sample {:?}", labels.len(), &labels[..labels.len().min(10)]);
+  assert!(
+    labels.contains(&"email"),
+    "expected users' remaining `email`; got {} items, sample {:?}",
+    labels.len(),
+    &labels[..labels.len().min(10)]
+  );
   assert!(!labels.contains(&"id"), "already-listed `id` should be filtered out; got {labels:?}");
   // Full RETURNING menu (columns + aliases + all functions + expression
   // keywords), not the narrow ~2-item column-only menu the SET-slot
   // shadow bug produced -- same ~786-790 baseline as every other
   // WHERE-equivalent context measured this session.
-  assert!(labels.len() > 500, "expected the full RETURNING menu, not a narrow column-only one; got {} items", labels.len());
+  assert!(
+    labels.len() > 500,
+    "expected the full RETURNING menu, not a narrow column-only one; got {} items",
+    labels.len()
+  );
 }
 
 #[test]
@@ -2408,7 +2438,8 @@ fn plpgsql_body_second_statement_target_does_not_leak_first_statements_table() {
   // nearest real `;`, which coincides with PL/pgSQL inner-statement
   // boundaries in raw text).
   let cat = catalog_with_users_and_orders();
-  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN UPDATE users SET name = 'x' WHERE id = 1; INSERT INTO orders (";
+  let src =
+    "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN UPDATE users SET name = 'x' WHERE id = 1; INSERT INTO orders (";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   assert!(labels.contains(&"user_id"), "expected orders' `user_id` (2nd stmt's target); got {labels:?}");
@@ -2422,7 +2453,12 @@ fn execute_dynamic_sql_select_from_offers_tables() {
   let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE 'SELECT * FROM ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"users"), "expected `users`; got {} items, sample {:?}", labels.len(), &labels[..labels.len().min(10)]);
+  assert!(
+    labels.contains(&"users"),
+    "expected `users`; got {} items, sample {:?}",
+    labels.len(),
+    &labels[..labels.len().min(10)]
+  );
   assert!(labels.contains(&"orders"), "expected `orders`; got {labels:?}");
 }
 
@@ -2442,7 +2478,12 @@ fn execute_dynamic_sql_dollar_quoted_offers_tables() {
   let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE $sql$ SELECT * FROM ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"users"), "expected `users`; got {} items, sample {:?}", labels.len(), &labels[..labels.len().min(10)]);
+  assert!(
+    labels.contains(&"users"),
+    "expected `users`; got {} items, sample {:?}",
+    labels.len(),
+    &labels[..labels.len().min(10)]
+  );
 }
 
 #[test]
@@ -2451,7 +2492,11 @@ fn execute_dynamic_sql_escaped_quote_offers_columns() {
   let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE 'SELECT * FROM users WHERE name = ''foo'' AND ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id"), "expected `id` (proves the `''`-unescape + offset-mapping is correct, not just that some completion fired); got {} items", labels.len());
+  assert!(
+    labels.contains(&"id"),
+    "expected `id` (proves the `''`-unescape + offset-mapping is correct, not just that some completion fired); got {} items",
+    labels.len()
+  );
 }
 
 #[test]
@@ -2460,17 +2505,26 @@ fn execute_dynamic_sql_does_not_affect_unrelated_string_literal() {
   let src = "INSERT INTO users (email) VALUES ('";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.is_empty(), "a plain (non-EXECUTE) string literal must stay inert; got {} items: {labels:?}", labels.len());
+  assert!(
+    labels.is_empty(),
+    "a plain (non-EXECUTE) string literal must stay inert; got {} items: {labels:?}",
+    labels.len()
+  );
 }
 
 #[test]
 fn execute_dynamic_sql_concatenation_stays_inert() {
   let cat = catalog_with_users_and_orders();
-  let src = "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE 'SELECT * FROM ' || tbl_name; END; $$ LANGUAGE plpgsql;";
+  let src =
+    "CREATE FUNCTION f() RETURNS trigger AS $$ BEGIN EXECUTE 'SELECT * FROM ' || tbl_name; END; $$ LANGUAGE plpgsql;";
   let cursor = src.find("FROM ").unwrap() + "FROM ".len();
   let items = complete_at(src, cursor, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.is_empty(), "concatenated EXECUTE should stay inert (0 items), matching today's behavior; got {} items: {labels:?}", labels.len());
+  assert!(
+    labels.is_empty(),
+    "concatenated EXECUTE should stay inert (0 items), matching today's behavior; got {} items: {labels:?}",
+    labels.len()
+  );
 }
 
 #[test]
@@ -2480,7 +2534,11 @@ fn execute_dynamic_sql_format_wrapped_stays_inert() {
   let cursor = src.find("SELECT").unwrap();
   let items = complete_at(src, cursor, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.is_empty(), "format()-wrapped EXECUTE should stay inert (0 items); got {} items: {labels:?}", labels.len());
+  assert!(
+    labels.is_empty(),
+    "format()-wrapped EXECUTE should stay inert (0 items); got {} items: {labels:?}",
+    labels.len()
+  );
 }
 
 #[test]
@@ -2490,7 +2548,11 @@ fn execute_dynamic_sql_using_clause_still_offers_completion() {
   let cursor = src.find("' USING").unwrap();
   let items = complete_at(src, cursor, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id"), "a trailing USING clause should not disqualify the string; expected `id`, got {} items", labels.len());
+  assert!(
+    labels.contains(&"id"),
+    "a trailing USING clause should not disqualify the string; expected `id`, got {} items",
+    labels.len()
+  );
 }
 
 #[test]
@@ -2499,7 +2561,12 @@ fn rls_policy_using_expr_offers_target_table_columns() {
   let src = "CREATE POLICY p ON users USING (";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id"), "expected users' columns; got {} items, sample {:?}", labels.len(), &labels[..labels.len().min(10)]);
+  assert!(
+    labels.contains(&"id"),
+    "expected users' columns; got {} items, sample {:?}",
+    labels.len(),
+    &labels[..labels.len().min(10)]
+  );
   // A scoped menu here (this table's columns + all functions +
   // expression keywords) lands around ~790 items -- matching every
   // other WHERE-clause-equivalent context measured this session (the
@@ -2569,10 +2636,7 @@ fn tablesample_offers_method_keywords() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["BERNOULLI", "SYSTEM"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "TABLESAMPLE should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "TABLESAMPLE should suggest `{kw}`; got {labels:?}");
   }
   assert!(
     !labels.iter().any(|l| l == "INNER JOIN" || l == "CROSS JOIN"),
@@ -2589,10 +2653,7 @@ fn select_for_offers_lock_strength_keywords() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["UPDATE", "SHARE", "NO KEY UPDATE", "KEY SHARE"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "SELECT ... FOR should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "SELECT ... FOR should suggest `{kw}`; got {labels:?}");
   }
   // Should not be the JOIN menu.
   assert!(
@@ -2610,10 +2671,7 @@ fn select_for_update_offers_lock_modifiers() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["OF", "NOWAIT", "SKIP LOCKED"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "SELECT ... FOR UPDATE should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "SELECT ... FOR UPDATE should suggest `{kw}`; got {labels:?}");
   }
 }
 
@@ -2626,10 +2684,7 @@ fn limit_emits_no_join_keywords() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["INNER JOIN", "LEFT JOIN", "JOIN", "ON", "USING"] {
-    assert!(
-      !labels.iter().any(|l| l == kw),
-      "LIMIT slot wrongly emitted `{kw}`; got {labels:?}"
-    );
+    assert!(!labels.iter().any(|l| l == kw), "LIMIT slot wrongly emitted `{kw}`; got {labels:?}");
   }
 }
 
@@ -2642,10 +2697,7 @@ fn limit_offers_offset_as_followup_only() {
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   // Either empty or just OFFSET.
   for l in &labels {
-    assert!(
-      l == "OFFSET" || l == "FETCH",
-      "LIMIT slot should at most suggest OFFSET/FETCH; got `{l}` in {labels:?}"
-    );
+    assert!(l == "OFFSET" || l == "FETCH", "LIMIT slot should at most suggest OFFSET/FETCH; got `{l}` in {labels:?}");
   }
 }
 
@@ -2655,7 +2707,10 @@ fn offset_emits_no_catalog_items() {
   let cat = catalog_with_users_and_orders();
   let src = "SELECT * FROM users LIMIT 10 OFFSET ";
   let items = complete_at(src, src.len(), &cat);
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table)).count();
+  let bad = items
+    .iter()
+    .filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table))
+    .count();
   assert_eq!(bad, 0, "OFFSET slot leaked {bad} catalog items");
 }
 
@@ -2682,7 +2737,12 @@ fn alter_column_set_statistics_emits_no_catalog_items() {
   let cat = catalog_with_users_and_orders();
   let src = "ALTER TABLE users ALTER COLUMN id SET STATISTICS ";
   let items = complete_at(src, src.len(), &cat);
-  let bad = items.iter().filter(|i| matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table | ItemKind::Keyword)).count();
+  let bad = items
+    .iter()
+    .filter(|i| {
+      matches!(i.kind, ItemKind::Function | ItemKind::Type | ItemKind::Column | ItemKind::Table | ItemKind::Keyword)
+    })
+    .count();
   assert_eq!(bad, 0, "SET STATISTICS slot leaked {bad} items into an integer-only slot");
 }
 
@@ -2696,10 +2756,7 @@ fn alter_column_set_offers_set_subkeywords() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["DEFAULT", "NOT NULL", "DATA TYPE"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "ALTER COLUMN SET should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "ALTER COLUMN SET should suggest `{kw}`; got {labels:?}");
   }
   // Action keywords like ADD COLUMN shouldn't appear here.
   assert!(
@@ -2717,15 +2774,9 @@ fn alter_column_drop_offers_drop_subkeywords() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["DEFAULT", "NOT NULL"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "ALTER COLUMN DROP should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "ALTER COLUMN DROP should suggest `{kw}`; got {labels:?}");
   }
-  assert!(
-    !labels.iter().any(|l| l == "ADD COLUMN"),
-    "ADD COLUMN wrongly listed in DROP sub-keyword slot: {labels:?}"
-  );
+  assert!(!labels.iter().any(|l| l == "ADD COLUMN"), "ADD COLUMN wrongly listed in DROP sub-keyword slot: {labels:?}");
 }
 
 #[test]
@@ -2837,10 +2888,7 @@ fn delete_from_does_not_emit_where_keyword_as_table_alias() {
   let cur = src.len();
   let items = complete_at(src, cur, &cat);
   let tables: Vec<&str> = items.iter().filter(|i| i.kind == ItemKind::Table).map(|i| i.label.as_str()).collect();
-  assert!(
-    !tables.iter().any(|t| t.eq_ignore_ascii_case("WHERE")),
-    "phantom Table=WHERE leaked: {tables:?}"
-  );
+  assert!(!tables.iter().any(|t| t.eq_ignore_ascii_case("WHERE")), "phantom Table=WHERE leaked: {tables:?}");
 }
 
 #[test]
@@ -2851,10 +2899,7 @@ fn insert_returning_does_not_emit_returning_keyword_as_table_alias() {
   let items = complete_at(src, cur, &cat);
   let tables: Vec<&str> = items.iter().filter(|i| i.kind == ItemKind::Table).map(|i| i.label.as_str()).collect();
   for stray in ["VALUES", "RETURNING"] {
-    assert!(
-      !tables.iter().any(|t| t.eq_ignore_ascii_case(stray)),
-      "phantom Table={stray} leaked: {tables:?}"
-    );
+    assert!(!tables.iter().any(|t| t.eq_ignore_ascii_case(stray)), "phantom Table={stray} leaked: {tables:?}");
   }
 }
 
@@ -2948,10 +2993,7 @@ fn where_is_offers_is_continuation_keywords() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["NULL", "NOT NULL", "TRUE", "FALSE", "DISTINCT FROM"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "WHERE ... IS should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "WHERE ... IS should suggest `{kw}`; got {labels:?}");
   }
 }
 
@@ -2964,10 +3006,7 @@ fn where_is_not_offers_is_not_continuation_keywords() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<String> = items.iter().map(|i| i.label.to_ascii_uppercase()).collect();
   for kw in &["NULL", "TRUE", "FALSE", "DISTINCT FROM"] {
-    assert!(
-      labels.iter().any(|l| l == kw),
-      "WHERE ... IS NOT should suggest `{kw}`; got {labels:?}"
-    );
+    assert!(labels.iter().any(|l| l == kw), "WHERE ... IS NOT should suggest `{kw}`; got {labels:?}");
   }
 }
 
@@ -2979,18 +3018,9 @@ fn no_completion_inside_string_literal() {
   let cur = "SELECT * FROM users WHERE name = 'jo".len();
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(
-    !items.iter().any(|i| i.kind == ItemKind::Keyword),
-    "no keywords inside a string literal, got: {labels:?}"
-  );
-  assert!(
-    !items.iter().any(|i| i.kind == ItemKind::Table),
-    "no tables inside a string literal, got: {labels:?}"
-  );
-  assert!(
-    !items.iter().any(|i| i.kind == ItemKind::Column),
-    "no columns inside a string literal, got: {labels:?}"
-  );
+  assert!(!items.iter().any(|i| i.kind == ItemKind::Keyword), "no keywords inside a string literal, got: {labels:?}");
+  assert!(!items.iter().any(|i| i.kind == ItemKind::Table), "no tables inside a string literal, got: {labels:?}");
+  assert!(!items.iter().any(|i| i.kind == ItemKind::Column), "no columns inside a string literal, got: {labels:?}");
 }
 
 // ============================================================================
@@ -3076,7 +3106,11 @@ fn create_view_as_select_offers_columns() {
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // (The body has no FROM yet, so fallback emits catalog cols/funcs;
   // verify users columns appear and the 642-keyword dump is gone.)
-  assert!(labels.contains(&"id") || labels.contains(&"email"), "expected users columns: {:?}", &labels[..labels.len().min(15)]);
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email"),
+    "expected users columns: {:?}",
+    &labels[..labels.len().min(15)]
+  );
   assert!(
     !labels.iter().any(|l| l == &"DELETE FROM" || l == &"DROP TABLE"),
     "DDL keyword dump leaked into CREATE VIEW body: {:?}",
@@ -3405,7 +3439,10 @@ fn from_subquery_projection_slot_offers_inner_table_columns() {
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   assert!(labels.contains(&"id"), "expected `users.id` inside FROM-subquery: {:?}", &labels[..labels.len().min(15)]);
-  assert!(!labels.iter().any(|l| l.contains("INNER JOIN")), "JOIN keywords leaked into subquery projection slot: {labels:?}");
+  assert!(
+    !labels.iter().any(|l| l.contains("INNER JOIN")),
+    "JOIN keywords leaked into subquery projection slot: {labels:?}"
+  );
 }
 
 // ============================================================================
@@ -4319,7 +4356,19 @@ fn r127_comment_on_full_kind_list() {
   let src = "COMMENT ON ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  for k in ["RULE", "AGGREGATE", "CAST", "COLLATION", "CONVERSION", "OPERATOR", "STATISTICS", "ACCESS METHOD", "LARGE OBJECT", "TEXT SEARCH CONFIGURATION", "TRANSFORM"] {
+  for k in [
+    "RULE",
+    "AGGREGATE",
+    "CAST",
+    "COLLATION",
+    "CONVERSION",
+    "OPERATOR",
+    "STATISTICS",
+    "ACCESS METHOD",
+    "LARGE OBJECT",
+    "TEXT SEARCH CONFIGURATION",
+    "TRANSFORM",
+  ] {
     assert!(labels.contains(&k), "COMMENT ON missing {k}");
   }
 }
@@ -4330,7 +4379,18 @@ fn r128_drop_full_kind_list() {
   let src = "DROP ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  for k in ["ROUTINE", "OPERATOR CLASS", "OPERATOR FAMILY", "STATISTICS", "ACCESS METHOD", "LANGUAGE", "CONVERSION", "EVENT TRIGGER", "TRANSFORM", "TEXT SEARCH CONFIGURATION"] {
+  for k in [
+    "ROUTINE",
+    "OPERATOR CLASS",
+    "OPERATOR FAMILY",
+    "STATISTICS",
+    "ACCESS METHOD",
+    "LANGUAGE",
+    "CONVERSION",
+    "EVENT TRIGGER",
+    "TRANSFORM",
+    "TEXT SEARCH CONFIGURATION",
+  ] {
     assert!(labels.contains(&k), "DROP missing {k}");
   }
 }
@@ -4341,7 +4401,18 @@ fn r129_alter_alone_emits_full_class_menu() {
   let src = "ALTER ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  for k in ["TABLE", "VIEW", "INDEX", "FUNCTION", "ROLE", "SYSTEM", "DEFAULT PRIVILEGES", "STATISTICS", "PUBLICATION", "SUBSCRIPTION"] {
+  for k in [
+    "TABLE",
+    "VIEW",
+    "INDEX",
+    "FUNCTION",
+    "ROLE",
+    "SYSTEM",
+    "DEFAULT PRIVILEGES",
+    "STATISTICS",
+    "PUBLICATION",
+    "SUBSCRIPTION",
+  ] {
     assert!(labels.contains(&k), "ALTER missing {k}");
   }
 }
@@ -4352,7 +4423,18 @@ fn r130_create_alone_emits_full_class_menu() {
   let src = "CREATE ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  for k in ["CONVERSION", "TRANSFORM", "USER MAPPING", "OPERATOR CLASS", "OPERATOR FAMILY", "ACCESS METHOD", "STATISTICS", "LANGUAGE", "GROUP", "ROUTINE"] {
+  for k in [
+    "CONVERSION",
+    "TRANSFORM",
+    "USER MAPPING",
+    "OPERATOR CLASS",
+    "OPERATOR FAMILY",
+    "ACCESS METHOD",
+    "STATISTICS",
+    "LANGUAGE",
+    "GROUP",
+    "ROUTINE",
+  ] {
     assert!(labels.contains(&k), "CREATE missing {k}");
   }
 }
@@ -7223,7 +7305,6 @@ fn r2_074_cycle2_final_consolidation() {
     ("CREATE LANGUAGE plperl ", "HANDLER"),
     ("CREATE SERVER remote ", "TYPE"),
     ("CREATE USER MAPPING FOR alice SERVER remote ", "OPTIONS"),
-
     // alter chain (one-per-handler)
     ("ALTER DATABASE mydb ", "REFRESH COLLATION VERSION"),
     ("ALTER TABLESPACE ts ", "OWNER TO"),
@@ -7252,7 +7333,6 @@ fn r2_074_cycle2_final_consolidation() {
     ("ALTER RULE r ON users ", "RENAME TO"),
     ("ALTER TRIGGER t ON users ", "DEPENDS ON EXTENSION"),
     ("ALTER DEFAULT PRIVILEGES IN SCHEMA app GRANT SELECT ON ", "TABLES"),
-
     // DML / transaction edges
     ("MERGE INTO users u USING staged s ON u.id=s.id WHEN MATCHED THEN UPDATE ", "SET"),
     ("INSERT INTO users VALUES (1) ON CONFLICT (id) DO UPDATE ", "SET"),
@@ -7307,8 +7387,10 @@ fn r2_188_cast_with_space_emits_types() {
   let src = "SELECT CAST(col AS  ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| matches!(*l, "INT" | "BIGINT" | "TEXT" | "NUMERIC" | "BOOLEAN")),
-    "CAST AS with extra spaces missing types");
+  assert!(
+    labels.iter().any(|l| matches!(*l, "INT" | "BIGINT" | "TEXT" | "NUMERIC" | "BOOLEAN")),
+    "CAST AS with extra spaces missing types"
+  );
 }
 
 #[test]
@@ -7317,8 +7399,12 @@ fn r2_188_cast_function_expression_emits_types() {
   let src = "SELECT CAST(now() + INTERVAL '1 day' AS ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| matches!(*l, "INT" | "BIGINT" | "TEXT" | "NUMERIC" | "BOOLEAN" | "TIMESTAMP" | "TIMESTAMPTZ" | "DATE")),
-    "complex CAST expression AS missing types");
+  assert!(
+    labels
+      .iter()
+      .any(|l| matches!(*l, "INT" | "BIGINT" | "TEXT" | "NUMERIC" | "BOOLEAN" | "TIMESTAMP" | "TIMESTAMPTZ" | "DATE")),
+    "complex CAST expression AS missing types"
+  );
 }
 
 #[test]
@@ -7328,9 +7414,11 @@ fn r2_188_merge_when_matched_then_update_set_lhs() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // UPDATE SET LHS should expose target column names.
-  assert!(labels.contains(&"name") || labels.contains(&"email") || labels.contains(&"id"),
+  assert!(
+    labels.contains(&"name") || labels.contains(&"email") || labels.contains(&"id"),
     "MERGE THEN UPDATE SET LHS missing target cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7339,8 +7427,10 @@ fn r2_199_returning_after_on_conflict() {
   let src = "INSERT INTO users (id) VALUES (1) ON CONFLICT (id) DO UPDATE SET name = 'x' RETURNING ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"*"),
-    "RETURNING after ON CONFLICT missing target cols");
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"*"),
+    "RETURNING after ON CONFLICT missing target cols"
+  );
 }
 
 #[test]
@@ -7349,8 +7439,10 @@ fn r2_199_returning_after_do_nothing() {
   let src = "INSERT INTO users (id) VALUES (1) ON CONFLICT DO NOTHING RETURNING ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"*"),
-    "RETURNING after DO NOTHING missing target cols");
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"*"),
+    "RETURNING after DO NOTHING missing target cols"
+  );
 }
 
 #[test]
@@ -7359,8 +7451,10 @@ fn r2_198_returning_in_cte_with_chain() {
   let src = "WITH del AS (DELETE FROM users WHERE id = 1 RETURNING ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"*"),
-    "CTE RETURNING slot missing target cols");
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"*"),
+    "CTE RETURNING slot missing target cols"
+  );
 }
 
 #[test]
@@ -7369,8 +7463,10 @@ fn r2_198_returning_after_multiple_stmts() {
   let src = "SELECT 1; INSERT INTO users (id) VALUES (1) RETURNING ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"*"),
-    "post-prev-stmt RETURNING missing target cols");
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"*"),
+    "post-prev-stmt RETURNING missing target cols"
+  );
 }
 
 #[test]
@@ -7379,9 +7475,11 @@ fn r2_197_returning_with_alias_dot() {
   let src = "UPDATE users u SET name = 'x' WHERE id = 1 RETURNING u.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email"),
     "RETURNING u.<col> missing alias cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7391,8 +7489,10 @@ fn r2_197_returning_expression_with_function() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // Inside upper(...) -- expression slot, target cols + funcs.
-  assert!(labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"now"),
-    "RETURNING fn-arg slot missing expr ctx");
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"now"),
+    "RETURNING fn-arg slot missing expr ctx"
+  );
 }
 
 #[test]
@@ -7411,8 +7511,7 @@ fn r2_196_returning_partial_column_filter_friendly() {
   let src = "INSERT INTO users (id) VALUES (1) RETURNING em";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"email"),
-    "RETURNING partial col `em` missing email");
+  assert!(labels.contains(&"email"), "RETURNING partial col `em` missing email");
 }
 
 #[test]
@@ -7425,9 +7524,11 @@ fn r2_195_returning_emits_target_columns() {
   ] {
     let items = complete_at(src, src.len(), &cat);
     let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-    assert!(labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"*"),
+    assert!(
+      labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"*"),
       "{src:?}: RETURNING missing target cols/*; labels[..15]={:?}",
-      &labels[..labels.len().min(15)]);
+      &labels[..labels.len().min(15)]
+    );
   }
 }
 
@@ -7437,9 +7538,11 @@ fn r2_195_returning_after_comma_still_target_cols() {
   let src = "INSERT INTO users (id) VALUES (1) RETURNING id, ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"name") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"name") || labels.contains(&"email"),
     "RETURNING comma-followup missing cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7453,9 +7556,7 @@ fn r2_194_insert_overriding_user_value_chain() {
   ] {
     let items = complete_at(src, src.len(), &cat);
     let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-    assert!(labels.contains(want),
-      "{src:?} -> {want}: missing; labels[..10]={:?}",
-      &labels[..labels.len().min(10)]);
+    assert!(labels.contains(want), "{src:?} -> {want}: missing; labels[..10]={:?}", &labels[..labels.len().min(10)]);
   }
 }
 
@@ -7465,9 +7566,11 @@ fn r2_194_insert_overriding_value_then_values_clause() {
   let src = "INSERT INTO users OVERRIDING SYSTEM VALUE ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"VALUES") || labels.contains(&"SELECT") || labels.contains(&"DEFAULT VALUES"),
+  assert!(
+    labels.contains(&"VALUES") || labels.contains(&"SELECT") || labels.contains(&"DEFAULT VALUES"),
     "after OVERRIDING VALUE missing body shape; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7478,9 +7581,13 @@ fn r2_193_merge_update_set_complex_expression() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // Concatenation continuation -- still expression slot.
-  assert!(labels.contains(&"now") || labels.contains(&"current_timestamp")
-    || labels.contains(&"id") || labels.contains(&"user_id"),
-    "MERGE complex expr continuation missing expr ctx");
+  assert!(
+    labels.contains(&"now")
+      || labels.contains(&"current_timestamp")
+      || labels.contains(&"id")
+      || labels.contains(&"user_id"),
+    "MERGE complex expr continuation missing expr ctx"
+  );
 }
 
 #[test]
@@ -7489,9 +7596,11 @@ fn r2_193_insert_overriding_value_followup() {
   let src = "INSERT INTO users OVERRIDING SYSTEM ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"VALUE"),
+  assert!(
+    labels.contains(&"VALUE"),
     "OVERRIDING SYSTEM <cursor> missing VALUE; labels[..10]={:?}",
-    &labels[..labels.len().min(10)]);
+    &labels[..labels.len().min(10)]
+  );
 }
 
 #[test]
@@ -7501,9 +7610,11 @@ fn r2_192_merge_update_set_rhs_uses_alias_dot() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // After `o.` -- dot alias resolves source table cols.
-  assert!(labels.contains(&"user_id") || labels.contains(&"id"),
+  assert!(
+    labels.contains(&"user_id") || labels.contains(&"id"),
     "MERGE UPDATE SET RHS o.<col> missing source cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7514,8 +7625,10 @@ fn r2_192_merge_update_set_multi_assignment() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // Should still recognize expression slot.
-  assert!(labels.contains(&"now") || labels.contains(&"user_id") || labels.contains(&"id"),
-    "MERGE UPDATE SET 2nd assignment RHS missing expr ctx");
+  assert!(
+    labels.contains(&"now") || labels.contains(&"user_id") || labels.contains(&"id"),
+    "MERGE UPDATE SET 2nd assignment RHS missing expr ctx"
+  );
 }
 
 #[test]
@@ -7525,10 +7638,14 @@ fn r2_191_merge_update_set_rhs_now_works() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // Fixed: target + source cols + aliases + functions surface.
-  assert!(labels.contains(&"now") || labels.contains(&"current_timestamp")
-    || labels.contains(&"id") || labels.contains(&"user_id"),
+  assert!(
+    labels.contains(&"now")
+      || labels.contains(&"current_timestamp")
+      || labels.contains(&"id")
+      || labels.contains(&"user_id"),
     "MERGE UPDATE SET RHS still missing expr ctx; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7538,9 +7655,11 @@ fn r2_190_insert_col_list_resolves_partial() {
   let src = "INSERT INTO users (id, em";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"email"),
+  assert!(
+    labels.contains(&"email"),
     "INSERT col list partial col missing email; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7549,9 +7668,11 @@ fn r2_190_update_set_lhs_emits_target_cols() {
   let src = "UPDATE users SET ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"name") || labels.contains(&"email") || labels.contains(&"id"),
+  assert!(
+    labels.contains(&"name") || labels.contains(&"email") || labels.contains(&"id"),
     "UPDATE SET LHS missing target cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7561,9 +7682,11 @@ fn r2_189_merge_when_not_matched_then_insert_col_list_now_works() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // Fixed via merge_insert_col_list_slot detector.
-  assert!(labels.contains(&"id") || labels.contains(&"name") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"name") || labels.contains(&"email"),
     "MERGE THEN INSERT col list still missing target cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7573,9 +7696,11 @@ fn r2_187_nested_cte_inner_cursor_resolves() {
   let cur = src.find("u.").unwrap() + 2;
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email"),
     "nested CTE inner cursor missed cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7585,8 +7710,10 @@ fn r2_187_after_cast_emits_expr_context() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // Expression slot after `+` -- functions present.
-  assert!(labels.contains(&"now") || labels.contains(&"current_timestamp"),
-    "after cast+arithmetic expr ctx missing fns");
+  assert!(
+    labels.contains(&"now") || labels.contains(&"current_timestamp"),
+    "after cast+arithmetic expr ctx missing fns"
+  );
 }
 
 #[test]
@@ -7596,9 +7723,11 @@ fn r2_187_inside_cast_paren_emits_types() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // Fixed via cast_as_expects_type detector -- types only now.
-  assert!(labels.iter().any(|l| matches!(*l, "INT" | "INTEGER" | "BIGINT" | "TEXT" | "BOOLEAN" | "NUMERIC")),
+  assert!(
+    labels.iter().any(|l| matches!(*l, "INT" | "INTEGER" | "BIGINT" | "TEXT" | "BOOLEAN" | "NUMERIC")),
     "CAST AS slot missing types; labels[..20]={:?}",
-    &labels[..labels.len().min(20)]);
+    &labels[..labels.len().min(20)]
+  );
 }
 
 #[test]
@@ -7608,10 +7737,14 @@ fn r2_187_over_paren_no_args_emits_partition_order() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // Inside OVER (...) the user can write PARTITION BY / ORDER BY / RANGE / ROWS / GROUPS.
-  assert!(labels.contains(&"PARTITION BY") || labels.contains(&"ORDER BY")
-    || labels.contains(&"PARTITION") || labels.contains(&"ROWS"),
+  assert!(
+    labels.contains(&"PARTITION BY")
+      || labels.contains(&"ORDER BY")
+      || labels.contains(&"PARTITION")
+      || labels.contains(&"ROWS"),
     "OVER ( slot missing window-clause kws; labels[..20]={:?}",
-    &labels[..labels.len().min(20)]);
+    &labels[..labels.len().min(20)]
+  );
 }
 
 #[test]
@@ -7621,9 +7754,11 @@ fn r2_187_multiline_cursor_position() {
   let cur = src.find("em").unwrap() + 2;
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"email"),
+  assert!(
+    labels.contains(&"email"),
     "multiline cursor missed email; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7633,9 +7768,11 @@ fn r2_186_completion_after_semicolon_starts_fresh() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // Cursor after `;` should land at top-level stmt-start menu.
-  assert!(labels.contains(&"SELECT") || labels.contains(&"INSERT INTO"),
+  assert!(
+    labels.contains(&"SELECT") || labels.contains(&"INSERT INTO"),
     "fresh stmt slot missing top-level kws; labels[..10]={:?}",
-    &labels[..labels.len().min(10)]);
+    &labels[..labels.len().min(10)]
+  );
 }
 
 #[test]
@@ -7645,8 +7782,7 @@ fn r2_186_completion_after_keyword_alias() {
   // completion. Should not dump 600 items.
   let src = "SELECT id AS ";
   let items = complete_at(src, src.len(), &cat);
-  assert!(items.len() < 100,
-    "AS-alias slot dumped {} items", items.len());
+  assert!(items.len() < 100, "AS-alias slot dumped {} items", items.len());
 }
 
 #[test]
@@ -7657,8 +7793,7 @@ fn r2_186_completion_after_semicolons_in_middle() {
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // Second stmt's scope should resolve users; "em" surfaces email.
-  assert!(labels.contains(&"email"),
-    "multi-stmt second-stmt partial col missing email");
+  assert!(labels.contains(&"email"), "multi-stmt second-stmt partial col missing email");
 }
 
 #[test]
@@ -7668,11 +7803,17 @@ fn r2_186_completion_empty_alias_in_from() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // After table name + space, next legal: JOIN/WHERE/AS/etc.
-  assert!(labels.contains(&"WHERE") || labels.contains(&"AS") || labels.contains(&"JOIN")
-    || labels.contains(&"INNER JOIN") || labels.contains(&"ORDER BY")
-    || labels.contains(&"GROUP BY") || labels.contains(&"LIMIT"),
+  assert!(
+    labels.contains(&"WHERE")
+      || labels.contains(&"AS")
+      || labels.contains(&"JOIN")
+      || labels.contains(&"INNER JOIN")
+      || labels.contains(&"ORDER BY")
+      || labels.contains(&"GROUP BY")
+      || labels.contains(&"LIMIT"),
     "after-table slot missing core kws; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7682,8 +7823,7 @@ fn r2_186_dot_no_alias_doesnt_emit_columns() {
   let src = "SELECT bogus.";
   let items = complete_at(src, src.len(), &cat);
   // Either empty or only schema-like results, never a column dump.
-  assert!(items.len() < 30,
-    "bogus.* leaked {} items", items.len());
+  assert!(items.len() < 30, "bogus.* leaked {} items", items.len());
 }
 
 #[test]
@@ -7709,9 +7849,11 @@ fn r2_164_generic_dialect_does_not_panic() {
   let scopes = dsl_resolve::resolve_with_source(&file.statements, src);
   let items = dsl_completion::complete(src, &file, &scopes, &cat, (cur as u32).into());
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"email"),
+  assert!(
+    labels.contains(&"email"),
     "Generic-dialect completion lost email; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7732,15 +7874,16 @@ fn r2_162_long_select_list_no_panic() {
   let cat = catalog_with_users_and_orders();
   let mut src = "SELECT ".to_string();
   for i in 0..1000 {
-    if i > 0 { src.push(','); }
+    if i > 0 {
+      src.push(',');
+    }
     src.push_str(&format!(" col{i}"));
   }
   src.push_str(" FROM users WHERE em");
   let cur = src.len();
   let items = complete_at(&src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"email"),
-    "long projection list lost partial col completion");
+  assert!(labels.contains(&"email"), "long projection list lost partial col completion");
 }
 
 #[test]
@@ -7748,15 +7891,16 @@ fn r2_162_huge_in_list_completion_no_panic() {
   let cat = catalog_with_users_and_orders();
   let mut src = "SELECT id FROM users WHERE id IN (".to_string();
   for i in 0..500 {
-    if i > 0 { src.push_str(", "); }
+    if i > 0 {
+      src.push_str(", ");
+    }
     src.push_str(&i.to_string());
   }
   src.push_str(") AND em");
   let cur = src.len();
   let items = complete_at(&src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"email"),
-    "huge IN list broke partial col completion");
+  assert!(labels.contains(&"email"), "huge IN list broke partial col completion");
 }
 
 #[test]
@@ -7768,9 +7912,11 @@ fn r2_160_multistmt_cursor_in_second_stmt_resolves_own_scope() {
   let cur = src.len();
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"user_id") || labels.contains(&"id"),
+  assert!(
+    labels.contains(&"user_id") || labels.contains(&"id"),
     "second-stmt cursor missed orders cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7781,9 +7927,11 @@ fn r2_160_multistmt_cursor_in_first_stmt_keeps_own_scope() {
   let cur = "SELECT u.".len();
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email"),
     "first-stmt cursor lost users cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7794,9 +7942,11 @@ fn r2_160_cte_chain_mid_typing_doesnt_panic() {
   let cur = src.len();
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id"),
+  assert!(
+    labels.contains(&"id"),
     "CTE alias dot missed projected id; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7807,8 +7957,7 @@ fn r2_160_deeply_nested_subquery_resolves() {
   let items = complete_at(src, cur, &cat);
   // sub2 doesn't project specific cols, so cols may not surface. Just
   // verify no panic + result isn't the 600-item dump.
-  assert!(items.len() < 300,
-    "deep nested subquery dumped {} items", items.len());
+  assert!(items.len() < 300, "deep nested subquery dumped {} items", items.len());
 }
 
 #[test]
@@ -7819,9 +7968,11 @@ fn r2_159_partial_identifier_in_projection_still_completes() {
   let cur = "SELECT em".len();
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"email"),
+  assert!(
+    labels.contains(&"email"),
     "partial-typed `em` in projection didn't surface email; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7831,8 +7982,7 @@ fn r2_159_partial_identifier_after_comma() {
   let cur = "SELECT id, em".len();
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"email"),
-    "partial col after comma didn't surface email");
+  assert!(labels.contains(&"email"), "partial col after comma didn't surface email");
 }
 
 #[test]
@@ -7843,9 +7993,11 @@ fn r2_159_partial_keyword_at_stmt_start() {
   let cur = src.len();
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"SELECT") || labels.contains(&"SET"),
+  assert!(
+    labels.contains(&"SELECT") || labels.contains(&"SET"),
     "partial stmt-start kw missing; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7855,9 +8007,11 @@ fn r2_159_partial_table_after_from() {
   let cur = src.len();
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"users"),
+  assert!(
+    labels.contains(&"users"),
     "partial table `us` missing users; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7867,9 +8021,11 @@ fn r2_159_cursor_after_paren_in_predicate() {
   let cur = src.len();
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email"),
     "predicate cursor after `(` missing cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7880,9 +8036,11 @@ fn r2_159_cursor_after_equals_emits_columns_and_fns() {
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // RHS of `=` is an expression slot -- columns + functions.
-  assert!(labels.contains(&"id") || labels.contains(&"now"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"now"),
     "after `=` missing expr context; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7902,7 +8060,10 @@ fn r2_155_source_tables_merge_case_insensitive() {
       policies: Vec::new(),
       comment: None,
       row_estimate: None,
-      owner: None, definition: None, strict: false, options: None,
+      owner: None,
+      definition: None,
+      strict: false,
+      options: None,
     }],
   });
   let mut derived = Catalog::default();
@@ -7919,7 +8080,10 @@ fn r2_155_source_tables_merge_case_insensitive() {
       policies: Vec::new(),
       comment: None,
       row_estimate: None,
-      owner: None, definition: None, strict: false, options: None,
+      owner: None,
+      definition: None,
+      strict: false,
+      options: None,
     }],
   });
   let merged = ::dsl_completion::source_tables::merge(&live, &derived);
@@ -7935,9 +8099,11 @@ fn r2_152_fallback_mixed_case_alias_dot_resolves() {
   let src = "SELECT * FROM USERS U WHERE U.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email"),
     "mixed-case alias dot missing cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -7994,9 +8160,11 @@ fn r2_150_upper_case_table_dot_resolves_now() {
   let cur = "SELECT USERS.".len();
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email"),
     "USERS.<col> missing cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -8005,9 +8173,11 @@ fn r2_149_mixed_case_alias_dot_resolves() {
   let src = "SELECT * FROM users U WHERE U.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email"),
     "uppercase alias dot missing cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -8018,9 +8188,11 @@ fn r2_149_partial_column_after_dot_returns_all_cols() {
   let src = "SELECT * FROM users u WHERE u.em";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"email"),
+  assert!(
+    labels.contains(&"email"),
     "partial-typed col `em` did not surface email; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -8029,9 +8201,11 @@ fn r2_149_dot_inside_join_on_predicate() {
   let src = "SELECT * FROM users u JOIN orders o ON o.user_id = u.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email"),
     "JOIN ON predicate dot missing cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -8041,9 +8215,11 @@ fn r2_149_dot_in_select_projection() {
   let cur = "SELECT u.".len();
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email"),
     "projection dot missing cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -8052,9 +8228,11 @@ fn r2_149_dot_in_order_by() {
   let src = "SELECT * FROM users u ORDER BY u.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email"),
     "ORDER BY dot missing cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -8063,9 +8241,11 @@ fn r2_148_schema_qualified_alias_dot_columns() {
   let src = "SELECT u.id FROM public.users u WHERE u.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email"),
     "schema-qualified alias dot missing cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -8074,9 +8254,11 @@ fn r2_148_quoted_alias_dot_columns() {
   let src = "SELECT * FROM users \"U\" WHERE \"U\".";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email"),
     "quoted alias dot missing cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -8089,8 +8271,7 @@ fn r2_148_cte_column_list_dot_alias_columns() {
   // Either the explicit list (alpha/beta) OR the CTE body cols if the
   // resolver fell through. Just require something useful, not nothing.
   assert!(
-    labels.contains(&"alpha") || labels.contains(&"beta")
-      || labels.contains(&"id") || labels.contains(&"email"),
+    labels.contains(&"alpha") || labels.contains(&"beta") || labels.contains(&"id") || labels.contains(&"email"),
     "CTE col-list dot missing cols; labels[..15]={:?}",
     &labels[..labels.len().min(15)]
   );
@@ -8117,9 +8298,11 @@ fn r2_147_merge_source_alias_dot_columns() {
   let src = "MERGE INTO users u USING orders o ON u.id = o.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"user_id"),
+  assert!(
+    labels.contains(&"user_id"),
     "MERGE USING alias dot missing user_id; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -8128,9 +8311,11 @@ fn r2_147_merge_target_alias_dot_columns() {
   let src = "MERGE INTO users u USING orders o ON u.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email"),
     "MERGE INTO alias dot missing users cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -8139,9 +8324,11 @@ fn r2_147_insert_select_from_alias_dot_columns() {
   let src = "INSERT INTO users (id, name) SELECT u.id, u.name FROM users u WHERE u.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email"),
     "INSERT ... SELECT FROM alias dot missing users cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -8150,9 +8337,11 @@ fn r2_147_cte_alias_dot_emits_projected_columns() {
   let src = "WITH t AS (SELECT id, email FROM users) SELECT t.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email"),
     "CTE alias dot missing projected cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -8161,9 +8350,7 @@ fn r2_146_update_from_alias_dot_emits_columns() {
   let src = "UPDATE users u SET name = o.user_id::text FROM orders o WHERE u.id = o.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"user_id"),
-    "o.<col> missing user_id; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+  assert!(labels.contains(&"user_id"), "o.<col> missing user_id; labels[..15]={:?}", &labels[..labels.len().min(15)]);
 }
 
 #[test]
@@ -8172,9 +8359,11 @@ fn r2_146_delete_using_alias_dot_emits_columns() {
   let src = "DELETE FROM orders o USING users u WHERE o.user_id = u.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email"),
     "u.<col> missing target cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -8185,9 +8374,11 @@ fn r2_146_new_dot_in_trigger_function_body() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // NEW.<col> -> columns of users (trigger target).
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email"),
     "NEW.<col> missing trigger target cols; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -8196,12 +8387,16 @@ fn r2_145_insert_values_inner_slot_emits_default_and_fns() {
   let src = "INSERT INTO users (id, name) VALUES (";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"DEFAULT"),
+  assert!(
+    labels.contains(&"DEFAULT"),
     "DEFAULT keyword missing inside VALUES; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
   // Any common function should be present.
-  assert!(labels.contains(&"now") || labels.contains(&"current_timestamp"),
-    "expression context (functions) missing inside VALUES");
+  assert!(
+    labels.contains(&"now") || labels.contains(&"current_timestamp"),
+    "expression context (functions) missing inside VALUES"
+  );
 }
 
 #[test]
@@ -8211,9 +8406,11 @@ fn r2_145_on_conflict_do_update_set_emits_target_columns() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // LHS slot of DO UPDATE SET expects target columns.
-  assert!(labels.contains(&"name") || labels.contains(&"email") || labels.contains(&"id"),
+  assert!(
+    labels.contains(&"name") || labels.contains(&"email") || labels.contains(&"id"),
     "DO UPDATE SET LHS missing target columns; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -8223,9 +8420,11 @@ fn r2_145_excluded_dot_emits_target_columns() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // EXCLUDED is the proposed row -- same columns as the target.
-  assert!(labels.contains(&"name") || labels.contains(&"email") || labels.contains(&"id"),
+  assert!(
+    labels.contains(&"name") || labels.contains(&"email") || labels.contains(&"id"),
     "EXCLUDED.<col> missing target columns; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
+    &labels[..labels.len().min(15)]
+  );
 }
 
 #[test]
@@ -8234,11 +8433,15 @@ fn r2_145_insert_values_after_comma_emits_default_and_fns() {
   let src = "INSERT INTO users (id, name) VALUES (1, ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"DEFAULT"),
+  assert!(
+    labels.contains(&"DEFAULT"),
     "DEFAULT keyword missing after VALUES comma; labels[..15]={:?}",
-    &labels[..labels.len().min(15)]);
-  assert!(labels.contains(&"now") || labels.contains(&"current_timestamp"),
-    "expression context (functions) missing after VALUES comma");
+    &labels[..labels.len().min(15)]
+  );
+  assert!(
+    labels.contains(&"now") || labels.contains(&"current_timestamp"),
+    "expression context (functions) missing after VALUES comma"
+  );
 }
 
 #[test]
@@ -8248,15 +8451,13 @@ fn r2_144_merge_when_matched_and_predicate_slot() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // Aliases must surface.
-  assert!(labels.contains(&"u"), "alias u missing; labels[..20]={:?}",
-    &labels[..labels.len().min(20)]);
+  assert!(labels.contains(&"u"), "alias u missing; labels[..20]={:?}", &labels[..labels.len().min(20)]);
   assert!(labels.contains(&"o"), "alias o missing");
   // Columns of both target and source must surface.
   assert!(labels.contains(&"id"), "id missing");
   assert!(labels.contains(&"user_id"), "user_id missing");
   // Expression keywords present.
-  assert!(labels.contains(&"NOT") || labels.contains(&"AND") || labels.contains(&"OR"),
-    "expression kws missing");
+  assert!(labels.contains(&"NOT") || labels.contains(&"AND") || labels.contains(&"OR"), "expression kws missing");
 }
 
 #[test]
@@ -8276,9 +8477,11 @@ fn r2_143_insert_returning_columns_fix() {
   let src = "INSERT INTO users (id, name) VALUES (1, 'x') RETURNING ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"*"),
+  assert!(
+    labels.contains(&"id") || labels.contains(&"*"),
     "RETURNING column slot missing id/*; labels[..20]={:?}",
-    &labels[..labels.len().min(20)]);
+    &labels[..labels.len().min(20)]
+  );
 }
 
 #[test]
@@ -8289,9 +8492,11 @@ fn r2_143_lateral_after_comma_surfaces_tables() {
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // LATERAL slot expects a table-returning expression -- catalog
   // tables are the right starting point.
-  assert!(labels.contains(&"users") || labels.contains(&"orders"),
+  assert!(
+    labels.contains(&"users") || labels.contains(&"orders"),
     "LATERAL slot missing catalog tables; labels[..20]={:?}",
-    &labels[..labels.len().min(20)]);
+    &labels[..labels.len().min(20)]
+  );
 }
 
 #[test]
@@ -8956,7 +9161,6 @@ fn r3_007_within_group_order_by_emits_scope_columns() {
   assert!(labels.contains(&"id"), "expected id in WITHIN GROUP ORDER BY: {labels:?}");
 }
 
-
 #[test]
 fn r3_008_distinct_on_paren_emits_scope_columns() {
   // SELECT DISTINCT ON (<cursor>) -- column slot scoped to FROM.
@@ -9008,8 +9212,7 @@ fn r3_014_returning_star_no_panic() {
   let src = "INSERT INTO users (email) VALUES ('a') RETURNING ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
-    "RETURNING expected target cols: {labels:?}");
+  assert!(labels.contains(&"id") || labels.contains(&"email"), "RETURNING expected target cols: {labels:?}");
 }
 
 #[test]
@@ -9057,8 +9260,7 @@ fn r3_056_cte_alias_dot_surfaces_projected_columns() {
   let cur = "WITH t AS (SELECT id, email FROM users) SELECT t.".len();
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
-    "CTE projection: {labels:?}");
+  assert!(labels.contains(&"id") || labels.contains(&"email"), "CTE projection: {labels:?}");
 }
 
 #[test]
@@ -9068,8 +9270,7 @@ fn r3_059_create_policy_using_emits_columns() {
   let cur = "CREATE POLICY p ON users USING (".len();
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
-    "POLICY USING: {labels:?}");
+  assert!(labels.contains(&"id") || labels.contains(&"email"), "POLICY USING: {labels:?}");
 }
 
 #[test]
@@ -9079,8 +9280,7 @@ fn r3_060_create_policy_with_check_emits_columns() {
   let cur = "CREATE POLICY p ON users WITH CHECK (".len();
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
-    "POLICY WITH CHECK: {labels:?}");
+  assert!(labels.contains(&"id") || labels.contains(&"email"), "POLICY WITH CHECK: {labels:?}");
 }
 
 #[test]
@@ -9091,8 +9291,7 @@ fn r3_062_merge_when_not_matched_then_do_nothing() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // Should suggest INSERT or DO NOTHING.
-  assert!(labels.iter().any(|l| l.contains("INSERT") || l.contains("DO")),
-    "MERGE THEN: {labels:?}");
+  assert!(labels.iter().any(|l| l.contains("INSERT") || l.contains("DO")), "MERGE THEN: {labels:?}");
 }
 
 #[test]
@@ -9103,8 +9302,10 @@ fn r3_063_merge_when_matched_then_do_delete() {
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
   // MERGE THEN DELETE RETURNING -- target table columns.
-  assert!(labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"name"),
-    "MERGE DELETE RETURNING: {labels:?}");
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"name"),
+    "MERGE DELETE RETURNING: {labels:?}"
+  );
 }
 
 #[test]
@@ -9114,8 +9315,10 @@ fn r3_084_cte_with_explicit_col_list_dot() {
   let cur = "WITH t (a, b, c) AS (SELECT 1, 2, 3) SELECT t.".len();
   let items = complete_at(src, cur, &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"a") || labels.contains(&"b") || labels.contains(&"c"),
-    "CTE explicit col list dot: {labels:?}");
+  assert!(
+    labels.contains(&"a") || labels.contains(&"b") || labels.contains(&"c"),
+    "CTE explicit col list dot: {labels:?}"
+  );
 }
 
 #[test]
@@ -9133,8 +9336,7 @@ fn r3_122_create_trigger_for_each_row() {
   let src = "CREATE TRIGGER tg BEFORE INSERT ON users FOR EACH ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| l == &"ROW" || l == &"STATEMENT"),
-    "FOR EACH: {labels:?}");
+  assert!(labels.iter().any(|l| l == &"ROW" || l == &"STATEMENT"), "FOR EACH: {labels:?}");
 }
 
 #[test]
@@ -9143,8 +9345,13 @@ fn r3_123_create_index_using_method() {
   let src = "CREATE INDEX idx ON users USING ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["btree", "BTREE", "hash", "HASH", "gist", "GIST", "gin", "GIN", "spgist", "SPGIST", "brin", "BRIN"].contains(l)),
-    "INDEX USING: {labels:?}");
+  assert!(
+    labels
+      .iter()
+      .any(|l| ["btree", "BTREE", "hash", "HASH", "gist", "GIST", "gin", "GIN", "spgist", "SPGIST", "brin", "BRIN"]
+        .contains(l)),
+    "INDEX USING: {labels:?}"
+  );
 }
 
 #[test]
@@ -9162,8 +9369,7 @@ fn r3_129_create_publication_for_tables() {
   let src = "CREATE PUBLICATION p FOR ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| l.contains("TABLE")),
-    "PUBLICATION FOR: {labels:?}");
+  assert!(labels.iter().any(|l| l.contains("TABLE")), "PUBLICATION FOR: {labels:?}");
 }
 
 #[test]
@@ -9172,8 +9378,10 @@ fn r3_131_create_extension_with_schema() {
   let src = "CREATE EXTENSION pgcrypto WITH ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| l.contains("SCHEMA") || l.contains("VERSION") || l.contains("CASCADE")),
-    "CREATE EXTENSION WITH: {labels:?}");
+  assert!(
+    labels.iter().any(|l| l.contains("SCHEMA") || l.contains("VERSION") || l.contains("CASCADE")),
+    "CREATE EXTENSION WITH: {labels:?}"
+  );
 }
 
 #[test]
@@ -9182,8 +9390,7 @@ fn r3_134_set_transaction_isolation() {
   let src = "SET TRANSACTION ISOLATION LEVEL ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["READ", "REPEATABLE", "SERIALIZABLE"].contains(l)),
-    "ISOLATION LEVEL: {labels:?}");
+  assert!(labels.iter().any(|l| ["READ", "REPEATABLE", "SERIALIZABLE"].contains(l)), "ISOLATION LEVEL: {labels:?}");
 }
 
 #[test]
@@ -9192,8 +9399,7 @@ fn r3_152_for_share_skip_locked() {
   let src = "SELECT * FROM users FOR SHARE ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| l == &"NOWAIT" || l == &"SKIP" || l.contains("LOCKED")),
-    "FOR SHARE: {labels:?}");
+  assert!(labels.iter().any(|l| l == &"NOWAIT" || l == &"SKIP" || l.contains("LOCKED")), "FOR SHARE: {labels:?}");
 }
 
 #[test]
@@ -9202,8 +9408,10 @@ fn r3_154_with_check_option_view() {
   let src = "CREATE VIEW v AS SELECT * FROM users WITH ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["LOCAL", "CASCADED", "CHECK"].contains(l) || l.contains("CHECK") || l.contains("OPTION")),
-    "WITH OPTION: {labels:?}");
+  assert!(
+    labels.iter().any(|l| ["LOCAL", "CASCADED", "CHECK"].contains(l) || l.contains("CHECK") || l.contains("OPTION")),
+    "WITH OPTION: {labels:?}"
+  );
 }
 
 #[test]
@@ -9212,9 +9420,20 @@ fn r3_168_create_event_trigger_on_event() {
   let src = "CREATE EVENT TRIGGER et ON ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["ddl_command_start", "ddl_command_end", "sql_drop", "table_rewrite",
-    "DDL_COMMAND_START", "DDL_COMMAND_END", "SQL_DROP", "TABLE_REWRITE"].contains(l)),
-    "EVENT TRIGGER ON: {labels:?}");
+  assert!(
+    labels.iter().any(|l| [
+      "ddl_command_start",
+      "ddl_command_end",
+      "sql_drop",
+      "table_rewrite",
+      "DDL_COMMAND_START",
+      "DDL_COMMAND_END",
+      "SQL_DROP",
+      "TABLE_REWRITE"
+    ]
+    .contains(l)),
+    "EVENT TRIGGER ON: {labels:?}"
+  );
 }
 
 #[test]
@@ -9223,8 +9442,7 @@ fn r3_203_alter_type_add_value() {
   let src = "ALTER TYPE color ADD VALUE 'red' ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["BEFORE", "AFTER"].contains(l)),
-    "ADD VALUE chain: {labels:?}");
+  assert!(labels.iter().any(|l| ["BEFORE", "AFTER"].contains(l)), "ADD VALUE chain: {labels:?}");
 }
 
 #[test]
@@ -9233,8 +9451,7 @@ fn r3_207_create_materialized_view_with_data() {
   let src = "CREATE MATERIALIZED VIEW mv AS SELECT * FROM users WITH ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["DATA", "NO"].contains(l) || l.contains("DATA")),
-    "MV WITH: {labels:?}");
+  assert!(labels.iter().any(|l| ["DATA", "NO"].contains(l) || l.contains("DATA")), "MV WITH: {labels:?}");
 }
 
 #[test]
@@ -9243,8 +9460,10 @@ fn r3_246_create_function_volatility_kw() {
   let src = "CREATE FUNCTION f() RETURNS int AS $$ SELECT 1 $$ LANGUAGE sql ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["IMMUTABLE", "STABLE", "VOLATILE", "STRICT", "PARALLEL"].contains(l)),
-    "FUNCTION volatility: {labels:?}");
+  assert!(
+    labels.iter().any(|l| ["IMMUTABLE", "STABLE", "VOLATILE", "STRICT", "PARALLEL"].contains(l)),
+    "FUNCTION volatility: {labels:?}"
+  );
 }
 
 #[test]
@@ -9253,8 +9472,7 @@ fn r3_247_create_function_parallel_safe() {
   let src = "CREATE FUNCTION f() RETURNS int AS $$ SELECT 1 $$ LANGUAGE sql PARALLEL ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["SAFE", "UNSAFE", "RESTRICTED"].contains(l)),
-    "PARALLEL: {labels:?}");
+  assert!(labels.iter().any(|l| ["SAFE", "UNSAFE", "RESTRICTED"].contains(l)), "PARALLEL: {labels:?}");
 }
 
 #[test]
@@ -9263,8 +9481,7 @@ fn r3_248_create_function_security_definer() {
   let src = "CREATE FUNCTION f() RETURNS int AS $$ SELECT 1 $$ LANGUAGE sql SECURITY ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["DEFINER", "INVOKER"].contains(l)),
-    "SECURITY: {labels:?}");
+  assert!(labels.iter().any(|l| ["DEFINER", "INVOKER"].contains(l)), "SECURITY: {labels:?}");
 }
 
 #[test]
@@ -9273,8 +9490,7 @@ fn r3_256_create_rule_chain() {
   let src = "CREATE RULE r AS ON ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["SELECT", "INSERT", "UPDATE", "DELETE"].contains(l)),
-    "RULE AS ON: {labels:?}");
+  assert!(labels.iter().any(|l| ["SELECT", "INSERT", "UPDATE", "DELETE"].contains(l)), "RULE AS ON: {labels:?}");
 }
 
 #[test]
@@ -9293,8 +9509,7 @@ fn r3_307_create_table_on_delete_action() {
   let src = "CREATE TABLE t (uid uuid REFERENCES users(id) ON DELETE ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["CASCADE", "RESTRICT", "SET", "NO"].contains(l)),
-    "ON DELETE: {labels:?}");
+  assert!(labels.iter().any(|l| ["CASCADE", "RESTRICT", "SET", "NO"].contains(l)), "ON DELETE: {labels:?}");
 }
 
 #[test]
@@ -9303,8 +9518,7 @@ fn r3_308_create_table_on_update_action() {
   let src = "CREATE TABLE t (uid uuid REFERENCES users(id) ON UPDATE ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["CASCADE", "RESTRICT", "SET", "NO"].contains(l)),
-    "ON UPDATE: {labels:?}");
+  assert!(labels.iter().any(|l| ["CASCADE", "RESTRICT", "SET", "NO"].contains(l)), "ON UPDATE: {labels:?}");
 }
 
 #[test]
@@ -9313,8 +9527,7 @@ fn r3_309_create_table_set_null_chain() {
   let src = "CREATE TABLE t (uid uuid REFERENCES users(id) ON DELETE SET ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["NULL", "DEFAULT"].contains(l)),
-    "SET NULL/DEFAULT: {labels:?}");
+  assert!(labels.iter().any(|l| ["NULL", "DEFAULT"].contains(l)), "SET NULL/DEFAULT: {labels:?}");
 }
 
 #[test]
@@ -9323,8 +9536,10 @@ fn r3_310_create_table_deferrable_chain() {
   let src = "CREATE TABLE t (id int PRIMARY KEY DEFERRABLE ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| l.contains("INITIALLY") || l.contains("DEFERRED") || l.contains("IMMEDIATE")),
-    "DEFERRABLE: {labels:?}");
+  assert!(
+    labels.iter().any(|l| l.contains("INITIALLY") || l.contains("DEFERRED") || l.contains("IMMEDIATE")),
+    "DEFERRABLE: {labels:?}"
+  );
 }
 
 #[test]
@@ -9333,8 +9548,10 @@ fn r3_315_alter_table_alter_column_drop_default() {
   let src = "ALTER TABLE users ALTER COLUMN active DROP ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["DEFAULT", "NOT NULL", "IDENTITY", "EXPRESSION"].contains(l) || l.contains("DEFAULT")),
-    "DROP DEFAULT chain: {labels:?}");
+  assert!(
+    labels.iter().any(|l| ["DEFAULT", "NOT NULL", "IDENTITY", "EXPRESSION"].contains(l) || l.contains("DEFAULT")),
+    "DROP DEFAULT chain: {labels:?}"
+  );
 }
 
 #[test]
@@ -9343,8 +9560,7 @@ fn r3_317_alter_table_alter_column_set_storage() {
   let src = "ALTER TABLE users ALTER COLUMN data SET STORAGE ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["PLAIN", "EXTERNAL", "EXTENDED", "MAIN"].contains(l)),
-    "SET STORAGE: {labels:?}");
+  assert!(labels.iter().any(|l| ["PLAIN", "EXTERNAL", "EXTENDED", "MAIN"].contains(l)), "SET STORAGE: {labels:?}");
 }
 
 #[test]
@@ -9353,8 +9569,7 @@ fn r3_394_offset_rows_only() {
   let src = "SELECT * FROM users OFFSET 10 ROWS FETCH NEXT 5 ROWS ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| l == &"ONLY" || l.contains("TIES")),
-    "FETCH NEXT trailing: {labels:?}");
+  assert!(labels.iter().any(|l| l == &"ONLY" || l.contains("TIES")), "FETCH NEXT trailing: {labels:?}");
 }
 
 #[test]
@@ -9363,8 +9578,10 @@ fn r3_398_is_null_chain() {
   let src = "SELECT * FROM users WHERE id IS ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["NULL", "NOT", "TRUE", "FALSE", "DISTINCT", "UNKNOWN"].contains(l)),
-    "IS chain: {labels:?}");
+  assert!(
+    labels.iter().any(|l| ["NULL", "NOT", "TRUE", "FALSE", "DISTINCT", "UNKNOWN"].contains(l)),
+    "IS chain: {labels:?}"
+  );
 }
 
 #[test]
@@ -9386,8 +9603,7 @@ fn r4_001_grouping_sets_inner_paren_second_tuple() {
   let src = "SELECT id FROM users u GROUP BY GROUPING SETS ((id), (";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"email") || labels.contains(&"id"),
-    "second tuple: {labels:?}");
+  assert!(labels.contains(&"email") || labels.contains(&"id"), "second tuple: {labels:?}");
 }
 
 #[test]
@@ -9409,8 +9625,7 @@ fn r4_013_create_temp_table_on_commit() {
   let src = "CREATE TEMP TABLE t (id int) ON COMMIT ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["DELETE", "PRESERVE", "DROP"].contains(l)),
-    "ON COMMIT: {labels:?}");
+  assert!(labels.iter().any(|l| ["DELETE", "PRESERVE", "DROP"].contains(l)), "ON COMMIT: {labels:?}");
 }
 
 #[test]
@@ -9419,8 +9634,7 @@ fn r4_142_alter_table_replica_identity_no_panic() {
   let src = "ALTER TABLE t REPLICA IDENTITY ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["DEFAULT", "USING", "FULL", "NOTHING"].contains(l)),
-    "REPLICA IDENTITY: {labels:?}");
+  assert!(labels.iter().any(|l| ["DEFAULT", "USING", "FULL", "NOTHING"].contains(l)), "REPLICA IDENTITY: {labels:?}");
 }
 
 #[test]
@@ -9429,8 +9643,7 @@ fn r4_164_select_qualified_dot_in_where() {
   let src = "SELECT * FROM users u WHERE u.email = 'a' AND u.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"name"),
-    "u dot: {labels:?}");
+  assert!(labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"name"), "u dot: {labels:?}");
 }
 
 #[test]
@@ -9439,8 +9652,7 @@ fn r4_165_select_table_dot_in_having() {
   let src = "SELECT u.id FROM users u GROUP BY u.id HAVING u.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"name"),
-    "HAVING dot: {labels:?}");
+  assert!(labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"name"), "HAVING dot: {labels:?}");
 }
 
 #[test]
@@ -9449,8 +9661,7 @@ fn r4_166_select_table_dot_in_order_by() {
   let src = "SELECT u.id FROM users u ORDER BY u.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"name"),
-    "ORDER BY dot: {labels:?}");
+  assert!(labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"name"), "ORDER BY dot: {labels:?}");
 }
 
 #[test]
@@ -9459,8 +9670,7 @@ fn r4_167_select_table_dot_in_group_by() {
   let src = "SELECT u.id FROM users u GROUP BY u.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"name"),
-    "GROUP BY dot: {labels:?}");
+  assert!(labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"name"), "GROUP BY dot: {labels:?}");
 }
 
 #[test]
@@ -9469,8 +9679,7 @@ fn r4_170_dot_after_alias_in_join_on() {
   let src = "SELECT * FROM users u JOIN orders o ON o.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"user_id") || labels.contains(&"id"),
-    "ON dot: {labels:?}");
+  assert!(labels.contains(&"user_id") || labels.contains(&"id"), "ON dot: {labels:?}");
 }
 
 #[test]
@@ -9479,8 +9688,7 @@ fn r4_214_discard_chain() {
   let src = "DISCARD ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["ALL", "PLANS", "SEQUENCES", "TEMP", "TEMPORARY"].contains(l)),
-    "DISCARD: {labels:?}");
+  assert!(labels.iter().any(|l| ["ALL", "PLANS", "SEQUENCES", "TEMP", "TEMPORARY"].contains(l)), "DISCARD: {labels:?}");
 }
 
 #[test]
@@ -9548,8 +9756,10 @@ fn r4_returning_surfaces_columns_and_functions() {
   assert!(labels.contains(&"id"), "expected id: {labels:?}");
   assert!(labels.contains(&"email"), "expected email: {labels:?}");
   // Function presence: at least one common builtin should be there.
-  assert!(labels.iter().any(|l| ["left", "right", "count", "now", "max", "coalesce"].contains(l)),
-    "expected at least one common function: missing in {labels:?}");
+  assert!(
+    labels.iter().any(|l| ["left", "right", "count", "now", "max", "coalesce"].contains(l)),
+    "expected at least one common function: missing in {labels:?}"
+  );
 }
 
 #[test]
@@ -9559,8 +9769,7 @@ fn r4_returning_then_dot_resolves_alias() {
   let src = "INSERT INTO users (email) VALUES ('a') RETURNING users.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email"),
-    "expected users.<col>: {labels:?}");
+  assert!(labels.contains(&"id") || labels.contains(&"email"), "expected users.<col>: {labels:?}");
 }
 
 #[test]
@@ -9574,8 +9783,10 @@ fn r4_returning_after_comma_still_full_menu() {
   // `id` should be filtered (already used), `email` should still appear.
   assert!(labels.contains(&"email"), "email missing: {labels:?}");
   // At least one common function.
-  assert!(labels.iter().any(|l| ["left", "count", "now", "coalesce"].contains(l)),
-    "no function in second RETURNING slot: {labels:?}");
+  assert!(
+    labels.iter().any(|l| ["left", "count", "now", "coalesce"].contains(l)),
+    "no function in second RETURNING slot: {labels:?}"
+  );
 }
 
 #[test]
@@ -9586,10 +9797,7 @@ INSERT INTO t (id) VALUES (1), (2), (3);
 INSERT INTO t (id) VALUES (4), (5);";
   let p = dsl_parse::parse(src, dsl_parse::Dialect::Postgres);
   let cat = source_tables::from_source(&p, src);
-  let row_est = cat.schemas.iter()
-    .flat_map(|s| &s.tables)
-    .find(|t| t.name == "t")
-    .and_then(|t| t.row_estimate);
+  let row_est = cat.schemas.iter().flat_map(|s| &s.tables).find(|t| t.name == "t").and_then(|t| t.row_estimate);
   assert_eq!(row_est, Some(5.0), "expected 3+2=5 rows; got {row_est:?}");
 }
 
@@ -9600,10 +9808,7 @@ fn r4_row_est_insert_select_generate_series() {
 INSERT INTO t SELECT i FROM generate_series(1, 100) AS s(i);";
   let p = dsl_parse::parse(src, dsl_parse::Dialect::Postgres);
   let cat = source_tables::from_source(&p, src);
-  let row_est = cat.schemas.iter()
-    .flat_map(|s| &s.tables)
-    .find(|t| t.name == "t")
-    .and_then(|t| t.row_estimate);
+  let row_est = cat.schemas.iter().flat_map(|s| &s.tables).find(|t| t.name == "t").and_then(|t| t.row_estimate);
   assert_eq!(row_est, Some(100.0), "expected 100 rows from generate_series; got {row_est:?}");
 }
 
@@ -9615,10 +9820,7 @@ INSERT INTO t (id) VALUES (1), (2), (3), (4), (5);
 DELETE FROM t;";
   let p = dsl_parse::parse(src, dsl_parse::Dialect::Postgres);
   let cat = source_tables::from_source(&p, src);
-  let row_est = cat.schemas.iter()
-    .flat_map(|s| &s.tables)
-    .find(|t| t.name == "t")
-    .and_then(|t| t.row_estimate);
+  let row_est = cat.schemas.iter().flat_map(|s| &s.tables).find(|t| t.name == "t").and_then(|t| t.row_estimate);
   // DELETE without WHERE clears -> 0.
   assert_eq!(row_est, Some(0.0), "expected 0 rows after DELETE FROM t; got {row_est:?}");
 }
@@ -9631,10 +9833,7 @@ INSERT INTO t (id) VALUES (1), (2), (3);
 TRUNCATE TABLE t;";
   let p = dsl_parse::parse(src, dsl_parse::Dialect::Postgres);
   let cat = source_tables::from_source(&p, src);
-  let row_est = cat.schemas.iter()
-    .flat_map(|s| &s.tables)
-    .find(|t| t.name == "t")
-    .and_then(|t| t.row_estimate);
+  let row_est = cat.schemas.iter().flat_map(|s| &s.tables).find(|t| t.name == "t").and_then(|t| t.row_estimate);
   assert_eq!(row_est, Some(0.0), "TRUNCATE should clear; got {row_est:?}");
 }
 
@@ -9646,10 +9845,7 @@ INSERT INTO t (id) VALUES (1), (2), (3);
 DELETE FROM t WHERE id = 1;";
   let p = dsl_parse::parse(src, dsl_parse::Dialect::Postgres);
   let cat = source_tables::from_source(&p, src);
-  let row_est = cat.schemas.iter()
-    .flat_map(|s| &s.tables)
-    .find(|t| t.name == "t")
-    .and_then(|t| t.row_estimate);
+  let row_est = cat.schemas.iter().flat_map(|s| &s.tables).find(|t| t.name == "t").and_then(|t| t.row_estimate);
   // DELETE WHERE is best-effort -1; 3 - 1 = 2.
   assert_eq!(row_est, Some(2.0), "expected 2 rows after DELETE WHERE; got {row_est:?}");
 }
@@ -9697,8 +9893,10 @@ fn r4_503_complete_returning_with_alias_chain() {
   let src = "UPDATE users u SET name = 'x' RETURNING u.";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"name"),
-    "u dot in RETURNING: {labels:?}");
+  assert!(
+    labels.contains(&"id") || labels.contains(&"email") || labels.contains(&"name"),
+    "u dot in RETURNING: {labels:?}"
+  );
 }
 
 #[test]
@@ -9707,8 +9905,23 @@ fn r4_542_create_table_like_including() {
   let src = "CREATE TABLE clone (LIKE users INCLUDING ";
   let items = complete_at(src, src.len(), &cat);
   let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
-  assert!(labels.iter().any(|l| ["ALL", "DEFAULTS", "CONSTRAINTS", "INDEXES", "STORAGE", "COMMENTS", "STATISTICS", "GENERATED", "IDENTITY"].contains(l) || l.contains("DEFAULT") || l.contains("CONSTRAINT")),
-    "LIKE INCLUDING: {labels:?}");
+  assert!(
+    labels.iter().any(|l| [
+      "ALL",
+      "DEFAULTS",
+      "CONSTRAINTS",
+      "INDEXES",
+      "STORAGE",
+      "COMMENTS",
+      "STATISTICS",
+      "GENERATED",
+      "IDENTITY"
+    ]
+    .contains(l)
+      || l.contains("DEFAULT")
+      || l.contains("CONSTRAINT")),
+    "LIKE INCLUDING: {labels:?}"
+  );
 }
 
 #[test]
@@ -10058,7 +10271,10 @@ fn r9_complete_alias_1009() {
   let src = "SELECT u. FROM users u JOIN orders o ON u.id = o.user_id";
   let cur = src.find("u.").unwrap() + "u.".len();
   let items = complete_at(src, cur, &catalog_with_users_and_orders());
-  assert!(items.iter().any(|i| i.label == "name"), "expected col `name` for `SELECT u. FROM users u JOIN orders o ON u.id = o.user_id`");
+  assert!(
+    items.iter().any(|i| i.label == "name"),
+    "expected col `name` for `SELECT u. FROM users u JOIN orders o ON u.id = o.user_id`"
+  );
 }
 
 #[test]
@@ -13716,10 +13932,7 @@ fn r16_probe_having() {
 #[test]
 fn r16_probe_insert_values() {
   let cat = catalog_with_users_and_orders();
-  for s in [
-    "INSERT INTO users (id, name) VALUES (1, ",
-    "INSERT INTO users VALUES (",
-  ] {
+  for s in ["INSERT INTO users (id, name) VALUES (1, ", "INSERT INTO users VALUES ("] {
     let items = complete_at(s, s.len(), &cat);
     eprintln!("IV|{}|n={}", s, items.len());
   }
@@ -13728,10 +13941,7 @@ fn r16_probe_insert_values() {
 #[test]
 fn r16_probe_update_set_eq() {
   let cat = catalog_with_users_and_orders();
-  for s in [
-    "UPDATE users SET name = ",
-    "UPDATE users SET id = ",
-  ] {
+  for s in ["UPDATE users SET name = ", "UPDATE users SET id = "] {
     let items = complete_at(s, s.len(), &cat);
     eprintln!("US|{}|n={}", s, items.len());
   }
@@ -13740,10 +13950,7 @@ fn r16_probe_update_set_eq() {
 #[test]
 fn r16_probe_join_on() {
   let cat = catalog_with_users_and_orders();
-  for s in [
-    "SELECT * FROM users u JOIN orders o ON ",
-    "SELECT * FROM users u JOIN orders o ON u.id = o.",
-  ] {
+  for s in ["SELECT * FROM users u JOIN orders o ON ", "SELECT * FROM users u JOIN orders o ON u.id = o."] {
     let items = complete_at(s, s.len(), &cat);
     let has_uid = items.iter().any(|i| i.label == "user_id");
     eprintln!("JO|{}|n={}|has_uid={}", s, items.len(), has_uid);
@@ -14860,7 +15067,6 @@ fn r18_probe_on_conflict_set() {
   }
 }
 
-
 #[test]
 fn r18_excluded_0001_id() {
   let src = "-- ex0\nINSERT INTO users (id) VALUES (1) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.";
@@ -15576,84 +15782,132 @@ fn r18_del_using_0119() {
 fn r18_values_0131() {
   let src = "-- vl0\nINSERT INTO users (id) VALUES (";
   let items = complete_at(src, src.len(), &catalog_with_users_and_orders());
-  assert!(items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL")) || items.iter().any(|i| matches!(i.kind, ItemKind::Function)), "VALUES ( ctx had no NULL/Function");
+  assert!(
+    items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL"))
+      || items.iter().any(|i| matches!(i.kind, ItemKind::Function)),
+    "VALUES ( ctx had no NULL/Function"
+  );
 }
 
 #[test]
 fn r18_values_0132() {
   let src = "-- vl0\nINSERT INTO users (id, name) VALUES (1, ";
   let items = complete_at(src, src.len(), &catalog_with_users_and_orders());
-  assert!(items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL")) || items.iter().any(|i| matches!(i.kind, ItemKind::Function)), "VALUES ( ctx had no NULL/Function");
+  assert!(
+    items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL"))
+      || items.iter().any(|i| matches!(i.kind, ItemKind::Function)),
+    "VALUES ( ctx had no NULL/Function"
+  );
 }
 
 #[test]
 fn r18_values_0133() {
   let src = "-- vl0\nINSERT INTO orders (id, user_id) VALUES (";
   let items = complete_at(src, src.len(), &catalog_with_users_and_orders());
-  assert!(items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL")) || items.iter().any(|i| matches!(i.kind, ItemKind::Function)), "VALUES ( ctx had no NULL/Function");
+  assert!(
+    items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL"))
+      || items.iter().any(|i| matches!(i.kind, ItemKind::Function)),
+    "VALUES ( ctx had no NULL/Function"
+  );
 }
 
 #[test]
 fn r18_values_0134() {
   let src = "-- vl0\nINSERT INTO orders VALUES (";
   let items = complete_at(src, src.len(), &catalog_with_users_and_orders());
-  assert!(items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL")) || items.iter().any(|i| matches!(i.kind, ItemKind::Function)), "VALUES ( ctx had no NULL/Function");
+  assert!(
+    items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL"))
+      || items.iter().any(|i| matches!(i.kind, ItemKind::Function)),
+    "VALUES ( ctx had no NULL/Function"
+  );
 }
 
 #[test]
 fn r18_values_0135() {
   let src = "-- vl1\nINSERT INTO users (id) VALUES (";
   let items = complete_at(src, src.len(), &catalog_with_users_and_orders());
-  assert!(items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL")) || items.iter().any(|i| matches!(i.kind, ItemKind::Function)), "VALUES ( ctx had no NULL/Function");
+  assert!(
+    items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL"))
+      || items.iter().any(|i| matches!(i.kind, ItemKind::Function)),
+    "VALUES ( ctx had no NULL/Function"
+  );
 }
 
 #[test]
 fn r18_values_0136() {
   let src = "-- vl1\nINSERT INTO users (id, name) VALUES (1, ";
   let items = complete_at(src, src.len(), &catalog_with_users_and_orders());
-  assert!(items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL")) || items.iter().any(|i| matches!(i.kind, ItemKind::Function)), "VALUES ( ctx had no NULL/Function");
+  assert!(
+    items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL"))
+      || items.iter().any(|i| matches!(i.kind, ItemKind::Function)),
+    "VALUES ( ctx had no NULL/Function"
+  );
 }
 
 #[test]
 fn r18_values_0137() {
   let src = "-- vl1\nINSERT INTO orders (id, user_id) VALUES (";
   let items = complete_at(src, src.len(), &catalog_with_users_and_orders());
-  assert!(items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL")) || items.iter().any(|i| matches!(i.kind, ItemKind::Function)), "VALUES ( ctx had no NULL/Function");
+  assert!(
+    items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL"))
+      || items.iter().any(|i| matches!(i.kind, ItemKind::Function)),
+    "VALUES ( ctx had no NULL/Function"
+  );
 }
 
 #[test]
 fn r18_values_0138() {
   let src = "-- vl1\nINSERT INTO orders VALUES (";
   let items = complete_at(src, src.len(), &catalog_with_users_and_orders());
-  assert!(items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL")) || items.iter().any(|i| matches!(i.kind, ItemKind::Function)), "VALUES ( ctx had no NULL/Function");
+  assert!(
+    items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL"))
+      || items.iter().any(|i| matches!(i.kind, ItemKind::Function)),
+    "VALUES ( ctx had no NULL/Function"
+  );
 }
 
 #[test]
 fn r18_values_0139() {
   let src = "-- vl2\nINSERT INTO users (id) VALUES (";
   let items = complete_at(src, src.len(), &catalog_with_users_and_orders());
-  assert!(items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL")) || items.iter().any(|i| matches!(i.kind, ItemKind::Function)), "VALUES ( ctx had no NULL/Function");
+  assert!(
+    items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL"))
+      || items.iter().any(|i| matches!(i.kind, ItemKind::Function)),
+    "VALUES ( ctx had no NULL/Function"
+  );
 }
 
 #[test]
 fn r18_values_0140() {
   let src = "-- vl2\nINSERT INTO users (id, name) VALUES (1, ";
   let items = complete_at(src, src.len(), &catalog_with_users_and_orders());
-  assert!(items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL")) || items.iter().any(|i| matches!(i.kind, ItemKind::Function)), "VALUES ( ctx had no NULL/Function");
+  assert!(
+    items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL"))
+      || items.iter().any(|i| matches!(i.kind, ItemKind::Function)),
+    "VALUES ( ctx had no NULL/Function"
+  );
 }
 
 #[test]
 fn r18_values_0141() {
   let src = "-- vl2\nINSERT INTO orders (id, user_id) VALUES (";
   let items = complete_at(src, src.len(), &catalog_with_users_and_orders());
-  assert!(items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL")) || items.iter().any(|i| matches!(i.kind, ItemKind::Function)), "VALUES ( ctx had no NULL/Function");
+  assert!(
+    items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL"))
+      || items.iter().any(|i| matches!(i.kind, ItemKind::Function)),
+    "VALUES ( ctx had no NULL/Function"
+  );
 }
 
 #[test]
 fn r18_values_0142() {
   let src = "-- vl2\nINSERT INTO orders VALUES (";
   let items = complete_at(src, src.len(), &catalog_with_users_and_orders());
-  assert!(items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL")) || items.iter().any(|i| matches!(i.kind, ItemKind::Function)), "VALUES ( ctx had no NULL/Function");
+  assert!(
+    items.iter().any(|i| matches!(i.kind, ItemKind::Keyword) && i.label.eq_ignore_ascii_case("NULL"))
+      || items.iter().any(|i| matches!(i.kind, ItemKind::Function)),
+    "VALUES ( ctx had no NULL/Function"
+  );
 }
 
 #[test]
@@ -17587,7 +17841,10 @@ fn r22_probe() {
     ("SELECT * FROM users u WHERE u.id = (SELECT max(o.user_id) FROM orders o WHERE o.", "subq_alias_corr"),
     ("MERGE INTO users u USING orders o ON u.id = o.user_id WHEN MATCHED THEN UPDATE SET name = ", "merge_set_rhs"),
     ("MERGE INTO users u USING orders o ON u.id = o.user_id WHEN NOT MATCHED THEN INSERT (", "merge_insert_cols"),
-    ("MERGE INTO users u USING orders o ON u.id = o.user_id WHEN NOT MATCHED THEN INSERT (id) VALUES (", "merge_insert_vals"),
+    (
+      "MERGE INTO users u USING orders o ON u.id = o.user_id WHEN NOT MATCHED THEN INSERT (id) VALUES (",
+      "merge_insert_vals",
+    ),
     ("DECLARE c CURSOR FOR SELECT  FROM users", "cursor_select"),
     ("PREPARE p AS SELECT  FROM users", "prepare_select"),
     ("EXPLAIN SELECT  FROM users", "explain_select"),
@@ -17618,7 +17875,9 @@ fn r22_probe_table_qual() {
   let cat = catalog_with_users_and_orders();
   let s = "SELECT users.id FROM users WHERE users.";
   let items = complete_at(s, s.len(), &cat);
-  for it in &items { eprintln!("TQ|{}|{:?}", it.label, it.kind); }
+  for it in &items {
+    eprintln!("TQ|{}|{:?}", it.label, it.kind);
+  }
 }
 
 #[test]
@@ -17626,7 +17885,9 @@ fn r22_probe_table_qual2() {
   let cat = catalog_with_users_and_orders();
   let s = "SELECT * FROM users WHERE users.";
   let items = complete_at(s, s.len(), &cat);
-  for it in &items { eprintln!("T2|{}|{:?}", it.label, it.kind); }
+  for it in &items {
+    eprintln!("T2|{}|{:?}", it.label, it.kind);
+  }
 }
 
 #[test]
@@ -17647,7 +17908,8 @@ fn r22_rec_cte_0002() {
 
 #[test]
 fn r22_rec_cte_0003() {
-  let src = "-- rc0\nWITH RECURSIVE r AS (SELECT id, email FROM users UNION SELECT id, email FROM users) SELECT  FROM r";
+  let src =
+    "-- rc0\nWITH RECURSIVE r AS (SELECT id, email FROM users UNION SELECT id, email FROM users) SELECT  FROM r";
   let cur = src.find("SELECT  ").unwrap() + 7;
   let items = complete_at(src, cur, &catalog_with_users_and_orders());
   assert!(items.iter().any(|i| i.label == "email"), "rec CTE proj missed `email`");
@@ -17671,7 +17933,8 @@ fn r22_rec_cte_0005() {
 
 #[test]
 fn r22_rec_cte_0006() {
-  let src = "-- rc1\nWITH RECURSIVE r AS (SELECT id, email FROM users UNION SELECT id, email FROM users) SELECT  FROM r";
+  let src =
+    "-- rc1\nWITH RECURSIVE r AS (SELECT id, email FROM users UNION SELECT id, email FROM users) SELECT  FROM r";
   let cur = src.find("SELECT  ").unwrap() + 7;
   let items = complete_at(src, cur, &catalog_with_users_and_orders());
   assert!(items.iter().any(|i| i.label == "email"), "rec CTE proj missed `email`");
@@ -17695,7 +17958,8 @@ fn r22_rec_cte_0008() {
 
 #[test]
 fn r22_rec_cte_0009() {
-  let src = "-- rc2\nWITH RECURSIVE r AS (SELECT id, email FROM users UNION SELECT id, email FROM users) SELECT  FROM r";
+  let src =
+    "-- rc2\nWITH RECURSIVE r AS (SELECT id, email FROM users UNION SELECT id, email FROM users) SELECT  FROM r";
   let cur = src.find("SELECT  ").unwrap() + 7;
   let items = complete_at(src, cur, &catalog_with_users_and_orders());
   assert!(items.iter().any(|i| i.label == "email"), "rec CTE proj missed `email`");
@@ -19161,7 +19425,6 @@ fn r25_drop_mv_0034() {
   assert!(items.iter().any(|i| i.label == "users"));
 }
 
-
 #[test]
 fn r26_probe() {
   let cat = catalog_with_users_and_orders();
@@ -19490,7 +19753,10 @@ fn r26_strong_0042() {
 fn r27_probe() {
   let cat = catalog_with_users_and_orders();
   for (s, label) in [
-    ("SELECT * FROM users WHERE id = (SELECT id FROM users WHERE email = (SELECT email FROM users WHERE id = ", "triple_nested"),
+    (
+      "SELECT * FROM users WHERE id = (SELECT id FROM users WHERE email = (SELECT email FROM users WHERE id = ",
+      "triple_nested",
+    ),
     ("SELECT id FROM users GROUP BY GROUPING SETS ((", "grouping_sets_open"),
     ("SELECT id FROM users GROUP BY ROLLUP (id, ", "rollup_after"),
     ("SELECT id FROM users GROUP BY CUBE (", "cube_open"),
@@ -19521,7 +19787,8 @@ fn r27_probe() {
 
 #[test]
 fn r27_strong_0001() {
-  let src = "-- v0\nSELECT * FROM users WHERE id = (SELECT id FROM users WHERE email = (SELECT email FROM users WHERE id = ";
+  let src =
+    "-- v0\nSELECT * FROM users WHERE id = (SELECT id FROM users WHERE email = (SELECT email FROM users WHERE id = ";
   let items = complete_at(src, src.len(), &catalog_with_users_and_orders());
   assert!(items.iter().any(|i| i.label == "id"));
 }
@@ -19605,7 +19872,8 @@ fn r27_strong_0012() {
 
 #[test]
 fn r27_strong_0013() {
-  let src = "-- v1\nSELECT * FROM users WHERE id = (SELECT id FROM users WHERE email = (SELECT email FROM users WHERE id = ";
+  let src =
+    "-- v1\nSELECT * FROM users WHERE id = (SELECT id FROM users WHERE email = (SELECT email FROM users WHERE id = ";
   let items = complete_at(src, src.len(), &catalog_with_users_and_orders());
   assert!(items.iter().any(|i| i.label == "id"));
 }
@@ -19689,7 +19957,8 @@ fn r27_strong_0024() {
 
 #[test]
 fn r27_strong_0025() {
-  let src = "-- v2\nSELECT * FROM users WHERE id = (SELECT id FROM users WHERE email = (SELECT email FROM users WHERE id = ";
+  let src =
+    "-- v2\nSELECT * FROM users WHERE id = (SELECT id FROM users WHERE email = (SELECT email FROM users WHERE id = ";
   let items = complete_at(src, src.len(), &catalog_with_users_and_orders());
   assert!(items.iter().any(|i| i.label == "id"));
 }

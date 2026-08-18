@@ -285,14 +285,21 @@ fn collapse_function_set_clause(input: &str) -> String {
     // Attribute lines that anchor the indent we want SET to match.
     if in_create_fn {
       let trimmed = line.trim_start();
-      let first = trimmed
-        .split(|c: char| !c.is_ascii_alphabetic())
-        .next()
-        .unwrap_or("")
-        .to_ascii_uppercase();
+      let first = trimmed.split(|c: char| !c.is_ascii_alphabetic()).next().unwrap_or("").to_ascii_uppercase();
       if matches!(
         first.as_str(),
-        "RETURNS" | "LANGUAGE" | "STABLE" | "IMMUTABLE" | "VOLATILE" | "STRICT" | "PARALLEL" | "LEAKPROOF" | "SECURITY" | "COST" | "ROWS" | "WINDOW"
+        "RETURNS"
+          | "LANGUAGE"
+          | "STABLE"
+          | "IMMUTABLE"
+          | "VOLATILE"
+          | "STRICT"
+          | "PARALLEL"
+          | "LEAKPROOF"
+          | "SECURITY"
+          | "COST"
+          | "ROWS"
+          | "WINDOW"
       ) {
         let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
         prev_attr_indent = Some(indent);
@@ -401,9 +408,7 @@ fn format_function_bodies(input: &str, fmt_style: &FormatterStyle) -> String {
     let open_start = i + open_rel;
     // Read dollar tag (between the two `$`).
     let mut tag_end = open_start + 1;
-    while tag_end < n
-      && (bytes[tag_end].is_ascii_alphanumeric() || bytes[tag_end] == b'_')
-    {
+    while tag_end < n && (bytes[tag_end].is_ascii_alphanumeric() || bytes[tag_end] == b'_') {
       tag_end += 1;
     }
     if tag_end >= n || bytes[tag_end] != b'$' {
@@ -443,9 +448,7 @@ fn format_function_bodies(input: &str, fmt_style: &FormatterStyle) -> String {
     let body_upper = body.to_ascii_uppercase();
     let body_starts_with_plpgsql = {
       let trimmed = body_upper.trim_start();
-      trimmed.starts_with("DECLARE")
-        || trimmed.starts_with("BEGIN")
-        || trimmed.starts_with("<<")
+      trimmed.starts_with("DECLARE") || trimmed.starts_with("BEGIN") || trimmed.starts_with("<<")
     };
     let mentions_non_sql_lang = |hay: &str| {
       hay.contains("LANGUAGE PLPGSQL")
@@ -455,12 +458,11 @@ fn format_function_bodies(input: &str, fmt_style: &FormatterStyle) -> String {
         || hay.contains("LANGUAGE PLTCL")
         || hay.contains("LANGUAGE C")
     };
-    let language_is_sql = !mentions_non_sql_lang(&pre_upper)
-      && !mentions_non_sql_lang(post)
-      && !body_starts_with_plpgsql;
+    let language_is_sql =
+      !mentions_non_sql_lang(&pre_upper) && !mentions_non_sql_lang(post) && !body_starts_with_plpgsql;
     if is_sql_fn_body && language_is_sql && !body.trim().is_empty() {
-      let formatted_body = external::run_sql_formatter(body.trim(), fmt_style)
-        .unwrap_or_else(|| body.trim().to_string());
+      let formatted_body =
+        external::run_sql_formatter(body.trim(), fmt_style).unwrap_or_else(|| body.trim().to_string());
       // PG convention: body content stays at column 0 between `$$`
       // markers. Leading + trailing newline so the closer sits on its
       // own line.
@@ -654,9 +656,34 @@ fn compact_clauses(s: &str) -> String {
   // sql-formatter v15 puts every primary keyword at start-of-line. Detect
   // primary keywords + glue lines until next primary keyword.
   let primary: &[&str] = &[
-    "SELECT", "FROM", "WHERE", "GROUP", "HAVING", "ORDER", "LIMIT", "OFFSET", "FETCH", "RETURNING", "VALUES", "INSERT",
-    "UPDATE", "DELETE", "SET", "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "CROSS", "FULL", "NATURAL", "UNION", "EXCEPT",
-    "INTERSECT", "WITH", "ON",
+    "SELECT",
+    "FROM",
+    "WHERE",
+    "GROUP",
+    "HAVING",
+    "ORDER",
+    "LIMIT",
+    "OFFSET",
+    "FETCH",
+    "RETURNING",
+    "VALUES",
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "SET",
+    "JOIN",
+    "LEFT",
+    "RIGHT",
+    "INNER",
+    "OUTER",
+    "CROSS",
+    "FULL",
+    "NATURAL",
+    "UNION",
+    "EXCEPT",
+    "INTERSECT",
+    "WITH",
+    "ON",
   ];
   let mut out = String::with_capacity(s.len());
   let mut current_clause: Option<String> = None;

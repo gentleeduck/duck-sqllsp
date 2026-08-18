@@ -12,9 +12,26 @@ use dsl_resolve::Scope;
 
 /// MySQL-only words that can follow `SHOW`.
 const MYSQL_SHOW: &[&str] = &[
-  "TABLES", "DATABASES", "SCHEMAS", "COLUMNS", "INDEX", "INDEXES", "KEYS", "GRANTS", "TRIGGERS",
-  "PROCESSLIST", "ENGINES", "VARIABLES", "WARNINGS", "ERRORS", "CREATE", "FULL", "TABLE", "PROCEDURE",
-  "FUNCTION", "EVENTS",
+  "TABLES",
+  "DATABASES",
+  "SCHEMAS",
+  "COLUMNS",
+  "INDEX",
+  "INDEXES",
+  "KEYS",
+  "GRANTS",
+  "TRIGGERS",
+  "PROCESSLIST",
+  "ENGINES",
+  "VARIABLES",
+  "WARNINGS",
+  "ERRORS",
+  "CREATE",
+  "FULL",
+  "TABLE",
+  "PROCEDURE",
+  "FUNCTION",
+  "EVENTS",
 ];
 
 pub struct Rule;

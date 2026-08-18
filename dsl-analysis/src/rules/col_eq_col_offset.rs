@@ -9,8 +9,20 @@ use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
 
-const STOPWORDS: &[&str] =
-  &["GROUP", "ORDER", "HAVING", "LIMIT", "OFFSET", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT", "FETCH", "FOR"];
+const STOPWORDS: &[&str] = &[
+  "GROUP",
+  "ORDER",
+  "HAVING",
+  "LIMIT",
+  "OFFSET",
+  "WINDOW",
+  "RETURNING",
+  "UNION",
+  "INTERSECT",
+  "EXCEPT",
+  "FETCH",
+  "FOR",
+];
 
 pub struct Rule;
 
@@ -38,7 +50,10 @@ impl LintRule for Rule {
             out.push(Diagnostic {
               code: "sql566",
               severity: Severity::Warning,
-              message: format!("`{}` is always false -- `{col}` cannot equal itself plus a non-zero amount", raw.trim()),
+              message: format!(
+                "`{}` is always false -- `{col}` cannot equal itself plus a non-zero amount",
+                raw.trim()
+              ),
               range: crate::range_at(start + s + lead, start + s + raw.trim_end().len()),
             });
           }

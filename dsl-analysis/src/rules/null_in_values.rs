@@ -4,8 +4,8 @@
 //! untyped NULL on the first row can pin the column to TEXT and force
 //! later rows to cast. Hint: `NULL::<type>` instead.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -100,4 +100,3 @@ fn match_paren(bytes: &[u8], open: usize) -> Option<usize> {
   }
   None
 }
-

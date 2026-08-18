@@ -26,9 +26,7 @@ impl LintRule for Rule {
     let needle = b"TABLESAMPLE";
     let mut i = 0usize;
     while i + needle.len() <= n {
-      if &ub[i..i + needle.len()] == needle
-        && (i == 0 || !is_word(ub[i - 1] as char))
-      {
+      if &ub[i..i + needle.len()] == needle && (i == 0 || !is_word(ub[i - 1] as char)) {
         // skip method name and whitespace up to `(`
         let mut j = i + needle.len();
         while j < n && ub[j] != b'(' && ub[j] != b';' {

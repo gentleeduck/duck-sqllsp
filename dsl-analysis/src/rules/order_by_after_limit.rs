@@ -63,7 +63,8 @@ impl LintRule for Rule {
               out.push(Diagnostic {
                 code: "sql657",
                 severity: Severity::Error,
-                message: "ORDER BY appears after LIMIT/OFFSET -- clause order must be ORDER BY then LIMIT (PG 42601)".into(),
+                message: "ORDER BY appears after LIMIT/OFFSET -- clause order must be ORDER BY then LIMIT (PG 42601)"
+                  .into(),
                 range: crate::range_at(start + i, start + i + 5),
               });
               return;
@@ -71,8 +72,8 @@ impl LintRule for Rule {
             i += 5;
             continue;
           }
-        }
-        _ => {}
+        },
+        _ => {},
       }
       i += 1;
     }

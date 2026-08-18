@@ -1,8 +1,8 @@
 //! sql094: `CASE` expressions nested more than 3 deep -- usually
 //! signals a lookup table or function refactor is needed.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -71,4 +71,3 @@ impl LintRule for Rule {
     }
   }
 }
-

@@ -1,8 +1,8 @@
 //! sql132: `SELECT ... FOR UPDATE` inside the recursive arm of a CTE
 //! is forbidden by PG -- the planner rejects it.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -117,4 +117,3 @@ impl LintRule for Rule {
     });
   }
 }
-

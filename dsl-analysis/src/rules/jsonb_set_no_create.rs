@@ -2,8 +2,8 @@
 //! (create-if-missing). But explicit `false` silently drops updates
 //! when the key isn't already present. Flag explicit `false`.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -69,4 +69,3 @@ impl LintRule for Rule {
     }
   }
 }
-

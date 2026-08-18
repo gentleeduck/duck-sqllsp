@@ -54,7 +54,12 @@ impl LintRule for Rule {
       if let Some((sev, msg)) = classify(&args) {
         let abs_s = start + i;
         let abs_e = start + close + 1;
-        out.push(Diagnostic { code: "sql444", severity: sev, message: msg, range: TextRange::new((abs_s as u32).into(), (abs_e as u32).into()) });
+        out.push(Diagnostic {
+          code: "sql444",
+          severity: sev,
+          message: msg,
+          range: TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
+        });
       }
       i = close + 1;
     }
@@ -82,7 +87,8 @@ fn classify(args: &[(&str, usize)]) -> Option<(Severity, String)> {
       if step == 0 {
         return Some((
           Severity::Error,
-          "generate_series(..., ..., 0): zero step -- PG raises 22023 \"step size cannot equal zero\" at runtime".into(),
+          "generate_series(..., ..., 0): zero step -- PG raises 22023 \"step size cannot equal zero\" at runtime"
+            .into(),
         ));
       }
       let a = parse_signed_int(args[0].0.trim())?;

@@ -41,7 +41,8 @@ impl LintRule for Rule {
         out.push(Diagnostic {
           code: "sql803",
           severity: Severity::Hint,
-          message: "RAISE NOTICE inside a loop body -- a per-iteration notice can be noisy/slow on bulk operations".into(),
+          message: "RAISE NOTICE inside a loop body -- a per-iteration notice can be noisy/slow on bulk operations"
+            .into(),
           range: crate::range_at(start + abs, start + abs + "RAISE".len()),
         });
       }

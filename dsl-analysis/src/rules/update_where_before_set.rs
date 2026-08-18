@@ -50,13 +50,14 @@ impl LintRule for Rule {
             out.push(Diagnostic {
               code: "sql665",
               severity: Severity::Error,
-              message: "WHERE comes before SET in this UPDATE -- the order is `UPDATE t SET ... WHERE ...` (PG 42601)".into(),
+              message: "WHERE comes before SET in this UPDATE -- the order is `UPDATE t SET ... WHERE ...` (PG 42601)"
+                .into(),
               range: crate::range_at(start + i, start + i + 5),
             });
             return;
           }
-        }
-        _ => {}
+        },
+        _ => {},
       }
       i += 1;
     }

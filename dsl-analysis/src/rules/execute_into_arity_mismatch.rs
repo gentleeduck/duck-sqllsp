@@ -54,7 +54,8 @@ impl LintRule for Rule {
       };
       let into_start = skip_ws(ub, into_rel + 4);
       let into_end = find_stmt_end(ub, into_start);
-      let into_count = split_top_level(&body[into_start..into_end]).iter().filter(|(s, _)| !s.trim().is_empty()).count();
+      let into_count =
+        split_top_level(&body[into_start..into_end]).iter().filter(|(s, _)| !s.trim().is_empty()).count();
       if select_cols != into_count {
         out.push(Diagnostic {
           code: "sql802",

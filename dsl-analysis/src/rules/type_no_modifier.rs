@@ -35,9 +35,7 @@ impl LintRule for Rule {
       let len = ty.len();
       let mut i = 0usize;
       while i + len <= n {
-        if &ub[i..i + len] == ty.as_bytes()
-          && (i == 0 || !is_word(ub[i - 1] as char))
-        {
+        if &ub[i..i + len] == ty.as_bytes() && (i == 0 || !is_word(ub[i - 1] as char)) {
           // optional whitespace, then `(digits[,digits])`
           let mut j = i + len;
           while j < n && ub[j].is_ascii_whitespace() {
@@ -69,7 +67,7 @@ impl Rule {
       match s[k] {
         b')' => return saw_digit,
         b'0'..=b'9' => saw_digit = true,
-        b',' | b' ' => {}
+        b',' | b' ' => {},
         _ => return false,
       }
       k += 1;

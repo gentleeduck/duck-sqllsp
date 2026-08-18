@@ -2,8 +2,8 @@
 //! argument. PG prints the placeholder as-is and probably swallows the
 //! error if the user expected interpolation.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -110,4 +110,3 @@ impl LintRule for Rule {
     }
   }
 }
-

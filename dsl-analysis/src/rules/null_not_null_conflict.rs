@@ -56,7 +56,9 @@ fn has_standalone_null(seg: &[u8]) -> bool {
   let n = seg.len();
   let mut i = 0usize;
   while i + 4 <= n {
-    if &seg[i..i + 4] == b"NULL" && (i == 0 || !is_word(seg[i - 1] as char)) && (i + 4 == n || !is_word(seg[i + 4] as char))
+    if &seg[i..i + 4] == b"NULL"
+      && (i == 0 || !is_word(seg[i - 1] as char))
+      && (i + 4 == n || !is_word(seg[i + 4] as char))
     {
       // Preceding word.
       let mut j = i;
@@ -82,9 +84,7 @@ fn find_word(seg: &[u8], kw: &[u8]) -> Option<usize> {
   let m = kw.len();
   let mut i = 0usize;
   while i + m <= n {
-    if seg[i..i + m] == *kw
-      && (i == 0 || !is_word(seg[i - 1] as char))
-      && (i + m == n || !is_word(seg[i + m] as char))
+    if seg[i..i + m] == *kw && (i == 0 || !is_word(seg[i - 1] as char)) && (i + m == n || !is_word(seg[i + m] as char))
     {
       return Some(i);
     }

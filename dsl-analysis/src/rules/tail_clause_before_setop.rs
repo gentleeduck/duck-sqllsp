@@ -76,8 +76,8 @@ impl LintRule for Rule {
           } else if kw(b, i, b"LIMIT") || kw(b, i, b"OFFSET") || kw(b, i, b"FETCH") {
             tail_seen = true;
           }
-        }
-        _ => {}
+        },
+        _ => {},
       }
       i += 1;
     }

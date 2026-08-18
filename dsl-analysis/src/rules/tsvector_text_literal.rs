@@ -115,7 +115,8 @@ impl LintRule for Rule {
       // literal contains a space without a tsquery operator, the
       // diagnostic adds a "runtime error" note.
       if emitted.insert(op_at) {
-        let has_unprotected_space = lit_text.contains(' ') && !lit_text.chars().any(|c| matches!(c, '&' | '|' | '!' | ':'));
+        let has_unprotected_space =
+          lit_text.contains(' ') && !lit_text.chars().any(|c| matches!(c, '&' | '|' | '!' | ':'));
         let abs_s = start + l;
         let abs_e = start + lit_end;
         let msg = if has_unprotected_space {

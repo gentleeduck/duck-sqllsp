@@ -131,7 +131,12 @@ fn has_zero_start(inner: &str) -> bool {
             d += 1;
           } else if cc == b')' {
             d -= 1;
-          } else if d == 0 && j + 3 <= n && &lb[j..j + 3] == b"for" && (j == 0 || !is_word(lb[j - 1] as char)) && (j + 3 == n || !is_word(lb[j + 3] as char)) {
+          } else if d == 0
+            && j + 3 <= n
+            && &lb[j..j + 3] == b"for"
+            && (j == 0 || !is_word(lb[j - 1] as char))
+            && (j + 3 == n || !is_word(lb[j + 3] as char))
+          {
             break;
           }
           j += 1;

@@ -5,8 +5,8 @@
 //! references silently become invalid and the view stops compiling on
 //! next pg_dump / DEFINITION refresh.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -122,4 +122,3 @@ fn word_contains(haystack: &str, needle: &str) -> bool {
   }
   false
 }
-

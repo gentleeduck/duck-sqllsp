@@ -34,8 +34,18 @@ const SRFS: &[&str] = &[
 ];
 
 const STOP: &[&str] = &[
-  "GROUP BY", "ORDER BY", "LIMIT", "OFFSET", "HAVING", "FOR", "FETCH", "WINDOW", "RETURNING", "UNION",
-  "INTERSECT", "EXCEPT",
+  "GROUP BY",
+  "ORDER BY",
+  "LIMIT",
+  "OFFSET",
+  "HAVING",
+  "FOR",
+  "FETCH",
+  "WINDOW",
+  "RETURNING",
+  "UNION",
+  "INTERSECT",
+  "EXCEPT",
 ];
 
 pub struct Rule;
@@ -77,7 +87,8 @@ impl Rule {
         while j < hi && lb[j].is_ascii_whitespace() {
           j += 1;
         }
-        let is_subquery = lb[j..hi.min(lb.len())].starts_with(b"select") || lb[j..hi.min(lb.len())].starts_with(b"with");
+        let is_subquery =
+          lb[j..hi.min(lb.len())].starts_with(b"select") || lb[j..hi.min(lb.len())].starts_with(b"with");
         if is_subquery {
           let mut depth = 0i32;
           let mut k = i;
@@ -89,8 +100,8 @@ impl Rule {
                 if depth == 0 {
                   break;
                 }
-              }
-              _ => {}
+              },
+              _ => {},
             }
             k += 1;
           }
@@ -104,10 +115,7 @@ impl Rule {
       if (i == lo || !is_word(lb[i - 1] as char)) && is_word(c as char) {
         for &srf in SRFS {
           let l = srf.len();
-          if i + l <= hi
-            && &lb[i..i + l] == srf.as_bytes()
-            && lb.get(i + l).is_none_or(|&b| !is_word(b as char))
-          {
+          if i + l <= hi && &lb[i..i + l] == srf.as_bytes() && lb.get(i + l).is_none_or(|&b| !is_word(b as char)) {
             let mut p = i + l;
             while p < hi && lb[p].is_ascii_whitespace() {
               p += 1;

@@ -26,14 +26,24 @@ impl LintRule for Rule {
     let upper = cleaned.to_ascii_uppercase();
     let bytes_u = upper.as_bytes();
     let bytes = cleaned.as_bytes();
-    let stopwords = ["GROUP BY", "ORDER BY", "LIMIT", "OFFSET", "HAVING", "FOR", "FETCH", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT"];
+    let stopwords = [
+      "GROUP BY",
+      "ORDER BY",
+      "LIMIT",
+      "OFFSET",
+      "HAVING",
+      "FOR",
+      "FETCH",
+      "WINDOW",
+      "RETURNING",
+      "UNION",
+      "INTERSECT",
+      "EXCEPT",
+    ];
 
-    for (needle, label) in [
-      (&b"WHERE"[..], "WHERE"),
-      (&b"ON"[..], "JOIN ON"),
-      (&b"HAVING"[..], "HAVING"),
-      (&b"GROUP BY"[..], "GROUP BY"),
-    ] {
+    for (needle, label) in
+      [(&b"WHERE"[..], "WHERE"), (&b"ON"[..], "JOIN ON"), (&b"HAVING"[..], "HAVING"), (&b"GROUP BY"[..], "GROUP BY")]
+    {
       let mut from = 0usize;
       while let Some(rel) = find_clause(&bytes_u[from..], needle).map(|p| p + from) {
         let pred_start = rel + needle.len();
@@ -45,7 +55,15 @@ impl LintRule for Rule {
   }
 }
 
-fn scan_over(bytes: &[u8], upper: &[u8], from: usize, to: usize, abs_off: usize, clause_label: &str, out: &mut Vec<Diagnostic>) {
+fn scan_over(
+  bytes: &[u8],
+  upper: &[u8],
+  from: usize,
+  to: usize,
+  abs_off: usize,
+  clause_label: &str,
+  out: &mut Vec<Diagnostic>,
+) {
   // Walk tracking subquery scope (same as sql424).
   let mut stack: Vec<bool> = Vec::new();
   let mut i = from;
@@ -65,8 +83,9 @@ fn scan_over(bytes: &[u8], upper: &[u8], from: usize, to: usize, abs_off: usize,
       while j < to && bytes[j].is_ascii_whitespace() {
         j += 1;
       }
-      let is_subquery = (j + 6 <= to && upper[j..j + 6] == *b"SELECT" && (j + 6 == to || !is_word(upper[j + 6] as char)))
-        || (j + 4 <= to && upper[j..j + 4] == *b"WITH" && (j + 4 == to || !is_word(upper[j + 4] as char)));
+      let is_subquery =
+        (j + 6 <= to && upper[j..j + 6] == *b"SELECT" && (j + 6 == to || !is_word(upper[j + 6] as char)))
+          || (j + 4 <= to && upper[j..j + 4] == *b"WITH" && (j + 4 == to || !is_word(upper[j + 4] as char)));
       stack.push(is_subquery);
       i += 1;
       continue;

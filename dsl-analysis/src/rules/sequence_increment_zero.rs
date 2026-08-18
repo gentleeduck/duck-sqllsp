@@ -54,7 +54,8 @@ impl LintRule for Rule {
 
 /// `0` as a complete integer literal at `i` (not `0.5`, `00`, ...).
 fn is_zero(ub: &[u8], i: usize) -> bool {
-  ub.get(i) == Some(&b'0') && !matches!(ub.get(i + 1), Some(c) if c.is_ascii_digit() || *c == b'.' || is_word(*c as char))
+  ub.get(i) == Some(&b'0')
+    && !matches!(ub.get(i + 1), Some(c) if c.is_ascii_digit() || *c == b'.' || is_word(*c as char))
 }
 
 fn contains_word(ub: &[u8], w: &[u8]) -> bool {

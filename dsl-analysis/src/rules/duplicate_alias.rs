@@ -40,7 +40,9 @@ impl LintRule for Rule {
         out.push(Diagnostic {
           code: "sql402",
           severity: Severity::Error,
-          message: format!("duplicate alias `{alias}` in FROM/JOIN -- table names must be unique within a single SELECT"),
+          message: format!(
+            "duplicate alias `{alias}` in FROM/JOIN -- table names must be unique within a single SELECT"
+          ),
           range: stmt.range,
         });
       }

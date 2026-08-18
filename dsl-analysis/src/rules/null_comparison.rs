@@ -36,13 +36,21 @@ impl LintRule for Rule {
     // the message misreports the operator. Left-NULL patterns
     // (`NULL = ...`) require a word boundary before NULL.
     let right_patterns: &[&str] = &[
-      "!= NULL", "!=NULL", "<> NULL", "<>NULL", "= NULL", "=NULL",
+      "!= NULL",
+      "!=NULL",
+      "<> NULL",
+      "<>NULL",
+      "= NULL",
+      "=NULL",
       // Long-form `<op> CAST(NULL AS ...)` -- same semantics.
-      "!= CAST(NULL", "!=CAST(NULL", "<> CAST(NULL", "<>CAST(NULL", "= CAST(NULL", "=CAST(NULL",
+      "!= CAST(NULL",
+      "!=CAST(NULL",
+      "<> CAST(NULL",
+      "<>CAST(NULL",
+      "= CAST(NULL",
+      "=CAST(NULL",
     ];
-    let left_patterns: &[&str] = &[
-      "NULL !=", "NULL!=", "NULL <>", "NULL<>", "NULL =", "NULL=",
-    ];
+    let left_patterns: &[&str] = &["NULL !=", "NULL!=", "NULL <>", "NULL<>", "NULL =", "NULL="];
     for pat in right_patterns {
       if in_set_assignment && pat.starts_with("=") {
         let Some(set_at) = upper_slice.find(" SET ") else { continue };

@@ -30,7 +30,8 @@ impl LintRule for Rule {
     // column (not a function call, expression). Mixing `*` with an
     // aliased expression (`SELECT *, count(*) OVER ()`) is a real
     // pattern; don't flag those.
-    let has_named_col = s.projections.iter().any(|p| matches!(p, Projection::Expr { expr: dsl_parse::Expr::Column { .. }, .. }));
+    let has_named_col =
+      s.projections.iter().any(|p| matches!(p, Projection::Expr { expr: dsl_parse::Expr::Column { .. }, .. }));
     if !has_named_col {
       return;
     }

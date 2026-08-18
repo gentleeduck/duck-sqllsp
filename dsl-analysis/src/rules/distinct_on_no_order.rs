@@ -1,8 +1,8 @@
 //! sql101: `SELECT DISTINCT ON (x) ... FROM t` without an `ORDER BY`
 //! that starts with `x` -- which row PG returns is undefined.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -86,4 +86,3 @@ impl LintRule for Rule {
     });
   }
 }
-

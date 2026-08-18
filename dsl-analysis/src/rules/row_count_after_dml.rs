@@ -2,8 +2,8 @@
 //! `GET DIAGNOSTICS rows = ROW_COUNT` -- callers usually want to know
 //! whether the UPDATE/DELETE actually touched anything. Flag as Hint.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -85,7 +85,6 @@ impl LintRule for Rule {
         });
   }
 }
-
 
 /// Is position `i` at the start of a statement -- i.e. preceded by
 /// `;`, `BEGIN`, `THEN`, `ELSE`, `LOOP`, or only whitespace from the

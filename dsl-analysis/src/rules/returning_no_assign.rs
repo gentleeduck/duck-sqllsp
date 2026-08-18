@@ -2,8 +2,8 @@
 //! block without `INTO <vars>` or `STRICT` -- the returned row is
 //! silently discarded. Almost always a bug.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -79,4 +79,3 @@ impl LintRule for Rule {
     }
   }
 }
-

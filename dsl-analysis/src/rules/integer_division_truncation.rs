@@ -46,7 +46,11 @@ impl LintRule for Rule {
     let list_start = select_at + 6;
     let list_end = find_clause(ub, b"FROM").unwrap_or(n);
     // Also accept WHERE region for sql504 since it's the same semantic mistake.
-    let where_stop = find_clause_end(ub, list_start, &["GROUP BY", "ORDER BY", "LIMIT", "OFFSET", "HAVING", "FOR", "FETCH", "WINDOW", "RETURNING"]);
+    let where_stop = find_clause_end(
+      ub,
+      list_start,
+      &["GROUP BY", "ORDER BY", "LIMIT", "OFFSET", "HAVING", "FOR", "FETCH", "WINDOW", "RETURNING"],
+    );
     let _ = where_stop;
 
     let mut emitted: std::collections::HashSet<usize> = std::collections::HashSet::new();

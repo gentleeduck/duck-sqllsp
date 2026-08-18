@@ -38,8 +38,8 @@ fn close_of(b: &[u8], open: usize) -> Option<usize> {
         if depth == 0 {
           return Some(i);
         }
-      }
-      _ => {}
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -89,7 +89,9 @@ impl LintRule for Rule {
           out.push(Diagnostic {
             code: "sql661",
             severity: Severity::Error,
-            message: format!("`{fname}` is a window function and requires an OVER clause -- add `OVER (...)` (PG 42P20)"),
+            message: format!(
+              "`{fname}` is a window function and requires an OVER clause -- add `OVER (...)` (PG 42P20)"
+            ),
             range: crate::range_at(start + at, start + at + fname.len()),
           });
         }

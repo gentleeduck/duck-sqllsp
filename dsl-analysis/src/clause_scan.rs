@@ -123,11 +123,7 @@ pub fn parse_simple_ident(s: &str) -> Option<(Option<String>, String)> {
 
 fn trim_quotes(s: &str) -> &str {
   let s = s.trim();
-  if s.len() >= 2 && s.starts_with('"') && s.ends_with('"') {
-    &s[1..s.len() - 1]
-  } else {
-    s
-  }
+  if s.len() >= 2 && s.starts_with('"') && s.ends_with('"') { &s[1..s.len() - 1] } else { s }
 }
 
 pub fn is_word(c: char) -> bool {

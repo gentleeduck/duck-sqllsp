@@ -1,8 +1,8 @@
 //! sql109: `length(text_col)` returns *bytes*. Use `char_length` for
 //! characters -- the bytes/chars distinction bites with non-ASCII.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -50,4 +50,3 @@ impl LintRule for Rule {
     }
   }
 }
-

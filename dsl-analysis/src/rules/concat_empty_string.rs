@@ -76,18 +76,13 @@ impl LintRule for Rule {
         let left_empty_ok = left_empty && (l < 3 || bytes[l - 3] != b'\'');
         let hit = left_empty_ok || right_empty;
         if hit && emitted.insert(op_at) {
-          let (abs_s, abs_e) = if left_empty_ok {
-            (start + (l - 2), start + op_at + 2)
-          } else {
-            (start + op_at, start + r + 2)
-          };
+          let (abs_s, abs_e) =
+            if left_empty_ok { (start + (l - 2), start + op_at + 2) } else { (start + op_at, start + r + 2) };
           let snippet = if left_empty_ok { "'' || ..." } else { "... || ''" };
           out.push(Diagnostic {
             code: "sql490",
             severity: Severity::Hint,
-            message: format!(
-              "`{snippet}` -- concatenating with the empty string is a no-op. Drop the `''` operand."
-            ),
+            message: format!("`{snippet}` -- concatenating with the empty string is a no-op. Drop the `''` operand."),
             range: TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
           });
         }

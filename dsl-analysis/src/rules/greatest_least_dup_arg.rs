@@ -64,11 +64,7 @@ fn has_duplicate(args: &[&str]) -> bool {
 
 /// Case-insensitive unless a string literal is involved.
 fn idents_eq(a: &str, b: &str) -> bool {
-  if a.contains('\'') || b.contains('\'') {
-    a == b
-  } else {
-    a.eq_ignore_ascii_case(b)
-  }
+  if a.contains('\'') || b.contains('\'') { a == b } else { a.eq_ignore_ascii_case(b) }
 }
 
 fn split_args(inner: &str) -> Vec<&str> {

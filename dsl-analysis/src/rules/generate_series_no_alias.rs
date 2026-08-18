@@ -1,8 +1,8 @@
 //! sql112: `generate_series(...)` in a FROM clause without an alias
 //! ends up named `generate_series` which makes queries hard to read.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -153,7 +153,6 @@ impl LintRule for Rule {
     }
   }
 }
-
 
 fn strip_dollar_and_noise(s: &str) -> String {
   let mut out: Vec<u8> = s.as_bytes().to_vec();

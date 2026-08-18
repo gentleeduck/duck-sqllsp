@@ -40,16 +40,17 @@ impl LintRule for Rule {
         k += 1;
       }
       let rest = &raw[k..];
-      let is_empty = rest.starts_with("'{}'")
-        || rest.starts_with("'[]'")
-        || rest.to_ascii_uppercase().starts_with("ARRAY[]");
+      let is_empty =
+        rest.starts_with("'{}'") || rest.starts_with("'[]'") || rest.to_ascii_uppercase().starts_with("ARRAY[]");
       if is_empty && emitted.insert(op_at) {
         let mut end_at = k;
         if rest.starts_with('\'') {
           end_at += 4;
           if end_at + 2 <= n && &raw[end_at..(end_at + 2).min(n)] == "::" {
             end_at += 2;
-            while end_at < n && (is_word(raw_bytes[end_at] as char) || raw_bytes[end_at] == b'[' || raw_bytes[end_at] == b']') {
+            while end_at < n
+              && (is_word(raw_bytes[end_at] as char) || raw_bytes[end_at] == b'[' || raw_bytes[end_at] == b']')
+            {
               end_at += 1;
             }
           }
@@ -57,7 +58,9 @@ impl LintRule for Rule {
           end_at += 7;
           if end_at + 2 <= n && &raw[end_at..(end_at + 2).min(n)] == "::" {
             end_at += 2;
-            while end_at < n && (is_word(raw_bytes[end_at] as char) || raw_bytes[end_at] == b'[' || raw_bytes[end_at] == b']') {
+            while end_at < n
+              && (is_word(raw_bytes[end_at] as char) || raw_bytes[end_at] == b'[' || raw_bytes[end_at] == b']')
+            {
               end_at += 1;
             }
           }

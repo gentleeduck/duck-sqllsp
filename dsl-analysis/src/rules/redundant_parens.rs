@@ -4,8 +4,8 @@
 //! has no top-level AND/OR. Multi-clause predicates obviously need
 //! grouping; this rule only flags the single-condition case.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -147,4 +147,3 @@ fn has_top_level_and_or(s: &str) -> bool {
   }
   false
 }
-

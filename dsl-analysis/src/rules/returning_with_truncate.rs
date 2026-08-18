@@ -1,8 +1,8 @@
 //! sql155: `TRUNCATE t RETURNING ...` -- TRUNCATE does not support
 //! RETURNING. PG rejects at parse time.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -39,4 +39,3 @@ impl LintRule for Rule {
     });
   }
 }
-

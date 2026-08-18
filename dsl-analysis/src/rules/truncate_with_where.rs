@@ -46,8 +46,8 @@ impl LintRule for Rule {
             range: crate::range_at(start + i, start + i + 5),
           });
           return;
-        }
-        _ => {}
+        },
+        _ => {},
       }
       i += 1;
     }

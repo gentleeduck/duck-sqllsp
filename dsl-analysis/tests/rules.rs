@@ -50,7 +50,10 @@ fn cat() -> Catalog {
     policies: vec![],
     comment: None,
     row_estimate: None,
-    owner: None, definition: None, strict: false, options: None,
+    owner: None,
+    definition: None,
+    strict: false,
+    options: None,
   };
   let orders = Table {
     schema: "public".into(),
@@ -82,7 +85,10 @@ fn cat() -> Catalog {
     policies: vec![],
     comment: None,
     row_estimate: None,
-    owner: None, definition: None, strict: false, options: None,
+    owner: None,
+    definition: None,
+    strict: false,
+    options: None,
   };
   let flags = Table {
     schema: "public".into(),
@@ -114,7 +120,10 @@ fn cat() -> Catalog {
     policies: vec![],
     comment: None,
     row_estimate: None,
-    owner: None, definition: None, strict: false, options: None,
+    owner: None,
+    definition: None,
+    strict: false,
+    options: None,
   };
   Catalog {
     version: CATALOG_VERSION,
@@ -372,7 +381,9 @@ fn sql432_searched_case_duplicate_when() {
 
 #[test]
 fn sql432_searched_case_duplicate_when_not_adjacent() {
-  let d = diags("SELECT CASE WHEN status = 'a' THEN 1 WHEN status = 'b' THEN 2 WHEN status = 'a' THEN 3 ELSE 4 END FROM users;");
+  let d = diags(
+    "SELECT CASE WHEN status = 'a' THEN 1 WHEN status = 'b' THEN 2 WHEN status = 'a' THEN 3 ELSE 4 END FROM users;",
+  );
   assert!(d.iter().any(|x| x.code == "sql432"), "expected sql432 for non-adjacent dup WHEN: {d:?}");
 }
 
@@ -410,10 +421,7 @@ fn sql403_quiet_for_order_by_null_literal() {
   // Regression: NULL is a keyword literal, not a column reference.
   // sql403 must NOT flag it as an unknown column.
   let d = diags("SELECT * FROM users ORDER BY NULL;");
-  assert!(
-    !d.iter().any(|x| x.code == "sql403"),
-    "sql403 must not flag NULL as unknown column: {d:?}"
-  );
+  assert!(!d.iter().any(|x| x.code == "sql403"), "sql403 must not flag NULL as unknown column: {d:?}");
 }
 
 #[test]
@@ -459,13 +467,19 @@ fn sql433_order_by_null_is_noop() {
 #[test]
 fn sql433_order_by_boolean_constant() {
   let d = diags("SELECT * FROM users ORDER BY TRUE;");
-  assert!(d.iter().any(|x| x.code == "sql433" && x.message.contains("boolean")), "expected sql433 for ORDER BY TRUE: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql433" && x.message.contains("boolean")),
+    "expected sql433 for ORDER BY TRUE: {d:?}"
+  );
 }
 
 #[test]
 fn sql433_order_by_string_literal() {
   let d = diags("SELECT * FROM users ORDER BY 'foo';");
-  assert!(d.iter().any(|x| x.code == "sql433" && x.message.contains("string")), "expected sql433 for ORDER BY 'foo': {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql433" && x.message.contains("string")),
+    "expected sql433 for ORDER BY 'foo': {d:?}"
+  );
 }
 
 #[test]
@@ -485,10 +499,7 @@ fn sql433_quiet_for_positional() {
 #[test]
 fn sql434_is_not_null_with_equality() {
   let d = diags("SELECT * FROM users WHERE email IS NOT NULL AND email = 'a@b.c';");
-  assert!(
-    d.iter().any(|x| x.code == "sql434"),
-    "expected sql434 for IS NOT NULL + equality on same column: {d:?}"
-  );
+  assert!(d.iter().any(|x| x.code == "sql434"), "expected sql434 for IS NOT NULL + equality on same column: {d:?}");
 }
 
 #[test]
@@ -768,25 +779,37 @@ fn sql439_quiet_for_non_iso_shape() {
 #[test]
 fn sql439_time_literal_invalid_hour() {
   let d = diags("SELECT TIME '25:00:00';");
-  assert!(d.iter().any(|x| x.code == "sql439" && x.message.contains("hour 25")), "expected sql439 for TIME '25:00:00': {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql439" && x.message.contains("hour 25")),
+    "expected sql439 for TIME '25:00:00': {d:?}"
+  );
 }
 
 #[test]
 fn sql439_time_literal_invalid_minute() {
   let d = diags("SELECT TIME '12:60:00';");
-  assert!(d.iter().any(|x| x.code == "sql439" && x.message.contains("minute 60")), "expected sql439 for TIME '12:60:00': {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql439" && x.message.contains("minute 60")),
+    "expected sql439 for TIME '12:60:00': {d:?}"
+  );
 }
 
 #[test]
 fn sql439_time_literal_invalid_second() {
   let d = diags("SELECT TIME '12:00:60';");
-  assert!(d.iter().any(|x| x.code == "sql439" && x.message.contains("second 60")), "expected sql439 for TIME '12:00:60': {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql439" && x.message.contains("second 60")),
+    "expected sql439 for TIME '12:00:60': {d:?}"
+  );
 }
 
 #[test]
 fn sql439_timestamp_invalid_hour_in_time_portion() {
   let d = diags("SELECT TIMESTAMP '2024-01-01 25:00:00';");
-  assert!(d.iter().any(|x| x.code == "sql439" && x.message.contains("hour 25")), "expected sql439 for TIMESTAMP invalid hour: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql439" && x.message.contains("hour 25")),
+    "expected sql439 for TIMESTAMP invalid hour: {d:?}"
+  );
 }
 
 #[test]
@@ -811,7 +834,10 @@ fn sql439_time_quiet_for_end_of_day_24() {
 #[test]
 fn sql439_time_flags_24_with_nonzero_minute() {
   let d = diags("SELECT TIME '24:01:00';");
-  assert!(d.iter().any(|x| x.code == "sql439" && x.message.contains("end-of-day")), "expected sql439 for TIME 24:01: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql439" && x.message.contains("end-of-day")),
+    "expected sql439 for TIME 24:01: {d:?}"
+  );
 }
 
 #[test]
@@ -929,7 +955,8 @@ fn sql442_quiet_for_gi_flag() {
 #[test]
 fn sql442_quiet_for_non_literal_flag() {
   // Can't determine the runtime value of a variable -- stay silent.
-  let d = diags("SELECT regexp_replace(s, p, r, flag_var) FROM (SELECT 'a' AS s, 'a' AS p, 'b' AS r, 'g' AS flag_var) t;");
+  let d =
+    diags("SELECT regexp_replace(s, p, r, flag_var) FROM (SELECT 'a' AS s, 'a' AS p, 'b' AS r, 'g' AS flag_var) t;");
   assert!(!d.iter().any(|x| x.code == "sql442"), "non-literal flag must not fire: {d:?}");
 }
 
@@ -1051,7 +1078,10 @@ fn sql409_not_between_message_flipped_for_high_self_bound() {
 #[test]
 fn sql446_position_empty_in_string() {
   let d = diags("SELECT position('' in 'hello');");
-  assert!(d.iter().any(|x| x.code == "sql446" && x.message.contains("always returns 1")), "expected sql446 for position(''): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql446" && x.message.contains("always returns 1")),
+    "expected sql446 for position(''): {d:?}"
+  );
 }
 
 #[test]
@@ -1075,13 +1105,19 @@ fn sql446_quiet_for_non_literal_needle() {
 #[test]
 fn sql447_power_exponent_zero() {
   let d = diags("SELECT power(5, 0);");
-  assert!(d.iter().any(|x| x.code == "sql447" && x.message.contains("always returns 1")), "expected sql447 for power(_, 0): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql447" && x.message.contains("always returns 1")),
+    "expected sql447 for power(_, 0): {d:?}"
+  );
 }
 
 #[test]
 fn sql447_power_exponent_one() {
   let d = diags("SELECT power(5, 1);");
-  assert!(d.iter().any(|x| x.code == "sql447" && x.message.contains("no-op")), "expected sql447 for power(_, 1): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql447" && x.message.contains("no-op")),
+    "expected sql447 for power(_, 1): {d:?}"
+  );
 }
 
 #[test]
@@ -1197,13 +1233,19 @@ fn sql450_quiet_for_single_arg() {
 #[test]
 fn sql450_flags_zero_precision() {
   let d = diags("SELECT CAST(1 AS NUMERIC(0, 0));");
-  assert!(d.iter().any(|x| x.code == "sql450" && x.message.contains("precision")), "expected sql450 for NUMERIC(0,0): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql450" && x.message.contains("precision")),
+    "expected sql450 for NUMERIC(0,0): {d:?}"
+  );
 }
 
 #[test]
 fn sql451_varchar_zero_length() {
   let d = diags("CREATE TABLE t (name VARCHAR(0));");
-  assert!(d.iter().any(|x| x.code == "sql451" && x.message.contains("VARCHAR(0)")), "expected sql451 for VARCHAR(0): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql451" && x.message.contains("VARCHAR(0)")),
+    "expected sql451 for VARCHAR(0): {d:?}"
+  );
 }
 
 #[test]
@@ -1215,7 +1257,10 @@ fn sql451_char_zero_length() {
 #[test]
 fn sql451_character_varying_zero_length() {
   let d = diags("CREATE TABLE t (name CHARACTER VARYING(0));");
-  assert!(d.iter().any(|x| x.code == "sql451" && x.message.contains("CHARACTER VARYING(0)")), "expected sql451 for CHARACTER VARYING(0): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql451" && x.message.contains("CHARACTER VARYING(0)")),
+    "expected sql451 for CHARACTER VARYING(0): {d:?}"
+  );
 }
 
 #[test]
@@ -1286,10 +1331,7 @@ fn sql453_quiet_for_empty_args() {
 #[test]
 fn sql454_to_timestamp_hh_colon_mm() {
   let d = diags("SELECT to_timestamp('2024-01-01 10:30', 'YYYY-MM-DD HH:MM');");
-  assert!(
-    d.iter().any(|x| x.code == "sql454" && x.message.contains("MONTH")),
-    "expected sql454 for HH:MM: {d:?}"
-  );
+  assert!(d.iter().any(|x| x.code == "sql454" && x.message.contains("MONTH")), "expected sql454 for HH:MM: {d:?}");
 }
 
 #[test]
@@ -1355,7 +1397,10 @@ fn sql451_bit_quiet_for_positive_length() {
 #[test]
 fn sql455_x_or_not_x() {
   let d = diags("SELECT * FROM users WHERE active OR NOT active;");
-  assert!(d.iter().any(|x| x.code == "sql455" && x.message.contains("always TRUE")), "expected sql455 for x OR NOT x: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql455" && x.message.contains("always TRUE")),
+    "expected sql455 for x OR NOT x: {d:?}"
+  );
 }
 
 #[test]
@@ -1384,14 +1429,64 @@ fn cat_with_ints() -> Catalog {
     name: "nums".into(),
     kind: TableKind::Table,
     columns: vec![
-      Column { name: "s".into(), data_type: "smallint".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
-      Column { name: "i".into(), data_type: "integer".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
-      Column { name: "b".into(), data_type: "bigint".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
-      Column { name: "t".into(), data_type: "text".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
+      Column {
+        name: "s".into(),
+        data_type: "smallint".into(),
+        nullable: false,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
+      Column {
+        name: "i".into(),
+        data_type: "integer".into(),
+        nullable: false,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
+      Column {
+        name: "b".into(),
+        data_type: "bigint".into(),
+        nullable: false,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
+      Column {
+        name: "t".into(),
+        data_type: "text".into(),
+        nullable: false,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
     ],
-    constraints: vec![], indexes: vec![], triggers: vec![], policies: vec![], comment: None, row_estimate: None, owner: None, definition: None, strict: false, options: None,
+    constraints: vec![],
+    indexes: vec![],
+    triggers: vec![],
+    policies: vec![],
+    comment: None,
+    row_estimate: None,
+    owner: None,
+    definition: None,
+    strict: false,
+    options: None,
   };
-  Catalog { version: CATALOG_VERSION, connection_id: "test".into(), schemas: vec![Schema { name: "public".into(), tables: vec![nums] }], functions: vec![], types: vec![], roles: vec![], sequences: vec![], extensions: vec![] }
+  Catalog {
+    version: CATALOG_VERSION,
+    connection_id: "test".into(),
+    schemas: vec![Schema { name: "public".into(), tables: vec![nums] }],
+    functions: vec![],
+    types: vec![],
+    roles: vec![],
+    sequences: vec![],
+    extensions: vec![],
+  }
 }
 
 fn diags_with_ints(src: &str) -> Vec<dsl_analysis::Diagnostic> {
@@ -1419,7 +1514,10 @@ fn sql456_quiet_for_in_range_smallint() {
 #[test]
 fn sql456_int_literal_too_large() {
   let d = diags_with_ints("SELECT * FROM nums WHERE i = 5000000000;");
-  assert!(d.iter().any(|x| x.code == "sql456" && x.message.contains("integer")), "expected sql456 for int i = 5B: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql456" && x.message.contains("integer")),
+    "expected sql456 for int i = 5B: {d:?}"
+  );
 }
 
 #[test]
@@ -1459,7 +1557,10 @@ fn sql457_group_by_position_zero() {
 #[test]
 fn sql457_order_by_position_out_of_range() {
   let d = diags("SELECT id, name FROM users ORDER BY 5;");
-  assert!(d.iter().any(|x| x.code == "sql457" && x.message.contains("ORDER BY")), "expected sql457 for ORDER BY 5: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql457" && x.message.contains("ORDER BY")),
+    "expected sql457 for ORDER BY 5: {d:?}"
+  );
 }
 
 #[test]
@@ -1488,7 +1589,10 @@ fn sql458_sum_of_boolean_column() {
 #[test]
 fn sql458_avg_of_boolean_column() {
   let d = diags("SELECT avg(active) FROM flags;");
-  assert!(d.iter().any(|x| x.code == "sql458" && x.message.contains("avg(boolean)")), "expected sql458 for avg(active): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql458" && x.message.contains("avg(boolean)")),
+    "expected sql458 for avg(active): {d:?}"
+  );
 }
 
 #[test]
@@ -1585,13 +1689,19 @@ fn sql015_null_on_left_equals() {
   // same broken semantics as on the RHS -- the comparison yields
   // NULL, never TRUE.
   let d = diags("SELECT * FROM users WHERE NULL = email;");
-  assert!(d.iter().any(|x| x.code == "sql015" && x.message.contains("NULL =")), "expected sql015 for `NULL = col`: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql015" && x.message.contains("NULL =")),
+    "expected sql015 for `NULL = col`: {d:?}"
+  );
 }
 
 #[test]
 fn sql015_null_on_left_not_equals() {
   let d = diags("SELECT * FROM users WHERE NULL <> email;");
-  assert!(d.iter().any(|x| x.code == "sql015" && x.message.contains("NULL <>")), "expected sql015 for `NULL <> col`: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql015" && x.message.contains("NULL <>")),
+    "expected sql015 for `NULL <> col`: {d:?}"
+  );
 }
 
 #[test]
@@ -1615,7 +1725,10 @@ fn sql015_quiet_for_word_starting_with_null() {
 #[test]
 fn sql461_array_remove_null() {
   let d = diags("SELECT array_remove(NULL, 1);");
-  assert!(d.iter().any(|x| x.code == "sql461" && x.message.contains("array_remove(NULL")), "expected sql461 for array_remove(NULL, 1): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql461" && x.message.contains("array_remove(NULL")),
+    "expected sql461 for array_remove(NULL, 1): {d:?}"
+  );
 }
 
 #[test]
@@ -1652,7 +1765,10 @@ fn sql292_limit_zero() {
 #[test]
 fn sql292_fetch_first_zero_rows_only() {
   let d = diags("SELECT * FROM users FETCH FIRST 0 ROWS ONLY;");
-  assert!(d.iter().any(|x| x.code == "sql292" && x.message.contains("FETCH FIRST 0")), "expected sql292 for FETCH FIRST 0: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql292" && x.message.contains("FETCH FIRST 0")),
+    "expected sql292 for FETCH FIRST 0: {d:?}"
+  );
 }
 
 #[test]
@@ -1725,81 +1841,124 @@ fn sql462_quiet_for_cast_null() {
 
 #[test]
 fn sql463_tg_op_lowercase() {
-  let d = diags("CREATE OR REPLACE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_OP = 'insert' THEN RETURN NEW; END IF; RETURN NEW; END; $$;");
-  assert!(d.iter().any(|x| x.code == "sql463" && x.message.contains("'INSERT'")), "expected sql463 for TG_OP = 'insert': {d:?}");
+  let d = diags(
+    "CREATE OR REPLACE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_OP = 'insert' THEN RETURN NEW; END IF; RETURN NEW; END; $$;",
+  );
+  assert!(
+    d.iter().any(|x| x.code == "sql463" && x.message.contains("'INSERT'")),
+    "expected sql463 for TG_OP = 'insert': {d:?}"
+  );
 }
 
 #[test]
 fn sql463_tg_op_past_tense() {
-  let d = diags("CREATE OR REPLACE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_OP = 'inserted' THEN RETURN NEW; END IF; RETURN NEW; END; $$;");
+  let d = diags(
+    "CREATE OR REPLACE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_OP = 'inserted' THEN RETURN NEW; END IF; RETURN NEW; END; $$;",
+  );
   assert!(d.iter().any(|x| x.code == "sql463"), "expected sql463 for `inserted`: {d:?}");
 }
 
 #[test]
 fn sql463_tg_op_in_list_with_typo() {
-  let d = diags("CREATE OR REPLACE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_OP IN ('INSERT', 'updated') THEN RETURN NEW; END IF; RETURN NEW; END; $$;");
+  let d = diags(
+    "CREATE OR REPLACE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_OP IN ('INSERT', 'updated') THEN RETURN NEW; END IF; RETURN NEW; END; $$;",
+  );
   assert!(d.iter().any(|x| x.code == "sql463"), "expected sql463 for `updated` in IN-list: {d:?}");
 }
 
 #[test]
 fn sql463_quiet_for_valid_uppercase() {
-  let d = diags("CREATE OR REPLACE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_OP = 'INSERT' THEN RETURN NEW; END IF; RETURN NEW; END; $$;");
+  let d = diags(
+    "CREATE OR REPLACE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_OP = 'INSERT' THEN RETURN NEW; END IF; RETURN NEW; END; $$;",
+  );
   assert!(!d.iter().any(|x| x.code == "sql463"), "valid INSERT must not fire: {d:?}");
 }
 
 #[test]
 fn sql463_quiet_for_valid_in_list() {
-  let d = diags("CREATE OR REPLACE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_OP IN ('INSERT', 'UPDATE') THEN RETURN NEW; END IF; RETURN NEW; END; $$;");
+  let d = diags(
+    "CREATE OR REPLACE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_OP IN ('INSERT', 'UPDATE') THEN RETURN NEW; END IF; RETURN NEW; END; $$;",
+  );
   assert!(!d.iter().any(|x| x.code == "sql463"), "valid IN-list must not fire: {d:?}");
 }
 
 #[test]
 fn sql463_tg_level_lowercase() {
-  let d = diags("CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_LEVEL = 'row' THEN RETURN NEW; END IF; RETURN NEW; END; $$;");
-  assert!(d.iter().any(|x| x.code == "sql463" && x.message.contains("'ROW'")), "expected sql463 for TG_LEVEL = 'row': {d:?}");
+  let d = diags(
+    "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_LEVEL = 'row' THEN RETURN NEW; END IF; RETURN NEW; END; $$;",
+  );
+  assert!(
+    d.iter().any(|x| x.code == "sql463" && x.message.contains("'ROW'")),
+    "expected sql463 for TG_LEVEL = 'row': {d:?}"
+  );
 }
 
 #[test]
 fn sql463_tg_when_lowercase() {
-  let d = diags("CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_WHEN = 'before' THEN RETURN NEW; END IF; RETURN NEW; END; $$;");
-  assert!(d.iter().any(|x| x.code == "sql463" && x.message.contains("'BEFORE'")), "expected sql463 for TG_WHEN = 'before': {d:?}");
+  let d = diags(
+    "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_WHEN = 'before' THEN RETURN NEW; END IF; RETURN NEW; END; $$;",
+  );
+  assert!(
+    d.iter().any(|x| x.code == "sql463" && x.message.contains("'BEFORE'")),
+    "expected sql463 for TG_WHEN = 'before': {d:?}"
+  );
 }
 
 #[test]
 fn sql463_quiet_for_valid_tg_when() {
-  let d = diags("CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_WHEN = 'INSTEAD OF' THEN RETURN NEW; END IF; RETURN NEW; END; $$;");
+  let d = diags(
+    "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF TG_WHEN = 'INSTEAD OF' THEN RETURN NEW; END IF; RETURN NEW; END; $$;",
+  );
   assert!(!d.iter().any(|x| x.code == "sql463"), "valid `INSTEAD OF` must not fire: {d:?}");
 }
 
 #[test]
 fn sql463_commuted_literal_eq_tg_op() {
   // Regression iter195: `'insert' = TG_OP` (commuted) was silent.
-  let d = diags("CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF 'insert' = TG_OP THEN RETURN NEW; END IF; RETURN NEW; END; $$;");
-  assert!(d.iter().any(|x| x.code == "sql463" && x.message.contains("'INSERT'")), "expected sql463 for `'insert' = TG_OP`: {d:?}");
+  let d = diags(
+    "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF 'insert' = TG_OP THEN RETURN NEW; END IF; RETURN NEW; END; $$;",
+  );
+  assert!(
+    d.iter().any(|x| x.code == "sql463" && x.message.contains("'INSERT'")),
+    "expected sql463 for `'insert' = TG_OP`: {d:?}"
+  );
 }
 
 #[test]
 fn sql463_commuted_literal_neq_tg_op() {
-  let d = diags("CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF 'delete' <> TG_OP THEN RETURN NEW; END IF; RETURN NEW; END; $$;");
-  assert!(d.iter().any(|x| x.code == "sql463" && x.message.contains("'DELETE'")), "expected sql463 for commuted `<>`: {d:?}");
+  let d = diags(
+    "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF 'delete' <> TG_OP THEN RETURN NEW; END IF; RETURN NEW; END; $$;",
+  );
+  assert!(
+    d.iter().any(|x| x.code == "sql463" && x.message.contains("'DELETE'")),
+    "expected sql463 for commuted `<>`: {d:?}"
+  );
 }
 
 #[test]
 fn sql463_quiet_for_commuted_valid_literal() {
-  let d = diags("CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF 'INSERT' = TG_OP THEN RETURN NEW; END IF; RETURN NEW; END; $$;");
+  let d = diags(
+    "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF 'INSERT' = TG_OP THEN RETURN NEW; END IF; RETURN NEW; END; $$;",
+  );
   assert!(!d.iter().any(|x| x.code == "sql463"), "commuted valid literal must not fire: {d:?}");
 }
 
 #[test]
 fn sql464_is_distinct_from_self() {
   let d = diags("SELECT * FROM users WHERE id IS DISTINCT FROM id;");
-  assert!(d.iter().any(|x| x.code == "sql464" && x.message.contains("always FALSE")), "expected sql464 for `id IS DISTINCT FROM id`: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql464" && x.message.contains("always FALSE")),
+    "expected sql464 for `id IS DISTINCT FROM id`: {d:?}"
+  );
 }
 
 #[test]
 fn sql464_is_not_distinct_from_self() {
   let d = diags("SELECT * FROM users WHERE id IS NOT DISTINCT FROM id;");
-  assert!(d.iter().any(|x| x.code == "sql464" && x.message.contains("always TRUE")), "expected sql464 for `id IS NOT DISTINCT FROM id`: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql464" && x.message.contains("always TRUE")),
+    "expected sql464 for `id IS NOT DISTINCT FROM id`: {d:?}"
+  );
 }
 
 #[test]
@@ -1825,7 +1984,10 @@ fn sql464_quiet_for_null_rhs() {
 #[test]
 fn sql465_concat_ws_empty_sep() {
   let d = diags("SELECT concat_ws('', 'a', 'b', 'c');");
-  assert!(d.iter().any(|x| x.code == "sql465" && x.message.contains("concat(")), "expected sql465 for concat_ws('', ...): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql465" && x.message.contains("concat(")),
+    "expected sql465 for concat_ws('', ...): {d:?}"
+  );
 }
 
 #[test]
@@ -1882,13 +2044,19 @@ fn sql466_quiet_for_no_offset() {
 #[test]
 fn sql467_replace_empty_needle() {
   let d = diags("SELECT replace('hello', '', 'x');");
-  assert!(d.iter().any(|x| x.code == "sql467" && x.message.contains("replace")), "expected sql467 for replace empty needle: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql467" && x.message.contains("replace")),
+    "expected sql467 for replace empty needle: {d:?}"
+  );
 }
 
 #[test]
 fn sql467_split_part_empty_delimiter() {
   let d = diags("SELECT split_part('a-b-c', '', 1);");
-  assert!(d.iter().any(|x| x.code == "sql467" && x.message.contains("split_part")), "expected sql467 for split_part empty delim: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql467" && x.message.contains("split_part")),
+    "expected sql467 for split_part empty delim: {d:?}"
+  );
 }
 
 #[test]
@@ -1906,13 +2074,19 @@ fn sql467_quiet_for_split_real_delim() {
 #[test]
 fn sql468_greatest_all_null() {
   let d = diags("SELECT greatest(NULL, NULL);");
-  assert!(d.iter().any(|x| x.code == "sql468" && x.message.contains("greatest")), "expected sql468 for greatest(NULL, NULL): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql468" && x.message.contains("greatest")),
+    "expected sql468 for greatest(NULL, NULL): {d:?}"
+  );
 }
 
 #[test]
 fn sql468_least_all_null_three_args() {
   let d = diags("SELECT least(NULL, NULL, NULL);");
-  assert!(d.iter().any(|x| x.code == "sql468" && x.message.contains("least")), "expected sql468 for least(NULL, NULL, NULL): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql468" && x.message.contains("least")),
+    "expected sql468 for least(NULL, NULL, NULL): {d:?}"
+  );
 }
 
 #[test]
@@ -1931,7 +2105,10 @@ fn sql468_quiet_for_all_values() {
 #[test]
 fn sql469_not_paren_is_null() {
   let d = diags("SELECT * FROM users WHERE NOT (email IS NULL);");
-  assert!(d.iter().any(|x| x.code == "sql469" && x.message.contains("IS NOT NULL")), "expected sql469 for NOT (email IS NULL): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql469" && x.message.contains("IS NOT NULL")),
+    "expected sql469 for NOT (email IS NULL): {d:?}"
+  );
 }
 
 #[test]
@@ -1943,7 +2120,10 @@ fn sql469_not_unparen_is_null() {
 #[test]
 fn sql469_not_paren_is_not_null() {
   let d = diags("SELECT * FROM users WHERE NOT (email IS NOT NULL);");
-  assert!(d.iter().any(|x| x.code == "sql469" && x.message.contains("IS NULL")), "expected sql469 for double-negative: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql469" && x.message.contains("IS NULL")),
+    "expected sql469 for double-negative: {d:?}"
+  );
 }
 
 #[test]
@@ -1955,19 +2135,28 @@ fn sql469_quiet_for_idiomatic_form() {
 #[test]
 fn sql470_not_paren_in() {
   let d = diags("SELECT * FROM users WHERE NOT (email IN ('a', 'b'));");
-  assert!(d.iter().any(|x| x.code == "sql470" && x.message.contains("NOT IN")), "expected sql470 for NOT (email IN ...): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql470" && x.message.contains("NOT IN")),
+    "expected sql470 for NOT (email IN ...): {d:?}"
+  );
 }
 
 #[test]
 fn sql470_not_paren_like() {
   let d = diags("SELECT * FROM users WHERE NOT (email LIKE 'a%');");
-  assert!(d.iter().any(|x| x.code == "sql470" && x.message.contains("NOT LIKE")), "expected sql470 for NOT (email LIKE ...): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql470" && x.message.contains("NOT LIKE")),
+    "expected sql470 for NOT (email LIKE ...): {d:?}"
+  );
 }
 
 #[test]
 fn sql470_not_paren_between() {
   let d = diags("SELECT * FROM users WHERE NOT (id BETWEEN 1 AND 10);");
-  assert!(d.iter().any(|x| x.code == "sql470" && x.message.contains("NOT BETWEEN")), "expected sql470 for NOT (id BETWEEN ...): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql470" && x.message.contains("NOT BETWEEN")),
+    "expected sql470 for NOT (id BETWEEN ...): {d:?}"
+  );
 }
 
 #[test]
@@ -1993,7 +2182,10 @@ fn sql470_quiet_for_not_exists() {
 #[test]
 fn sql471_distinct_inside_in_subquery() {
   let d = diags("SELECT * FROM users WHERE id IN (SELECT DISTINCT user_id FROM orders);");
-  assert!(d.iter().any(|x| x.code == "sql471" && x.message.contains("DISTINCT")), "expected sql471 for DISTINCT inside IN: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql471" && x.message.contains("DISTINCT")),
+    "expected sql471 for DISTINCT inside IN: {d:?}"
+  );
 }
 
 #[test]
@@ -2018,13 +2210,19 @@ fn sql471_quiet_for_distinct_on() {
 #[test]
 fn sql472_extract_dow_from_interval() {
   let d = diags("SELECT extract(dow from '1 day'::interval);");
-  assert!(d.iter().any(|x| x.code == "sql472" && x.message.contains("dow")), "expected sql472 for extract(dow from interval): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql472" && x.message.contains("dow")),
+    "expected sql472 for extract(dow from interval): {d:?}"
+  );
 }
 
 #[test]
 fn sql472_extract_week_from_interval_keyword_form() {
   let d = diags("SELECT extract(week from INTERVAL '1 day');");
-  assert!(d.iter().any(|x| x.code == "sql472" && x.message.contains("week")), "expected sql472 for extract(week from INTERVAL): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql472" && x.message.contains("week")),
+    "expected sql472 for extract(week from INTERVAL): {d:?}"
+  );
 }
 
 #[test]
@@ -2074,13 +2272,19 @@ fn sql348_quiet_for_mode_aggregate() {
 #[test]
 fn sql473_any_empty_array() {
   let d = diags("SELECT * FROM users WHERE id = ANY(ARRAY[]::int[]);");
-  assert!(d.iter().any(|x| x.code == "sql473" && x.message.contains("always FALSE")), "expected sql473 for ANY(ARRAY[]): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql473" && x.message.contains("always FALSE")),
+    "expected sql473 for ANY(ARRAY[]): {d:?}"
+  );
 }
 
 #[test]
 fn sql473_all_empty_array() {
   let d = diags("SELECT * FROM users WHERE id = ALL(ARRAY[]::int[]);");
-  assert!(d.iter().any(|x| x.code == "sql473" && x.message.contains("always TRUE")), "expected sql473 for ALL(ARRAY[]): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql473" && x.message.contains("always TRUE")),
+    "expected sql473 for ALL(ARRAY[]): {d:?}"
+  );
 }
 
 #[test]
@@ -2098,7 +2302,10 @@ fn sql473_quiet_for_nonempty_array() {
 #[test]
 fn sql474_string_equal_tautology() {
   let d = diags("SELECT * FROM users WHERE 'a' = 'a';");
-  assert!(d.iter().any(|x| x.code == "sql474" && x.message.contains("always TRUE")), "expected sql474 for 'a' = 'a': {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql474" && x.message.contains("always TRUE")),
+    "expected sql474 for 'a' = 'a': {d:?}"
+  );
 }
 
 #[test]
@@ -2110,14 +2317,20 @@ fn sql474_numeric_equal_tautology() {
 #[test]
 fn sql474_string_contradiction() {
   let d = diags("SELECT * FROM users WHERE 'a' = 'b';");
-  assert!(d.iter().any(|x| x.code == "sql474" && x.message.contains("always FALSE")), "expected sql474 for 'a' = 'b': {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql474" && x.message.contains("always FALSE")),
+    "expected sql474 for 'a' = 'b': {d:?}"
+  );
 }
 
 #[test]
 fn sql474_neq_same_string() {
   // `'a' <> 'a'` -- always false (contradiction).
   let d = diags("SELECT * FROM users WHERE 'a' <> 'a';");
-  assert!(d.iter().any(|x| x.code == "sql474" && x.message.contains("always FALSE")), "expected sql474 for 'a' <> 'a': {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql474" && x.message.contains("always FALSE")),
+    "expected sql474 for 'a' <> 'a': {d:?}"
+  );
 }
 
 #[test]
@@ -2137,7 +2350,10 @@ fn sql474_quiet_for_different_kinds() {
 #[test]
 fn sql475_insert_self_select() {
   let d = diags("INSERT INTO users SELECT * FROM users;");
-  assert!(d.iter().any(|x| x.code == "sql475" && x.message.contains("doubles")), "expected sql475 for self-insert: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql475" && x.message.contains("doubles")),
+    "expected sql475 for self-insert: {d:?}"
+  );
 }
 
 #[test]
@@ -2215,7 +2431,10 @@ fn sql348_quiet_for_hmac() {
 #[test]
 fn sql348_quiet_for_range_merge() {
   let d = diags("SELECT range_merge(int4range(1,5), int4range(10,20));");
-  assert!(!d.iter().any(|x| x.code == "sql348" && x.message.contains("range_merge")), "range_merge must not be flagged: {d:?}");
+  assert!(
+    !d.iter().any(|x| x.code == "sql348" && x.message.contains("range_merge")),
+    "range_merge must not be flagged: {d:?}"
+  );
 }
 
 #[test]
@@ -2227,13 +2446,19 @@ fn sql348_quiet_for_to_hex() {
 #[test]
 fn sql348_quiet_for_normalize() {
   let d = diags("SELECT normalize('a', NFC);");
-  assert!(!d.iter().any(|x| x.code == "sql348" && x.message.contains("normalize")), "normalize must not be flagged: {d:?}");
+  assert!(
+    !d.iter().any(|x| x.code == "sql348" && x.message.contains("normalize")),
+    "normalize must not be flagged: {d:?}"
+  );
 }
 
 #[test]
 fn sql348_quiet_for_int4multirange() {
   let d = diags("SELECT int4multirange(int4range(1,5), int4range(10,20));");
-  assert!(!d.iter().any(|x| x.code == "sql348" && x.message.contains("int4multirange")), "int4multirange must not be flagged: {d:?}");
+  assert!(
+    !d.iter().any(|x| x.code == "sql348" && x.message.contains("int4multirange")),
+    "int4multirange must not be flagged: {d:?}"
+  );
 }
 
 #[test]
@@ -2253,7 +2478,10 @@ fn sql020_still_fires_for_array_length() {
 #[test]
 fn sql476_simple_case_when_null_first() {
   let d = diags("SELECT CASE id WHEN NULL THEN 'a' ELSE 'b' END FROM users;");
-  assert!(d.iter().any(|x| x.code == "sql476" && x.message.contains("IS NULL")), "expected sql476 for simple CASE WHEN NULL: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql476" && x.message.contains("IS NULL")),
+    "expected sql476 for simple CASE WHEN NULL: {d:?}"
+  );
 }
 
 #[test]
@@ -2294,7 +2522,10 @@ fn sql475_fires_for_schema_qualified_target() {
 #[test]
 fn sql477_contains_empty_jsonb_object() {
   let d = diags("SELECT * FROM users WHERE name::jsonb @> '{}'::jsonb;");
-  assert!(d.iter().any(|x| x.code == "sql477" && x.message.contains("vacuously")), "expected sql477 for @> '{{}}'::jsonb: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql477" && x.message.contains("vacuously")),
+    "expected sql477 for @> '{{}}'::jsonb: {d:?}"
+  );
 }
 
 #[test]
@@ -2318,7 +2549,10 @@ fn sql477_quiet_for_non_empty_container() {
 #[test]
 fn sql478_contained_by_empty_jsonb_object() {
   let d = diags("SELECT * FROM users WHERE name::jsonb <@ '{}'::jsonb;");
-  assert!(d.iter().any(|x| x.code == "sql478" && x.message.contains("intended filter")), "expected sql478 for <@ '{{}}'::jsonb: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql478" && x.message.contains("intended filter")),
+    "expected sql478 for <@ '{{}}'::jsonb: {d:?}"
+  );
 }
 
 #[test]
@@ -2342,7 +2576,10 @@ fn sql478_quiet_for_non_empty_container() {
 #[test]
 fn sql479_substring_zero_start_comma() {
   let d = diags("SELECT substring(name, 0, 3) FROM users;");
-  assert!(d.iter().any(|x| x.code == "sql479" && x.message.contains("1-indexed")), "expected sql479 for substring(name,0,3): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql479" && x.message.contains("1-indexed")),
+    "expected sql479 for substring(name,0,3): {d:?}"
+  );
 }
 
 #[test]
@@ -2374,19 +2611,28 @@ fn sql479_quiet_for_nonzero_first_arg() {
 #[test]
 fn sql480_group_by_string_literal() {
   let d = diags("SELECT count(*) FROM users GROUP BY 'name';");
-  assert!(d.iter().any(|x| x.code == "sql480" && x.message.contains("string literal")), "expected sql480 for GROUP BY 'name': {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql480" && x.message.contains("string literal")),
+    "expected sql480 for GROUP BY 'name': {d:?}"
+  );
 }
 
 #[test]
 fn sql480_group_by_null() {
   let d = diags("SELECT count(*) FROM users GROUP BY NULL;");
-  assert!(d.iter().any(|x| x.code == "sql480" && x.message.contains("NULL")), "expected sql480 for GROUP BY NULL: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql480" && x.message.contains("NULL")),
+    "expected sql480 for GROUP BY NULL: {d:?}"
+  );
 }
 
 #[test]
 fn sql480_group_by_boolean() {
   let d = diags("SELECT count(*) FROM users GROUP BY true;");
-  assert!(d.iter().any(|x| x.code == "sql480" && x.message.contains("boolean")), "expected sql480 for GROUP BY true: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql480" && x.message.contains("boolean")),
+    "expected sql480 for GROUP BY true: {d:?}"
+  );
 }
 
 #[test]
@@ -2424,7 +2670,10 @@ fn sql404_quiet_for_group_by_current_date() {
 #[test]
 fn sql481_position_empty_haystack_literal_needle() {
   let d = diags("SELECT position('a' in '') FROM users;");
-  assert!(d.iter().any(|x| x.code == "sql481" && x.message.contains("empty haystack")), "expected sql481 for position('a' in ''): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql481" && x.message.contains("empty haystack")),
+    "expected sql481 for position('a' in ''): {d:?}"
+  );
 }
 
 #[test]
@@ -2455,19 +2704,28 @@ fn sql481_quiet_for_empty_needle() {
 #[test]
 fn sql482_having_true_is_pointless() {
   let d = diags("SELECT count(*) FROM users GROUP BY id HAVING true;");
-  assert!(d.iter().any(|x| x.code == "sql482" && x.message.contains("TRUE")), "expected sql482 Hint for HAVING true: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql482" && x.message.contains("TRUE")),
+    "expected sql482 Hint for HAVING true: {d:?}"
+  );
 }
 
 #[test]
 fn sql482_having_false_empties_result() {
   let d = diags("SELECT count(*) FROM users GROUP BY id HAVING false;");
-  assert!(d.iter().any(|x| x.code == "sql482" && x.message.contains("FALSE")), "expected sql482 Warning for HAVING false: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql482" && x.message.contains("FALSE")),
+    "expected sql482 Warning for HAVING false: {d:?}"
+  );
 }
 
 #[test]
 fn sql482_having_null_empties_result() {
   let d = diags("SELECT count(*) FROM users GROUP BY id HAVING NULL;");
-  assert!(d.iter().any(|x| x.code == "sql482" && x.message.contains("NULL")), "expected sql482 Warning for HAVING NULL: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql482" && x.message.contains("NULL")),
+    "expected sql482 Warning for HAVING NULL: {d:?}"
+  );
 }
 
 #[test]
@@ -2485,7 +2743,10 @@ fn sql482_quiet_for_real_aggregate_predicate() {
 #[test]
 fn sql483_split_part_zero_field() {
   let d = diags("SELECT split_part(name, ',', 0) FROM users;");
-  assert!(d.iter().any(|x| x.code == "sql483" && x.message.contains("field position must not be zero")), "expected sql483 Error for split_part(_,_,0): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql483" && x.message.contains("field position must not be zero")),
+    "expected sql483 Error for split_part(_,_,0): {d:?}"
+  );
 }
 
 #[test]
@@ -2517,7 +2778,10 @@ fn sql483_quiet_when_zero_is_in_other_slot() {
 #[test]
 fn sql484_partition_by_string_literal() {
   let d = diags("SELECT row_number() OVER (PARTITION BY 'name' ORDER BY id) FROM users;");
-  assert!(d.iter().any(|x| x.code == "sql484" && x.message.contains("single window")), "expected sql484 for PARTITION BY 'name': {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql484" && x.message.contains("single window")),
+    "expected sql484 for PARTITION BY 'name': {d:?}"
+  );
 }
 
 #[test]
@@ -2560,7 +2824,10 @@ fn sql484_quiet_for_no_partition_clause() {
 #[test]
 fn sql485_regexp_split_to_array_empty_pattern() {
   let d = diags("SELECT regexp_split_to_array(name, '') FROM users;");
-  assert!(d.iter().any(|x| x.code == "sql485" && x.message.contains("single chars")), "expected sql485 for regexp_split_to_array(_,''): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql485" && x.message.contains("single chars")),
+    "expected sql485 for regexp_split_to_array(_,''): {d:?}"
+  );
 }
 
 #[test]
@@ -2572,7 +2839,10 @@ fn sql485_regexp_split_to_table_empty_pattern() {
 #[test]
 fn sql485_regexp_match_empty_pattern() {
   let d = diags("SELECT regexp_match(name, '') FROM users;");
-  assert!(d.iter().any(|x| x.code == "sql485" && x.message.contains("every position")), "expected sql485 for regexp_match(_,''): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql485" && x.message.contains("every position")),
+    "expected sql485 for regexp_match(_,''): {d:?}"
+  );
 }
 
 #[test]
@@ -2599,7 +2869,10 @@ fn sql485_quiet_for_regexp_replace() {
 #[test]
 fn sql486_distinct_star() {
   let d = diags("SELECT DISTINCT * FROM users;");
-  assert!(d.iter().any(|x| x.code == "sql486" && x.message.contains("entire row")), "expected sql486 for SELECT DISTINCT *: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql486" && x.message.contains("entire row")),
+    "expected sql486 for SELECT DISTINCT *: {d:?}"
+  );
 }
 
 #[test]
@@ -2637,13 +2910,19 @@ fn sql486_quiet_for_select_star_no_distinct() {
 #[test]
 fn sql487_array_length_dim_zero() {
   let d = diags("SELECT array_length(name::text[], 0) FROM users;");
-  assert!(d.iter().any(|x| x.code == "sql487" && x.message.contains("dimension 0")), "expected sql487 for array_length(_,0): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql487" && x.message.contains("dimension 0")),
+    "expected sql487 for array_length(_,0): {d:?}"
+  );
 }
 
 #[test]
 fn sql487_array_length_dim_negative() {
   let d = diags("SELECT array_length(name::text[], -1) FROM users;");
-  assert!(d.iter().any(|x| x.code == "sql487" && x.message.contains("negative")), "expected sql487 for array_length(_,-1): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql487" && x.message.contains("negative")),
+    "expected sql487 for array_length(_,-1): {d:?}"
+  );
 }
 
 #[test]
@@ -2673,7 +2952,10 @@ fn sql487_quiet_for_dim_two() {
 #[test]
 fn sql488_jsonb_path_exists_missing_anchor() {
   let d = diags("SELECT jsonb_path_exists(name::jsonb, 'name') FROM users;");
-  assert!(d.iter().any(|x| x.code == "sql488" && x.message.contains("root anchor")), "expected sql488 for missing $ anchor: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql488" && x.message.contains("root anchor")),
+    "expected sql488 for missing $ anchor: {d:?}"
+  );
 }
 
 #[test]
@@ -2807,13 +3089,19 @@ fn sql490_quiet_for_concat_function() {
 #[test]
 fn sql491_having_numeric_tautology() {
   let d = diags("SELECT count(*) FROM users GROUP BY id HAVING 1 = 1;");
-  assert!(d.iter().any(|x| x.code == "sql491" && x.message.contains("TRUE")), "expected sql491 Hint for HAVING 1=1: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql491" && x.message.contains("TRUE")),
+    "expected sql491 Hint for HAVING 1=1: {d:?}"
+  );
 }
 
 #[test]
 fn sql491_having_numeric_contradiction() {
   let d = diags("SELECT count(*) FROM users GROUP BY id HAVING 1 = 2;");
-  assert!(d.iter().any(|x| x.code == "sql491" && x.message.contains("FALSE")), "expected sql491 Warning for HAVING 1=2: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql491" && x.message.contains("FALSE")),
+    "expected sql491 Warning for HAVING 1=2: {d:?}"
+  );
 }
 
 #[test]
@@ -2825,14 +3113,20 @@ fn sql491_having_zero_zero_tautology() {
 #[test]
 fn sql491_having_string_tautology() {
   let d = diags("SELECT count(*) FROM users GROUP BY id HAVING 'a' = 'a';");
-  assert!(d.iter().any(|x| x.code == "sql491" && x.message.contains("TRUE")), "expected sql491 for HAVING 'a'='a': {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql491" && x.message.contains("TRUE")),
+    "expected sql491 for HAVING 'a'='a': {d:?}"
+  );
 }
 
 #[test]
 fn sql491_having_neq_tautology() {
   // `1 <> 2` is always TRUE -- inequality of distinct constants.
   let d = diags("SELECT count(*) FROM users GROUP BY id HAVING 1 <> 2;");
-  assert!(d.iter().any(|x| x.code == "sql491" && x.message.contains("TRUE")), "expected sql491 Hint for HAVING 1<>2: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql491" && x.message.contains("TRUE")),
+    "expected sql491 Hint for HAVING 1<>2: {d:?}"
+  );
 }
 
 #[test]
@@ -2921,28 +3215,19 @@ fn sql427_quiet_for_lower_on_literal() {
 #[test]
 fn sql427_cast_function_form_on_column() {
   let d = diags("SELECT * FROM users WHERE CAST(created_at AS date) = '2023-01-01';");
-  assert!(
-    d.iter().any(|x| x.code == "sql427" && x.message.contains("CAST(created_at")),
-    "got {d:?}"
-  );
+  assert!(d.iter().any(|x| x.code == "sql427" && x.message.contains("CAST(created_at")), "got {d:?}");
 }
 
 #[test]
 fn sql427_date_function_wrapper_on_column() {
   let d = diags("SELECT * FROM users WHERE date(created_at) = '2023-01-01';");
-  assert!(
-    d.iter().any(|x| x.code == "sql427" && x.message.contains("date(col)")),
-    "got {d:?}"
-  );
+  assert!(d.iter().any(|x| x.code == "sql427" && x.message.contains("date(col)")), "got {d:?}");
 }
 
 #[test]
 fn sql427_double_colon_cast_on_column() {
   let d = diags("SELECT * FROM users WHERE created_at::date = '2023-01-01';");
-  assert!(
-    d.iter().any(|x| x.code == "sql427" && x.message.contains("created_at::date")),
-    "got {d:?}"
-  );
+  assert!(d.iter().any(|x| x.code == "sql427" && x.message.contains("created_at::date")), "got {d:?}");
 }
 
 #[test]
@@ -2964,10 +3249,7 @@ fn sql269_date_part_on_column_fires() {
   // date_part('year', col) has the same non-sargable shape as
   // EXTRACT(YEAR FROM col); both should hint a range rewrite.
   let d = diags("SELECT * FROM users WHERE date_part('year', created_at) = 2023;");
-  assert!(
-    d.iter().any(|x| x.code == "sql269" && x.message.contains("date_part")),
-    "got {d:?}"
-  );
+  assert!(d.iter().any(|x| x.code == "sql269" && x.message.contains("date_part")), "got {d:?}");
 }
 
 #[test]
@@ -3087,19 +3369,13 @@ fn sql424_quiet_for_aggregate_in_select_list() {
 #[test]
 fn sql423_regex_anchored_prefix_suggests_like() {
   let d = diags("SELECT * FROM users WHERE email ~ '^abc';");
-  assert!(
-    d.iter().any(|x| x.code == "sql423" && x.message.contains("LIKE 'abc%'")),
-    "got {d:?}"
-  );
+  assert!(d.iter().any(|x| x.code == "sql423" && x.message.contains("LIKE 'abc%'")), "got {d:?}");
 }
 
 #[test]
 fn sql423_regex_case_insensitive_suggests_ilike() {
   let d = diags("SELECT * FROM users WHERE email ~* '^abc';");
-  assert!(
-    d.iter().any(|x| x.code == "sql423" && x.message.contains("ILIKE 'abc%'")),
-    "got {d:?}"
-  );
+  assert!(d.iter().any(|x| x.code == "sql423" && x.message.contains("ILIKE 'abc%'")), "got {d:?}");
 }
 
 #[test]
@@ -3222,10 +3498,7 @@ fn sql418_distinct_on_primary_key_column() {
   // Catalog test helper's `users` table already declares id as PK,
   // so DISTINCT id FROM users is by definition redundant.
   let d = diags("SELECT DISTINCT id FROM users;");
-  assert!(
-    d.iter().any(|x| x.code == "sql418" && x.message.contains("PRIMARY KEY")),
-    "expected sql418: {d:?}"
-  );
+  assert!(d.iter().any(|x| x.code == "sql418" && x.message.contains("PRIMARY KEY")), "expected sql418: {d:?}");
 }
 
 #[test]
@@ -3247,10 +3520,7 @@ fn sql418_distinct_quiet_for_joined_query() {
 #[test]
 fn sql417_coalesce_duplicate_column_arg() {
   let d = diags("SELECT COALESCE(nickname, nickname, 'fallback') FROM users;");
-  assert!(
-    d.iter().any(|x| x.code == "sql417" && x.message.contains("nickname")),
-    "expected sql417: {d:?}"
-  );
+  assert!(d.iter().any(|x| x.code == "sql417" && x.message.contains("nickname")), "expected sql417: {d:?}");
 }
 
 #[test]
@@ -3556,10 +3826,7 @@ fn sql408_quiet_for_numeric_literal_self_compare() {
 #[test]
 fn sql408_where_column_self_compare_bare() {
   let d = diags("SELECT * FROM users WHERE age = age;");
-  assert!(
-    d.iter().any(|x| x.code == "sql408" && x.message.contains("age = age")),
-    "expected sql408; got {d:?}"
-  );
+  assert!(d.iter().any(|x| x.code == "sql408" && x.message.contains("age = age")), "expected sql408; got {d:?}");
 }
 
 #[test]
@@ -3638,12 +3905,18 @@ fn sql407_honors_clause_boundaries() {
   // rather than bleeding into the GROUP BY tail.
   let d = diags("SELECT * FROM users WHERE 1=2 GROUP BY id;");
   let hit = d.iter().find(|x| x.code == "sql407").expect("sql407 should fire");
-  assert!(hit.message.contains("1=2") && !hit.message.contains("GROUP"), "message leaked past GROUP BY: {}", hit.message);
+  assert!(
+    hit.message.contains("1=2") && !hit.message.contains("GROUP"),
+    "message leaked past GROUP BY: {}",
+    hit.message
+  );
 }
 
 #[test]
 fn sql406_duplicate_insert_column() {
-  let d = diags("INSERT INTO users (id, email, id) VALUES ('00000000-0000-0000-0000-000000000000','a','00000000-0000-0000-0000-000000000000');");
+  let d = diags(
+    "INSERT INTO users (id, email, id) VALUES ('00000000-0000-0000-0000-000000000000','a','00000000-0000-0000-0000-000000000000');",
+  );
   assert!(
     d.iter().any(|x| x.code == "sql406" && x.message.contains("INSERT") && x.message.contains("id")),
     "expected sql406 duplicate INSERT column; got {d:?}"
@@ -3852,10 +4125,7 @@ fn sql402_duplicate_alias_in_from_list() {
 #[test]
 fn sql402_duplicate_alias_across_from_and_join() {
   let d = diags("SELECT * FROM users u JOIN orders u ON u.id = u.user_id;");
-  assert!(
-    d.iter().any(|x| x.code == "sql402"),
-    "expected sql402 duplicate alias across FROM and JOIN; got {d:?}"
-  );
+  assert!(d.iter().any(|x| x.code == "sql402"), "expected sql402 duplicate alias across FROM and JOIN; got {d:?}");
 }
 
 #[test]
@@ -3895,10 +4165,7 @@ fn sql003_still_flags_non_using_column_in_using_join() {
   // (In this minimal catalog only `id` is shared, so we just confirm
   // the rule still runs by checking another diagnostic class.)
   let d = diags("SELECT id, u.email FROM users u JOIN orders o USING (id);");
-  assert!(
-    !d.iter().any(|x| x.code == "sql003"),
-    "USING(id) plus qualified other column should be clean: {d:?}"
-  );
+  assert!(!d.iter().any(|x| x.code == "sql003"), "USING(id) plus qualified other column should be clean: {d:?}");
 }
 
 #[test]
@@ -5010,7 +5277,10 @@ fn sql054_quiet_for_is_true() {
 #[test]
 fn sql492_not_in_with_null_in_list() {
   let d = diags("SELECT * FROM users WHERE name NOT IN ('a', NULL);");
-  assert!(d.iter().any(|x| x.code == "sql492" && x.message.contains("ZERO rows")), "expected sql492 Warning for NOT IN (...,NULL): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql492" && x.message.contains("ZERO rows")),
+    "expected sql492 Warning for NOT IN (...,NULL): {d:?}"
+  );
 }
 
 #[test]
@@ -5022,7 +5292,10 @@ fn sql492_not_in_with_only_null() {
 #[test]
 fn sql492_in_with_only_null() {
   let d = diags("SELECT * FROM users WHERE name IN (NULL);");
-  assert!(d.iter().any(|x| x.code == "sql492" && x.message.contains("never TRUE")), "expected sql492 Warning for IN (NULL): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql492" && x.message.contains("never TRUE")),
+    "expected sql492 Warning for IN (NULL): {d:?}"
+  );
 }
 
 #[test]
@@ -5050,7 +5323,10 @@ fn sql492_quiet_for_in_subquery() {
 #[test]
 fn sql493_coalesce_on_not_null_column() {
   let d = diags("SELECT COALESCE(id, 0) FROM users;");
-  assert!(d.iter().any(|x| x.code == "sql493" && x.message.contains("dead code")), "expected sql493 for COALESCE(id, 0): {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql493" && x.message.contains("dead code")),
+    "expected sql493 for COALESCE(id, 0): {d:?}"
+  );
 }
 
 #[test]
@@ -5090,7 +5366,10 @@ fn sql493_quiet_for_single_arg() {
 #[test]
 fn sql494_jsonb_set_empty_path_literal() {
   let d = diags("SELECT jsonb_set(name::jsonb, '{}', '\"x\"') FROM users;");
-  assert!(d.iter().any(|x| x.code == "sql494" && x.message.contains("no-op")), "expected sql494 for jsonb_set empty path: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql494" && x.message.contains("no-op")),
+    "expected sql494 for jsonb_set empty path: {d:?}"
+  );
 }
 
 #[test]
@@ -5129,13 +5408,55 @@ fn cat_with_generated() -> Catalog {
     name: "events".into(),
     kind: TableKind::Table,
     columns: vec![
-      Column { name: "id".into(), data_type: "int".into(), nullable: false, default: Some("GENERATED ALWAYS AS IDENTITY".into()), comment: None, generated: None, json_keys: None },
-      Column { name: "full_name".into(), data_type: "text".into(), nullable: true, default: None, comment: None, generated: Some("first_name || ' ' || last_name".into()), json_keys: None },
-      Column { name: "name".into(), data_type: "text".into(), nullable: true, default: None, comment: None, generated: None, json_keys: None },
+      Column {
+        name: "id".into(),
+        data_type: "int".into(),
+        nullable: false,
+        default: Some("GENERATED ALWAYS AS IDENTITY".into()),
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
+      Column {
+        name: "full_name".into(),
+        data_type: "text".into(),
+        nullable: true,
+        default: None,
+        comment: None,
+        generated: Some("first_name || ' ' || last_name".into()),
+        json_keys: None,
+      },
+      Column {
+        name: "name".into(),
+        data_type: "text".into(),
+        nullable: true,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
     ],
-    constraints: vec![], indexes: vec![], triggers: vec![], policies: vec![], comment: None, row_estimate: None, owner: None, definition: None, strict: false, options: None,
+    constraints: vec![],
+    indexes: vec![],
+    triggers: vec![],
+    policies: vec![],
+    comment: None,
+    row_estimate: None,
+    owner: None,
+    definition: None,
+    strict: false,
+    options: None,
   };
-  Catalog { version: CATALOG_VERSION, connection_id: "test".into(), schemas: vec![Schema { name: "public".into(), tables: vec![users] }], functions: vec![], types: vec![], roles: vec![], sequences: vec![], extensions: vec![] }
+  Catalog {
+    version: CATALOG_VERSION,
+    connection_id: "test".into(),
+    schemas: vec![Schema { name: "public".into(), tables: vec![users] }],
+    functions: vec![],
+    types: vec![],
+    roles: vec![],
+    sequences: vec![],
+    extensions: vec![],
+  }
 }
 
 fn diags_with_generated(src: &str) -> Vec<dsl_analysis::Diagnostic> {
@@ -5148,7 +5469,10 @@ fn diags_with_generated(src: &str) -> Vec<dsl_analysis::Diagnostic> {
 #[test]
 fn sql178_insert_identity_column_flagged() {
   let d = diags_with_generated("INSERT INTO events (id, name) VALUES (1, 'a');");
-  assert!(d.iter().any(|x| x.code == "sql178" && x.message.contains("IDENTITY")), "expected sql178 for INSERT into identity: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql178" && x.message.contains("IDENTITY")),
+    "expected sql178 for INSERT into identity: {d:?}"
+  );
 }
 
 #[test]
@@ -5156,7 +5480,10 @@ fn sql178_insert_stored_generated_column_flagged() {
   // Regression iter190: STORED generated columns were NOT caught
   // by sql178 (only IDENTITY via `default` field was checked).
   let d = diags_with_generated("INSERT INTO events (full_name, name) VALUES ('x', 'a');");
-  assert!(d.iter().any(|x| x.code == "sql178" && x.message.contains("STORED")), "expected sql178 for INSERT into STORED generated: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql178" && x.message.contains("STORED")),
+    "expected sql178 for INSERT into STORED generated: {d:?}"
+  );
 }
 
 #[test]
@@ -5169,14 +5496,20 @@ fn sql178_insert_with_override_allows_identity() {
 fn sql178_update_identity_column_flagged() {
   // Regression iter190: UPDATE of identity column was silent.
   let d = diags_with_generated("UPDATE events SET id = 2 WHERE name = 'a';");
-  assert!(d.iter().any(|x| x.code == "sql178" && x.message.contains("IDENTITY")), "expected sql178 for UPDATE of identity col: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql178" && x.message.contains("IDENTITY")),
+    "expected sql178 for UPDATE of identity col: {d:?}"
+  );
 }
 
 #[test]
 fn sql178_update_stored_generated_column_flagged() {
   // Regression iter190: UPDATE of STORED generated col was silent.
   let d = diags_with_generated("UPDATE events SET full_name = 'x' WHERE id = 1;");
-  assert!(d.iter().any(|x| x.code == "sql178" && x.message.contains("STORED")), "expected sql178 for UPDATE of STORED generated: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql178" && x.message.contains("STORED")),
+    "expected sql178 for UPDATE of STORED generated: {d:?}"
+  );
 }
 
 #[test]
@@ -5194,7 +5527,10 @@ fn sql178_quiet_for_update_writable_column() {
 #[test]
 fn sql495_eq_all_array_distinct_elements_is_always_false() {
   let d = diags("SELECT * FROM users WHERE name = ALL(ARRAY['a', 'b']);");
-  assert!(d.iter().any(|x| x.code == "sql495" && x.message.contains("always FALSE")), "expected sql495 Warning for distinct = ALL: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql495" && x.message.contains("always FALSE")),
+    "expected sql495 Warning for distinct = ALL: {d:?}"
+  );
 }
 
 #[test]
@@ -5271,7 +5607,10 @@ fn sql496_multi_assignment_flags_each() {
 #[test]
 fn sql497_array_agg_distinct_order_mismatch() {
   let d = diags("SELECT array_agg(DISTINCT name ORDER BY created_at) FROM users;");
-  assert!(d.iter().any(|x| x.code == "sql497" && x.message.contains("argument list")), "expected sql497 for array_agg distinct+order mismatch: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql497" && x.message.contains("argument list")),
+    "expected sql497 for array_agg distinct+order mismatch: {d:?}"
+  );
 }
 
 #[test]
@@ -5307,7 +5646,10 @@ fn sql497_quiet_for_no_order_by() {
 #[test]
 fn sql498_flags_similar_to() {
   let d = diags("SELECT * FROM users WHERE name SIMILAR TO '%foo%';");
-  assert!(d.iter().any(|x| x.code == "sql498" && x.message.contains("SIMILAR TO")), "expected sql498 for SIMILAR TO: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql498" && x.message.contains("SIMILAR TO")),
+    "expected sql498 for SIMILAR TO: {d:?}"
+  );
 }
 
 #[test]
@@ -5334,13 +5676,55 @@ fn cat_with_tsvector() -> Catalog {
     name: "docs".into(),
     kind: TableKind::Table,
     columns: vec![
-      Column { name: "id".into(), data_type: "int".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
-      Column { name: "search".into(), data_type: "tsvector".into(), nullable: true, default: None, comment: None, generated: None, json_keys: None },
-      Column { name: "body".into(), data_type: "text".into(), nullable: true, default: None, comment: None, generated: None, json_keys: None },
+      Column {
+        name: "id".into(),
+        data_type: "int".into(),
+        nullable: false,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
+      Column {
+        name: "search".into(),
+        data_type: "tsvector".into(),
+        nullable: true,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
+      Column {
+        name: "body".into(),
+        data_type: "text".into(),
+        nullable: true,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
     ],
-    constraints: vec![], indexes: vec![], triggers: vec![], policies: vec![], comment: None, row_estimate: None, owner: None, definition: None, strict: false, options: None,
+    constraints: vec![],
+    indexes: vec![],
+    triggers: vec![],
+    policies: vec![],
+    comment: None,
+    row_estimate: None,
+    owner: None,
+    definition: None,
+    strict: false,
+    options: None,
   };
-  Catalog { version: CATALOG_VERSION, connection_id: "test".into(), schemas: vec![Schema { name: "public".into(), tables: vec![docs] }], functions: vec![], types: vec![], roles: vec![], sequences: vec![], extensions: vec![] }
+  Catalog {
+    version: CATALOG_VERSION,
+    connection_id: "test".into(),
+    schemas: vec![Schema { name: "public".into(), tables: vec![docs] }],
+    functions: vec![],
+    types: vec![],
+    roles: vec![],
+    sequences: vec![],
+    extensions: vec![],
+  }
 }
 
 fn diags_with_tsvector(src: &str) -> Vec<dsl_analysis::Diagnostic> {
@@ -5389,15 +5773,73 @@ fn cat_with_dates() -> Catalog {
     name: "events".into(),
     kind: TableKind::Table,
     columns: vec![
-      Column { name: "id".into(), data_type: "int".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
-      Column { name: "start_date".into(), data_type: "date".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
-      Column { name: "end_date".into(), data_type: "date".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
-      Column { name: "start_ts".into(), data_type: "timestamptz".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
-      Column { name: "end_ts".into(), data_type: "timestamptz".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
+      Column {
+        name: "id".into(),
+        data_type: "int".into(),
+        nullable: false,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
+      Column {
+        name: "start_date".into(),
+        data_type: "date".into(),
+        nullable: false,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
+      Column {
+        name: "end_date".into(),
+        data_type: "date".into(),
+        nullable: false,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
+      Column {
+        name: "start_ts".into(),
+        data_type: "timestamptz".into(),
+        nullable: false,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
+      Column {
+        name: "end_ts".into(),
+        data_type: "timestamptz".into(),
+        nullable: false,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
     ],
-    constraints: vec![], indexes: vec![], triggers: vec![], policies: vec![], comment: None, row_estimate: None, owner: None, definition: None, strict: false, options: None,
+    constraints: vec![],
+    indexes: vec![],
+    triggers: vec![],
+    policies: vec![],
+    comment: None,
+    row_estimate: None,
+    owner: None,
+    definition: None,
+    strict: false,
+    options: None,
   };
-  Catalog { version: CATALOG_VERSION, connection_id: "test".into(), schemas: vec![Schema { name: "public".into(), tables: vec![events] }], functions: vec![], types: vec![], roles: vec![], sequences: vec![], extensions: vec![] }
+  Catalog {
+    version: CATALOG_VERSION,
+    connection_id: "test".into(),
+    schemas: vec![Schema { name: "public".into(), tables: vec![events] }],
+    functions: vec![],
+    types: vec![],
+    roles: vec![],
+    sequences: vec![],
+    extensions: vec![],
+  }
 }
 
 fn diags_with_dates(src: &str) -> Vec<dsl_analysis::Diagnostic> {
@@ -5480,13 +5922,55 @@ fn cat_with_tstz() -> Catalog {
     name: "events".into(),
     kind: TableKind::Table,
     columns: vec![
-      Column { name: "id".into(), data_type: "int".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
-      Column { name: "created_at".into(), data_type: "timestamptz".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
-      Column { name: "scheduled_for".into(), data_type: "timestamp".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
+      Column {
+        name: "id".into(),
+        data_type: "int".into(),
+        nullable: false,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
+      Column {
+        name: "created_at".into(),
+        data_type: "timestamptz".into(),
+        nullable: false,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
+      Column {
+        name: "scheduled_for".into(),
+        data_type: "timestamp".into(),
+        nullable: false,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
     ],
-    constraints: vec![], indexes: vec![], triggers: vec![], policies: vec![], comment: None, row_estimate: None, owner: None, definition: None, strict: false, options: None,
+    constraints: vec![],
+    indexes: vec![],
+    triggers: vec![],
+    policies: vec![],
+    comment: None,
+    row_estimate: None,
+    owner: None,
+    definition: None,
+    strict: false,
+    options: None,
   };
-  Catalog { version: CATALOG_VERSION, connection_id: "test".into(), schemas: vec![Schema { name: "public".into(), tables: vec![events] }], functions: vec![], types: vec![], roles: vec![], sequences: vec![], extensions: vec![] }
+  Catalog {
+    version: CATALOG_VERSION,
+    connection_id: "test".into(),
+    schemas: vec![Schema { name: "public".into(), tables: vec![events] }],
+    functions: vec![],
+    types: vec![],
+    roles: vec![],
+    sequences: vec![],
+    extensions: vec![],
+  }
 }
 
 fn diags_with_tstz(src: &str) -> Vec<dsl_analysis::Diagnostic> {
@@ -5542,14 +6026,64 @@ fn cat_with_json_text() -> Catalog {
     name: "docs".into(),
     kind: TableKind::Table,
     columns: vec![
-      Column { name: "id".into(), data_type: "int".into(), nullable: false, default: None, comment: None, generated: None, json_keys: None },
-      Column { name: "data".into(), data_type: "jsonb".into(), nullable: true, default: None, comment: None, generated: None, json_keys: None },
-      Column { name: "meta".into(), data_type: "json".into(), nullable: true, default: None, comment: None, generated: None, json_keys: None },
-      Column { name: "body".into(), data_type: "text".into(), nullable: true, default: None, comment: None, generated: None, json_keys: None },
+      Column {
+        name: "id".into(),
+        data_type: "int".into(),
+        nullable: false,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
+      Column {
+        name: "data".into(),
+        data_type: "jsonb".into(),
+        nullable: true,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
+      Column {
+        name: "meta".into(),
+        data_type: "json".into(),
+        nullable: true,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
+      Column {
+        name: "body".into(),
+        data_type: "text".into(),
+        nullable: true,
+        default: None,
+        comment: None,
+        generated: None,
+        json_keys: None,
+      },
     ],
-    constraints: vec![], indexes: vec![], triggers: vec![], policies: vec![], comment: None, row_estimate: None, owner: None, definition: None, strict: false, options: None,
+    constraints: vec![],
+    indexes: vec![],
+    triggers: vec![],
+    policies: vec![],
+    comment: None,
+    row_estimate: None,
+    owner: None,
+    definition: None,
+    strict: false,
+    options: None,
   };
-  Catalog { version: CATALOG_VERSION, connection_id: "test".into(), schemas: vec![Schema { name: "public".into(), tables: vec![docs] }], functions: vec![], types: vec![], roles: vec![], sequences: vec![], extensions: vec![] }
+  Catalog {
+    version: CATALOG_VERSION,
+    connection_id: "test".into(),
+    schemas: vec![Schema { name: "public".into(), tables: vec![docs] }],
+    functions: vec![],
+    types: vec![],
+    roles: vec![],
+    sequences: vec![],
+    extensions: vec![],
+  }
 }
 
 fn diags_with_json_text(src: &str) -> Vec<dsl_analysis::Diagnostic> {
@@ -5691,7 +6225,10 @@ fn sql505_quiet_for_json_col() {
 #[test]
 fn sql506_flags_array_single_null() {
   let d = diags("SELECT ARRAY[NULL] FROM users;");
-  assert!(d.iter().any(|x| x.code == "sql506" && x.message.contains("cannot determine")), "expected sql506 for ARRAY[NULL]: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql506" && x.message.contains("cannot determine")),
+    "expected sql506 for ARRAY[NULL]: {d:?}"
+  );
 }
 
 #[test]
@@ -5721,25 +6258,36 @@ fn sql506_quiet_for_outer_cast() {
 
 #[test]
 fn sql507_flags_execute_concat_with_param() {
-  let d = diags("CREATE OR REPLACE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN EXECUTE 'SELECT * FROM users WHERE id = ' || $1; END; $$;");
-  assert!(d.iter().any(|x| x.code == "sql507" && x.message.contains("injection")), "expected sql507 for EXECUTE || $1: {d:?}");
+  let d = diags(
+    "CREATE OR REPLACE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN EXECUTE 'SELECT * FROM users WHERE id = ' || $1; END; $$;",
+  );
+  assert!(
+    d.iter().any(|x| x.code == "sql507" && x.message.contains("injection")),
+    "expected sql507 for EXECUTE || $1: {d:?}"
+  );
 }
 
 #[test]
 fn sql507_flags_execute_concat_with_variable() {
-  let d = diags("CREATE OR REPLACE FUNCTION f(x text) RETURNS void LANGUAGE plpgsql AS $$ BEGIN EXECUTE 'SELECT * FROM ' || x; END; $$;");
+  let d = diags(
+    "CREATE OR REPLACE FUNCTION f(x text) RETURNS void LANGUAGE plpgsql AS $$ BEGIN EXECUTE 'SELECT * FROM ' || x; END; $$;",
+  );
   assert!(d.iter().any(|x| x.code == "sql507"), "expected sql507 for EXECUTE || x: {d:?}");
 }
 
 #[test]
 fn sql507_quiet_for_execute_using() {
-  let d = diags("CREATE OR REPLACE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN EXECUTE 'SELECT * FROM users WHERE id = $1' USING $1; END; $$;");
+  let d = diags(
+    "CREATE OR REPLACE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN EXECUTE 'SELECT * FROM users WHERE id = $1' USING $1; END; $$;",
+  );
   assert!(!d.iter().any(|x| x.code == "sql507"), "EXECUTE ... USING must not fire: {d:?}");
 }
 
 #[test]
 fn sql507_quiet_for_format_wrapper() {
-  let d = diags("CREATE OR REPLACE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN EXECUTE format('SELECT * FROM %I', 'users'); END; $$;");
+  let d = diags(
+    "CREATE OR REPLACE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN EXECUTE format('SELECT * FROM %I', 'users'); END; $$;",
+  );
   assert!(!d.iter().any(|x| x.code == "sql507"), "EXECUTE format(...) must not fire: {d:?}");
 }
 
@@ -5791,7 +6339,10 @@ fn sql508_quiet_for_different_qualifiers() {
 #[test]
 fn sql509_flags_pg_temp_select() {
   let d = diags("SELECT * FROM pg_temp.my_tmp;");
-  assert!(d.iter().any(|x| x.code == "sql509" && x.message.contains("per-backend")), "expected sql509 for pg_temp.my_tmp: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql509" && x.message.contains("per-backend")),
+    "expected sql509 for pg_temp.my_tmp: {d:?}"
+  );
 }
 
 #[test]
@@ -5881,19 +6432,28 @@ fn sql348_quiet_for_character_type_spelling() {
   // Regression iter211: `character(10)` was being misread as a
   // function call. PG type spellings: character, varying, bpchar.
   let d = diags("CREATE TABLE u (code character(10));");
-  assert!(!d.iter().any(|x| x.code == "sql348" && x.message.contains("character")), "sql348 must not flag `character` type: {d:?}");
+  assert!(
+    !d.iter().any(|x| x.code == "sql348" && x.message.contains("character")),
+    "sql348 must not flag `character` type: {d:?}"
+  );
 }
 
 #[test]
 fn sql348_quiet_for_character_varying_type() {
   let d = diags("CREATE TABLE u (code CHARACTER VARYING(10));");
-  assert!(!d.iter().any(|x| x.code == "sql348" && x.message.contains("VARYING")), "sql348 must not flag `VARYING` keyword: {d:?}");
+  assert!(
+    !d.iter().any(|x| x.code == "sql348" && x.message.contains("VARYING")),
+    "sql348 must not flag `VARYING` keyword: {d:?}"
+  );
 }
 
 #[test]
 fn sql348_quiet_for_bpchar_type() {
   let d = diags("CREATE TABLE u (code BPCHAR(10));");
-  assert!(!d.iter().any(|x| x.code == "sql348" && x.message.contains("BPCHAR")), "sql348 must not flag `BPCHAR` type: {d:?}");
+  assert!(
+    !d.iter().any(|x| x.code == "sql348" && x.message.contains("BPCHAR")),
+    "sql348 must not flag `BPCHAR` type: {d:?}"
+  );
 }
 
 #[test]
@@ -8975,9 +9535,7 @@ fn edge_cte_multi_binding() {
 
 #[test]
 fn edge_case_with_subquery() {
-  let d = diags(
-    "SELECT CASE WHEN id IN (SELECT id FROM users) THEN 1 ELSE 0 END FROM users;",
-  );
+  let d = diags("SELECT CASE WHEN id IN (SELECT id FROM users) THEN 1 ELSE 0 END FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -9022,9 +9580,8 @@ fn edge_writable_cte_update() {
 
 #[test]
 fn edge_subquery_in_having() {
-  let d = diags(
-    "SELECT email, count(*) FROM users GROUP BY email HAVING count(*) > (SELECT count(*) FROM users) / 10;",
-  );
+  let d =
+    diags("SELECT email, count(*) FROM users GROUP BY email HAVING count(*) > (SELECT count(*) FROM users) / 10;");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -9036,9 +9593,7 @@ fn edge_timestamp_arithmetic() {
 
 #[test]
 fn edge_partition_by_multi_col() {
-  let d = diags(
-    "SELECT id, row_number() OVER (PARTITION BY email, name ORDER BY id) FROM users;",
-  );
+  let d = diags("SELECT id, row_number() OVER (PARTITION BY email, name ORDER BY id) FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -9064,9 +9619,7 @@ fn edge_trim_leading_form() {
 #[test]
 #[ignore = "sql002 does not track ALTER ADD COLUMN cross-statement; sql351 does. Needs catalog mutation in dsl-resolve to fix."]
 fn edge_alter_table_add_column_then_select() {
-  let d = diags(
-    "ALTER TABLE users ADD COLUMN age INT; SELECT age FROM users WHERE age > 0;",
-  );
+  let d = diags("ALTER TABLE users ADD COLUMN age INT; SELECT age FROM users WHERE age > 0;");
   assert!(!d.iter().any(|x| x.code == "sql002"), "ALTER-added col must be in scope: {d:?}");
 }
 
@@ -9108,9 +9661,8 @@ fn edge_select_into_temp() {
 
 #[test]
 fn edge_not_exists_subquery() {
-  let d = diags(
-    "SELECT u.id FROM users u WHERE NOT EXISTS (SELECT 1 FROM users v WHERE v.id = u.id AND v.name IS NULL);",
-  );
+  let d =
+    diags("SELECT u.id FROM users u WHERE NOT EXISTS (SELECT 1 FROM users v WHERE v.id = u.id AND v.name IS NULL);");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -9302,17 +9854,13 @@ fn edge_refresh_materialized_view() {
 
 #[test]
 fn edge_create_foreign_table() {
-  let d = diags(
-    "CREATE FOREIGN TABLE remote_users (id uuid, name text) SERVER my_server;",
-  );
+  let d = diags("CREATE FOREIGN TABLE remote_users (id uuid, name text) SERVER my_server;");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
 #[test]
 fn edge_create_statistics() {
-  let d = diags(
-    "CREATE STATISTICS s_users (dependencies) ON name, email FROM users;",
-  );
+  let d = diags("CREATE STATISTICS s_users (dependencies) ON name, email FROM users;");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -9336,9 +9884,7 @@ fn edge_create_domain() {
 
 #[test]
 fn edge_create_aggregate() {
-  let d = diags(
-    "CREATE AGGREGATE my_sum(int) (sfunc = int4pl, stype = int, initcond = '0');",
-  );
+  let d = diags("CREATE AGGREGATE my_sum(int) (sfunc = int4pl, stype = int, initcond = '0');");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -9461,9 +10007,7 @@ fn edge_select_no_from() {
 
 #[test]
 fn edge_case_value_branches() {
-  let d = diags(
-    "SELECT CASE name WHEN 'a' THEN 1 WHEN 'b' THEN 2 ELSE 0 END FROM users;",
-  );
+  let d = diags("SELECT CASE name WHEN 'a' THEN 1 WHEN 'b' THEN 2 ELSE 0 END FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -9480,9 +10024,7 @@ fn edge_multi_subquery_in_from() {
 
 #[test]
 fn edge_unnest_with_ordinality_alias() {
-  let d = diags(
-    "SELECT v, idx FROM unnest(ARRAY['a','b','c']) WITH ORDINALITY AS u(v, idx);",
-  );
+  let d = diags("SELECT v, idx FROM unnest(ARRAY['a','b','c']) WITH ORDINALITY AS u(v, idx);");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -9585,9 +10127,7 @@ fn edge_comment_on_column() {
 
 #[test]
 fn edge_create_function_positional_args() {
-  let d = diags(
-    "CREATE FUNCTION add(int, int) RETURNS int AS $$ SELECT $1 + $2; $$ LANGUAGE sql IMMUTABLE;",
-  );
+  let d = diags("CREATE FUNCTION add(int, int) RETURNS int AS $$ SELECT $1 + $2; $$ LANGUAGE sql IMMUTABLE;");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -9603,9 +10143,7 @@ fn edge_create_function_plpgsql_return_query() {
 
 #[test]
 fn edge_cte_not_materialized() {
-  let d = diags(
-    "WITH u AS NOT MATERIALIZED (SELECT id FROM users) SELECT id FROM u;",
-  );
+  let d = diags("WITH u AS NOT MATERIALIZED (SELECT id FROM users) SELECT id FROM u;");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -9637,9 +10175,7 @@ fn edge_alter_table_drop_column() {
 
 #[test]
 fn edge_create_table_partition_by_range() {
-  let d = diags(
-    "CREATE TABLE measurements (id int, ts timestamptz) PARTITION BY RANGE (ts);",
-  );
+  let d = diags("CREATE TABLE measurements (id int, ts timestamptz) PARTITION BY RANGE (ts);");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -9714,9 +10250,7 @@ fn edge_range_constructor() {
 
 #[test]
 fn edge_record_return_table_alias() {
-  let d = diags(
-    "SELECT a, b FROM json_to_record('{\"a\":1,\"b\":\"x\"}'::json) AS x(a int, b text);",
-  );
+  let d = diags("SELECT a, b FROM json_to_record('{\"a\":1,\"b\":\"x\"}'::json) AS x(a int, b text);");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -9769,7 +10303,8 @@ fn edge_reassign_owned_by() {
 
 #[test]
 fn edge_create_collation() {
-  let d = diags("CREATE COLLATION case_insensitive (provider = icu, locale = 'und-u-ks-level2', deterministic = false);");
+  let d =
+    diags("CREATE COLLATION case_insensitive (provider = icu, locale = 'und-u-ks-level2', deterministic = false);");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -9789,17 +10324,14 @@ fn edge_similar_to_regex() {
 
 #[test]
 fn edge_regex_operators() {
-  let d = diags(
-    "SELECT id FROM users WHERE name ~ '^a' AND name ~* 'b$' AND email !~ '@example';",
-  );
+  let d = diags("SELECT id FROM users WHERE name ~ '^a' AND name ~* 'b$' AND email !~ '@example';");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
 #[test]
 fn edge_overlaps_operator() {
-  let d = diags(
-    "SELECT 1 WHERE (DATE '2024-01-01', DATE '2024-01-31') OVERLAPS (DATE '2024-01-15', DATE '2024-02-15');",
-  );
+  let d =
+    diags("SELECT 1 WHERE (DATE '2024-01-01', DATE '2024-01-31') OVERLAPS (DATE '2024-01-15', DATE '2024-02-15');");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -9817,17 +10349,13 @@ fn edge_is_not_distinct_from() {
 
 #[test]
 fn edge_grouping_function() {
-  let d = diags(
-    "SELECT email, GROUPING(email) AS g, count(*) FROM users GROUP BY ROLLUP (email);",
-  );
+  let d = diags("SELECT email, GROUPING(email) AS g, count(*) FROM users GROUP BY ROLLUP (email);");
   assert!(!d.iter().any(|x| matches!(x.code, "sql002" | "sql348")));
 }
 
 #[test]
 fn edge_nulls_not_distinct_unique() {
-  let d = diags(
-    "CREATE TABLE u2 (id int, email text, UNIQUE NULLS NOT DISTINCT (email));",
-  );
+  let d = diags("CREATE TABLE u2 (id int, email text, UNIQUE NULLS NOT DISTINCT (email));");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -9842,9 +10370,7 @@ fn edge_subquery_any_all_combos() {
 
 #[test]
 fn edge_boolean_literal_comparisons() {
-  let d = diags(
-    "SELECT id FROM users WHERE (name IS NOT NULL) = TRUE OR (email IS NULL) = FALSE;",
-  );
+  let d = diags("SELECT id FROM users WHERE (name IS NOT NULL) = TRUE OR (email IS NULL) = FALSE;");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -9882,9 +10408,7 @@ fn edge_on_conflict_do_nothing() {
 
 #[test]
 fn edge_create_operator() {
-  let d = diags(
-    "CREATE OPERATOR === (LEFTARG = int, RIGHTARG = int, FUNCTION = int4eq);",
-  );
+  let d = diags("CREATE OPERATOR === (LEFTARG = int, RIGHTARG = int, FUNCTION = int4eq);");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -9900,9 +10424,7 @@ fn edge_create_operator_class() {
 
 #[test]
 fn edge_any_array_op() {
-  let d = diags(
-    "SELECT id FROM users WHERE id::text = ANY(ARRAY['a', 'b', 'c']);",
-  );
+  let d = diags("SELECT id FROM users WHERE id::text = ANY(ARRAY['a', 'b', 'c']);");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -9915,17 +10437,13 @@ fn edge_like_escape() {
 #[test]
 fn edge_pg_function_overload() {
   // overload resolution: substring(text, int, int) vs substring(text, pattern)
-  let d = diags(
-    "SELECT substring(name, 1, 3), substring(name FROM '[a-z]+') FROM users;",
-  );
+  let d = diags("SELECT substring(name, 1, 3), substring(name FROM '[a-z]+') FROM users;");
   assert!(!d.iter().any(|x| matches!(x.code, "sql002" | "sql348")));
 }
 
 #[test]
 fn edge_pg_now_variations() {
-  let d = diags(
-    "SELECT now(), CURRENT_TIMESTAMP, CURRENT_DATE, CURRENT_TIME, LOCALTIMESTAMP;",
-  );
+  let d = diags("SELECT now(), CURRENT_TIMESTAMP, CURRENT_DATE, CURRENT_TIME, LOCALTIMESTAMP;");
   assert!(!d.iter().any(|x| matches!(x.code, "sql002" | "sql348")));
 }
 
@@ -9933,9 +10451,7 @@ fn edge_pg_now_variations() {
 
 #[test]
 fn edge_advisory_lock_calls() {
-  let d = diags(
-    "SELECT pg_advisory_lock(1), pg_try_advisory_lock(2), pg_advisory_unlock(1);",
-  );
+  let d = diags("SELECT pg_advisory_lock(1), pg_try_advisory_lock(2), pg_advisory_unlock(1);");
   assert!(!d.iter().any(|x| matches!(x.code, "sql002" | "sql348")));
 }
 
@@ -9954,9 +10470,7 @@ fn edge_generated_stored_column() {
 
 #[test]
 fn edge_identity_by_default() {
-  let d = diags(
-    "CREATE TABLE seq_t (id int GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY);",
-  );
+  let d = diags("CREATE TABLE seq_t (id int GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY);");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -9985,9 +10499,7 @@ fn edge_table_shorthand() {
 
 #[test]
 fn edge_import_foreign_schema() {
-  let d = diags(
-    "IMPORT FOREIGN SCHEMA public LIMIT TO (users) FROM SERVER s INTO local_schema;",
-  );
+  let d = diags("IMPORT FOREIGN SCHEMA public LIMIT TO (users) FROM SERVER s INTO local_schema;");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -10008,9 +10520,7 @@ fn edge_create_event_trigger() {
 
 #[test]
 fn edge_alter_default_privileges() {
-  let d = diags(
-    "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO authenticated;",
-  );
+  let d = diags("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO authenticated;");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -10061,9 +10571,7 @@ fn edge_update_multi_from() {
 
 #[test]
 fn edge_set_op_with_order() {
-  let d = diags(
-    "(SELECT id FROM users) UNION ALL (SELECT id FROM users) ORDER BY 1 LIMIT 5;",
-  );
+  let d = diags("(SELECT id FROM users) UNION ALL (SELECT id FROM users) ORDER BY 1 LIMIT 5;");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -10090,9 +10598,7 @@ fn edge_pg18_merge_returning() {
 
 #[test]
 fn edge_lateral_subquery_alias_columns() {
-  let d = diags(
-    "SELECT u.id, sub.cnt FROM users u, LATERAL (SELECT count(*) FROM users WHERE id = u.id) AS sub(cnt);",
-  );
+  let d = diags("SELECT u.id, sub.cnt FROM users u, LATERAL (SELECT count(*) FROM users WHERE id = u.id) AS sub(cnt);");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -10159,9 +10665,7 @@ fn edge_update_with_cte() {
 
 #[test]
 fn edge_tagged_dollar_quote() {
-  let d = diags(
-    "CREATE FUNCTION g() RETURNS text AS $tag$ SELECT 'hello, $$world$$'; $tag$ LANGUAGE sql;",
-  );
+  let d = diags("CREATE FUNCTION g() RETURNS text AS $tag$ SELECT 'hello, $$world$$'; $tag$ LANGUAGE sql;");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -10189,9 +10693,7 @@ fn edge_select_distinct_count() {
 
 #[test]
 fn edge_aggregate_over_partition_alias() {
-  let d = diags(
-    "SELECT id, sum(1) OVER (PARTITION BY email ORDER BY id DESC) AS r FROM users;",
-  );
+  let d = diags("SELECT id, sum(1) OVER (PARTITION BY email ORDER BY id DESC) AS r FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -10246,9 +10748,7 @@ fn edge_block_comment_with_keywords() {
 
 #[test]
 fn edge_string_literal_with_keywords() {
-  let d = diags(
-    "SELECT 'SELECT id FROM users WHERE bogus = 1' AS lit FROM users;",
-  );
+  let d = diags("SELECT 'SELECT id FROM users WHERE bogus = 1' AS lit FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -10289,9 +10789,7 @@ fn edge_on_conflict_where_partial() {
 fn edge_cte_alias_shadows_table() {
   // CTE named the same as a real table -- inside the SELECT, the CTE
   // wins; the table is only visible if explicitly schema-qualified.
-  let d = diags(
-    "WITH users AS (SELECT id FROM public.users) SELECT id FROM users;",
-  );
+  let d = diags("WITH users AS (SELECT id FROM public.users) SELECT id FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -10309,25 +10807,19 @@ fn edge_recursive_cte_cycle() {
 
 #[test]
 fn edge_update_set_from_subquery() {
-  let d = diags(
-    "UPDATE users SET name = (SELECT name FROM users WHERE id = users.id LIMIT 1);",
-  );
+  let d = diags("UPDATE users SET name = (SELECT name FROM users WHERE id = users.id LIMIT 1);");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
 #[test]
 fn edge_delete_with_subquery_in_where() {
-  let d = diags(
-    "DELETE FROM users WHERE id IN (SELECT id FROM users WHERE name IS NULL);",
-  );
+  let d = diags("DELETE FROM users WHERE id IN (SELECT id FROM users WHERE name IS NULL);");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
 #[test]
 fn edge_pg_array_operators() {
-  let d = diags(
-    "SELECT id FROM users WHERE ARRAY[id] && ARRAY[gen_random_uuid()];",
-  );
+  let d = diags("SELECT id FROM users WHERE ARRAY[id] && ARRAY[gen_random_uuid()];");
   assert!(!d.iter().any(|x| matches!(x.code, "sql002" | "sql348")));
 }
 
@@ -10353,9 +10845,7 @@ fn edge_select_star_except() {
 #[test]
 fn edge_join_using_clause() {
   // JOIN ... USING (col) -- column must exist in both tables.
-  let d = diags(
-    "SELECT id FROM users a JOIN users b USING (id);",
-  );
+  let d = diags("SELECT id FROM users a JOIN users b USING (id);");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -10363,9 +10853,7 @@ fn edge_join_using_clause() {
 
 #[test]
 fn edge_insert_select_compatible_cols() {
-  let d = diags(
-    "INSERT INTO users (id, name, email) SELECT id, name, email FROM users WHERE name IS NOT NULL;",
-  );
+  let d = diags("INSERT INTO users (id, name, email) SELECT id, name, email FROM users WHERE name IS NOT NULL;");
   // Quiet: column count matches, types compatible.
   assert!(!d.iter().any(|x| x.code == "sql166"));
 }
@@ -10384,25 +10872,19 @@ fn edge_check_constraint_inline() {
 #[test]
 fn edge_alter_add_column_with_default() {
   // sql042 ADD COLUMN NOT NULL without DEFAULT -- this has both, quiet.
-  let d = diags(
-    "ALTER TABLE users ADD COLUMN status text NOT NULL DEFAULT 'active';",
-  );
+  let d = diags("ALTER TABLE users ADD COLUMN status text NOT NULL DEFAULT 'active';");
   assert!(!d.iter().any(|x| x.code == "sql042"));
 }
 
 #[test]
 fn edge_join_with_on_clause() {
-  let d = diags(
-    "SELECT u.id FROM users u JOIN users v ON u.id = v.id;",
-  );
+  let d = diags("SELECT u.id FROM users u JOIN users v ON u.id = v.id;");
   assert!(!d.iter().any(|x| x.code == "sql194"));
 }
 
 #[test]
 fn edge_aggregate_with_group_by() {
-  let d = diags(
-    "SELECT email, count(*) FROM users GROUP BY email;",
-  );
+  let d = diags("SELECT email, count(*) FROM users GROUP BY email;");
   assert!(!d.iter().any(|x| x.code == "sql256"));
 }
 
@@ -10421,9 +10903,7 @@ fn edge_limit_nonzero() {
 
 #[test]
 fn edge_union_matched_col_count() {
-  let d = diags(
-    "SELECT id FROM users UNION SELECT id FROM users;",
-  );
+  let d = diags("SELECT id FROM users UNION SELECT id FROM users;");
   assert!(!d.iter().any(|x| matches!(x.code, "sql002" | "sql165")));
 }
 
@@ -10438,9 +10918,7 @@ fn edge_insert_with_subquery_returning() {
 
 #[test]
 fn edge_subquery_returning_text() {
-  let d = diags(
-    "SELECT id, name FROM users WHERE id = (SELECT id FROM users WHERE name = 'a' LIMIT 1);",
-  );
+  let d = diags("SELECT id, name FROM users WHERE id = (SELECT id FROM users WHERE name = 'a' LIMIT 1);");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -10448,9 +10926,7 @@ fn edge_subquery_returning_text() {
 
 #[test]
 fn edge_create_function_or_replace() {
-  let d = diags(
-    "CREATE OR REPLACE FUNCTION g() RETURNS int AS $$ SELECT 1; $$ LANGUAGE sql IMMUTABLE;",
-  );
+  let d = diags("CREATE OR REPLACE FUNCTION g() RETURNS int AS $$ SELECT 1; $$ LANGUAGE sql IMMUTABLE;");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -10462,9 +10938,7 @@ fn edge_reindex_concurrently() {
 
 #[test]
 fn edge_create_database_encoding() {
-  let d = diags(
-    "CREATE DATABASE app ENCODING 'UTF8' LC_COLLATE 'en_US.UTF-8' TEMPLATE template0;",
-  );
+  let d = diags("CREATE DATABASE app ENCODING 'UTF8' LC_COLLATE 'en_US.UTF-8' TEMPLATE template0;");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -10502,9 +10976,7 @@ fn edge_raise_in_function() {
 
 #[test]
 fn edge_create_table_if_not_exists() {
-  let d = diags(
-    "CREATE TABLE IF NOT EXISTS new_t (id int);",
-  );
+  let d = diags("CREATE TABLE IF NOT EXISTS new_t (id int);");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -10516,9 +10988,7 @@ fn edge_drop_table_if_exists() {
 
 #[test]
 fn edge_create_index_if_not_exists() {
-  let d = diags(
-    "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);",
-  );
+  let d = diags("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -10526,9 +10996,7 @@ fn edge_create_index_if_not_exists() {
 
 #[test]
 fn edge_alter_add_column_identity() {
-  let d = diags(
-    "ALTER TABLE users ADD COLUMN seq int GENERATED ALWAYS AS IDENTITY;",
-  );
+  let d = diags("ALTER TABLE users ADD COLUMN seq int GENERATED ALWAYS AS IDENTITY;");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -10579,9 +11047,7 @@ fn edge_drop_index_concurrently() {
 
 #[test]
 fn edge_alter_table_add_constraint_not_valid() {
-  let d = diags(
-    "ALTER TABLE users ADD CONSTRAINT chk_name CHECK (length(name) > 0) NOT VALID;",
-  );
+  let d = diags("ALTER TABLE users ADD CONSTRAINT chk_name CHECK (length(name) > 0) NOT VALID;");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -10593,9 +11059,7 @@ fn edge_alter_table_validate_constraint() {
 
 #[test]
 fn edge_create_index_with_storage() {
-  let d = diags(
-    "CREATE INDEX idx_users_email ON users(email) WITH (fillfactor = 80);",
-  );
+  let d = diags("CREATE INDEX idx_users_email ON users(email) WITH (fillfactor = 80);");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -10645,9 +11109,7 @@ fn edge_window_exclude_ties() {
 
 #[test]
 fn edge_aggregate_filter_order_by() {
-  let d = diags(
-    "SELECT array_agg(name ORDER BY id) FILTER (WHERE name IS NOT NULL) FROM users;",
-  );
+  let d = diags("SELECT array_agg(name ORDER BY id) FILTER (WHERE name IS NOT NULL) FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -10686,9 +11148,7 @@ fn edge_merge_matched_with_condition() {
 
 #[test]
 fn edge_pg_lateral_subquery_in_select() {
-  let d = diags(
-    "SELECT u.id, (SELECT count(*) FROM users v WHERE v.email = u.email) FROM users u;",
-  );
+  let d = diags("SELECT u.id, (SELECT count(*) FROM users v WHERE v.email = u.email) FROM users u;");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -10697,9 +11157,13 @@ fn edge_pg_lateral_subquery_in_select() {
 #[test]
 fn edge_deep_paren_nesting() {
   let mut sql = String::from("SELECT ");
-  for _ in 0..50 { sql.push('('); }
+  for _ in 0..50 {
+    sql.push('(');
+  }
   sql.push_str("id");
-  for _ in 0..50 { sql.push(')'); }
+  for _ in 0..50 {
+    sql.push(')');
+  }
   sql.push_str(" FROM users;");
   let d = diags(&sql);
   assert!(!d.iter().any(|x| x.code == "sql002"));
@@ -10781,33 +11245,26 @@ fn edge_pg_date_functions() {
 
 #[test]
 fn edge_pg_string_functions() {
-  let d = diags(
-    "SELECT split_part('a,b,c', ',', 2), regexp_replace('x', 'x', 'y'), regexp_split_to_array('a b c', ' ');",
-  );
+  let d =
+    diags("SELECT split_part('a,b,c', ',', 2), regexp_replace('x', 'x', 'y'), regexp_split_to_array('a b c', ' ');");
   assert!(!d.iter().any(|x| x.code == "sql348"));
 }
 
 #[test]
 fn edge_pg_jsonb_iteration_functions() {
-  let d = diags(
-    "SELECT jsonb_each('{\"a\":1}'::jsonb), jsonb_array_elements('[1,2,3]'::jsonb);",
-  );
+  let d = diags("SELECT jsonb_each('{\"a\":1}'::jsonb), jsonb_array_elements('[1,2,3]'::jsonb);");
   assert!(!d.iter().any(|x| x.code == "sql348"));
 }
 
 #[test]
 fn edge_pg_math_functions() {
-  let d = diags(
-    "SELECT round(1.5), ceil(1.1), floor(1.9), abs(-5), mod(7, 3), sqrt(16), power(2, 10);",
-  );
+  let d = diags("SELECT round(1.5), ceil(1.1), floor(1.9), abs(-5), mod(7, 3), sqrt(16), power(2, 10);");
   assert!(!d.iter().any(|x| x.code == "sql348"));
 }
 
 #[test]
 fn edge_pg_aggregate_functions() {
-  let d = diags(
-    "SELECT sum(1), avg(1), min(id), max(id), count(*), array_agg(id), string_agg(name, ',') FROM users;",
-  );
+  let d = diags("SELECT sum(1), avg(1), min(id), max(id), count(*), array_agg(id), string_agg(name, ',') FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql348"));
 }
 
@@ -10827,9 +11284,7 @@ fn edge_pg_window_functions() {
 
 #[test]
 fn edge_pg_array_functions() {
-  let d = diags(
-    "SELECT array_length(ARRAY[1,2,3], 1), array_append(ARRAY[1,2], 3), unnest(ARRAY[1,2,3]);",
-  );
+  let d = diags("SELECT array_length(ARRAY[1,2,3], 1), array_append(ARRAY[1,2], 3), unnest(ARRAY[1,2,3]);");
   assert!(!d.iter().any(|x| x.code == "sql348"));
 }
 
@@ -10857,17 +11312,14 @@ fn edge_pg_uuid_functions() {
 
 #[test]
 fn edge_insert_overriding_system_value() {
-  let d = diags(
-    "INSERT INTO users (id, name) OVERRIDING SYSTEM VALUE VALUES ('00000000-0000-0000-0000-000000000001', 'a');",
-  );
+  let d =
+    diags("INSERT INTO users (id, name) OVERRIDING SYSTEM VALUE VALUES ('00000000-0000-0000-0000-000000000001', 'a');");
   assert!(!d.iter().any(|x| matches!(x.code, "sql166" | "sql178")));
 }
 
 #[test]
 fn edge_insert_overriding_user_value() {
-  let d = diags(
-    "INSERT INTO users (id, name) OVERRIDING USER VALUE VALUES (DEFAULT, 'a');",
-  );
+  let d = diags("INSERT INTO users (id, name) OVERRIDING USER VALUE VALUES (DEFAULT, 'a');");
   assert!(!d.iter().any(|x| matches!(x.code, "sql166" | "sql178")));
 }
 
@@ -10899,17 +11351,13 @@ fn edge_select_from_table_function() {
 
 #[test]
 fn edge_insert_returning_extra_cols() {
-  let d = diags(
-    "INSERT INTO users (name) VALUES ('x') RETURNING id, name, email;",
-  );
+  let d = diags("INSERT INTO users (name) VALUES ('x') RETURNING id, name, email;");
   assert!(!d.iter().any(|x| matches!(x.code, "sql002" | "sql350")));
 }
 
 #[test]
 fn edge_insert_select_col_count_match() {
-  let d = diags(
-    "INSERT INTO users (id, name, email) SELECT id, name, email FROM users WHERE name IS NULL;",
-  );
+  let d = diags("INSERT INTO users (id, name, email) SELECT id, name, email FROM users WHERE name IS NULL;");
   assert!(!d.iter().any(|x| x.code == "sql166"));
 }
 
@@ -10921,9 +11369,7 @@ fn edge_select_from_generate_series_aliased() {
 
 #[test]
 fn edge_select_from_jsonb_each_aliased() {
-  let d = diags(
-    "SELECT key, value FROM jsonb_each('{\"a\":1,\"b\":2}'::jsonb) AS kv(key, value);",
-  );
+  let d = diags("SELECT key, value FROM jsonb_each('{\"a\":1,\"b\":2}'::jsonb) AS kv(key, value);");
   assert!(!d.iter().any(|x| matches!(x.code, "sql002" | "sql348")));
 }
 
@@ -11013,9 +11459,7 @@ fn edge_positive_bool_compare_equals_true() {
 
 #[test]
 fn edge_positive_case_when_null() {
-  let d = diags(
-    "SELECT CASE name WHEN NULL THEN 1 ELSE 0 END FROM users;",
-  );
+  let d = diags("SELECT CASE name WHEN NULL THEN 1 ELSE 0 END FROM users;");
   // sql for CASE simple form with NULL.
   let codes: Vec<_> = d.iter().map(|x| x.code).collect();
   assert!(codes.iter().any(|c| c.starts_with("sql")), "expected diagnostic for CASE WHEN NULL: {codes:?}");
@@ -11031,9 +11475,7 @@ fn edge_positive_in_null_list() {
 #[test]
 fn edge_positive_case_duplicate_when() {
   // sql432 case_duplicate_when -- WHEN x WHEN x ... fires.
-  let d = diags(
-    "SELECT CASE WHEN name = 'a' THEN 1 WHEN name = 'a' THEN 2 ELSE 0 END FROM users;",
-  );
+  let d = diags("SELECT CASE WHEN name = 'a' THEN 1 WHEN name = 'a' THEN 2 ELSE 0 END FROM users;");
   let codes: Vec<_> = d.iter().map(|x| x.code).collect();
   assert!(codes.contains(&"sql432"), "expected sql432 dup WHEN: {codes:?}");
 }
@@ -11094,9 +11536,7 @@ fn edge_quiet_where_pred_real() {
 
 #[test]
 fn edge_quiet_insert_matched_counts() {
-  let d = diags(
-    "INSERT INTO users (id, name, email) VALUES ('00000000-0000-0000-0000-000000000001', 'a', 'b');",
-  );
+  let d = diags("INSERT INTO users (id, name, email) VALUES ('00000000-0000-0000-0000-000000000001', 'a', 'b');");
   assert!(!d.iter().any(|x| x.code == "sql038"));
 }
 
@@ -11332,17 +11772,13 @@ fn edge_quiet_coalesce_with_nullable() {
 fn edge_positive_cte_dml_no_returning() {
   // sql229 fires when the outer query references the data-modifying
   // CTE that lacks RETURNING (PG raises 0A000 at runtime).
-  let d = diags(
-    "WITH x AS (DELETE FROM users WHERE name = 'old') SELECT * FROM x;",
-  );
+  let d = diags("WITH x AS (DELETE FROM users WHERE name = 'old') SELECT * FROM x;");
   assert!(d.iter().any(|x| x.code == "sql229"), "expected sql229: {d:?}");
 }
 
 #[test]
 fn edge_quiet_cte_dml_with_returning() {
-  let d = diags(
-    "WITH x AS (DELETE FROM users WHERE name = 'old' RETURNING id) SELECT id FROM x;",
-  );
+  let d = diags("WITH x AS (DELETE FROM users WHERE name = 'old' RETURNING id) SELECT id FROM x;");
   assert!(!d.iter().any(|x| x.code == "sql229"));
 }
 
@@ -11391,17 +11827,13 @@ fn edge_quiet_alter_rename_column() {
 fn edge_positive_alter_drop_just_created() {
   // sql239 fires on ALTER DROP COLUMN that targets a col declared in
   // an earlier CREATE TABLE in the same buffer.
-  let d = diags(
-    "CREATE TABLE t (id int, tmp_x int); ALTER TABLE t DROP COLUMN tmp_x;",
-  );
+  let d = diags("CREATE TABLE t (id int, tmp_x int); ALTER TABLE t DROP COLUMN tmp_x;");
   assert!(d.iter().any(|x| x.code == "sql239"), "expected sql239: {d:?}");
 }
 
 #[test]
 fn edge_quiet_alter_drop_different_col() {
-  let d = diags(
-    "ALTER TABLE users ADD COLUMN tmp_x int; ALTER TABLE users DROP COLUMN other_col;",
-  );
+  let d = diags("ALTER TABLE users ADD COLUMN tmp_x int; ALTER TABLE users DROP COLUMN other_col;");
   assert!(!d.iter().any(|x| x.code == "sql239"));
 }
 
@@ -11414,9 +11846,7 @@ fn edge_positive_set_local_outside_tx() {
 
 #[test]
 fn edge_quiet_set_local_inside_tx() {
-  let d = diags(
-    "BEGIN; SET LOCAL statement_timeout = '5s'; COMMIT;",
-  );
+  let d = diags("BEGIN; SET LOCAL statement_timeout = '5s'; COMMIT;");
   assert!(!d.iter().any(|x| x.code == "sql258"));
 }
 
@@ -11578,17 +12008,13 @@ fn edge_quiet_for_update_with_where() {
 #[test]
 fn edge_positive_insert_subquery_col_count() {
   // sql206 -- INSERT (a, b, c) SELECT a, b col count mismatch.
-  let d = diags(
-    "INSERT INTO users (id, name, email) SELECT id, name FROM users;",
-  );
+  let d = diags("INSERT INTO users (id, name, email) SELECT id, name FROM users;");
   assert!(d.iter().any(|x| x.code == "sql206"), "expected sql206: {d:?}");
 }
 
 #[test]
 fn edge_quiet_insert_subquery_col_match() {
-  let d = diags(
-    "INSERT INTO users (id, name, email) SELECT id, name, email FROM users;",
-  );
+  let d = diags("INSERT INTO users (id, name, email) SELECT id, name, email FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql206"));
 }
 
@@ -11610,17 +12036,13 @@ fn edge_quiet_case_branch_types_match() {
 #[test]
 fn edge_positive_generated_uses_volatile() {
   // sql193 generated_uses_volatile -- GENERATED AS (random()) is unstable.
-  let d = diags(
-    "CREATE TABLE t (id int, val numeric GENERATED ALWAYS AS (random()) STORED);",
-  );
+  let d = diags("CREATE TABLE t (id int, val numeric GENERATED ALWAYS AS (random()) STORED);");
   assert!(d.iter().any(|x| x.code == "sql193"), "expected sql193: {d:?}");
 }
 
 #[test]
 fn edge_quiet_generated_immutable_expr() {
-  let d = diags(
-    "CREATE TABLE t (a int, b int, total int GENERATED ALWAYS AS (a + b) STORED);",
-  );
+  let d = diags("CREATE TABLE t (a int, b int, total int GENERATED ALWAYS AS (a + b) STORED);");
   assert!(!d.iter().any(|x| x.code == "sql193"));
 }
 
@@ -11640,9 +12062,7 @@ fn edge_quiet_grant_specific_privs() {
 #[test]
 fn edge_positive_union_inner_order_by() {
   // sql268 -- ORDER BY inside a UNION leg is silently dropped by PG.
-  let d = diags(
-    "(SELECT id FROM users ORDER BY id) UNION (SELECT id FROM users);",
-  );
+  let d = diags("(SELECT id FROM users ORDER BY id) UNION (SELECT id FROM users);");
   assert!(d.iter().any(|x| x.code == "sql268"), "expected sql268: {d:?}");
 }
 
@@ -11699,9 +12119,7 @@ fn edge_positive_oracle_dual() {
 #[test]
 fn edge_positive_secdef_no_search_path() {
   // sql201 -- SECURITY DEFINER without explicit search_path is a hijack risk.
-  let d = diags(
-    "CREATE FUNCTION danger() RETURNS void AS $$ SELECT 1; $$ LANGUAGE sql SECURITY DEFINER;",
-  );
+  let d = diags("CREATE FUNCTION danger() RETURNS void AS $$ SELECT 1; $$ LANGUAGE sql SECURITY DEFINER;");
   assert!(d.iter().any(|x| x.code == "sql201"), "expected sql201: {d:?}");
 }
 
@@ -11771,18 +12189,14 @@ fn edge_quiet_jsonb_contains_with_cast() {
 #[test]
 fn edge_positive_unique_on_nullable() {
   // sql139 unique_on_nullable -- UNIQUE on a nullable col allows multiple NULLs.
-  let d = diags(
-    "CREATE TABLE acc (id int PRIMARY KEY, email text UNIQUE);",
-  );
+  let d = diags("CREATE TABLE acc (id int PRIMARY KEY, email text UNIQUE);");
   // 'email' nullable by default; sql139 fires.
   assert!(d.iter().any(|x| x.code == "sql139"), "expected sql139: {d:?}");
 }
 
 #[test]
 fn edge_quiet_unique_on_not_null() {
-  let d = diags(
-    "CREATE TABLE acc (id int PRIMARY KEY, email text NOT NULL UNIQUE);",
-  );
+  let d = diags("CREATE TABLE acc (id int PRIMARY KEY, email text NOT NULL UNIQUE);");
   assert!(!d.iter().any(|x| x.code == "sql139"));
 }
 
@@ -11803,9 +12217,7 @@ fn edge_positive_jsonb_set_path_format() {
 
 #[test]
 fn edge_quiet_jsonb_set_correct_path() {
-  let d = diags(
-    "SELECT jsonb_set('{\"a\":{\"b\":1}}'::jsonb, '{a,b}', '2'::jsonb);",
-  );
+  let d = diags("SELECT jsonb_set('{\"a\":{\"b\":1}}'::jsonb, '{a,b}', '2'::jsonb);");
   assert!(!d.iter().any(|x| x.code == "sql223"));
 }
 
@@ -11856,9 +12268,7 @@ fn edge_positive_alter_set_not_null_scan() {
 #[test]
 fn edge_positive_alter_type_add_value_in_tx() {
   // sql141 -- ALTER TYPE ADD VALUE cannot be in a transaction in PG12-.
-  let d = diags(
-    "BEGIN; ALTER TYPE status ADD VALUE 'archived'; COMMIT;",
-  );
+  let d = diags("BEGIN; ALTER TYPE status ADD VALUE 'archived'; COMMIT;");
   assert!(d.iter().any(|x| x.code == "sql141"), "expected sql141: {d:?}");
 }
 
@@ -11930,27 +12340,22 @@ fn edge_quiet_drop_function_with_args() {
 #[test]
 fn edge_positive_self_fk_no_deferrable() {
   // sql304 -- self-referential FK without DEFERRABLE causes insert-order pain.
-  let d = diags(
-    "CREATE TABLE node (id int PRIMARY KEY, parent_id int REFERENCES node(id));",
-  );
+  let d = diags("CREATE TABLE node (id int PRIMARY KEY, parent_id int REFERENCES node(id));");
   let codes: Vec<_> = d.iter().map(|x| x.code).collect();
   assert!(codes.contains(&"sql304"), "expected sql304: {codes:?}");
 }
 
 #[test]
 fn edge_quiet_self_fk_with_deferrable() {
-  let d = diags(
-    "CREATE TABLE node (id int PRIMARY KEY, parent_id int REFERENCES node(id) DEFERRABLE INITIALLY DEFERRED);",
-  );
+  let d =
+    diags("CREATE TABLE node (id int PRIMARY KEY, parent_id int REFERENCES node(id) DEFERRABLE INITIALLY DEFERRED);");
   assert!(!d.iter().any(|x| x.code == "sql304"));
 }
 
 #[test]
 #[ignore = "sql185 requires the source CREATE TABLE in the merged catalog; test diags() uses static catalog only."]
 fn edge_positive_fk_unknown_column() {
-  let d = diags(
-    "CREATE TABLE orders (id int PRIMARY KEY, user_id uuid REFERENCES users(bogus_col));",
-  );
+  let d = diags("CREATE TABLE orders (id int PRIMARY KEY, user_id uuid REFERENCES users(bogus_col));");
   assert!(d.iter().any(|x| x.code == "sql185"), "expected sql185: {d:?}");
 }
 
@@ -11980,9 +12385,7 @@ fn edge_positive_duplicate_dml_column() {
 
 #[test]
 fn edge_quiet_distinct_cols_in_insert() {
-  let d = diags(
-    "INSERT INTO users (id, name, email) VALUES ('00000000-0000-0000-0000-000000000001', 'a', 'b');",
-  );
+  let d = diags("INSERT INTO users (id, name, email) VALUES ('00000000-0000-0000-0000-000000000001', 'a', 'b');");
   assert!(!d.iter().any(|x| x.code == "sql406"));
 }
 
@@ -12003,34 +12406,26 @@ fn edge_quiet_numeric_with_precision() {
 #[test]
 #[ignore = "sql003 ambiguity check requires column refs the resolver flags as ambiguous; self-join via alias may resolve uniquely."]
 fn edge_positive_ambiguous_column() {
-  let d = diags(
-    "SELECT id FROM users u JOIN users v ON u.id = v.id;",
-  );
+  let d = diags("SELECT id FROM users u JOIN users v ON u.id = v.id;");
   assert!(d.iter().any(|x| x.code == "sql003"), "expected sql003: {d:?}");
 }
 
 #[test]
 fn edge_quiet_qualified_column_in_join() {
-  let d = diags(
-    "SELECT u.id FROM users u JOIN users v ON u.id = v.id;",
-  );
+  let d = diags("SELECT u.id FROM users u JOIN users v ON u.id = v.id;");
   assert!(!d.iter().any(|x| x.code == "sql003"));
 }
 
 #[test]
 #[ignore = "sql117 boolean_in_text_column may require specific UPDATE/INSERT shape; rule not pinned here."]
 fn edge_positive_boolean_in_text_column() {
-  let d = diags(
-    "UPDATE users SET name = (id IS NOT NULL) WHERE id = '00000000-0000-0000-0000-000000000001';",
-  );
+  let d = diags("UPDATE users SET name = (id IS NOT NULL) WHERE id = '00000000-0000-0000-0000-000000000001';");
   assert!(d.iter().any(|x| x.code == "sql117"), "expected sql117: {d:?}");
 }
 
 #[test]
 fn edge_quiet_text_assignment_normal() {
-  let d = diags(
-    "UPDATE users SET name = 'x' WHERE id = '00000000-0000-0000-0000-000000000001';",
-  );
+  let d = diags("UPDATE users SET name = 'x' WHERE id = '00000000-0000-0000-0000-000000000001';");
   assert!(!d.iter().any(|x| x.code == "sql117"));
 }
 
@@ -12273,18 +12668,14 @@ fn edge_quiet_comment_normal() {
 #[test]
 fn edge_positive_set_default_no_default() {
   // sql496 -- UPDATE SET col = DEFAULT but the column has no DEFAULT defined.
-  let d = diags(
-    "UPDATE users SET name = DEFAULT WHERE id = '00000000-0000-0000-0000-000000000001';",
-  );
+  let d = diags("UPDATE users SET name = DEFAULT WHERE id = '00000000-0000-0000-0000-000000000001';");
   let codes: Vec<_> = d.iter().map(|x| x.code).collect();
   assert!(codes.contains(&"sql496"), "expected sql496: {codes:?}");
 }
 
 #[test]
 fn edge_quiet_set_to_literal() {
-  let d = diags(
-    "UPDATE users SET name = 'x' WHERE id = '00000000-0000-0000-0000-000000000001';",
-  );
+  let d = diags("UPDATE users SET name = 'x' WHERE id = '00000000-0000-0000-0000-000000000001';");
   assert!(!d.iter().any(|x| x.code == "sql496"));
 }
 
@@ -12312,17 +12703,13 @@ fn edge_quiet_case_when_value() {
 #[test]
 #[ignore = "sql036 may require RAISE inside CREATE FUNCTION body; DO block may parse differently."]
 fn edge_positive_raise_arg_count_mismatch() {
-  let d = diags(
-    "DO $$ BEGIN RAISE NOTICE 'val: %'; END $$;",
-  );
+  let d = diags("DO $$ BEGIN RAISE NOTICE 'val: %'; END $$;");
   assert!(d.iter().any(|x| x.code == "sql036"), "expected sql036: {d:?}");
 }
 
 #[test]
 fn edge_quiet_raise_args_match() {
-  let d = diags(
-    "DO $$ BEGIN RAISE NOTICE 'val: %', 42; END $$;",
-  );
+  let d = diags("DO $$ BEGIN RAISE NOTICE 'val: %', 42; END $$;");
   assert!(!d.iter().any(|x| x.code == "sql036"));
 }
 
@@ -12469,9 +12856,7 @@ fn edge_positive_null_into_not_null() {
 
 #[test]
 fn edge_quiet_insert_real_value_into_not_null() {
-  let d = diags(
-    "INSERT INTO users (id, name, email) VALUES ('00000000-0000-0000-0000-000000000001', 'a', 'b');",
-  );
+  let d = diags("INSERT INTO users (id, name, email) VALUES ('00000000-0000-0000-0000-000000000001', 'a', 'b');");
   assert!(!d.iter().any(|x| x.code == "sql177"));
 }
 
@@ -12540,9 +12925,7 @@ fn edge_positive_null_in_values() {
 
 #[test]
 fn edge_quiet_values_with_real_data() {
-  let d = diags(
-    "INSERT INTO users VALUES ('00000000-0000-0000-0000-000000000001', 'a', 'b');",
-  );
+  let d = diags("INSERT INTO users VALUES ('00000000-0000-0000-0000-000000000001', 'a', 'b');");
   assert!(!d.iter().any(|x| x.code == "sql061"));
 }
 
@@ -12599,17 +12982,13 @@ fn edge_quiet_reindex_outside_tx() {
 #[test]
 fn edge_positive_distinct_on_subq_no_order() {
   // sql263 -- DISTINCT ON in a subquery without ORDER BY is unstable.
-  let d = diags(
-    "SELECT id FROM (SELECT DISTINCT ON (email) email, id FROM users) sub;",
-  );
+  let d = diags("SELECT id FROM (SELECT DISTINCT ON (email) email, id FROM users) sub;");
   assert!(d.iter().any(|x| x.code == "sql263"), "expected sql263: {d:?}");
 }
 
 #[test]
 fn edge_quiet_distinct_on_subq_with_order() {
-  let d = diags(
-    "SELECT id FROM (SELECT DISTINCT ON (email) email, id FROM users ORDER BY email, id) sub;",
-  );
+  let d = diags("SELECT id FROM (SELECT DISTINCT ON (email) email, id FROM users ORDER BY email, id) sub;");
   assert!(!d.iter().any(|x| x.code == "sql263"));
 }
 
@@ -12622,9 +13001,7 @@ fn edge_alter_add_constraint_unique() {
 
 #[test]
 fn edge_alter_add_constraint_check_with_complex_expr() {
-  let d = diags(
-    "ALTER TABLE users ADD CONSTRAINT chk_complex CHECK (length(name) BETWEEN 1 AND 100);",
-  );
+  let d = diags("ALTER TABLE users ADD CONSTRAINT chk_complex CHECK (length(name) BETWEEN 1 AND 100);");
   assert!(d.iter().any(|x| x.code == "sql280"));
 }
 
@@ -12731,9 +13108,7 @@ fn edge_quiet_empty_array_with_cast() {
 #[test]
 fn edge_positive_exit_outside_loop() {
   // sql044 -- EXIT used outside any LOOP.
-  let d = diags(
-    "CREATE FUNCTION f() RETURNS void AS $$ BEGIN EXIT; END $$ LANGUAGE plpgsql;",
-  );
+  let d = diags("CREATE FUNCTION f() RETURNS void AS $$ BEGIN EXIT; END $$ LANGUAGE plpgsql;");
   let codes: Vec<_> = d.iter().map(|x| x.code).collect();
   assert!(codes.contains(&"sql044"), "expected sql044: {codes:?}");
 }
@@ -12994,9 +13369,7 @@ fn edge_positive_savepoint_name_reuse() {
 
 #[test]
 fn edge_quiet_savepoint_unique_names() {
-  let d = diags(
-    "BEGIN; SAVEPOINT a; SAVEPOINT b; RELEASE SAVEPOINT a; RELEASE SAVEPOINT b; COMMIT;",
-  );
+  let d = diags("BEGIN; SAVEPOINT a; SAVEPOINT b; RELEASE SAVEPOINT a; RELEASE SAVEPOINT b; COMMIT;");
   assert!(!d.iter().any(|x| x.code == "sql240"));
 }
 
@@ -13108,17 +13481,13 @@ fn edge_quiet_revoke_without_cascade() {
 #[test]
 #[ignore = "sql333 requires the target FK col to be flagged as PK in the catalog; CREATE TABLE not auto-merged."]
 fn edge_positive_on_update_cascade_pk() {
-  let d = diags(
-    "CREATE TABLE orders (id int, user_id uuid REFERENCES users(id) ON UPDATE CASCADE);",
-  );
+  let d = diags("CREATE TABLE orders (id int, user_id uuid REFERENCES users(id) ON UPDATE CASCADE);");
   assert!(d.iter().any(|x| x.code == "sql333"), "expected sql333: {d:?}");
 }
 
 #[test]
 fn edge_quiet_on_delete_cascade_only() {
-  let d = diags(
-    "CREATE TABLE orders (id int, user_id uuid REFERENCES users(id) ON DELETE CASCADE);",
-  );
+  let d = diags("CREATE TABLE orders (id int, user_id uuid REFERENCES users(id) ON DELETE CASCADE);");
   assert!(!d.iter().any(|x| x.code == "sql333"));
 }
 
@@ -13311,17 +13680,15 @@ fn edge_quiet_where_normal_compound() {
 #[test]
 fn edge_positive_trigger_when_uses_old_in_insert() {
   // sql140 -- CREATE TRIGGER ... ON INSERT WHEN (OLD.x ...) -- OLD doesn't exist in INSERT.
-  let d = diags(
-    "CREATE TRIGGER t1 AFTER INSERT ON users FOR EACH ROW WHEN (OLD.name IS NOT NULL) EXECUTE FUNCTION f();",
-  );
+  let d =
+    diags("CREATE TRIGGER t1 AFTER INSERT ON users FOR EACH ROW WHEN (OLD.name IS NOT NULL) EXECUTE FUNCTION f();");
   assert!(d.iter().any(|x| x.code == "sql140"), "expected sql140: {d:?}");
 }
 
 #[test]
 fn edge_quiet_trigger_when_uses_new_in_insert() {
-  let d = diags(
-    "CREATE TRIGGER t1 AFTER INSERT ON users FOR EACH ROW WHEN (NEW.name IS NOT NULL) EXECUTE FUNCTION f();",
-  );
+  let d =
+    diags("CREATE TRIGGER t1 AFTER INSERT ON users FOR EACH ROW WHEN (NEW.name IS NOT NULL) EXECUTE FUNCTION f();");
   assert!(!d.iter().any(|x| x.code == "sql140"));
 }
 
@@ -13335,17 +13702,13 @@ fn edge_quiet_trigger_on_update() {
 
 #[test]
 fn edge_trigger_before_insert_no_when() {
-  let d = diags(
-    "CREATE TRIGGER t1 BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION f();",
-  );
+  let d = diags("CREATE TRIGGER t1 BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION f();");
   assert!(!d.iter().any(|x| x.code == "sql140"));
 }
 
 #[test]
 fn edge_trigger_truncate() {
-  let d = diags(
-    "CREATE TRIGGER t1 AFTER TRUNCATE ON users FOR EACH STATEMENT EXECUTE FUNCTION f();",
-  );
+  let d = diags("CREATE TRIGGER t1 AFTER TRUNCATE ON users FOR EACH STATEMENT EXECUTE FUNCTION f();");
   assert!(!d.iter().any(|x| x.code == "sql140"));
 }
 
@@ -13694,17 +14057,13 @@ fn edge_array_length_dim_two() {
 #[test]
 fn edge_positive_bare_return_typed() {
   // sql032 -- RETURN without expression in a typed function.
-  let d = diags(
-    "CREATE FUNCTION f() RETURNS int AS $$ BEGIN RETURN; END $$ LANGUAGE plpgsql;",
-  );
+  let d = diags("CREATE FUNCTION f() RETURNS int AS $$ BEGIN RETURN; END $$ LANGUAGE plpgsql;");
   assert!(d.iter().any(|x| x.code == "sql032"), "expected sql032: {d:?}");
 }
 
 #[test]
 fn edge_quiet_return_with_expr() {
-  let d = diags(
-    "CREATE FUNCTION f() RETURNS int AS $$ BEGIN RETURN 1; END $$ LANGUAGE plpgsql;",
-  );
+  let d = diags("CREATE FUNCTION f() RETURNS int AS $$ BEGIN RETURN 1; END $$ LANGUAGE plpgsql;");
   assert!(!d.iter().any(|x| x.code == "sql032"));
 }
 
@@ -13716,18 +14075,14 @@ fn edge_begin_with_isolation() {
 
 #[test]
 fn edge_quiet_return_void_no_expr() {
-  let d = diags(
-    "CREATE FUNCTION f() RETURNS void AS $$ BEGIN RETURN; END $$ LANGUAGE plpgsql;",
-  );
+  let d = diags("CREATE FUNCTION f() RETURNS void AS $$ BEGIN RETURN; END $$ LANGUAGE plpgsql;");
   assert!(!d.iter().any(|x| x.code == "sql032"));
 }
 
 #[test]
 #[ignore = "sql032 may fire on bare RETURN regardless of SETOF context; rule treats it conservatively."]
 fn edge_return_next_in_setof() {
-  let d = diags(
-    "CREATE FUNCTION f() RETURNS SETOF int AS $$ BEGIN RETURN NEXT 1; RETURN; END $$ LANGUAGE plpgsql;",
-  );
+  let d = diags("CREATE FUNCTION f() RETURNS SETOF int AS $$ BEGIN RETURN NEXT 1; RETURN; END $$ LANGUAGE plpgsql;");
   assert!(!d.iter().any(|x| x.code == "sql032"));
 }
 
@@ -13753,9 +14108,7 @@ fn edge_function_returns_table() {
 
 #[test]
 fn edge_function_setof_record() {
-  let d = diags(
-    "CREATE FUNCTION f() RETURNS SETOF record AS $$ SELECT 1; $$ LANGUAGE sql;",
-  );
+  let d = diags("CREATE FUNCTION f() RETURNS SETOF record AS $$ SELECT 1; $$ LANGUAGE sql;");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -13827,17 +14180,13 @@ fn edge_positive_coalesce_not_null() {
 #[test]
 fn edge_positive_commit_in_function() {
   // sql219 -- COMMIT inside a function (PG fns can't COMMIT).
-  let d = diags(
-    "CREATE FUNCTION f() RETURNS void AS $$ BEGIN COMMIT; END $$ LANGUAGE plpgsql;",
-  );
+  let d = diags("CREATE FUNCTION f() RETURNS void AS $$ BEGIN COMMIT; END $$ LANGUAGE plpgsql;");
   assert!(d.iter().any(|x| x.code == "sql219"), "expected sql219: {d:?}");
 }
 
 #[test]
 fn edge_quiet_function_no_commit() {
-  let d = diags(
-    "CREATE FUNCTION f() RETURNS void AS $$ BEGIN PERFORM 1; END $$ LANGUAGE plpgsql;",
-  );
+  let d = diags("CREATE FUNCTION f() RETURNS void AS $$ BEGIN PERFORM 1; END $$ LANGUAGE plpgsql;");
   assert!(!d.iter().any(|x| x.code == "sql219"));
 }
 
@@ -13879,17 +14228,13 @@ fn edge_quiet_contains_real_jsonb() {
 #[test]
 fn edge_call_proc_with_commit() {
   // PROCEDURE can COMMIT/ROLLBACK.
-  let d = diags(
-    "CREATE PROCEDURE p() AS $$ BEGIN COMMIT; END $$ LANGUAGE plpgsql;",
-  );
+  let d = diags("CREATE PROCEDURE p() AS $$ BEGIN COMMIT; END $$ LANGUAGE plpgsql;");
   assert!(!d.iter().any(|x| x.code == "sql219"));
 }
 
 #[test]
 fn edge_function_rollback_attempt() {
-  let d = diags(
-    "CREATE FUNCTION f() RETURNS void AS $$ BEGIN ROLLBACK; END $$ LANGUAGE plpgsql;",
-  );
+  let d = diags("CREATE FUNCTION f() RETURNS void AS $$ BEGIN ROLLBACK; END $$ LANGUAGE plpgsql;");
   assert!(d.iter().any(|x| x.code == "sql219"));
 }
 
@@ -13905,17 +14250,13 @@ fn edge_comment_on_function() {
 #[test]
 fn edge_duplicate_update_column() {
   // sql406 -- UPDATE with same col listed twice.
-  let d = diags(
-    "UPDATE users SET name = 'a', name = 'b' WHERE id = '00000000-0000-0000-0000-000000000001';",
-  );
+  let d = diags("UPDATE users SET name = 'a', name = 'b' WHERE id = '00000000-0000-0000-0000-000000000001';");
   assert!(d.iter().any(|x| x.code == "sql406"), "expected sql406: {d:?}");
 }
 
 #[test]
 fn edge_quiet_distinct_update_cols() {
-  let d = diags(
-    "UPDATE users SET name = 'a', email = 'b' WHERE id = '00000000-0000-0000-0000-000000000001';",
-  );
+  let d = diags("UPDATE users SET name = 'a', email = 'b' WHERE id = '00000000-0000-0000-0000-000000000001';");
   assert!(!d.iter().any(|x| x.code == "sql406"));
 }
 
@@ -13933,9 +14274,7 @@ fn edge_concat_real_strings() {
 
 #[test]
 fn edge_case_without_else_in_having() {
-  let d = diags(
-    "SELECT email FROM users GROUP BY email HAVING CASE WHEN count(*) > 1 THEN true END;",
-  );
+  let d = diags("SELECT email FROM users GROUP BY email HAVING CASE WHEN count(*) > 1 THEN true END;");
   assert!(d.iter().any(|x| x.code == "sql150"));
 }
 
@@ -14018,9 +14357,8 @@ fn edge_cte_with_search() {
 
 #[test]
 fn edge_create_aggregate_with_finalfunc() {
-  let d = diags(
-    "CREATE AGGREGATE my_avg(int) (sfunc = int4_avg_accum, stype = int4_avg_state, finalfunc = int4_avg_final);",
-  );
+  let d =
+    diags("CREATE AGGREGATE my_avg(int) (sfunc = int4_avg_accum, stype = int4_avg_state, finalfunc = int4_avg_final);");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -14055,9 +14393,8 @@ fn edge_insert_on_conflict_do_update_set_where() {
 
 #[test]
 fn edge_update_returning_multiple_cols() {
-  let d = diags(
-    "UPDATE users SET name = 'x' WHERE id = '00000000-0000-0000-0000-000000000001' RETURNING id, name, email;",
-  );
+  let d =
+    diags("UPDATE users SET name = 'x' WHERE id = '00000000-0000-0000-0000-000000000001' RETURNING id, name, email;");
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
@@ -14086,33 +14423,25 @@ fn edge_alter_table_add_check_with_paren() {
 
 #[test]
 fn edge_create_function_strict() {
-  let d = diags(
-    "CREATE FUNCTION f(int) RETURNS int AS $$ SELECT $1; $$ LANGUAGE sql STRICT IMMUTABLE;",
-  );
+  let d = diags("CREATE FUNCTION f(int) RETURNS int AS $$ SELECT $1; $$ LANGUAGE sql STRICT IMMUTABLE;");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
 #[test]
 fn edge_create_function_parallel_safe() {
-  let d = diags(
-    "CREATE FUNCTION f() RETURNS int AS $$ SELECT 1; $$ LANGUAGE sql IMMUTABLE PARALLEL SAFE;",
-  );
+  let d = diags("CREATE FUNCTION f() RETURNS int AS $$ SELECT 1; $$ LANGUAGE sql IMMUTABLE PARALLEL SAFE;");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
 #[test]
 fn edge_create_function_set_search_path() {
-  let d = diags(
-    "CREATE FUNCTION f() RETURNS int AS $$ SELECT 1; $$ LANGUAGE sql SET search_path = public;",
-  );
+  let d = diags("CREATE FUNCTION f() RETURNS int AS $$ SELECT 1; $$ LANGUAGE sql SET search_path = public;");
   assert!(!d.iter().any(|x| x.code == "sql201"));
 }
 
 #[test]
 fn edge_create_function_external_security_invoker() {
-  let d = diags(
-    "CREATE FUNCTION f() RETURNS int AS $$ SELECT 1; $$ LANGUAGE sql SECURITY INVOKER;",
-  );
+  let d = diags("CREATE FUNCTION f() RETURNS int AS $$ SELECT 1; $$ LANGUAGE sql SECURITY INVOKER;");
   assert!(!d.iter().any(|x| x.code == "sql201"));
 }
 
@@ -14194,9 +14523,7 @@ fn edge_alter_table_alter_column_default_set() {
 
 #[test]
 fn edge_create_table_with_generated_default_combo() {
-  let d = diags(
-    "CREATE TABLE t (id int GENERATED ALWAYS AS IDENTITY, label text DEFAULT 'x');",
-  );
+  let d = diags("CREATE TABLE t (id int GENERATED ALWAYS AS IDENTITY, label text DEFAULT 'x');");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -14210,9 +14537,7 @@ fn edge_create_table_check_uses_column() {
 
 #[test]
 fn edge_create_table_exclusion_constraint() {
-  let d = diags(
-    "CREATE TABLE bookings (room int, span tstzrange, EXCLUDE USING gist (room WITH =, span WITH &&));",
-  );
+  let d = diags("CREATE TABLE bookings (room int, span tstzrange, EXCLUDE USING gist (room WITH =, span WITH &&));");
   assert!(!d.iter().any(|x| matches!(x.code, "sql001" | "sql002")));
 }
 
@@ -14265,8 +14590,7 @@ fn r2_129_select_star_top_level_flagged_or_quiet() {
   // Some rule families flag SELECT * at top level. Whichever it is,
   // resolve / unresolved column codes must NOT fire on plain SELECT *.
   let d = diags("SELECT * FROM users;");
-  assert!(!d.iter().any(|x| x.code == "sql002"),
-    "unknown column rule should not fire on SELECT *");
+  assert!(!d.iter().any(|x| x.code == "sql002"), "unknown column rule should not fire on SELECT *");
 }
 
 #[test]
@@ -14274,8 +14598,11 @@ fn r2_129_like_without_anchor_runs() {
   // LIKE / ILIKE without leading anchor cannot use a btree index.
   // Just ensure the analyzer doesn't crash on the input.
   let d = diags("SELECT id FROM users WHERE name LIKE '%foo%';");
-  assert!(!d.iter().any(|x| x.code == "sql000"),
-    "syntax error fired unexpectedly: {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    !d.iter().any(|x| x.code == "sql000"),
+    "syntax error fired unexpectedly: {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
@@ -14338,9 +14665,7 @@ fn r2_130_jsonb_path_access_clean() {
 
 #[test]
 fn r2_130_nested_cte_chain_clean() {
-  let d = diags(
-    "WITH a AS (SELECT id FROM users), b AS (SELECT id FROM a) SELECT * FROM b;",
-  );
+  let d = diags("WITH a AS (SELECT id FROM users), b AS (SELECT id FROM a) SELECT * FROM b;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
   assert!(!d.iter().any(|x| x.code == "sql001"));
 }
@@ -14357,48 +14682,37 @@ fn r2_130_create_table_all_constraint_kinds_clean() {
        created_at timestamptz NOT NULL DEFAULT now()\
      );",
   );
-  assert!(!d.iter().any(|x| x.code == "sql000"),
-    "syntax err: {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(!d.iter().any(|x| x.code == "sql000"), "syntax err: {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
 }
 
 #[test]
 fn r2_130_create_index_with_predicate_clean() {
-  let d = diags(
-    "CREATE INDEX active_users_ix ON users (id) WHERE active = true;",
-  );
+  let d = diags("CREATE INDEX active_users_ix ON users (id) WHERE active = true;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_130_create_unique_index_with_include_clean() {
-  let d = diags(
-    "CREATE UNIQUE INDEX users_email_ux ON users (email) INCLUDE (id, name);",
-  );
+  let d = diags("CREATE UNIQUE INDEX users_email_ux ON users (email) INCLUDE (id, name);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_130_create_partitioned_table_clean() {
-  let d = diags(
-    "CREATE TABLE events (id bigint, ts timestamptz NOT NULL) PARTITION BY RANGE (ts);",
-  );
+  let d = diags("CREATE TABLE events (id bigint, ts timestamptz NOT NULL) PARTITION BY RANGE (ts);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_130_grouping_sets_clean() {
-  let d = diags(
-    "SELECT email, count(*) FROM users GROUP BY GROUPING SETS ((email), ());",
-  );
+  let d = diags("SELECT email, count(*) FROM users GROUP BY GROUPING SETS ((email), ());");
   assert!(!d.iter().any(|x| x.code == "sql000"));
   assert!(!d.iter().any(|x| x.code == "sql002"));
 }
 
 #[test]
 fn r2_130_cube_rollup_combo_clean() {
-  let d = diags(
-    "SELECT email, name, count(*) FROM users GROUP BY ROLLUP (email), CUBE (name);",
-  );
+  let d = diags("SELECT email, name, count(*) FROM users GROUP BY ROLLUP (email), CUBE (name);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -14419,10 +14733,9 @@ fn r2_131_merge_clean() {
   let d = diags(
     "MERGE INTO users u USING orders o ON u.id = o.user_id \
      WHEN MATCHED THEN UPDATE SET name = 'x' \
-     WHEN NOT MATCHED THEN INSERT (id, name) VALUES (o.user_id, 'new');"
+     WHEN NOT MATCHED THEN INSERT (id, name) VALUES (o.user_id, 'new');",
   );
-  assert!(!d.iter().any(|x| x.code == "sql000"),
-    "syntax err: {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(!d.iter().any(|x| x.code == "sql000"), "syntax err: {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
 }
 
 #[test]
@@ -14451,17 +14764,13 @@ fn r2_131_copy_from_stdin_clean() {
 
 #[test]
 fn r2_131_create_function_sql_body_clean() {
-  let d = diags(
-    "CREATE FUNCTION add_one(n int) RETURNS int LANGUAGE sql AS 'SELECT n + 1';"
-  );
+  let d = diags("CREATE FUNCTION add_one(n int) RETURNS int LANGUAGE sql AS 'SELECT n + 1';");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_131_create_function_plpgsql_clean() {
-  let d = diags(
-    "CREATE FUNCTION add_two(n int) RETURNS int LANGUAGE plpgsql AS $$ BEGIN RETURN n + 2; END; $$;"
-  );
+  let d = diags("CREATE FUNCTION add_two(n int) RETURNS int LANGUAGE plpgsql AS $$ BEGIN RETURN n + 2; END; $$;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -14469,7 +14778,7 @@ fn r2_131_create_function_plpgsql_clean() {
 fn r2_131_savepoint_sequence_clean() {
   let d = diags(
     "BEGIN; SAVEPOINT sp1; UPDATE users SET name = 'x' WHERE id = 1; \
-     ROLLBACK TO SAVEPOINT sp1; COMMIT;"
+     ROLLBACK TO SAVEPOINT sp1; COMMIT;",
   );
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
@@ -14488,17 +14797,13 @@ fn r2_131_regex_imatch_clean() {
 
 #[test]
 fn r2_131_tsvector_match_clean() {
-  let d = diags(
-    "SELECT id FROM users WHERE to_tsvector('english', name) @@ to_tsquery('alice');"
-  );
+  let d = diags("SELECT id FROM users WHERE to_tsvector('english', name) @@ to_tsquery('alice');");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_131_window_filter_clean() {
-  let d = diags(
-    "SELECT id, count(*) FILTER (WHERE active) OVER (PARTITION BY name) FROM users;"
-  );
+  let d = diags("SELECT id, count(*) FILTER (WHERE active) OVER (PARTITION BY name) FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -14522,25 +14827,21 @@ fn r2_132_create_extension_clean() {
 
 #[test]
 fn r2_132_create_foreign_data_wrapper_clean() {
-  let d = diags(
-    "CREATE FOREIGN DATA WRAPPER postgres_fdw HANDLER postgres_fdw_handler VALIDATOR postgres_fdw_validator;"
-  );
+  let d =
+    diags("CREATE FOREIGN DATA WRAPPER postgres_fdw HANDLER postgres_fdw_handler VALIDATOR postgres_fdw_validator;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_132_create_server_clean() {
-  let d = diags(
-    "CREATE SERVER reporting FOREIGN DATA WRAPPER postgres_fdw OPTIONS (host 'r.example.com', dbname 'rep');"
-  );
+  let d =
+    diags("CREATE SERVER reporting FOREIGN DATA WRAPPER postgres_fdw OPTIONS (host 'r.example.com', dbname 'rep');");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_132_create_user_mapping_clean() {
-  let d = diags(
-    "CREATE USER MAPPING FOR app SERVER reporting OPTIONS (user 'rep_user', password 's3cr3t');"
-  );
+  let d = diags("CREATE USER MAPPING FOR app SERVER reporting OPTIONS (user 'rep_user', password 's3cr3t');");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -14582,25 +14883,21 @@ fn r2_132_grant_all_tables_in_schema_clean() {
 
 #[test]
 fn r2_132_create_policy_using_clean() {
-  let d = diags(
-    "CREATE POLICY own_rows ON users FOR SELECT USING (current_user = handle);"
-  );
+  let d = diags("CREATE POLICY own_rows ON users FOR SELECT USING (current_user = handle);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_132_create_policy_with_check_clean() {
   let d = diags(
-    "CREATE POLICY mutate_own ON users FOR UPDATE USING (current_user = handle) WITH CHECK (current_user = handle);"
+    "CREATE POLICY mutate_own ON users FOR UPDATE USING (current_user = handle) WITH CHECK (current_user = handle);",
   );
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_132_create_trigger_before_insert_clean() {
-  let d = diags(
-    "CREATE TRIGGER set_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION set_ts();"
-  );
+  let d = diags("CREATE TRIGGER set_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION set_ts();");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -14608,16 +14905,14 @@ fn r2_132_create_trigger_before_insert_clean() {
 fn r2_132_create_trigger_after_with_when_clean() {
   let d = diags(
     "CREATE TRIGGER audit_changes AFTER INSERT OR UPDATE ON users FOR EACH ROW \
-     WHEN (NEW.email IS NOT NULL) EXECUTE FUNCTION audit();"
+     WHEN (NEW.email IS NOT NULL) EXECUTE FUNCTION audit();",
   );
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_132_create_trigger_instead_of_on_view_clean() {
-  let d = diags(
-    "CREATE TRIGGER edit_view INSTEAD OF UPDATE ON v_users FOR EACH ROW EXECUTE FUNCTION edit_v();"
-  );
+  let d = diags("CREATE TRIGGER edit_view INSTEAD OF UPDATE ON v_users FOR EACH ROW EXECUTE FUNCTION edit_v();");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -14625,32 +14920,26 @@ fn r2_132_create_trigger_instead_of_on_view_clean() {
 fn r2_132_create_event_trigger_with_tag_clean() {
   let d = diags(
     "CREATE EVENT TRIGGER audit_ddl ON ddl_command_start WHEN TAG IN ('CREATE TABLE', 'DROP TABLE') \
-     EXECUTE FUNCTION audit_ddl();"
+     EXECUTE FUNCTION audit_ddl();",
   );
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_133_alter_foreign_table_options_clean() {
-  let d = diags(
-    "ALTER FOREIGN TABLE remote_users OPTIONS (ADD schema_name 'public', ADD table_name 'users');"
-  );
+  let d = diags("ALTER FOREIGN TABLE remote_users OPTIONS (ADD schema_name 'public', ADD table_name 'users');");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_133_alter_server_options_clean() {
-  let d = diags(
-    "ALTER SERVER reporting OPTIONS (SET host 'r2.example.com', DROP port);"
-  );
+  let d = diags("ALTER SERVER reporting OPTIONS (SET host 'r2.example.com', DROP port);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_133_alter_user_mapping_options_clean() {
-  let d = diags(
-    "ALTER USER MAPPING FOR app SERVER reporting OPTIONS (SET user 'rep_user2');"
-  );
+  let d = diags("ALTER USER MAPPING FOR app SERVER reporting OPTIONS (SET user 'rep_user2');");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -14714,7 +15003,7 @@ fn r2_133_vacuum_all_paren_options_clean() {
     "VACUUM (FULL, FREEZE, VERBOSE, ANALYZE, SKIP_LOCKED, \
        INDEX_CLEANUP ON, PROCESS_TOAST true, PROCESS_MAIN true, \
        TRUNCATE true, DISABLE_PAGE_SKIPPING, BUFFER_USAGE_LIMIT '32MB', \
-       PARALLEL 4) users;"
+       PARALLEL 4) users;",
   );
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
@@ -14745,105 +15034,82 @@ fn r2_133_cluster_using_index_clean() {
 
 #[test]
 fn r2_134_create_operator_clean() {
-  let d = diags(
-    "CREATE OPERATOR === (LEFTARG = int, RIGHTARG = int, PROCEDURE = int4eq, COMMUTATOR = ===);"
-  );
+  let d = diags("CREATE OPERATOR === (LEFTARG = int, RIGHTARG = int, PROCEDURE = int4eq, COMMUTATOR = ===);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_134_create_aggregate_clean() {
-  let d = diags(
-    "CREATE AGGREGATE my_sum (int) (SFUNC = int4pl, STYPE = int, INITCOND = 0);"
-  );
+  let d = diags("CREATE AGGREGATE my_sum (int) (SFUNC = int4pl, STYPE = int, INITCOND = 0);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_134_create_collation_clean() {
-  let d = diags(
-    "CREATE COLLATION fr (LOCALE_PROVIDER = icu, LOCALE = 'fr-FR-x-icu', DETERMINISTIC = true);"
-  );
+  let d = diags("CREATE COLLATION fr (LOCALE_PROVIDER = icu, LOCALE = 'fr-FR-x-icu', DETERMINISTIC = true);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_134_create_conversion_clean() {
-  let d = diags(
-    "CREATE CONVERSION my_utf8 FOR 'utf8' TO 'latin1' FROM utf8_to_iso_8859_1;"
-  );
+  let d = diags("CREATE CONVERSION my_utf8 FOR 'utf8' TO 'latin1' FROM utf8_to_iso_8859_1;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_134_create_domain_clean() {
-  let d = diags(
-    "CREATE DOMAIN positive_int AS int NOT NULL CHECK (VALUE > 0);"
-  );
+  let d = diags("CREATE DOMAIN positive_int AS int NOT NULL CHECK (VALUE > 0);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_134_create_type_composite_clean() {
-  let d = diags(
-    "CREATE TYPE point2d AS (x double precision, y double precision);"
-  );
+  let d = diags("CREATE TYPE point2d AS (x double precision, y double precision);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_134_create_type_enum_clean() {
-  let d = diags(
-    "CREATE TYPE mood AS ENUM ('happy', 'meh', 'sad');"
-  );
+  let d = diags("CREATE TYPE mood AS ENUM ('happy', 'meh', 'sad');");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_134_create_type_range_clean() {
-  let d = diags(
-    "CREATE TYPE numrange_alt AS RANGE (SUBTYPE = numeric);"
-  );
+  let d = diags("CREATE TYPE numrange_alt AS RANGE (SUBTYPE = numeric);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_134_create_sequence_full_options_clean() {
   let d = diags(
-    "CREATE SEQUENCE s AS bigint INCREMENT BY 1 MINVALUE 1 NO MAXVALUE START WITH 1000 CACHE 50 CYCLE OWNED BY users.id;"
+    "CREATE SEQUENCE s AS bigint INCREMENT BY 1 MINVALUE 1 NO MAXVALUE START WITH 1000 CACHE 50 CYCLE OWNED BY users.id;",
   );
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_134_create_text_search_dict_clean() {
-  let d = diags(
-    "CREATE TEXT SEARCH DICTIONARY english_stem (TEMPLATE = snowball, LANGUAGE = english);"
-  );
+  let d = diags("CREATE TEXT SEARCH DICTIONARY english_stem (TEMPLATE = snowball, LANGUAGE = english);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_134_create_text_search_config_clean() {
-  let d = diags(
-    "CREATE TEXT SEARCH CONFIGURATION en (COPY = english);"
-  );
+  let d = diags("CREATE TEXT SEARCH CONFIGURATION en (COPY = english);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_134_create_publication_clean() {
-  let d = diags(
-    "CREATE PUBLICATION pub_all FOR ALL TABLES WITH (publish = 'insert, update');"
-  );
+  let d = diags("CREATE PUBLICATION pub_all FOR ALL TABLES WITH (publish = 'insert, update');");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_134_create_publication_for_tables_in_schema_clean() {
-  let d = diags(
-    "CREATE PUBLICATION pub_sch FOR TABLES IN SCHEMA public, audit WITH (publish_via_partition_root = true);"
-  );
+  let d =
+    diags("CREATE PUBLICATION pub_sch FOR TABLES IN SCHEMA public, audit WITH (publish_via_partition_root = true);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -14851,24 +15117,20 @@ fn r2_134_create_publication_for_tables_in_schema_clean() {
 fn r2_134_create_subscription_clean() {
   let d = diags(
     "CREATE SUBSCRIPTION sub CONNECTION 'host=h dbname=d user=rep' PUBLICATION pub_all \
-     WITH (create_slot = true, enabled = true, copy_data = true);"
+     WITH (create_slot = true, enabled = true, copy_data = true);",
   );
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_134_create_statistics_clean() {
-  let d = diags(
-    "CREATE STATISTICS stat_users (ndistinct, dependencies) ON id, email FROM users;"
-  );
+  let d = diags("CREATE STATISTICS stat_users (ndistinct, dependencies) ON id, email FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_135_alter_function_modifiers_clean() {
-  let d = diags(
-    "ALTER FUNCTION add_one(int) STABLE PARALLEL SAFE SECURITY DEFINER COST 10 ROWS 1;"
-  );
+  let d = diags("ALTER FUNCTION add_one(int) STABLE PARALLEL SAFE SECURITY DEFINER COST 10 ROWS 1;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -14880,49 +15142,37 @@ fn r2_135_alter_function_set_search_path_clean() {
 
 #[test]
 fn r2_135_alter_table_add_drop_column_clean() {
-  let d = diags(
-    "ALTER TABLE users ADD COLUMN updated_at timestamptz DEFAULT now(), DROP COLUMN old_col CASCADE;"
-  );
+  let d = diags("ALTER TABLE users ADD COLUMN updated_at timestamptz DEFAULT now(), DROP COLUMN old_col CASCADE;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_135_alter_table_alter_column_type_clean() {
-  let d = diags(
-    "ALTER TABLE users ALTER COLUMN id TYPE bigint USING id::bigint;"
-  );
+  let d = diags("ALTER TABLE users ALTER COLUMN id TYPE bigint USING id::bigint;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_135_alter_table_set_storage_clean() {
-  let d = diags(
-    "ALTER TABLE users ALTER COLUMN body SET STORAGE EXTENDED;"
-  );
+  let d = diags("ALTER TABLE users ALTER COLUMN body SET STORAGE EXTENDED;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_135_alter_table_attach_partition_clean() {
-  let d = diags(
-    "ALTER TABLE events ATTACH PARTITION events_2025 FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');"
-  );
+  let d = diags("ALTER TABLE events ATTACH PARTITION events_2025 FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_135_alter_table_detach_partition_clean() {
-  let d = diags(
-    "ALTER TABLE events DETACH PARTITION events_2024 CONCURRENTLY;"
-  );
+  let d = diags("ALTER TABLE events DETACH PARTITION events_2024 CONCURRENTLY;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_135_alter_table_inherit_clean() {
-  let d = diags(
-    "ALTER TABLE child INHERIT parent;"
-  );
+  let d = diags("ALTER TABLE child INHERIT parent;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -14934,17 +15184,13 @@ fn r2_135_alter_table_replica_identity_clean() {
 
 #[test]
 fn r2_135_alter_sequence_options_clean() {
-  let d = diags(
-    "ALTER SEQUENCE s RESTART WITH 5000 INCREMENT BY 5 CYCLE;"
-  );
+  let d = diags("ALTER SEQUENCE s RESTART WITH 5000 INCREMENT BY 5 CYCLE;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_135_alter_index_set_storage_param_clean() {
-  let d = diags(
-    "ALTER INDEX users_email_ux SET (fillfactor = 80, deduplicate_items = on);"
-  );
+  let d = diags("ALTER INDEX users_email_ux SET (fillfactor = 80, deduplicate_items = on);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -14962,17 +15208,13 @@ fn r2_135_alter_mv_set_access_method_clean() {
 
 #[test]
 fn r2_135_alter_role_set_search_path_clean() {
-  let d = diags(
-    "ALTER ROLE bob SET search_path = 'public, app';"
-  );
+  let d = diags("ALTER ROLE bob SET search_path = 'public, app';");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_135_alter_database_set_guc_clean() {
-  let d = diags(
-    "ALTER DATABASE mydb SET log_min_duration_statement = '1s';"
-  );
+  let d = diags("ALTER DATABASE mydb SET log_min_duration_statement = '1s';");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -14996,9 +15238,7 @@ fn r2_135_alter_type_rename_value_clean() {
 
 #[test]
 fn r2_135_alter_domain_add_constraint_clean() {
-  let d = diags(
-    "ALTER DOMAIN positive_int ADD CONSTRAINT positive CHECK (VALUE > 0) NOT VALID;"
-  );
+  let d = diags("ALTER DOMAIN positive_int ADD CONSTRAINT positive CHECK (VALUE > 0) NOT VALID;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -15208,25 +15448,19 @@ fn r2_137_end_transaction_clean() {
 
 #[test]
 fn r2_137_savepoint_lifecycle_clean() {
-  let d = diags(
-    "BEGIN; SAVEPOINT s1; UPDATE users SET name = 'x' WHERE id = 1; RELEASE SAVEPOINT s1; COMMIT;"
-  );
+  let d = diags("BEGIN; SAVEPOINT s1; UPDATE users SET name = 'x' WHERE id = 1; RELEASE SAVEPOINT s1; COMMIT;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_137_nested_savepoints_clean() {
-  let d = diags(
-    "BEGIN; SAVEPOINT a; SAVEPOINT b; ROLLBACK TO SAVEPOINT a; RELEASE SAVEPOINT a; COMMIT;"
-  );
+  let d = diags("BEGIN; SAVEPOINT a; SAVEPOINT b; ROLLBACK TO SAVEPOINT a; RELEASE SAVEPOINT a; COMMIT;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_137_prepare_transaction_lifecycle_clean() {
-  let d = diags(
-    "BEGIN; UPDATE users SET name = 'x' WHERE id = 1; PREPARE TRANSACTION 'tx-42';"
-  );
+  let d = diags("BEGIN; UPDATE users SET name = 'x' WHERE id = 1; PREPARE TRANSACTION 'tx-42';");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -15268,9 +15502,7 @@ fn r2_137_show_all_clean() {
 
 #[test]
 fn r2_138_prepare_clean() {
-  let d = diags(
-    "PREPARE find_user(int) AS SELECT * FROM users WHERE id = $1;"
-  );
+  let d = diags("PREPARE find_user(int) AS SELECT * FROM users WHERE id = $1;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -15307,48 +15539,38 @@ fn r2_138_do_block_default_lang_clean() {
 #[test]
 fn r2_138_copy_with_encoding_clean() {
   let d = diags(
-    "COPY users FROM '/tmp/u.csv' WITH (FORMAT csv, ENCODING 'UTF8', DELIMITER ',', QUOTE '\"', NULL '\\N', HEADER true);"
+    "COPY users FROM '/tmp/u.csv' WITH (FORMAT csv, ENCODING 'UTF8', DELIMITER ',', QUOTE '\"', NULL '\\N', HEADER true);",
   );
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_138_copy_force_quote_clean() {
-  let d = diags(
-    "COPY (SELECT id, email FROM users) TO '/tmp/u.csv' WITH (FORMAT csv, FORCE_QUOTE (email));"
-  );
+  let d = diags("COPY (SELECT id, email FROM users) TO '/tmp/u.csv' WITH (FORMAT csv, FORCE_QUOTE (email));");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_138_copy_force_quote_star_clean() {
-  let d = diags(
-    "COPY users TO '/tmp/u.csv' WITH (FORMAT csv, FORCE_QUOTE *);"
-  );
+  let d = diags("COPY users TO '/tmp/u.csv' WITH (FORMAT csv, FORCE_QUOTE *);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_138_copy_force_not_null_clean() {
-  let d = diags(
-    "COPY users FROM '/tmp/u.csv' WITH (FORMAT csv, FORCE_NOT_NULL (email));"
-  );
+  let d = diags("COPY users FROM '/tmp/u.csv' WITH (FORMAT csv, FORCE_NOT_NULL (email));");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_138_copy_force_null_clean() {
-  let d = diags(
-    "COPY users FROM '/tmp/u.csv' WITH (FORMAT csv, FORCE_NULL (email));"
-  );
+  let d = diags("COPY users FROM '/tmp/u.csv' WITH (FORMAT csv, FORCE_NULL (email));");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_138_copy_header_match_clean() {
-  let d = diags(
-    "COPY users FROM '/tmp/u.csv' WITH (FORMAT csv, HEADER MATCH);"
-  );
+  let d = diags("COPY users FROM '/tmp/u.csv' WITH (FORMAT csv, HEADER MATCH);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -15383,24 +15605,20 @@ fn r2_138_lock_table_nowait_clean() {
 #[test]
 fn r2_138_import_foreign_schema_clean() {
   let d = diags(
-    "IMPORT FOREIGN SCHEMA public LIMIT TO (users, orders) FROM SERVER reporting INTO public OPTIONS (use_remote_estimate 'true');"
+    "IMPORT FOREIGN SCHEMA public LIMIT TO (users, orders) FROM SERVER reporting INTO public OPTIONS (use_remote_estimate 'true');",
   );
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_138_import_foreign_schema_except_clean() {
-  let d = diags(
-    "IMPORT FOREIGN SCHEMA public EXCEPT (audit) FROM SERVER reporting INTO public;"
-  );
+  let d = diags("IMPORT FOREIGN SCHEMA public EXCEPT (audit) FROM SERVER reporting INTO public;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_138_alter_default_privileges_clean() {
-  let d = diags(
-    "ALTER DEFAULT PRIVILEGES FOR ROLE app IN SCHEMA public GRANT SELECT ON TABLES TO ro_role;"
-  );
+  let d = diags("ALTER DEFAULT PRIVILEGES FOR ROLE app IN SCHEMA public GRANT SELECT ON TABLES TO ro_role;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -15496,65 +15714,49 @@ fn r2_139_create_table_of_type_clean() {
 
 #[test]
 fn r2_139_create_view_with_check_option_clean() {
-  let d = diags(
-    "CREATE VIEW active_users AS SELECT * FROM users WHERE active WITH CHECK OPTION;"
-  );
+  let d = diags("CREATE VIEW active_users AS SELECT * FROM users WHERE active WITH CHECK OPTION;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_139_create_view_with_local_check_option_clean() {
-  let d = diags(
-    "CREATE VIEW local_users AS SELECT * FROM users WITH LOCAL CHECK OPTION;"
-  );
+  let d = diags("CREATE VIEW local_users AS SELECT * FROM users WITH LOCAL CHECK OPTION;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_139_create_view_with_cascaded_check_option_clean() {
-  let d = diags(
-    "CREATE VIEW cascaded_users AS SELECT * FROM users WITH CASCADED CHECK OPTION;"
-  );
+  let d = diags("CREATE VIEW cascaded_users AS SELECT * FROM users WITH CASCADED CHECK OPTION;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_139_create_recursive_view_clean() {
-  let d = diags(
-    "CREATE RECURSIVE VIEW t(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM t WHERE n < 10);"
-  );
+  let d = diags("CREATE RECURSIVE VIEW t(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM t WHERE n < 10);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_139_create_or_replace_view_clean() {
-  let d = diags(
-    "CREATE OR REPLACE VIEW v AS SELECT id FROM users;"
-  );
+  let d = diags("CREATE OR REPLACE VIEW v AS SELECT id FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_139_create_materialized_view_with_data_clean() {
-  let d = diags(
-    "CREATE MATERIALIZED VIEW mv AS SELECT id, name FROM users WITH DATA;"
-  );
+  let d = diags("CREATE MATERIALIZED VIEW mv AS SELECT id, name FROM users WITH DATA;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_139_create_materialized_view_with_no_data_clean() {
-  let d = diags(
-    "CREATE MATERIALIZED VIEW mv AS SELECT id FROM users WITH NO DATA;"
-  );
+  let d = diags("CREATE MATERIALIZED VIEW mv AS SELECT id FROM users WITH NO DATA;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_139_create_table_partition_of_clean() {
-  let d = diags(
-    "CREATE TABLE events_2025 PARTITION OF events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');"
-  );
+  let d = diags("CREATE TABLE events_2025 PARTITION OF events FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -15578,9 +15780,7 @@ fn r2_140_for_update_clean() {
 
 #[test]
 fn r2_140_for_update_of_clean() {
-  let d = diags(
-    "SELECT * FROM users u JOIN orders o ON u.id = o.user_id FOR UPDATE OF u NOWAIT;"
-  );
+  let d = diags("SELECT * FROM users u JOIN orders o ON u.id = o.user_id FOR UPDATE OF u NOWAIT;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -15612,32 +15812,26 @@ fn r2_140_for_key_share_clean() {
 fn r2_140_grouping_fn_clean() {
   let d = diags(
     "SELECT email, name, GROUPING(email) AS gr, count(*) FROM users \
-     GROUP BY ROLLUP (email, name);"
+     GROUP BY ROLLUP (email, name);",
   );
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_140_cube_column_group_clean() {
-  let d = diags(
-    "SELECT email, name, count(*) FROM users GROUP BY CUBE ((email, name));"
-  );
+  let d = diags("SELECT email, name, count(*) FROM users GROUP BY CUBE ((email, name));");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_140_rollup_column_group_clean() {
-  let d = diags(
-    "SELECT email, name, count(*) FROM users GROUP BY ROLLUP ((email, name));"
-  );
+  let d = diags("SELECT email, name, count(*) FROM users GROUP BY ROLLUP ((email, name));");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_140_select_distinct_on_clean() {
-  let d = diags(
-    "SELECT DISTINCT ON (email) id, email FROM users ORDER BY email, id;"
-  );
+  let d = diags("SELECT DISTINCT ON (email) id, email FROM users ORDER BY email, id;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -15663,7 +15857,7 @@ fn r2_140_select_fetch_with_ties_clean() {
 fn r2_140_select_union_all_intersect_except_clean() {
   let d = diags(
     "(SELECT id FROM users) UNION ALL (SELECT id FROM orders) \
-     INTERSECT (SELECT id FROM events) EXCEPT (SELECT id FROM banned);"
+     INTERSECT (SELECT id FROM events) EXCEPT (SELECT id FROM banned);",
   );
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
@@ -15675,64 +15869,50 @@ fn r2_141_json_table_nested_path_clean() {
       COLUMNS (\
         id INT PATH '$.id', \
         NESTED PATH '$.items[*]' COLUMNS (item INT PATH '$')\
-      )) AS jt;"
+      )) AS jt;",
   );
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_141_json_value_clean() {
-  let d = diags(
-    "SELECT JSON_VALUE(data, '$.profile.name' RETURNING text NULL ON EMPTY ERROR ON ERROR) FROM users;"
-  );
+  let d = diags("SELECT JSON_VALUE(data, '$.profile.name' RETURNING text NULL ON EMPTY ERROR ON ERROR) FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_141_json_query_with_wrapper_clean() {
-  let d = diags(
-    "SELECT JSON_QUERY(data, '$.tags' WITH UNCONDITIONAL WRAPPER NULL ON EMPTY) FROM users;"
-  );
+  let d = diags("SELECT JSON_QUERY(data, '$.tags' WITH UNCONDITIONAL WRAPPER NULL ON EMPTY) FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_141_json_query_omit_quotes_clean() {
-  let d = diags(
-    "SELECT JSON_QUERY(data, '$.name' OMIT QUOTES) FROM users;"
-  );
+  let d = diags("SELECT JSON_QUERY(data, '$.name' OMIT QUOTES) FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_141_json_exists_clean() {
-  let d = diags(
-    "SELECT id FROM users WHERE JSON_EXISTS(data, '$.profile.email');"
-  );
+  let d = diags("SELECT id FROM users WHERE JSON_EXISTS(data, '$.profile.email');");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_141_json_object_constructor_clean() {
-  let d = diags(
-    "SELECT JSON_OBJECT('id': id, 'name': name ABSENT ON NULL RETURNING jsonb) FROM users;"
-  );
+  let d = diags("SELECT JSON_OBJECT('id': id, 'name': name ABSENT ON NULL RETURNING jsonb) FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_141_json_array_constructor_clean() {
-  let d = diags(
-    "SELECT JSON_ARRAY(id, name NULL ON NULL RETURNING jsonb) FROM users;"
-  );
+  let d = diags("SELECT JSON_ARRAY(id, name NULL ON NULL RETURNING jsonb) FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_141_json_objectagg_clean() {
-  let d = diags(
-    "SELECT JSON_OBJECTAGG(id: name ABSENT ON NULL) FROM users;"
-  );
+  let d = diags("SELECT JSON_OBJECTAGG(id: name ABSENT ON NULL) FROM users;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -15745,7 +15925,7 @@ fn r2_141_json_arrayagg_clean() {
 #[test]
 fn r2_141_overlaps_predicate_clean() {
   let d = diags(
-    "SELECT id FROM users WHERE (now() - INTERVAL '1 day', now()) OVERLAPS (now() - INTERVAL '12 hours', now());"
+    "SELECT id FROM users WHERE (now() - INTERVAL '1 day', now()) OVERLAPS (now() - INTERVAL '12 hours', now());",
   );
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
@@ -15762,7 +15942,7 @@ fn r2_141_cast_standard_types_clean() {
        CAST(1 AS REAL), \
        CAST(1 AS DOUBLE PRECISION), \
        CAST('1 day' AS INTERVAL), \
-       CAST(NULL AS TEXT);"
+       CAST(NULL AS TEXT);",
   );
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
@@ -15776,7 +15956,7 @@ fn r2_141_cast_operator_double_colon_clean() {
 #[test]
 fn r2_141_generated_stored_column_clean() {
   let d = diags(
-    "CREATE TABLE prices (amount numeric, tax_pct numeric, with_tax numeric GENERATED ALWAYS AS (amount * (1 + tax_pct)) STORED);"
+    "CREATE TABLE prices (amount numeric, tax_pct numeric, with_tax numeric GENERATED ALWAYS AS (amount * (1 + tax_pct)) STORED);",
   );
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
@@ -15784,32 +15964,26 @@ fn r2_141_generated_stored_column_clean() {
 #[test]
 fn r2_141_generated_identity_always_clean() {
   let d = diags(
-    "CREATE TABLE t (id int GENERATED ALWAYS AS IDENTITY (START WITH 1000 INCREMENT BY 5 CACHE 50) PRIMARY KEY);"
+    "CREATE TABLE t (id int GENERATED ALWAYS AS IDENTITY (START WITH 1000 INCREMENT BY 5 CACHE 50) PRIMARY KEY);",
   );
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_141_generated_identity_by_default_clean() {
-  let d = diags(
-    "CREATE TABLE t (id int GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY);"
-  );
+  let d = diags("CREATE TABLE t (id int GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_141_insert_overriding_system_value_clean() {
-  let d = diags(
-    "INSERT INTO t OVERRIDING SYSTEM VALUE VALUES (1, 'x');"
-  );
+  let d = diags("INSERT INTO t OVERRIDING SYSTEM VALUE VALUES (1, 'x');");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_141_insert_overriding_user_value_clean() {
-  let d = diags(
-    "INSERT INTO t OVERRIDING USER VALUE VALUES (1, 'x');"
-  );
+  let d = diags("INSERT INTO t OVERRIDING USER VALUE VALUES (1, 'x');");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -15833,25 +16007,19 @@ fn r2_142_all_subquery_clean() {
 
 #[test]
 fn r2_142_exists_subquery_clean() {
-  let d = diags(
-    "SELECT u.id FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id);"
-  );
+  let d = diags("SELECT u.id FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_142_not_exists_subquery_clean() {
-  let d = diags(
-    "SELECT u.id FROM users u WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id);"
-  );
+  let d = diags("SELECT u.id FROM users u WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id);");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_142_scalar_subquery_clean() {
-  let d = diags(
-    "SELECT id, (SELECT count(*) FROM orders o WHERE o.user_id = u.id) AS order_count FROM users u;"
-  );
+  let d = diags("SELECT id, (SELECT count(*) FROM orders o WHERE o.user_id = u.id) AS order_count FROM users u;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -15869,9 +16037,7 @@ fn r2_142_unnest_clean() {
 
 #[test]
 fn r2_142_array_agg_with_order_clean() {
-  let d = diags(
-    "SELECT user_id, array_agg(id ORDER BY id) FROM orders GROUP BY user_id;"
-  );
+  let d = diags("SELECT user_id, array_agg(id ORDER BY id) FROM orders GROUP BY user_id;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -15907,17 +16073,14 @@ fn r2_142_array_slice_clean() {
 
 #[test]
 fn r2_142_tsvector_construction_clean() {
-  let d = diags(
-    "SELECT to_tsvector('english', 'The quick brown fox') @@ to_tsquery('english', 'quick & fox');"
-  );
+  let d = diags("SELECT to_tsvector('english', 'The quick brown fox') @@ to_tsquery('english', 'quick & fox');");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_142_tsvector_setweight_clean() {
-  let d = diags(
-    "SELECT setweight(to_tsvector('english', 'title'), 'A') || setweight(to_tsvector('english', 'body'), 'D');"
-  );
+  let d =
+    diags("SELECT setweight(to_tsvector('english', 'title'), 'A') || setweight(to_tsvector('english', 'body'), 'D');");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -15953,17 +16116,13 @@ fn r2_142_multirange_clean() {
 
 #[test]
 fn r2_142_range_agg_clean() {
-  let d = diags(
-    "SELECT range_agg(daterange(start, finish)) FROM events;"
-  );
+  let d = diags("SELECT range_agg(daterange(start, finish)) FROM events;");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
 #[test]
 fn r2_142_range_lower_upper_clean() {
-  let d = diags(
-    "SELECT lower(int4range(1, 100)), upper(int4range(1, 100)), lower_inc(int4range(1, 100));"
-  );
+  let d = diags("SELECT lower(int4range(1, 100)), upper(int4range(1, 100)), lower_inc(int4range(1, 100));");
   assert!(!d.iter().any(|x| x.code == "sql000"));
 }
 
@@ -15972,9 +16131,11 @@ fn r2_153_unknown_column_case_insensitive() {
   // sql002 must not fire when the user references a column in a
   // different case than the catalog stores.
   let d = diags("SELECT ID FROM users;");
-  assert!(!d.iter().any(|x| x.code == "sql002"),
+  assert!(
+    !d.iter().any(|x| x.code == "sql002"),
     "sql002 fired for uppercase ID; codes: {:?}",
-    d.iter().map(|x| x.code).collect::<Vec<_>>());
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
@@ -15986,9 +16147,11 @@ fn r2_153_unknown_column_explicit_lowercase_still_clean() {
 #[test]
 fn r2_153_uppercase_table_still_resolves() {
   let d = diags("SELECT id FROM USERS;");
-  assert!(!d.iter().any(|x| x.code == "sql001"),
+  assert!(
+    !d.iter().any(|x| x.code == "sql001"),
     "sql001 fired for uppercase USERS; codes: {:?}",
-    d.iter().map(|x| x.code).collect::<Vec<_>>());
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
@@ -16010,9 +16173,11 @@ fn r2_158_current_user_uppercase_clean() {
 #[test]
 fn r2_158_explicit_schema_uppercase_resolves() {
   let d = diags("SELECT id FROM PUBLIC.users;");
-  assert!(!d.iter().any(|x| x.code == "sql001"),
+  assert!(
+    !d.iter().any(|x| x.code == "sql001"),
     "sql001 fired for uppercase schema PUBLIC; codes: {:?}",
-    d.iter().map(|x| x.code).collect::<Vec<_>>());
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
@@ -16026,8 +16191,7 @@ fn r2_163_2k_line_buffer_no_panic() {
     s.push_str(&format!("SELECT id FROM users WHERE id = {i};\n"));
   }
   let d = diags(&s);
-  assert!(d.iter().filter(|x| x.code == "sql000").count() < 100,
-    "sql000 spam from 2k-line buffer");
+  assert!(d.iter().filter(|x| x.code == "sql000").count() < 100, "sql000 spam from 2k-line buffer");
 }
 
 #[test]
@@ -16038,8 +16202,11 @@ fn r2_165_mysql_auto_increment_runs_under_mysql_dialect() {
   let scopes = dsl_resolve::resolve_with_source(&file.statements, q);
   // sql314 is the MySQL AUTO_INCREMENT detector; on MySQL buffer it must NOT fire.
   let d = dsl_analysis::run_with_dialect(q, &file, &scopes, &cat(), Dialect::MySql);
-  assert!(!d.iter().any(|x| x.code == "sql314"),
-    "sql314 fired on MySQL buffer: {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    !d.iter().any(|x| x.code == "sql314"),
+    "sql314 fired on MySQL buffer: {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
@@ -16048,29 +16215,31 @@ fn r3_005_sql001_flags_update_from_missing_table() {
   // FROM-list table should be flagged just like a missing JOIN
   // table in SELECT.
   let d = diags("UPDATE users SET x = nope.y FROM nope WHERE 1=1;");
-  assert!(d.iter().any(|x| x.code == "sql001" && x.message.contains("nope")),
-    "expected sql001 for FROM-list missing table: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql001" && x.message.contains("nope")),
+    "expected sql001 for FROM-list missing table: {d:?}"
+  );
 }
 
 #[test]
 fn r3_005_sql001_quiet_when_update_from_table_exists() {
   let d = diags("UPDATE users SET active = true FROM orders o WHERE o.user_id = users.id;");
-  assert!(!d.iter().any(|x| x.code == "sql001"),
-    "spurious sql001: {d:?}");
+  assert!(!d.iter().any(|x| x.code == "sql001"), "spurious sql001: {d:?}");
 }
 
 #[test]
 fn r3_005_sql001_flags_delete_using_missing_table() {
   let d = diags("DELETE FROM users USING nope WHERE nope.id = users.id;");
-  assert!(d.iter().any(|x| x.code == "sql001" && x.message.contains("nope")),
-    "expected sql001 for USING-list missing table: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql001" && x.message.contains("nope")),
+    "expected sql001 for USING-list missing table: {d:?}"
+  );
 }
 
 #[test]
 fn r3_005_sql001_quiet_when_delete_using_table_exists() {
   let d = diags("DELETE FROM users USING orders o WHERE o.user_id = users.id;");
-  assert!(!d.iter().any(|x| x.code == "sql001"),
-    "spurious sql001: {d:?}");
+  assert!(!d.iter().any(|x| x.code == "sql001"), "spurious sql001: {d:?}");
 }
 
 #[test]
@@ -16101,11 +16270,8 @@ fn r3_029_sql001_quiet_for_cte_referenced_later() {
 fn r3_030_sql001_recursive_cte_self_ref_no_panic() {
   // Recursive CTE self-references are valid. sql001 may not descend
   // into the CTE body, but the outer SELECT t must NOT be flagged.
-  let d = diags(
-    "WITH RECURSIVE t AS (SELECT 1 AS x UNION ALL SELECT x+1 FROM t WHERE x < 5) SELECT * FROM t;",
-  );
-  assert!(!d.iter().any(|x| x.code == "sql001" && x.message.contains("`t`")),
-    "spurious sql001 on CTE self-ref: {d:?}");
+  let d = diags("WITH RECURSIVE t AS (SELECT 1 AS x UNION ALL SELECT x+1 FROM t WHERE x < 5) SELECT * FROM t;");
+  assert!(!d.iter().any(|x| x.code == "sql001" && x.message.contains("`t`")), "spurious sql001 on CTE self-ref: {d:?}");
 }
 
 #[test]
@@ -16167,27 +16333,25 @@ fn diags_with_funcs(src: &str) -> Vec<dsl_analysis::Diagnostic> {
 fn r4_sql513_too_few_args() {
   let d = diags_with_funcs(
     "CREATE FUNCTION add2(a int, b int) RETURNS int LANGUAGE sql AS $$ SELECT a + b $$;
-     SELECT add2(1);"
+     SELECT add2(1);",
   );
-  assert!(d.iter().any(|x| x.code == "sql513" && x.message.contains("requires 2")),
-    "expected sql513 too-few: {d:?}");
+  assert!(d.iter().any(|x| x.code == "sql513" && x.message.contains("requires 2")), "expected sql513 too-few: {d:?}");
 }
 
 #[test]
 fn r4_sql513_too_many_args() {
   let d = diags_with_funcs(
     "CREATE FUNCTION add2(a int, b int) RETURNS int LANGUAGE sql AS $$ SELECT a + b $$;
-     SELECT add2(1, 2, 3);"
+     SELECT add2(1, 2, 3);",
   );
-  assert!(d.iter().any(|x| x.code == "sql513" && x.message.contains("at most 2")),
-    "expected sql513 too-many: {d:?}");
+  assert!(d.iter().any(|x| x.code == "sql513" && x.message.contains("at most 2")), "expected sql513 too-many: {d:?}");
 }
 
 #[test]
 fn r4_sql513_correct_arity_quiet() {
   let d = diags_with_funcs(
     "CREATE FUNCTION add2(a int, b int) RETURNS int LANGUAGE sql AS $$ SELECT a + b $$;
-     SELECT add2(1, 2);"
+     SELECT add2(1, 2);",
   );
   assert!(!d.iter().any(|x| x.code == "sql513"), "spurious sql513: {d:?}");
 }
@@ -16196,20 +16360,21 @@ fn r4_sql513_correct_arity_quiet() {
 fn r4_sql513_no_args_required_when_call_is_empty() {
   let d = diags_with_funcs(
     "CREATE FUNCTION foo(a int, b int) RETURNS int LANGUAGE sql AS $$ SELECT a + b $$;
-     SELECT foo();"
+     SELECT foo();",
   );
-  assert!(d.iter().any(|x| x.code == "sql513" && x.message.contains("requires 2")),
-    "expected sql513 for SELECT foo() needing args: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql513" && x.message.contains("requires 2")),
+    "expected sql513 for SELECT foo() needing args: {d:?}"
+  );
 }
 
 #[test]
 fn r4_sql513_default_arg_tolerated() {
   let d = diags_with_funcs(
     "CREATE FUNCTION foo(a int, b int DEFAULT 0) RETURNS int LANGUAGE sql AS $$ SELECT a + b $$;
-     SELECT foo_def(1);"
+     SELECT foo_def(1);",
   );
-  assert!(!d.iter().any(|x| x.code == "sql513"),
-    "DEFAULT arg should not fire sql513: {d:?}");
+  assert!(!d.iter().any(|x| x.code == "sql513"), "DEFAULT arg should not fire sql513: {d:?}");
 }
 
 #[test]
@@ -16222,10 +16387,9 @@ fn r4_sql513_unknown_function_quiet() {
 fn r4_sql513_nested_call_no_panic() {
   let d = diags_with_funcs(
     "CREATE FUNCTION add2(a int, b int) RETURNS int LANGUAGE sql AS $$ SELECT a + b $$;
-     SELECT add2(add2(1, 2), 3);"
+     SELECT add2(add2(1, 2), 3);",
   );
-  assert!(!d.iter().any(|x| x.code == "sql513"),
-    "valid nested call should not fire: {d:?}");
+  assert!(!d.iter().any(|x| x.code == "sql513"), "valid nested call should not fire: {d:?}");
 }
 
 #[test]
@@ -16242,29 +16406,26 @@ fn r4_sql513_schema_qualified() {
   let file = dsl_parse::parse("SELECT app.current_user_id(1);", dsl_parse::Dialect::Postgres);
   let scopes = dsl_resolve::resolve_with_source(&file.statements, "SELECT app.current_user_id(1);");
   let d = dsl_analysis::run("SELECT app.current_user_id(1);", &file, &scopes, &c);
-  assert!(d.iter().any(|x| x.code == "sql513"),
-    "schema.fn(arg) should flag when fn takes 0 args: {d:?}");
+  assert!(d.iter().any(|x| x.code == "sql513"), "schema.fn(arg) should flag when fn takes 0 args: {d:?}");
 }
 
 #[test]
 fn r4_sql513_inside_where_clause() {
   let d = diags_with_funcs(
     "CREATE FUNCTION add2(a int, b int) RETURNS int LANGUAGE sql AS $$ SELECT a + b $$;
-     SELECT 1 WHERE add2(1) > 0;"
+     SELECT 1 WHERE add2(1) > 0;",
   );
-  assert!(d.iter().any(|x| x.code == "sql513"),
-    "should fire in WHERE clause: {d:?}");
+  assert!(d.iter().any(|x| x.code == "sql513"), "should fire in WHERE clause: {d:?}");
 }
 
 #[test]
 fn r4_sql513_call_inside_string_ignored() {
   let d = diags_with_funcs(
     "CREATE FUNCTION add2(a int, b int) RETURNS int LANGUAGE sql AS $$ SELECT a + b $$;
-     SELECT 'add2(1)' FROM t;"
+     SELECT 'add2(1)' FROM t;",
   );
   // The `add2(1)` inside the string literal must not fire.
-  assert!(!d.iter().any(|x| x.code == "sql513"),
-    "string literal `add2(1)` should be inert: {d:?}");
+  assert!(!d.iter().any(|x| x.code == "sql513"), "string literal `add2(1)` should be inert: {d:?}");
 }
 
 #[test]
@@ -16272,7 +16433,7 @@ fn r4_sql513_call_inside_comment_ignored() {
   let d = diags_with_funcs(
     "CREATE FUNCTION add2(a int, b int) RETURNS int LANGUAGE sql AS $$ SELECT a + b $$;
      -- add2(1) in a comment
-     SELECT 1;"
+     SELECT 1;",
   );
   assert!(!d.iter().any(|x| x.code == "sql513"));
 }
@@ -16283,17 +16444,21 @@ fn r4_500_sql513_overload_resolution() {
   let mut c = cat();
   // Two overloads: 1-arg and 2-arg `foo`.
   c.functions.push(Function {
-    schema: "public".into(), name: "foo_ovl".into(),
+    schema: "public".into(),
+    name: "foo_ovl".into(),
     arguments: vec![dsl_catalog::FunctionArg { name: Some("a".into()), data_type: "int".into() }],
-    return_type: "int".into(), comment: None,
+    return_type: "int".into(),
+    comment: None,
   });
   c.functions.push(Function {
-    schema: "public".into(), name: "foo_ovl".into(),
+    schema: "public".into(),
+    name: "foo_ovl".into(),
     arguments: vec![
       dsl_catalog::FunctionArg { name: Some("a".into()), data_type: "int".into() },
       dsl_catalog::FunctionArg { name: Some("b".into()), data_type: "int".into() },
     ],
-    return_type: "int".into(), comment: None,
+    return_type: "int".into(),
+    comment: None,
   });
   let src = "SELECT foo_ovl(1); SELECT foo_ovl(1, 2);";
   let file = dsl_parse::parse(src, dsl_parse::Dialect::Postgres);
@@ -16307,11 +16472,11 @@ fn r4_501_sql513_variadic_unbounded() {
   use dsl_catalog::Function;
   let mut c = cat();
   c.functions.push(Function {
-    schema: "public".into(), name: "concat_vs".into(),
-    arguments: vec![
-      dsl_catalog::FunctionArg { name: Some("a".into()), data_type: "VARIADIC text".into() },
-    ],
-    return_type: "text".into(), comment: None,
+    schema: "public".into(),
+    name: "concat_vs".into(),
+    arguments: vec![dsl_catalog::FunctionArg { name: Some("a".into()), data_type: "VARIADIC text".into() }],
+    return_type: "text".into(),
+    comment: None,
   });
   let src = "SELECT concat_vs('a', 'b', 'c', 'd', 'e');";
   let file = dsl_parse::parse(src, dsl_parse::Dialect::Postgres);
@@ -16325,16 +16490,20 @@ fn r4_sql513_literal_int_for_text_arg() {
   use dsl_catalog::{Function, FunctionArg};
   let mut c = cat();
   c.functions.push(Function {
-    schema: "public".into(), name: "greet".into(),
+    schema: "public".into(),
+    name: "greet".into(),
     arguments: vec![FunctionArg { name: Some("who".into()), data_type: "text".into() }],
-    return_type: "text".into(), comment: None,
+    return_type: "text".into(),
+    comment: None,
   });
   let src = "SELECT greet(42);";
   let file = dsl_parse::parse(src, dsl_parse::Dialect::Postgres);
   let scopes = dsl_resolve::resolve_with_source(&file.statements, src);
   let d = dsl_analysis::run(src, &file, &scopes, &c);
-  assert!(d.iter().any(|x| x.code == "sql513" && x.message.contains("integer") && x.message.contains("text")),
-    "expected literal-type mismatch: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql513" && x.message.contains("integer") && x.message.contains("text")),
+    "expected literal-type mismatch: {d:?}"
+  );
 }
 
 #[test]
@@ -16342,16 +16511,20 @@ fn r4_sql513_literal_text_for_int_arg() {
   use dsl_catalog::{Function, FunctionArg};
   let mut c = cat();
   c.functions.push(Function {
-    schema: "public".into(), name: "pow2".into(),
+    schema: "public".into(),
+    name: "pow2".into(),
     arguments: vec![FunctionArg { name: Some("n".into()), data_type: "int".into() }],
-    return_type: "int".into(), comment: None,
+    return_type: "int".into(),
+    comment: None,
   });
   let src = "SELECT pow2('three');";
   let file = dsl_parse::parse(src, dsl_parse::Dialect::Postgres);
   let scopes = dsl_resolve::resolve_with_source(&file.statements, src);
   let d = dsl_analysis::run(src, &file, &scopes, &c);
-  assert!(d.iter().any(|x| x.code == "sql513" && x.message.contains("text") && x.message.contains("integer")),
-    "expected text-for-int mismatch: {d:?}");
+  assert!(
+    d.iter().any(|x| x.code == "sql513" && x.message.contains("text") && x.message.contains("integer")),
+    "expected text-for-int mismatch: {d:?}"
+  );
 }
 
 #[test]
@@ -16359,9 +16532,11 @@ fn r4_sql513_correct_literal_quiet() {
   use dsl_catalog::{Function, FunctionArg};
   let mut c = cat();
   c.functions.push(Function {
-    schema: "public".into(), name: "pow2".into(),
+    schema: "public".into(),
+    name: "pow2".into(),
     arguments: vec![FunctionArg { name: Some("n".into()), data_type: "int".into() }],
-    return_type: "int".into(), comment: None,
+    return_type: "int".into(),
+    comment: None,
   });
   let src = "SELECT pow2(42);";
   let file = dsl_parse::parse(src, dsl_parse::Dialect::Postgres);
@@ -16375,9 +16550,11 @@ fn r4_sql513_null_arg_silent() {
   use dsl_catalog::{Function, FunctionArg};
   let mut c = cat();
   c.functions.push(Function {
-    schema: "public".into(), name: "pow2".into(),
+    schema: "public".into(),
+    name: "pow2".into(),
     arguments: vec![FunctionArg { name: Some("n".into()), data_type: "int".into() }],
-    return_type: "int".into(), comment: None,
+    return_type: "int".into(),
+    comment: None,
   });
   let src = "SELECT pow2(NULL);";
   let file = dsl_parse::parse(src, dsl_parse::Dialect::Postgres);
@@ -16907,7 +17084,6 @@ fn r9_diag_clean_2409() {
   let d = diags("SELECT count(*) FROM orders");
   assert!(!d.iter().any(|x| x.code == "sql001" || x.code == "sql002" || x.code == "sql003"));
 }
-
 
 #[test]
 fn r10_sql001_0001() {
@@ -21809,7 +21985,6 @@ fn r22_sql473_0093() {
   assert!(d.iter().any(|x| x.code == "sql473"));
 }
 
-
 #[test]
 fn r23_probe_codes() {
   for s in [
@@ -22643,7 +22818,6 @@ fn r25_sql056_0043() {
   assert!(d.iter().any(|x| x.code == "sql056"));
 }
 
-
 #[test]
 fn r26_probe_codes() {
   for s in [
@@ -23305,601 +23479,1001 @@ fn r28_bulk_probe() {
 #[test]
 fn r28_sql017_0001() {
   let d = diags("-- v0\nSELECT id, count(*) FROM users");
-  assert!(d.iter().any(|x| x.code == "sql017"), "expected sql017 for `-- v0\nSELECT id, count(*) FROM users` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql017"),
+    "expected sql017 for `-- v0\nSELECT id, count(*) FROM users` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql017_0002() {
   let d = diags("-- v1\nSELECT count(*), id FROM users");
-  assert!(d.iter().any(|x| x.code == "sql017"), "expected sql017 for `-- v1\nSELECT count(*), id FROM users` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql017"),
+    "expected sql017 for `-- v1\nSELECT count(*), id FROM users` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql017_0003() {
   let d = diags("-- v2\nSELECT email, sum(id) FROM users");
-  assert!(d.iter().any(|x| x.code == "sql017"), "expected sql017 for `-- v2\nSELECT email, sum(id) FROM users` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql017"),
+    "expected sql017 for `-- v2\nSELECT email, sum(id) FROM users` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql017_0004() {
   let d = diags("-- v3\nSELECT name, max(id) FROM users");
-  assert!(d.iter().any(|x| x.code == "sql017"), "expected sql017 for `-- v3\nSELECT name, max(id) FROM users` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql017"),
+    "expected sql017 for `-- v3\nSELECT name, max(id) FROM users` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql482_0005() {
   let d = diags("-- v4\nSELECT id FROM users HAVING TRUE");
-  assert!(d.iter().any(|x| x.code == "sql482"), "expected sql482 for `-- v4\nSELECT id FROM users HAVING TRUE` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql482"),
+    "expected sql482 for `-- v4\nSELECT id FROM users HAVING TRUE` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql482_0006() {
   let d = diags("-- v5\nSELECT id FROM users HAVING true");
-  assert!(d.iter().any(|x| x.code == "sql482"), "expected sql482 for `-- v5\nSELECT id FROM users HAVING true` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql482"),
+    "expected sql482 for `-- v5\nSELECT id FROM users HAVING true` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql414_0008() {
   let d = diags("-- v7\nSELECT id FROM users WHERE id IN (id)");
-  assert!(d.iter().any(|x| x.code == "sql414"), "expected sql414 for `-- v7\nSELECT id FROM users WHERE id IN (id)` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql414"),
+    "expected sql414 for `-- v7\nSELECT id FROM users WHERE id IN (id)` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql414_0009() {
   let d = diags("-- v8\nSELECT email FROM users WHERE email IN (email)");
-  assert!(d.iter().any(|x| x.code == "sql414"), "expected sql414 for `-- v8\nSELECT email FROM users WHERE email IN (email)` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql414"),
+    "expected sql414 for `-- v8\nSELECT email FROM users WHERE email IN (email)` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql414_0010() {
   let d = diags("-- v9\nSELECT name FROM users WHERE name IN (name)");
-  assert!(d.iter().any(|x| x.code == "sql414"), "expected sql414 for `-- v9\nSELECT name FROM users WHERE name IN (name)` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql414"),
+    "expected sql414 for `-- v9\nSELECT name FROM users WHERE name IN (name)` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql464_0011() {
   let d = diags("-- v10\nSELECT * FROM users WHERE id IS DISTINCT FROM id");
-  assert!(d.iter().any(|x| x.code == "sql464"), "expected sql464 for `-- v10\nSELECT * FROM users WHERE id IS DISTINCT FROM id` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql464"),
+    "expected sql464 for `-- v10\nSELECT * FROM users WHERE id IS DISTINCT FROM id` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql464_0012() {
   let d = diags("-- v11\nSELECT * FROM users WHERE id IS NOT DISTINCT FROM id");
-  assert!(d.iter().any(|x| x.code == "sql464"), "expected sql464 for `-- v11\nSELECT * FROM users WHERE id IS NOT DISTINCT FROM id` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql464"),
+    "expected sql464 for `-- v11\nSELECT * FROM users WHERE id IS NOT DISTINCT FROM id` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql464_0013() {
   let d = diags("-- v12\nSELECT * FROM users WHERE email IS DISTINCT FROM email");
-  assert!(d.iter().any(|x| x.code == "sql464"), "expected sql464 for `-- v12\nSELECT * FROM users WHERE email IS DISTINCT FROM email` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql464"),
+    "expected sql464 for `-- v12\nSELECT * FROM users WHERE email IS DISTINCT FROM email` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql464_0014() {
   let d = diags("-- v13\nSELECT * FROM users WHERE name IS NOT DISTINCT FROM name");
-  assert!(d.iter().any(|x| x.code == "sql464"), "expected sql464 for `-- v13\nSELECT * FROM users WHERE name IS NOT DISTINCT FROM name` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql464"),
+    "expected sql464 for `-- v13\nSELECT * FROM users WHERE name IS NOT DISTINCT FROM name` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql139_0015() {
   let d = diags("-- v14\nCREATE TABLE t (a int PRIMARY KEY, b int UNIQUE, c int UNIQUE, d int UNIQUE)");
-  assert!(d.iter().any(|x| x.code == "sql139"), "expected sql139 for `-- v14\nCREATE TABLE t (a int PRIMARY KEY, b int UNIQUE, c int UNIQUE, d int UNIQUE)` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql139"),
+    "expected sql139 for `-- v14\nCREATE TABLE t (a int PRIMARY KEY, b int UNIQUE, c int UNIQUE, d int UNIQUE)` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql139_0016() {
   let d = diags("-- v15\nCREATE TABLE x (a int PRIMARY KEY, b int UNIQUE, c int UNIQUE)");
-  assert!(d.iter().any(|x| x.code == "sql139"), "expected sql139 for `-- v15\nCREATE TABLE x (a int PRIMARY KEY, b int UNIQUE, c int UNIQUE)` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql139"),
+    "expected sql139 for `-- v15\nCREATE TABLE x (a int PRIMARY KEY, b int UNIQUE, c int UNIQUE)` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql291_0017() {
   let d = diags("-- v16\nGRANT ALL PRIVILEGES ON DATABASE app TO alice");
-  assert!(d.iter().any(|x| x.code == "sql291"), "expected sql291 for `-- v16\nGRANT ALL PRIVILEGES ON DATABASE app TO alice` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql291"),
+    "expected sql291 for `-- v16\nGRANT ALL PRIVILEGES ON DATABASE app TO alice` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql291_0018() {
   let d = diags("-- v17\nGRANT ALL PRIVILEGES ON DATABASE postgres TO bob");
-  assert!(d.iter().any(|x| x.code == "sql291"), "expected sql291 for `-- v17\nGRANT ALL PRIVILEGES ON DATABASE postgres TO bob` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql291"),
+    "expected sql291 for `-- v17\nGRANT ALL PRIVILEGES ON DATABASE postgres TO bob` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql291_0019() {
   let d = diags("-- v18\nGRANT ALL ON DATABASE my_db TO alice");
-  assert!(d.iter().any(|x| x.code == "sql291"), "expected sql291 for `-- v18\nGRANT ALL ON DATABASE my_db TO alice` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql291"),
+    "expected sql291 for `-- v18\nGRANT ALL ON DATABASE my_db TO alice` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql328_0020() {
   let d = diags("-- v19\nREVOKE ALL ON DATABASE app FROM PUBLIC");
-  assert!(d.iter().any(|x| x.code == "sql328"), "expected sql328 for `-- v19\nREVOKE ALL ON DATABASE app FROM PUBLIC` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql328"),
+    "expected sql328 for `-- v19\nREVOKE ALL ON DATABASE app FROM PUBLIC` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql328_0021() {
   let d = diags("-- v20\nREVOKE ALL PRIVILEGES ON DATABASE postgres FROM PUBLIC");
-  assert!(d.iter().any(|x| x.code == "sql328"), "expected sql328 for `-- v20\nREVOKE ALL PRIVILEGES ON DATABASE postgres FROM PUBLIC` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql328"),
+    "expected sql328 for `-- v20\nREVOKE ALL PRIVILEGES ON DATABASE postgres FROM PUBLIC` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql242_0022() {
   let d = diags("-- v21\nDROP DATABASE IF EXISTS app");
-  assert!(d.iter().any(|x| x.code == "sql242"), "expected sql242 for `-- v21\nDROP DATABASE IF EXISTS app` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql242"),
+    "expected sql242 for `-- v21\nDROP DATABASE IF EXISTS app` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql242_0023() {
   let d = diags("-- v22\nDROP DATABASE app");
-  assert!(d.iter().any(|x| x.code == "sql242"), "expected sql242 for `-- v22\nDROP DATABASE app` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql242"),
+    "expected sql242 for `-- v22\nDROP DATABASE app` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql242_0024() {
   let d = diags("-- v23\nDROP DATABASE app WITH (FORCE)");
-  assert!(d.iter().any(|x| x.code == "sql242"), "expected sql242 for `-- v23\nDROP DATABASE app WITH (FORCE)` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql242"),
+    "expected sql242 for `-- v23\nDROP DATABASE app WITH (FORCE)` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql262_0025() {
   let d = diags("-- v24\nCREATE EXTENSION pgcrypto");
-  assert!(d.iter().any(|x| x.code == "sql262"), "expected sql262 for `-- v24\nCREATE EXTENSION pgcrypto` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql262"),
+    "expected sql262 for `-- v24\nCREATE EXTENSION pgcrypto` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql262_0026() {
   let d = diags("-- v25\nCREATE EXTENSION uuid_ossp");
-  assert!(d.iter().any(|x| x.code == "sql262"), "expected sql262 for `-- v25\nCREATE EXTENSION uuid_ossp` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql262"),
+    "expected sql262 for `-- v25\nCREATE EXTENSION uuid_ossp` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql262_0027() {
   let d = diags("-- v26\nCREATE EXTENSION pg_trgm");
-  assert!(d.iter().any(|x| x.code == "sql262"), "expected sql262 for `-- v26\nCREATE EXTENSION pg_trgm` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql262"),
+    "expected sql262 for `-- v26\nCREATE EXTENSION pg_trgm` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql469_0028() {
   let d = diags("-- v27\nSELECT id FROM users WHERE NOT id IS NULL");
-  assert!(d.iter().any(|x| x.code == "sql469"), "expected sql469 for `-- v27\nSELECT id FROM users WHERE NOT id IS NULL` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql469"),
+    "expected sql469 for `-- v27\nSELECT id FROM users WHERE NOT id IS NULL` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql469_0029() {
   let d = diags("-- v28\nSELECT id FROM users WHERE NOT email IS NULL");
-  assert!(d.iter().any(|x| x.code == "sql469"), "expected sql469 for `-- v28\nSELECT id FROM users WHERE NOT email IS NULL` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql469"),
+    "expected sql469 for `-- v28\nSELECT id FROM users WHERE NOT email IS NULL` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql174_0030() {
   let d = diags("-- v29\nSELECT count(name) FROM users");
-  assert!(d.iter().any(|x| x.code == "sql174"), "expected sql174 for `-- v29\nSELECT count(name) FROM users` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql174"),
+    "expected sql174 for `-- v29\nSELECT count(name) FROM users` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql413_0032() {
   let d = diags("-- v31\nSELECT 'abc' || NULL");
-  assert!(d.iter().any(|x| x.code == "sql413"), "expected sql413 for `-- v31\nSELECT 'abc' || NULL` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql413"),
+    "expected sql413 for `-- v31\nSELECT 'abc' || NULL` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql413_0033() {
   let d = diags("-- v32\nSELECT NULL || 'def'");
-  assert!(d.iter().any(|x| x.code == "sql413"), "expected sql413 for `-- v32\nSELECT NULL || 'def'` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql413"),
+    "expected sql413 for `-- v32\nSELECT NULL || 'def'` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql413_0034() {
   let d = diags("-- v33\nSELECT NULL || NULL");
-  assert!(d.iter().any(|x| x.code == "sql413"), "expected sql413 for `-- v33\nSELECT NULL || NULL` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql413"),
+    "expected sql413 for `-- v33\nSELECT NULL || NULL` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql097_0035() {
   let d = diags("-- v34\nSELECT NULL || NULL");
-  assert!(d.iter().any(|x| x.code == "sql097"), "expected sql097 for `-- v34\nSELECT NULL || NULL` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql097"),
+    "expected sql097 for `-- v34\nSELECT NULL || NULL` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql097_0036() {
   let d = diags("-- v35\nSELECT + + 1");
-  assert!(d.iter().any(|x| x.code == "sql097"), "expected sql097 for `-- v35\nSELECT + + 1` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql097"),
+    "expected sql097 for `-- v35\nSELECT + + 1` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql479_0037() {
   let d = diags("-- v36\nSELECT substring('abc', 0)");
-  assert!(d.iter().any(|x| x.code == "sql479"), "expected sql479 for `-- v36\nSELECT substring('abc', 0)` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql479"),
+    "expected sql479 for `-- v36\nSELECT substring('abc', 0)` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql479_0038() {
   let d = diags("-- v37\nSELECT substring('hello', 0)");
-  assert!(d.iter().any(|x| x.code == "sql479"), "expected sql479 for `-- v37\nSELECT substring('hello', 0)` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql479"),
+    "expected sql479 for `-- v37\nSELECT substring('hello', 0)` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql467_0039() {
   let d = diags("-- v38\nSELECT replace('abc', '', 'X')");
-  assert!(d.iter().any(|x| x.code == "sql467"), "expected sql467 for `-- v38\nSELECT replace('abc', '', 'X')` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql467"),
+    "expected sql467 for `-- v38\nSELECT replace('abc', '', 'X')` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql467_0040() {
   let d = diags("-- v39\nSELECT split_part('a,b,c', '', 1)");
-  assert!(d.iter().any(|x| x.code == "sql467"), "expected sql467 for `-- v39\nSELECT split_part('a,b,c', '', 1)` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql467"),
+    "expected sql467 for `-- v39\nSELECT split_part('a,b,c', '', 1)` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql485_0041() {
   let d = diags("-- v40\nSELECT regexp_match('a', '')");
-  assert!(d.iter().any(|x| x.code == "sql485"), "expected sql485 for `-- v40\nSELECT regexp_match('a', '')` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql485"),
+    "expected sql485 for `-- v40\nSELECT regexp_match('a', '')` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql485_0042() {
   let d = diags("-- v41\nSELECT regexp_match('hello', '')");
-  assert!(d.iter().any(|x| x.code == "sql485"), "expected sql485 for `-- v41\nSELECT regexp_match('hello', '')` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql485"),
+    "expected sql485 for `-- v41\nSELECT regexp_match('hello', '')` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql069_0043() {
   let d = diags("-- v42\nCREATE TABLE t (a int NOT NULL DEFAULT NULL)");
-  assert!(d.iter().any(|x| x.code == "sql069"), "expected sql069 for `-- v42\nCREATE TABLE t (a int NOT NULL DEFAULT NULL)` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql069"),
+    "expected sql069 for `-- v42\nCREATE TABLE t (a int NOT NULL DEFAULT NULL)` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql069_0044() {
   let d = diags("-- v43\nCREATE TABLE x (col1 int NOT NULL DEFAULT NULL)");
-  assert!(d.iter().any(|x| x.code == "sql069"), "expected sql069 for `-- v43\nCREATE TABLE x (col1 int NOT NULL DEFAULT NULL)` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql069"),
+    "expected sql069 for `-- v43\nCREATE TABLE x (col1 int NOT NULL DEFAULT NULL)` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql054_0045() {
   let d = diags("-- v44\nALTER TABLE users SET (autovacuum_enabled = false)");
-  assert!(d.iter().any(|x| x.code == "sql054"), "expected sql054 for `-- v44\nALTER TABLE users SET (autovacuum_enabled = false)` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql054"),
+    "expected sql054 for `-- v44\nALTER TABLE users SET (autovacuum_enabled = false)` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql054_0046() {
   let d = diags("-- v45\nALTER TABLE orders SET (autovacuum_enabled = false)");
-  assert!(d.iter().any(|x| x.code == "sql054"), "expected sql054 for `-- v45\nALTER TABLE orders SET (autovacuum_enabled = false)` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql054"),
+    "expected sql054 for `-- v45\nALTER TABLE orders SET (autovacuum_enabled = false)` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql434_0047() {
   let d = diags("-- v46\nSELECT count(*) FROM users WHERE id > 0 AND id IS NOT NULL");
-  assert!(d.iter().any(|x| x.code == "sql434"), "expected sql434 for `-- v46\nSELECT count(*) FROM users WHERE id > 0 AND id IS NOT NULL` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql434"),
+    "expected sql434 for `-- v46\nSELECT count(*) FROM users WHERE id > 0 AND id IS NOT NULL` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql434_0048() {
   let d = diags("-- v47\nSELECT count(*) FROM orders WHERE id > 0 AND id IS NOT NULL");
-  assert!(d.iter().any(|x| x.code == "sql434"), "expected sql434 for `-- v47\nSELECT count(*) FROM orders WHERE id > 0 AND id IS NOT NULL` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql434"),
+    "expected sql434 for `-- v47\nSELECT count(*) FROM orders WHERE id > 0 AND id IS NOT NULL` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql288_0049() {
   let d = diags("-- v48\nCREATE INDEX ON users (lower(name))");
-  assert!(d.iter().any(|x| x.code == "sql288"), "expected sql288 for `-- v48\nCREATE INDEX ON users (lower(name))` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql288"),
+    "expected sql288 for `-- v48\nCREATE INDEX ON users (lower(name))` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql288_0050() {
   let d = diags("-- v49\nCREATE INDEX ON users (upper(name))");
-  assert!(d.iter().any(|x| x.code == "sql288"), "expected sql288 for `-- v49\nCREATE INDEX ON users (upper(name))` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql288"),
+    "expected sql288 for `-- v49\nCREATE INDEX ON users (upper(name))` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql288_0051() {
   let d = diags("-- v50\nCREATE INDEX ON users USING hash (id)");
-  assert!(d.iter().any(|x| x.code == "sql288"), "expected sql288 for `-- v50\nCREATE INDEX ON users USING hash (id)` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql288"),
+    "expected sql288 for `-- v50\nCREATE INDEX ON users USING hash (id)` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql474_0052() {
   let d = diags("-- v51\nDELETE FROM users WHERE 1=1");
-  assert!(d.iter().any(|x| x.code == "sql474"), "expected sql474 for `-- v51\nDELETE FROM users WHERE 1=1` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql474"),
+    "expected sql474 for `-- v51\nDELETE FROM users WHERE 1=1` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql474_0053() {
   let d = diags("-- v52\nUPDATE users SET id=1 WHERE 1=1");
-  assert!(d.iter().any(|x| x.code == "sql474"), "expected sql474 for `-- v52\nUPDATE users SET id=1 WHERE 1=1` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql474"),
+    "expected sql474 for `-- v52\nUPDATE users SET id=1 WHERE 1=1` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql474_0054() {
   let d = diags("-- v53\nSELECT id FROM users WHERE 0=0");
-  assert!(d.iter().any(|x| x.code == "sql474"), "expected sql474 for `-- v53\nSELECT id FROM users WHERE 0=0` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql474"),
+    "expected sql474 for `-- v53\nSELECT id FROM users WHERE 0=0` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql109_0055() {
   let d = diags("-- v54\nSELECT length(NULL)");
-  assert!(d.iter().any(|x| x.code == "sql109"), "expected sql109 for `-- v54\nSELECT length(NULL)` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql109"),
+    "expected sql109 for `-- v54\nSELECT length(NULL)` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql109_0056() {
   let d = diags("-- v55\nSELECT length(name) FROM users WHERE length(name) > 0");
-  assert!(d.iter().any(|x| x.code == "sql109"), "expected sql109 for `-- v55\nSELECT length(name) FROM users WHERE length(name) > 0` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql109"),
+    "expected sql109 for `-- v55\nSELECT length(name) FROM users WHERE length(name) > 0` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql048_0057() {
   let d = diags("-- v56\nINSERT INTO users VALUES (1, 'a', 'b'), (2, 'c', 'd')");
-  assert!(d.iter().any(|x| x.code == "sql048"), "expected sql048 for `-- v56\nINSERT INTO users VALUES (1, 'a', 'b'), (2, 'c', 'd')` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql048"),
+    "expected sql048 for `-- v56\nINSERT INTO users VALUES (1, 'a', 'b'), (2, 'c', 'd')` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql048_0058() {
   let d = diags("-- v57\nINSERT INTO users VALUES (1, 'a', 'b'), (2, 'c', 'd'), (3, 'e', 'f')");
-  assert!(d.iter().any(|x| x.code == "sql048"), "expected sql048 for `-- v57\nINSERT INTO users VALUES (1, 'a', 'b'), (2, 'c', 'd'), (3, 'e', 'f')` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql048"),
+    "expected sql048 for `-- v57\nINSERT INTO users VALUES (1, 'a', 'b'), (2, 'c', 'd'), (3, 'e', 'f')` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql099_0059() {
   let d = diags("-- v58\nSELECT id, name FROM users ORDER BY 1");
-  assert!(d.iter().any(|x| x.code == "sql099"), "expected sql099 for `-- v58\nSELECT id, name FROM users ORDER BY 1` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql099"),
+    "expected sql099 for `-- v58\nSELECT id, name FROM users ORDER BY 1` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql099_0060() {
   let d = diags("-- v59\nSELECT id, name, email FROM users ORDER BY 2");
-  assert!(d.iter().any(|x| x.code == "sql099"), "expected sql099 for `-- v59\nSELECT id, name, email FROM users ORDER BY 2` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql099"),
+    "expected sql099 for `-- v59\nSELECT id, name, email FROM users ORDER BY 2` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql065_0061() {
   let d = diags("-- v60\nSELECT id FROM users GROUP BY 1");
-  assert!(d.iter().any(|x| x.code == "sql065"), "expected sql065 for `-- v60\nSELECT id FROM users GROUP BY 1` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql065"),
+    "expected sql065 for `-- v60\nSELECT id FROM users GROUP BY 1` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql065_0062() {
   let d = diags("-- v61\nSELECT id, name FROM users GROUP BY 1, 2");
-  assert!(d.iter().any(|x| x.code == "sql065"), "expected sql065 for `-- v61\nSELECT id, name FROM users GROUP BY 1, 2` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql065"),
+    "expected sql065 for `-- v61\nSELECT id, name FROM users GROUP BY 1, 2` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql051_0063() {
   let d = diags("-- v62\nSELECT id FROM users LIMIT 'abc'");
-  assert!(d.iter().any(|x| x.code == "sql051"), "expected sql051 for `-- v62\nSELECT id FROM users LIMIT 'abc'` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql051"),
+    "expected sql051 for `-- v62\nSELECT id FROM users LIMIT 'abc'` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql051_0064() {
   let d = diags("-- v63\nSELECT id FROM users LIMIT 1000000");
-  assert!(d.iter().any(|x| x.code == "sql051"), "expected sql051 for `-- v63\nSELECT id FROM users LIMIT 1000000` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql051"),
+    "expected sql051 for `-- v63\nSELECT id FROM users LIMIT 1000000` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql473_0065() {
   let d = diags("-- v64\nSELECT * FROM users WHERE id = ANY(ARRAY[]::int[])");
-  assert!(d.iter().any(|x| x.code == "sql473"), "expected sql473 for `-- v64\nSELECT * FROM users WHERE id = ANY(ARRAY[]::int[])` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql473"),
+    "expected sql473 for `-- v64\nSELECT * FROM users WHERE id = ANY(ARRAY[]::int[])` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql473_0066() {
   let d = diags("-- v65\nSELECT * FROM users WHERE id = ALL(ARRAY[]::int[])");
-  assert!(d.iter().any(|x| x.code == "sql473"), "expected sql473 for `-- v65\nSELECT * FROM users WHERE id = ALL(ARRAY[]::int[])` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql473"),
+    "expected sql473 for `-- v65\nSELECT * FROM users WHERE id = ALL(ARRAY[]::int[])` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql412_0067() {
   let d = diags("-- v66\nSELECT id FROM users ORDER BY id ASC, id DESC");
-  assert!(d.iter().any(|x| x.code == "sql412"), "expected sql412 for `-- v66\nSELECT id FROM users ORDER BY id ASC, id DESC` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql412"),
+    "expected sql412 for `-- v66\nSELECT id FROM users ORDER BY id ASC, id DESC` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql412_0068() {
   let d = diags("-- v67\nSELECT id FROM users GROUP BY id, id");
-  assert!(d.iter().any(|x| x.code == "sql412"), "expected sql412 for `-- v67\nSELECT id FROM users GROUP BY id, id` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql412"),
+    "expected sql412 for `-- v67\nSELECT id FROM users GROUP BY id, id` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql410_0069() {
   let d = diags("-- v68\nSELECT id, email AS id FROM users");
-  assert!(d.iter().any(|x| x.code == "sql410"), "expected sql410 for `-- v68\nSELECT id, email AS id FROM users` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql410"),
+    "expected sql410 for `-- v68\nSELECT id, email AS id FROM users` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql410_0070() {
   let d = diags("-- v69\nSELECT id AS a, email AS a FROM users");
-  assert!(d.iter().any(|x| x.code == "sql410"), "expected sql410 for `-- v69\nSELECT id AS a, email AS a FROM users` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql410"),
+    "expected sql410 for `-- v69\nSELECT id AS a, email AS a FROM users` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql015_0071() {
   let d = diags("-- v70\nSELECT * FROM users WHERE NULL <> NULL");
-  assert!(d.iter().any(|x| x.code == "sql015"), "expected sql015 for `-- v70\nSELECT * FROM users WHERE NULL <> NULL` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql015"),
+    "expected sql015 for `-- v70\nSELECT * FROM users WHERE NULL <> NULL` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql015_0072() {
   let d = diags("-- v71\nSELECT * FROM users WHERE id = NULL");
-  assert!(d.iter().any(|x| x.code == "sql015"), "expected sql015 for `-- v71\nSELECT * FROM users WHERE id = NULL` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql015"),
+    "expected sql015 for `-- v71\nSELECT * FROM users WHERE id = NULL` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql408_0073() {
   let d = diags("-- v72\nSELECT id FROM users WHERE id = id");
-  assert!(d.iter().any(|x| x.code == "sql408"), "expected sql408 for `-- v72\nSELECT id FROM users WHERE id = id` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql408"),
+    "expected sql408 for `-- v72\nSELECT id FROM users WHERE id = id` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql408_0074() {
   let d = diags("-- v73\nSELECT id FROM users WHERE id != id");
-  assert!(d.iter().any(|x| x.code == "sql408"), "expected sql408 for `-- v73\nSELECT id FROM users WHERE id != id` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql408"),
+    "expected sql408 for `-- v73\nSELECT id FROM users WHERE id != id` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql407_0075() {
   let d = diags("-- v74\nSELECT id FROM users WHERE 1=2");
-  assert!(d.iter().any(|x| x.code == "sql407"), "expected sql407 for `-- v74\nSELECT id FROM users WHERE 1=2` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql407"),
+    "expected sql407 for `-- v74\nSELECT id FROM users WHERE 1=2` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql407_0076() {
   let d = diags("-- v75\nSELECT id FROM users WHERE FALSE");
-  assert!(d.iter().any(|x| x.code == "sql407"), "expected sql407 for `-- v75\nSELECT id FROM users WHERE FALSE` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql407"),
+    "expected sql407 for `-- v75\nSELECT id FROM users WHERE FALSE` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql460_0077() {
   let d = diags("-- v76\nSELECT id FROM users HAVING TRUE");
-  assert!(d.iter().any(|x| x.code == "sql460"), "expected sql460 for `-- v76\nSELECT id FROM users HAVING TRUE` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql460"),
+    "expected sql460 for `-- v76\nSELECT id FROM users HAVING TRUE` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql460_0078() {
   let d = diags("-- v77\nSELECT id FROM users HAVING id > 0");
-  assert!(d.iter().any(|x| x.code == "sql460"), "expected sql460 for `-- v77\nSELECT id FROM users HAVING id > 0` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql460"),
+    "expected sql460 for `-- v77\nSELECT id FROM users HAVING id > 0` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql056_0079() {
   let d = diags("-- v78\nSELECT id FROM users UNION SELECT id FROM users");
-  assert!(d.iter().any(|x| x.code == "sql056"), "expected sql056 for `-- v78\nSELECT id FROM users UNION SELECT id FROM users` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql056"),
+    "expected sql056 for `-- v78\nSELECT id FROM users UNION SELECT id FROM users` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql056_0080() {
   let d = diags("-- v79\nSELECT email FROM users UNION SELECT email FROM users");
-  assert!(d.iter().any(|x| x.code == "sql056"), "expected sql056 for `-- v79\nSELECT email FROM users UNION SELECT email FROM users` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql056"),
+    "expected sql056 for `-- v79\nSELECT email FROM users UNION SELECT email FROM users` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql486_0081() {
   let d = diags("-- v80\nSELECT DISTINCT * FROM users");
-  assert!(d.iter().any(|x| x.code == "sql486"), "expected sql486 for `-- v80\nSELECT DISTINCT * FROM users` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql486"),
+    "expected sql486 for `-- v80\nSELECT DISTINCT * FROM users` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql486_0082() {
   let d = diags("-- v81\nSELECT DISTINCT * FROM orders");
-  assert!(d.iter().any(|x| x.code == "sql486"), "expected sql486 for `-- v81\nSELECT DISTINCT * FROM orders` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql486"),
+    "expected sql486 for `-- v81\nSELECT DISTINCT * FROM orders` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql013_0083() {
   let d = diags("-- v82\nUPDATE users SET name='x'");
-  assert!(d.iter().any(|x| x.code == "sql013"), "expected sql013 for `-- v82\nUPDATE users SET name='x'` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql013"),
+    "expected sql013 for `-- v82\nUPDATE users SET name='x'` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql013_0084() {
   let d = diags("-- v83\nDELETE FROM users");
-  assert!(d.iter().any(|x| x.code == "sql013"), "expected sql013 for `-- v83\nDELETE FROM users` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql013"),
+    "expected sql013 for `-- v83\nDELETE FROM users` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql013_0085() {
   let d = diags("-- v84\nUPDATE orders SET id=1");
-  assert!(d.iter().any(|x| x.code == "sql013"), "expected sql013 for `-- v84\nUPDATE orders SET id=1` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql013"),
+    "expected sql013 for `-- v84\nUPDATE orders SET id=1` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql306_0087() {
   let d = diags("-- v86\nSELECT * FROM users WHERE id IN (1, 1, 2)");
-  assert!(d.iter().any(|x| x.code == "sql306"), "expected sql306 for `-- v86\nSELECT * FROM users WHERE id IN (1, 1, 2)` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql306"),
+    "expected sql306 for `-- v86\nSELECT * FROM users WHERE id IN (1, 1, 2)` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql087_0088() {
   let d = diags("-- v87\nSELECT * FROM users WHERE id BETWEEN 10 AND 1");
-  assert!(d.iter().any(|x| x.code == "sql087"), "expected sql087 for `-- v87\nSELECT * FROM users WHERE id BETWEEN 10 AND 1` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql087"),
+    "expected sql087 for `-- v87\nSELECT * FROM users WHERE id BETWEEN 10 AND 1` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql087_0089() {
   let d = diags("-- v88\nSELECT * FROM users WHERE id BETWEEN 100 AND 0");
-  assert!(d.iter().any(|x| x.code == "sql087"), "expected sql087 for `-- v88\nSELECT * FROM users WHERE id BETWEEN 100 AND 0` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql087"),
+    "expected sql087 for `-- v88\nSELECT * FROM users WHERE id BETWEEN 100 AND 0` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql292_0090() {
   let d = diags("-- v89\nSELECT * FROM users LIMIT 0");
-  assert!(d.iter().any(|x| x.code == "sql292"), "expected sql292 for `-- v89\nSELECT * FROM users LIMIT 0` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql292"),
+    "expected sql292 for `-- v89\nSELECT * FROM users LIMIT 0` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql292_0091() {
   let d = diags("-- v90\nSELECT id FROM orders LIMIT 0");
-  assert!(d.iter().any(|x| x.code == "sql292"), "expected sql292 for `-- v90\nSELECT id FROM orders LIMIT 0` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql292"),
+    "expected sql292 for `-- v90\nSELECT id FROM orders LIMIT 0` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql411_0092() {
   let d = diags("-- v91\nSELECT * FROM users LIMIT 1 OFFSET 1000000");
-  assert!(d.iter().any(|x| x.code == "sql411"), "expected sql411 for `-- v91\nSELECT * FROM users LIMIT 1 OFFSET 1000000` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql411"),
+    "expected sql411 for `-- v91\nSELECT * FROM users LIMIT 1 OFFSET 1000000` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql411_0093() {
   let d = diags("-- v92\nSELECT * FROM users LIMIT 10 OFFSET 999999");
-  assert!(d.iter().any(|x| x.code == "sql411"), "expected sql411 for `-- v92\nSELECT * FROM users LIMIT 10 OFFSET 999999` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql411"),
+    "expected sql411 for `-- v92\nSELECT * FROM users LIMIT 10 OFFSET 999999` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql176_0094() {
   let d = diags("-- v93\nSELECT * FROM users WHERE id IS NULL");
-  assert!(d.iter().any(|x| x.code == "sql176"), "expected sql176 for `-- v93\nSELECT * FROM users WHERE id IS NULL` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql176"),
+    "expected sql176 for `-- v93\nSELECT * FROM users WHERE id IS NULL` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql176_0095() {
   let d = diags("-- v94\nSELECT id FROM users WHERE email IS NULL");
-  assert!(d.iter().any(|x| x.code == "sql176"), "expected sql176 for `-- v94\nSELECT id FROM users WHERE email IS NULL` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql176"),
+    "expected sql176 for `-- v94\nSELECT id FROM users WHERE email IS NULL` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql088_0096() {
   let d = diags("-- v95\nSELECT * FROM users WHERE name LIKE '%abc'");
-  assert!(d.iter().any(|x| x.code == "sql088"), "expected sql088 for `-- v95\nSELECT * FROM users WHERE name LIKE '%abc'` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql088"),
+    "expected sql088 for `-- v95\nSELECT * FROM users WHERE name LIKE '%abc'` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql088_0097() {
   let d = diags("-- v96\nSELECT * FROM users WHERE email LIKE '%@b'");
-  assert!(d.iter().any(|x| x.code == "sql088"), "expected sql088 for `-- v96\nSELECT * FROM users WHERE email LIKE '%@b'` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql088"),
+    "expected sql088 for `-- v96\nSELECT * FROM users WHERE email LIKE '%@b'` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql052_0098() {
   let d = diags("-- v97\nSELECT * FROM users WHERE name LIKE 'abc'");
-  assert!(d.iter().any(|x| x.code == "sql052"), "expected sql052 for `-- v97\nSELECT * FROM users WHERE name LIKE 'abc'` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql052"),
+    "expected sql052 for `-- v97\nSELECT * FROM users WHERE name LIKE 'abc'` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql052_0099() {
   let d = diags("-- v98\nSELECT * FROM users WHERE name ILIKE 'x'");
-  assert!(d.iter().any(|x| x.code == "sql052"), "expected sql052 for `-- v98\nSELECT * FROM users WHERE name ILIKE 'x'` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql052"),
+    "expected sql052 for `-- v98\nSELECT * FROM users WHERE name ILIKE 'x'` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql001_0100() {
   let d = diags("-- v99\nSELECT * FROM bogus_table_xyz");
-  assert!(d.iter().any(|x| x.code == "sql001"), "expected sql001 for `-- v99\nSELECT * FROM bogus_table_xyz` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql001"),
+    "expected sql001 for `-- v99\nSELECT * FROM bogus_table_xyz` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql002_0101() {
   let d = diags("-- v100\nSELECT bogus_col FROM users");
-  assert!(d.iter().any(|x| x.code == "sql002"), "expected sql002 for `-- v100\nSELECT bogus_col FROM users` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql002"),
+    "expected sql002 for `-- v100\nSELECT bogus_col FROM users` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql003_0102() {
   let d = diags("-- v101\nSELECT id FROM users, orders");
-  assert!(d.iter().any(|x| x.code == "sql003"), "expected sql003 for `-- v101\nSELECT id FROM users, orders` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql003"),
+    "expected sql003 for `-- v101\nSELECT id FROM users, orders` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
 fn r28_sql018_0103() {
   let d = diags("-- v102\nDELETE FROM users WHERE id NOT IN (SELECT user_id FROM orders)");
-  assert!(d.iter().any(|x| x.code == "sql018"), "expected sql018 for `-- v102\nDELETE FROM users WHERE id NOT IN (SELECT user_id FROM orders)` got {:?}", d.iter().map(|x| x.code).collect::<Vec<_>>());
+  assert!(
+    d.iter().any(|x| x.code == "sql018"),
+    "expected sql018 for `-- v102\nDELETE FROM users WHERE id NOT IN (SELECT user_id FROM orders)` got {:?}",
+    d.iter().map(|x| x.code).collect::<Vec<_>>()
+  );
 }
 
 #[test]
@@ -23929,7 +24503,10 @@ fn r29_probe_missing() {
     ("sql226", "DROP TABLE users CASCADE; DROP TABLE orders CASCADE"),
     ("sql231", "SELECT * FROM users ORDER BY 1 NULLS FIRST, 2 NULLS LAST"),
     ("sql233", "CREATE MATERIALIZED VIEW mv AS SELECT 1 WITH NO DATA"),
-    ("sql236", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN INSERT INTO t VALUES (1); RETURN NEW; END $$"),
+    (
+      "sql236",
+      "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN INSERT INTO t VALUES (1); RETURN NEW; END $$",
+    ),
     ("sql245", "SELECT * FROM pg_tables"),
     ("sql249", "INSERT INTO users DEFAULT VALUES"),
     ("sql250", "SELECT max(id) FROM users FOR UPDATE"),
@@ -24172,13 +24749,16 @@ fn r29_sql271_0035() {
 
 #[test]
 fn r29_sql275_0036() {
-  let d = diags("-- v35\nCREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN SET TRANSACTION READ ONLY; END $$");
+  let d =
+    diags("-- v35\nCREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN SET TRANSACTION READ ONLY; END $$");
   assert!(d.iter().any(|x| x.code == "sql275"), "expected sql275");
 }
 
 #[test]
 fn r29_sql275_0037() {
-  let d = diags("-- v36\nCREATE FUNCTION g() RETURNS void LANGUAGE plpgsql AS $$ BEGIN SET TRANSACTION ISOLATION LEVEL SERIALIZABLE; END $$");
+  let d = diags(
+    "-- v36\nCREATE FUNCTION g() RETURNS void LANGUAGE plpgsql AS $$ BEGIN SET TRANSACTION ISOLATION LEVEL SERIALIZABLE; END $$",
+  );
   assert!(d.iter().any(|x| x.code == "sql275"), "expected sql275");
 }
 
@@ -24310,20 +24890,29 @@ fn r29_probe3() {
   let inputs = [
     ("sql180", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN TRUNCATE users; RETURN NEW; END $$"),
     ("sql186", "BEGIN; ALTER TABLE users DROP COLUMN id; COMMIT"),
-    ("sql202", "CREATE TRIGGER t BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION f(); CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN OLD; END $$"),
+    (
+      "sql202",
+      "CREATE TRIGGER t BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION f(); CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN OLD; END $$",
+    ),
     ("sql204", "UPDATE users u SET id = other.id FROM other"),
     ("sql212", "SELECT 1 INTO users"),
     ("sql222", "SELECT * FROM (SELECT * FROM users WHERE id > 0 LIMIT 10) sub FOR UPDATE"),
     ("sql226", "DROP TABLE users CASCADE"),
     ("sql231", "SELECT id FROM users NULLS FIRST"),
     ("sql233", "CREATE MATERIALIZED VIEW mv AS SELECT id FROM users WITH NO DATA"),
-    ("sql236", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$; CREATE TRIGGER t AFTER INSERT ON users FOR EACH ROW EXECUTE FUNCTION f()"),
+    (
+      "sql236",
+      "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$; CREATE TRIGGER t AFTER INSERT ON users FOR EACH ROW EXECUTE FUNCTION f()",
+    ),
     ("sql245", "SELECT * FROM pg_class"),
     ("sql265", "CREATE TABLE t (id int PRIMARY KEY, ts timestamptz DEFAULT now())"),
     ("sql274", "CREATE TEMP TABLE users (id int)"),
     ("sql284", "CREATE FUNCTION f() RETURNS int LANGUAGE plpgsql AS $$ BEGIN RETURN TG_OP::int; END $$"),
     ("sql286", "ALTER TYPE mood ADD VALUE 'new_val' BEFORE 'old_val'"),
-    ("sql297", "NOTIFY ch, 'abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789'"),
+    (
+      "sql297",
+      "NOTIFY ch, 'abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789'",
+    ),
     ("sql341", "SELECT 1 FROM users WHERE id = ARRAY[1]"),
     ("sql342", "SELECT bool_and(email::text = 'x') FROM users"),
     ("sql512", "ALTER TABLE users ADD CONSTRAINT chk CHECK (no_such_col > 0)"),
@@ -24380,13 +24969,16 @@ fn r30_sql179_0007() {
 
 #[test]
 fn r30_sql180_0008() {
-  let d = diags("-- v7\nCREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN TRUNCATE users; RETURN NEW; END $$");
+  let d =
+    diags("-- v7\nCREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN TRUNCATE users; RETURN NEW; END $$");
   assert!(d.iter().any(|x| x.code == "sql180"), "expected sql180");
 }
 
 #[test]
 fn r30_sql180_0009() {
-  let d = diags("-- v8\nCREATE FUNCTION g() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN TRUNCATE orders; RETURN NEW; END $$");
+  let d = diags(
+    "-- v8\nCREATE FUNCTION g() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN TRUNCATE orders; RETURN NEW; END $$",
+  );
   assert!(d.iter().any(|x| x.code == "sql180"), "expected sql180");
 }
 
@@ -24452,12 +25044,18 @@ fn r30_probe() {
     ("sql184", "CREATE TABLE big_t (n smallint); INSERT INTO big_t (n) VALUES (99999)"),
     ("sql184", "INSERT INTO big_t (n) VALUES (40000)"),
     ("sql186", "BEGIN; ALTER TABLE users DROP COLUMN email; COMMIT"),
-    ("sql202", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN OLD; END $$; CREATE TRIGGER t BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION f()"),
+    (
+      "sql202",
+      "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN OLD; END $$; CREATE TRIGGER t BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION f()",
+    ),
     ("sql204", "UPDATE users u SET id = u.id WHERE u.id = 1"),
     ("sql222", "WITH x AS (SELECT * FROM users LIMIT 10) SELECT * FROM x FOR UPDATE"),
     ("sql226", "DROP TABLE users CASCADE"),
     ("sql233", "CREATE MATERIALIZED VIEW mv AS SELECT 1 AS x WITH NO DATA"),
-    ("sql236", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$; CREATE TRIGGER t AFTER UPDATE ON users FOR EACH ROW EXECUTE FUNCTION f()"),
+    (
+      "sql236",
+      "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$; CREATE TRIGGER t AFTER UPDATE ON users FOR EACH ROW EXECUTE FUNCTION f()",
+    ),
     ("sql265", "CREATE TABLE t (id int PRIMARY KEY, ts timestamp DEFAULT now())"),
     ("sql265", "CREATE TABLE x (id int PRIMARY KEY, t timestamp WITHOUT TIME ZONE DEFAULT now())"),
     ("sql274", "CREATE TEMP TABLE users (id int)"),
@@ -24483,10 +25081,22 @@ fn r30_probe2() {
     ("sql222", "SELECT * FROM (SELECT id FROM users LIMIT 10) sub FOR UPDATE"),
     ("sql222", "SELECT * FROM (SELECT * FROM users LIMIT 5) sub FOR UPDATE"),
     ("sql222", "SELECT id FROM (SELECT id FROM orders LIMIT 100) sub FOR SHARE"),
-    ("sql236", "CREATE TRIGGER t AFTER INSERT ON users FOR EACH ROW EXECUTE FUNCTION f(); CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$"),
-    ("sql236", "CREATE TRIGGER trg AFTER UPDATE ON users FOR EACH ROW EXECUTE FUNCTION fn(); CREATE FUNCTION fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$"),
-    ("sql202", "CREATE TRIGGER t BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION fn(); CREATE FUNCTION fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE NOTICE '%', OLD; RETURN NEW; END $$"),
-    ("sql202", "CREATE TRIGGER trg BEFORE INSERT ON orders FOR EACH ROW EXECUTE FUNCTION my_fn(); CREATE FUNCTION my_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM OLD.id; RETURN NEW; END $$"),
+    (
+      "sql236",
+      "CREATE TRIGGER t AFTER INSERT ON users FOR EACH ROW EXECUTE FUNCTION f(); CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
+    ),
+    (
+      "sql236",
+      "CREATE TRIGGER trg AFTER UPDATE ON users FOR EACH ROW EXECUTE FUNCTION fn(); CREATE FUNCTION fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
+    ),
+    (
+      "sql202",
+      "CREATE TRIGGER t BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION fn(); CREATE FUNCTION fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE NOTICE '%', OLD; RETURN NEW; END $$",
+    ),
+    (
+      "sql202",
+      "CREATE TRIGGER trg BEFORE INSERT ON orders FOR EACH ROW EXECUTE FUNCTION my_fn(); CREATE FUNCTION my_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM OLD.id; RETURN NEW; END $$",
+    ),
   ];
   for (code, s) in inputs {
     let d = diags(s);
@@ -24498,13 +25108,17 @@ fn r30_probe2() {
 
 #[test]
 fn r31_sql202_0001() {
-  let d = diags("-- v0\nCREATE TRIGGER trg BEFORE INSERT ON orders FOR EACH ROW EXECUTE FUNCTION my_fn(); CREATE FUNCTION my_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM OLD.id; RETURN NEW; END $$");
+  let d = diags(
+    "-- v0\nCREATE TRIGGER trg BEFORE INSERT ON orders FOR EACH ROW EXECUTE FUNCTION my_fn(); CREATE FUNCTION my_fn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM OLD.id; RETURN NEW; END $$",
+  );
   assert!(d.iter().any(|x| x.code == "sql202"), "expected sql202");
 }
 
 #[test]
 fn r31_sql202_0002() {
-  let d = diags("-- v1\nCREATE TRIGGER tr BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION fn2(); CREATE FUNCTION fn2() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM OLD.email; RETURN NEW; END $$");
+  let d = diags(
+    "-- v1\nCREATE TRIGGER tr BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION fn2(); CREATE FUNCTION fn2() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM OLD.email; RETURN NEW; END $$",
+  );
   assert!(d.iter().any(|x| x.code == "sql202"), "expected sql202");
 }
 
@@ -24517,7 +25131,10 @@ fn r31_probe() {
     ("sql265", "CREATE TABLE t (id int PRIMARY KEY, ts timestamp NOT NULL DEFAULT now())"),
     ("sql265", "ALTER TABLE users ADD COLUMN ts timestamp DEFAULT now()"),
     ("sql286", "ALTER TYPE mood ADD VALUE IF NOT EXISTS 'new_val' BEFORE 'unknown_label_xyz'"),
-    ("sql297", "NOTIFY ch, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'"),
+    (
+      "sql297",
+      "NOTIFY ch, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'",
+    ),
     ("sql341", "SELECT * FROM users WHERE id::text = ARRAY[1]::text"),
     ("sql342", "SELECT bool_or(name IS NOT NULL) FROM users"),
     ("sql342", "SELECT bool_and(email IS NOT NULL) FROM users"),
@@ -24537,7 +25154,10 @@ fn r31_probe2() {
   let big_payload = "x".repeat(8100);
   let big_notify = format!("NOTIFY ch, '{}'", big_payload);
   let inputs = [
-    ("sql286", "CREATE TYPE mood AS ENUM ('happy', 'sad'); ALTER TYPE mood ADD VALUE 'new_val' BEFORE 'totally_unknown_label_xyz'"),
+    (
+      "sql286",
+      "CREATE TYPE mood AS ENUM ('happy', 'sad'); ALTER TYPE mood ADD VALUE 'new_val' BEFORE 'totally_unknown_label_xyz'",
+    ),
     ("sql297", big_notify.as_str()),
   ];
   for (code, s) in inputs {
@@ -24575,9 +25195,18 @@ fn r32_sql297_0003() {
 #[test]
 fn r32_probe() {
   let inputs = [
-    ("sql236", "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$; CREATE TRIGGER trg AFTER UPDATE ON users FOR EACH ROW EXECUTE FUNCTION f();"),
-    ("sql236", "CREATE FUNCTION audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$; CREATE TRIGGER au AFTER INSERT ON users FOR EACH ROW EXECUTE FUNCTION audit();"),
-    ("sql236", "CREATE TRIGGER tt AFTER INSERT ON users FOR EACH STATEMENT EXECUTE FUNCTION audit(); CREATE FUNCTION audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$"),
+    (
+      "sql236",
+      "CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$; CREATE TRIGGER trg AFTER UPDATE ON users FOR EACH ROW EXECUTE FUNCTION f();",
+    ),
+    (
+      "sql236",
+      "CREATE FUNCTION audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$; CREATE TRIGGER au AFTER INSERT ON users FOR EACH ROW EXECUTE FUNCTION audit();",
+    ),
+    (
+      "sql236",
+      "CREATE TRIGGER tt AFTER INSERT ON users FOR EACH STATEMENT EXECUTE FUNCTION audit(); CREATE FUNCTION audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$",
+    ),
     ("sql174", "SELECT count(name) FROM users"),
     ("sql174", "SELECT count(email) FROM users"),
   ];
@@ -24593,9 +25222,18 @@ fn r32_probe() {
 fn r32_probe2() {
   // Make sure execute function fn() pattern matches
   let inputs = [
-    ("sql236", "CREATE FUNCTION audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;\nCREATE TRIGGER au AFTER INSERT ON users FOR EACH ROW EXECUTE FUNCTION audit()"),
-    ("sql236", "CREATE FUNCTION audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN OLD; END $$;\nCREATE TRIGGER au AFTER DELETE ON users FOR EACH ROW EXECUTE FUNCTION audit()"),
-    ("sql236", "CREATE FUNCTION mkfn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;\nCREATE TRIGGER tr AFTER UPDATE ON orders FOR EACH ROW EXECUTE PROCEDURE mkfn()"),
+    (
+      "sql236",
+      "CREATE FUNCTION audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;\nCREATE TRIGGER au AFTER INSERT ON users FOR EACH ROW EXECUTE FUNCTION audit()",
+    ),
+    (
+      "sql236",
+      "CREATE FUNCTION audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN OLD; END $$;\nCREATE TRIGGER au AFTER DELETE ON users FOR EACH ROW EXECUTE FUNCTION audit()",
+    ),
+    (
+      "sql236",
+      "CREATE FUNCTION mkfn() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NEW; END $$;\nCREATE TRIGGER tr AFTER UPDATE ON orders FOR EACH ROW EXECUTE PROCEDURE mkfn()",
+    ),
   ];
   for (code, s) in inputs {
     let d = diags(s);
@@ -24909,7 +25547,9 @@ fn sql525_quiet_for_exists_without_limit() {
 
 #[test]
 fn sql525_quiet_for_limit_in_nested_derived_table() {
-  let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM (SELECT * FROM orders LIMIT 5) s WHERE s.user_id = u.id);");
+  let d = diags(
+    "SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM (SELECT * FROM orders LIMIT 5) s WHERE s.user_id = u.id);",
+  );
   assert!(!d.iter().any(|x| x.code == "sql525"), "LIMIT in nested derived table must not flag: {d:?}");
 }
 
@@ -25723,7 +26363,8 @@ fn sql568_quiet_for_real_regex_and_like() {
 
 #[test]
 fn sql569_flags_order_by_in_exists() {
-  let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id ORDER BY o.created_at);");
+  let d =
+    diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id ORDER BY o.created_at);");
   let m = d.iter().find(|x| x.code == "sql569").unwrap_or_else(|| panic!("expected sql569: {d:?}"));
   assert!(m.message.contains("ignores ordering"), "{}", m.message);
 }
@@ -25911,14 +26552,17 @@ fn sql582_quiet_for_numeric() {
 
 #[test]
 fn sql583_flags_group_by_in_exists() {
-  let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id GROUP BY o.status);");
+  let d =
+    diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id GROUP BY o.status);");
   let m = d.iter().find(|x| x.code == "sql583").unwrap_or_else(|| panic!("expected sql583: {d:?}"));
   assert!(m.message.contains("pointless"), "{}", m.message);
 }
 
 #[test]
 fn sql583_quiet_for_group_by_with_having() {
-  let d = diags("SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id GROUP BY o.status HAVING count(*) > 3);");
+  let d = diags(
+    "SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id GROUP BY o.status HAVING count(*) > 3);",
+  );
   assert!(!d.iter().any(|x| x.code == "sql583"), "GROUP BY + HAVING is meaningful: {d:?}");
 }
 
@@ -26574,7 +27218,8 @@ fn sql621_if_function() {
 
 #[test]
 fn sql621_quiet_plpgsql_if() {
-  let d = diags("CREATE FUNCTION f() RETURNS int AS $$ BEGIN IF (x > 0) THEN RETURN 1; END IF; END; $$ LANGUAGE plpgsql");
+  let d =
+    diags("CREATE FUNCTION f() RETURNS int AS $$ BEGIN IF (x > 0) THEN RETURN 1; END IF; END; $$ LANGUAGE plpgsql");
   assert!(!d.iter().any(|x| x.code == "sql621"));
 }
 
@@ -26766,7 +27411,8 @@ fn sql631_last_value_no_frame() {
 
 #[test]
 fn sql631_quiet_with_frame() {
-  let d = diags("SELECT last_value(x) OVER (ORDER BY y ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) FROM t");
+  let d =
+    diags("SELECT last_value(x) OVER (ORDER BY y ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) FROM t");
   assert!(!d.iter().any(|x| x.code == "sql631"));
 }
 

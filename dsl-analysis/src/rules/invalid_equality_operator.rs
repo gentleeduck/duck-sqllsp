@@ -36,7 +36,9 @@ impl LintRule for Rule {
         out.push(Diagnostic {
           code: "sql429",
           severity: Severity::Error,
-          message: "`==` is not a Postgres operator -- use `=` for equality (or `IS NOT DISTINCT FROM` for NULL-safe equality)".into(),
+          message:
+            "`==` is not a Postgres operator -- use `=` for equality (or `IS NOT DISTINCT FROM` for NULL-safe equality)"
+              .into(),
           range: TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
         });
         i += 2;

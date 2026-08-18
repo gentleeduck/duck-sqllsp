@@ -97,12 +97,7 @@ impl LintRule for Rule {
           ),
         )
       };
-      out.push(Diagnostic {
-        code: "sql496",
-        severity,
-        message: msg,
-        range: crate::range_at(abs_s, abs_e),
-      });
+      out.push(Diagnostic { code: "sql496", severity, message: msg, range: crate::range_at(abs_s, abs_e) });
       i = rel + 7;
     }
   }

@@ -42,7 +42,10 @@ impl LintRule for Rule {
     let mut i = 0usize;
     let mut emitted: std::collections::HashSet<usize> = std::collections::HashSet::new();
     while i + 3 <= n {
-      if !(&ub[i..i + 3] == b"NOT" && (i == 0 || !is_word(ub[i - 1] as char)) && (i + 3 == n || !is_word(ub[i + 3] as char))) {
+      if !(&ub[i..i + 3] == b"NOT"
+        && (i == 0 || !is_word(ub[i - 1] as char))
+        && (i + 3 == n || !is_word(ub[i + 3] as char)))
+      {
         i += 1;
         continue;
       }
@@ -84,10 +87,7 @@ impl LintRule for Rule {
       let mut matched: Option<&'static str> = None;
       for (kw, label) in PREDS {
         let m = kw.len();
-        if k + m <= n
-          && &ub[k..k + m] == *kw
-          && (k + m == n || !is_word(ub[k + m] as char))
-        {
+        if k + m <= n && &ub[k..k + m] == *kw && (k + m == n || !is_word(ub[k + m] as char)) {
           matched = Some(*label);
           break;
         }

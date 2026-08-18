@@ -2,8 +2,8 @@
 //! catalog data type -- the cast is a no-op and adds visual noise
 //! (and sometimes hides the wrong type from review). Drop the cast.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -173,7 +173,9 @@ fn maybe_emit(
   out.push(Diagnostic {
     code: "sql415",
     severity: Severity::Hint,
-    message: format!("cast of `{display}` to `{type_text}` is a no-op -- column is already `{col_type}`; drop the cast"),
+    message: format!(
+      "cast of `{display}` to `{type_text}` is a no-op -- column is already `{col_type}`; drop the cast"
+    ),
     range: TextRange::new(
       ((stmt_start + abs_start_in_clean) as u32).into(),
       ((stmt_start + abs_end_in_clean) as u32).into(),
@@ -243,4 +245,3 @@ fn type_equivalent(a: &str, b: &str) -> bool {
 fn is_ident_byte(b: u8) -> bool {
   b.is_ascii_alphanumeric() || b == b'_'
 }
-

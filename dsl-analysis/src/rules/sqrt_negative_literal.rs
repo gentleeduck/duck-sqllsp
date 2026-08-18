@@ -54,7 +54,10 @@ impl LintRule for Rule {
 
 fn is_negative_number(arg: &str) -> bool {
   let b = arg.as_bytes();
-  b.len() >= 2 && b[0] == b'-' && b[1..].iter().all(|&c| c.is_ascii_digit() || c == b'.') && b[1..].iter().any(u8::is_ascii_digit)
+  b.len() >= 2
+    && b[0] == b'-'
+    && b[1..].iter().all(|&c| c.is_ascii_digit() || c == b'.')
+    && b[1..].iter().any(u8::is_ascii_digit)
 }
 
 fn trim_range(ub: &[u8], mut s: usize, mut e: usize) -> Option<(usize, usize)> {

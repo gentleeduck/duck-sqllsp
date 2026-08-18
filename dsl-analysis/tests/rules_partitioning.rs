@@ -28,9 +28,7 @@ fn diags(src: &str) -> Vec<dsl_analysis::Diagnostic> {
 
 #[test]
 fn sql757_pk_missing_partition_column() {
-  let d = diags(
-    "CREATE TABLE t757a (id int, created_at date, PRIMARY KEY (id)) PARTITION BY RANGE (created_at);",
-  );
+  let d = diags("CREATE TABLE t757a (id int, created_at date, PRIMARY KEY (id)) PARTITION BY RANGE (created_at);");
   assert!(d.iter().any(|x| x.code == "sql757" && x.severity == Severity::Error));
 }
 

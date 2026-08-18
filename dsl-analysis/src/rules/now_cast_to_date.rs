@@ -8,7 +8,8 @@ use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
 
-const PATTERNS: &[&str] = &["now()::date", "current_timestamp::date", "localtimestamp::date", "transaction_timestamp()::date"];
+const PATTERNS: &[&str] =
+  &["now()::date", "current_timestamp::date", "localtimestamp::date", "transaction_timestamp()::date"];
 
 pub struct Rule;
 

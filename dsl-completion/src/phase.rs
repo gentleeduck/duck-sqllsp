@@ -390,9 +390,11 @@ fn subquery_body_start(src: &str, start: usize, pos: usize) -> Option<usize> {
       while k < end && bytes[k].is_ascii_whitespace() {
         k += 1;
       }
-      let starts_subquery = ["SELECT", "INSERT", "UPDATE", "DELETE", "WITH", "VALUES"]
-        .iter()
-        .any(|kw| k + kw.len() <= upper_bytes.len() && &upper_bytes[k..k + kw.len()] == kw.as_bytes() && (k + kw.len() == upper_bytes.len() || !is_word_cont(upper_bytes[k + kw.len()] as char)));
+      let starts_subquery = ["SELECT", "INSERT", "UPDATE", "DELETE", "WITH", "VALUES"].iter().any(|kw| {
+        k + kw.len() <= upper_bytes.len()
+          && &upper_bytes[k..k + kw.len()] == kw.as_bytes()
+          && (k + kw.len() == upper_bytes.len() || !is_word_cont(upper_bytes[k + kw.len()] as char))
+      });
       if starts_subquery {
         stack.push(i + 1);
         subq_depths.push(depth);

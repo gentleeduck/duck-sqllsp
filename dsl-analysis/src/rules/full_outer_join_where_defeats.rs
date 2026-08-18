@@ -14,8 +14,20 @@ use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
 
-const STOPWORDS: &[&str] =
-  &["GROUP", "ORDER", "HAVING", "LIMIT", "OFFSET", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT", "FETCH", "FOR"];
+const STOPWORDS: &[&str] = &[
+  "GROUP",
+  "ORDER",
+  "HAVING",
+  "LIMIT",
+  "OFFSET",
+  "WINDOW",
+  "RETURNING",
+  "UNION",
+  "INTERSECT",
+  "EXCEPT",
+  "FETCH",
+  "FOR",
+];
 
 pub struct Rule;
 

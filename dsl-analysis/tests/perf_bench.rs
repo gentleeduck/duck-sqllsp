@@ -1,6 +1,6 @@
 use dsl_analysis::run;
 use dsl_catalog::Catalog;
-use dsl_parse::{parse, Dialect};
+use dsl_parse::{Dialect, parse};
 use dsl_resolve::resolve_with_source;
 
 #[test]

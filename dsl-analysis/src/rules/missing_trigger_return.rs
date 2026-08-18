@@ -9,8 +9,8 @@
 //! when the body contains no `RETURN ` keyword at all. Branch-aware
 //! analysis (every IF/ELSE arm has a RETURN) comes in a follow-up.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -126,4 +126,3 @@ fn has_return(upper: &str) -> bool {
   }
   false
 }
-

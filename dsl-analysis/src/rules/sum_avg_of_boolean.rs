@@ -38,7 +38,10 @@ impl LintRule for Rule {
       let m = fname_u.len();
       let mut i = 0usize;
       while i + m <= n {
-        if !(&ub[i..i + m] == fname_u && (i == 0 || !is_word(ub[i - 1] as char)) && (i + m == n || !is_word(ub[i + m] as char))) {
+        if !(&ub[i..i + m] == fname_u
+          && (i == 0 || !is_word(ub[i - 1] as char))
+          && (i + m == n || !is_word(ub[i + m] as char)))
+        {
           i += 1;
           continue;
         }
@@ -99,11 +102,7 @@ fn parse_bare_ident(s: &str) -> Option<(Option<&str>, &str)> {
   if t.chars().all(|c| c.is_ascii_digit() || c == '.') {
     return None;
   }
-  if let Some(dot) = t.rfind('.') {
-    Some((Some(&t[..dot]), &t[dot + 1..]))
-  } else {
-    Some((None, t))
-  }
+  if let Some(dot) = t.rfind('.') { Some((Some(&t[..dot]), &t[dot + 1..])) } else { Some((None, t)) }
 }
 
 fn resolve_column_type(scope: &Scope, catalog: &Catalog, qualifier: Option<&str>, name: &str) -> Option<String> {

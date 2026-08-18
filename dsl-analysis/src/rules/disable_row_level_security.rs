@@ -25,7 +25,9 @@ impl LintRule for Rule {
       out.push(Diagnostic {
         code: "sql574",
         severity: Severity::Warning,
-        message: "DISABLE ROW LEVEL SECURITY stops all RLS policies on this table from applying -- confirm that's intended".into(),
+        message:
+          "DISABLE ROW LEVEL SECURITY stops all RLS policies on this table from applying -- confirm that's intended"
+            .into(),
         range: crate::range_at(start + at, start + (at + 7)),
       });
     }

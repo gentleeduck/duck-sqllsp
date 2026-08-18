@@ -57,8 +57,8 @@ impl LintRule for Rule {
           if kw(b, i, b"VALUES") || kw(b, i, b"SELECT") || kw(b, i, b"CONFLICT") {
             return;
           }
-        }
-        _ => {}
+        },
+        _ => {},
       }
       i += 1;
     }

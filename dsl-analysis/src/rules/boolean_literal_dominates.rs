@@ -15,8 +15,20 @@ use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
 
-const STOPWORDS: &[&str] =
-  &["GROUP", "ORDER", "HAVING", "LIMIT", "OFFSET", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT", "FETCH", "FOR"];
+const STOPWORDS: &[&str] = &[
+  "GROUP",
+  "ORDER",
+  "HAVING",
+  "LIMIT",
+  "OFFSET",
+  "WINDOW",
+  "RETURNING",
+  "UNION",
+  "INTERSECT",
+  "EXCEPT",
+  "FETCH",
+  "FOR",
+];
 
 pub struct Rule;
 
@@ -96,7 +108,10 @@ fn scan(ub: &[u8], abs: usize, from: usize, to: usize, out: &mut Vec<Diagnostic>
 fn bool_literal(ub: &[u8], i: usize, to: usize) -> Option<(bool, usize)> {
   for (kw, val) in [(&b"TRUE"[..], true), (&b"FALSE"[..], false)] {
     let end = i + kw.len();
-    if end <= to && ub[i..end] == *kw && (i == 0 || !is_word(ub[i - 1] as char)) && (end >= to || !is_word(ub[end] as char))
+    if end <= to
+      && ub[i..end] == *kw
+      && (i == 0 || !is_word(ub[i - 1] as char))
+      && (end >= to || !is_word(ub[end] as char))
     {
       return Some((val, end));
     }
@@ -169,11 +184,12 @@ fn has_top_level_or(ub: &[u8], from: usize, to: usize) -> bool {
           i += 1;
         }
       },
-      b'O' if depth == 0
-        && i + 2 <= to
-        && &ub[i..i + 2] == b"OR"
-        && (i == from || !is_word(ub[i - 1] as char))
-        && (i + 2 >= to || !is_word(ub[i + 2] as char)) =>
+      b'O'
+        if depth == 0
+          && i + 2 <= to
+          && &ub[i..i + 2] == b"OR"
+          && (i == from || !is_word(ub[i - 1] as char))
+          && (i + 2 >= to || !is_word(ub[i + 2] as char)) =>
       {
         return true;
       },

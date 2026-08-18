@@ -1,8 +1,8 @@
 //! sql084: `COUNT(1)` is equivalent to `COUNT(*)` -- prefer `COUNT(*)`
 //! which reads more naturally and matches every style guide.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -62,4 +62,3 @@ impl LintRule for Rule {
     }
   }
 }
-

@@ -47,8 +47,8 @@ impl LintRule for Rule {
               close = Some(j);
               break;
             }
-          }
-          _ => {}
+          },
+          _ => {},
         }
         j += 1;
       }
@@ -66,7 +66,9 @@ impl LintRule for Rule {
           out.push(Diagnostic {
             code: "sql634",
             severity: Severity::Warning,
-            message: format!("`gen_salt('{algo}')` is weak for password hashing -- use `gen_salt('bf', <rounds>)` (bcrypt)"),
+            message: format!(
+              "`gen_salt('{algo}')` is weak for password hashing -- use `gen_salt('bf', <rounds>)` (bcrypt)"
+            ),
             range: crate::range_at(start + abs, start + abs + t.len()),
           });
         }

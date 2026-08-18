@@ -1,8 +1,8 @@
 //! sql116: bare `NUMERIC` / `DECIMAL` -- unbounded precision is fine
 //! but rarely intentional. Most use-cases want NUMERIC(p,s).
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -56,4 +56,3 @@ impl LintRule for Rule {
     }
   }
 }
-

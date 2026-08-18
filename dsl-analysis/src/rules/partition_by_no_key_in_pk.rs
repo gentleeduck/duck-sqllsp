@@ -34,11 +34,8 @@ impl LintRule for Rule {
       return;
     }
     let Some((pk_start, pk_end, pk_cols)) = table_primary_key(&upper, body) else { return };
-    let missing: Vec<&str> = part_cols
-      .iter()
-      .map(String::as_str)
-      .filter(|c| !pk_cols.iter().any(|p| p.eq_ignore_ascii_case(c)))
-      .collect();
+    let missing: Vec<&str> =
+      part_cols.iter().map(String::as_str).filter(|c| !pk_cols.iter().any(|p| p.eq_ignore_ascii_case(c))).collect();
     if missing.is_empty() {
       return;
     }

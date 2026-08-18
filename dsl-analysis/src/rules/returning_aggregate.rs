@@ -14,8 +14,18 @@ use dsl_parse::Statement;
 use dsl_resolve::Scope;
 
 const AGG: &[&str] = &[
-  "COUNT", "SUM", "AVG", "MIN", "MAX", "STRING_AGG", "ARRAY_AGG", "JSON_AGG", "JSONB_AGG", "BOOL_AND",
-  "BOOL_OR", "EVERY",
+  "COUNT",
+  "SUM",
+  "AVG",
+  "MIN",
+  "MAX",
+  "STRING_AGG",
+  "ARRAY_AGG",
+  "JSON_AGG",
+  "JSONB_AGG",
+  "BOOL_AND",
+  "BOOL_OR",
+  "EVERY",
 ];
 
 pub struct Rule;
@@ -45,10 +55,7 @@ impl LintRule for Rule {
         _ if depth == 0 => {
           for &agg in AGG {
             let l = agg.len();
-            if i + l < n
-              && &b[i..i + l] == agg.as_bytes()
-              && (i == 0 || !is_word(b[i - 1] as char))
-            {
+            if i + l < n && &b[i..i + l] == agg.as_bytes() && (i == 0 || !is_word(b[i - 1] as char)) {
               // require an opening paren (allowing whitespace) after the name
               let mut j = i + l;
               while j < n && b[j].is_ascii_whitespace() {
@@ -65,8 +72,8 @@ impl LintRule for Rule {
               }
             }
           }
-        }
-        _ => {}
+        },
+        _ => {},
       }
       i += 1;
     }
@@ -84,8 +91,8 @@ fn find_returning(b: &[u8]) -> Option<usize> {
       b')' | b']' => depth -= 1,
       b'R' if depth == 0 && &b[i..i + 9] == b"RETURNING" && (i == 0 || !is_word(b[i - 1] as char)) => {
         return Some(i + 9);
-      }
-      _ => {}
+      },
+      _ => {},
     }
     i += 1;
   }

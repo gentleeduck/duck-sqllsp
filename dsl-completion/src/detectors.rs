@@ -280,16 +280,14 @@ pub(crate) fn window_clause_partition_or_order_by_expects_column(source: &str, o
   // Use word-bounded match so `(PARTITION BY` (no leading space) also
   // matches alongside ` PARTITION BY`.
   let trimmed = upper.trim_end();
-  let ends_partition_by = trimmed.ends_with("PARTITION BY")
-    && {
-      let n = trimmed.len() - "PARTITION BY".len();
-      n == 0 || !trimmed.as_bytes()[n - 1].is_ascii_alphanumeric()
-    };
-  let ends_order_by = trimmed.ends_with("ORDER BY")
-    && {
-      let n = trimmed.len() - "ORDER BY".len();
-      n == 0 || !trimmed.as_bytes()[n - 1].is_ascii_alphanumeric()
-    };
+  let ends_partition_by = trimmed.ends_with("PARTITION BY") && {
+    let n = trimmed.len() - "PARTITION BY".len();
+    n == 0 || !trimmed.as_bytes()[n - 1].is_ascii_alphanumeric()
+  };
+  let ends_order_by = trimmed.ends_with("ORDER BY") && {
+    let n = trimmed.len() - "ORDER BY".len();
+    n == 0 || !trimmed.as_bytes()[n - 1].is_ascii_alphanumeric()
+  };
   ends_partition_by || ends_order_by || trimmed.ends_with(',')
 }
 
@@ -454,8 +452,7 @@ pub(crate) fn is_predicate_continuation_keywords(
   }
   // Check ` IS` at end (word-bounded: preceded by whitespace).
   let ends_with_is = trimmed.len() >= 2
-    && trimmed.as_bytes()[trimmed.len() - 2..]
-      .eq_ignore_ascii_case(b"IS")
+    && trimmed.as_bytes()[trimmed.len() - 2..].eq_ignore_ascii_case(b"IS")
     && (trimmed.len() == 2 || trimmed.as_bytes()[trimmed.len() - 3].is_ascii_whitespace());
   if ends_with_is {
     const IS: &[(&str, &str)] = &[
@@ -565,8 +562,9 @@ pub(crate) fn create_policy_expects_table(source: &str, offset: TextSize) -> boo
 pub(crate) fn create_trigger_expects_timing(source: &str, offset: TextSize) -> bool {
   let (slice, upper) = stmt_slice_upper(source, offset);
   let stmt = slice.trim_start();
-  let starts =
-    upper.starts_with("CREATE TRIGGER") || upper.starts_with("CREATE OR REPLACE TRIGGER") || upper.starts_with("CREATE CONSTRAINT TRIGGER");
+  let starts = upper.starts_with("CREATE TRIGGER")
+    || upper.starts_with("CREATE OR REPLACE TRIGGER")
+    || upper.starts_with("CREATE CONSTRAINT TRIGGER");
   if !starts {
     return false;
   }
@@ -634,13 +632,18 @@ pub(crate) fn command_expects_role_name(source: &str, offset: TextSize) -> bool 
 /// since the actual GUC name comes next and isn't catalog-resolvable.
 /// `SET LOCAL <cursor>` / `SET SESSION <cursor>` -> empty (the GUC
 /// name is freeform). Returns None when not in a SET slot.
-pub(crate) fn set_statement_completion(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn set_statement_completion(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   let (slice, upper) = stmt_slice_upper(source, offset);
   let stmt = slice.trim_start();
   // Skip SET ROLE / SET CONSTRAINTS / SET TRANSACTION (those are
   // their own slots; routing them as GUC would be confusing).
-  if upper.starts_with("SET ROLE") || upper.starts_with("SET SESSION AUTHORIZATION")
-    || upper.starts_with("SET CONSTRAINTS") || upper.starts_with("SET TRANSACTION")
+  if upper.starts_with("SET ROLE")
+    || upper.starts_with("SET SESSION AUTHORIZATION")
+    || upper.starts_with("SET CONSTRAINTS")
+    || upper.starts_with("SET TRANSACTION")
   {
     return None;
   }
@@ -661,7 +664,10 @@ pub(crate) fn set_statement_completion(source: &str, offset: TextSize) -> Option
 /// list to emit (empty for COMMIT/ROLLBACK/END/ABORT/SAVEPOINT which
 /// take no further token or a fresh identifier). None when the cursor
 /// isn't in a recognised transaction-control slot.
-pub(crate) fn transaction_control_completion(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn transaction_control_completion(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   let (_slice, upper) = stmt_slice_upper(source, offset);
   // Slots that take transaction modifiers (ISOLATION LEVEL, READ ONLY,
   // READ WRITE, DEFERRABLE, NOT DEFERRABLE). `ATOMIC` is the standard-SQL
@@ -676,14 +682,18 @@ pub(crate) fn transaction_control_completion(source: &str, offset: TextSize) -> 
   ];
   // Slots that take nothing useful (fresh savepoint name / no args).
   const EMPTY: &[(&str, &str)] = &[];
-  let starts_with = |kw: &str| {
-    upper.starts_with(kw)
-      && (upper.len() == kw.len() || upper.as_bytes()[kw.len()].is_ascii_whitespace())
-  };
+  let starts_with =
+    |kw: &str| upper.starts_with(kw) && (upper.len() == kw.len() || upper.as_bytes()[kw.len()].is_ascii_whitespace());
   if starts_with("BEGIN TRANSACTION") || starts_with("START TRANSACTION") || starts_with("BEGIN") {
     return Some(TXN_MODIFIERS);
   }
-  if starts_with("COMMIT") || starts_with("ROLLBACK") || starts_with("END") || starts_with("ABORT") || starts_with("SAVEPOINT") || starts_with("RELEASE") {
+  if starts_with("COMMIT")
+    || starts_with("ROLLBACK")
+    || starts_with("END")
+    || starts_with("ABORT")
+    || starts_with("SAVEPOINT")
+    || starts_with("RELEASE")
+  {
     return Some(EMPTY);
   }
   None
@@ -753,10 +763,7 @@ pub(crate) fn comment_on_is_value_next_keyword(
   let words: Vec<&str> = upper.split_ascii_whitespace().collect();
   let last = *words.last()?;
   if last == "IS" {
-    return Some(&[
-      ("NULL", "IS NULL -- drop the comment"),
-      ("''", "'' -- empty comment (equivalent to NULL)"),
-    ]);
+    return Some(&[("NULL", "IS NULL -- drop the comment"), ("''", "'' -- empty comment (equivalent to NULL)")]);
   }
   // After class + name, expect IS.
   if words.contains(&"ON") && !words.contains(&"IS") && words.len() >= 4 {
@@ -934,8 +941,7 @@ pub(crate) fn vacuum_paren_expects_option(source: &str, offset: TextSize) -> boo
   }
   if !stmt.ends_with(char::is_whitespace) {
     let inner_start = after.rfind('(').unwrap_or(0);
-    let last_comma_or_open =
-      after[inner_start..].rfind([',', '(']).unwrap_or(0);
+    let last_comma_or_open = after[inner_start..].rfind([',', '(']).unwrap_or(0);
     let since = &after[inner_start + last_comma_or_open..];
     if !since.contains('=') {
       return true;
@@ -968,8 +974,7 @@ pub(crate) fn explain_paren_value_after(source: &str, offset: TextSize, kw: &str
   if opens == 0 || opens <= closes {
     return false;
   }
-  let last_tok =
-    stmt.split(|c: char| c.is_whitespace() || c == ',' || c == '(').rfind(|s| !s.is_empty()).unwrap_or("");
+  let last_tok = stmt.split(|c: char| c.is_whitespace() || c == ',' || c == '(').rfind(|s| !s.is_empty()).unwrap_or("");
   last_tok.eq_ignore_ascii_case(kw)
 }
 
@@ -1013,8 +1018,7 @@ pub(crate) fn explain_paren_expects_option(source: &str, offset: TextSize) -> bo
   // paren (otherwise we're in the value slot).
   if !stmt.ends_with(char::is_whitespace) {
     let inner_start = after.rfind('(').unwrap_or(0);
-    let last_comma_or_open =
-      after[inner_start..].rfind([',', '(']).unwrap_or(0);
+    let last_comma_or_open = after[inner_start..].rfind([',', '(']).unwrap_or(0);
     let since = &after[inner_start + last_comma_or_open..];
     if !since.contains('=') {
       return true;
@@ -1215,9 +1219,7 @@ pub(crate) fn drop_target_trailing_slot(source: &str, offset: TextSize) -> bool 
     "SERVER",
   ];
   let mut idx = 1usize;
-  if idx + 1 < words.len()
-    && two_word_classes.iter().any(|(a, b)| words[idx] == *a && words[idx + 1] == *b)
-  {
+  if idx + 1 < words.len() && two_word_classes.iter().any(|(a, b)| words[idx] == *a && words[idx + 1] == *b) {
     idx += 2;
   } else if one_word_classes.contains(&words[idx]) {
     idx += 1;
@@ -1374,7 +1376,10 @@ pub(crate) fn alter_table_add_column_after_default(source: &str, offset: TextSiz
 /// `CREATE OR REPLACE` / `CREATE [TEMP|TEMPORARY|UNLOGGED|GLOBAL|LOCAL]`)
 /// at the start of a statement. Returns the static list of object-type
 /// keywords PG accepts after CREATE.
-pub(crate) fn after_top_level_create_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn after_top_level_create_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   let pos: usize = (u32::from(offset) as usize).min(source.len());
   let bytes = source.as_bytes();
   let (slice_owned, _) = stmt_slice_upper(source, offset);
@@ -1582,14 +1587,15 @@ pub(crate) fn create_class_expects_if_not_exists(
   if !classes.contains(words.last().unwrap_or(&"")) {
     return None;
   }
-  Some(&[
-    ("IF NOT EXISTS", "CREATE ... IF NOT EXISTS <name> -- skip silently if it already exists"),
-  ])
+  Some(&[("IF NOT EXISTS", "CREATE ... IF NOT EXISTS <name> -- skip silently if it already exists")])
 }
 
 /// True when the cursor sits directly after a leading `ALTER` keyword
 /// with no class token typed yet -- emit the class menu PG accepts.
-pub(crate) fn after_top_level_alter_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn after_top_level_alter_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   let pos: usize = (u32::from(offset) as usize).min(source.len());
   let bytes = source.as_bytes();
   let (slice_owned, _) = stmt_slice_upper(source, offset);
@@ -1861,12 +1867,30 @@ pub(crate) fn alter_table_attach_detach_next_keyword(
     return Some(&[("PARTITION", "PARTITION <child>")]);
   }
   // After ATTACH PARTITION <child> -> FOR VALUES menu.
-  if words.contains(&"ATTACH") && words.contains(&"PARTITION") && words.len() >= 6 && last != "PARTITION" && last != "FOR" && last != "VALUES" && !words.contains(&"VALUES") {
-    return Some(&[("FOR", "FOR VALUES { IN (...) | FROM (...) TO (...) | WITH (...) }"), ("DEFAULT", "DEFAULT -- catch-all partition")]);
+  if words.contains(&"ATTACH")
+    && words.contains(&"PARTITION")
+    && words.len() >= 6
+    && last != "PARTITION"
+    && last != "FOR"
+    && last != "VALUES"
+    && !words.contains(&"VALUES")
+  {
+    return Some(&[
+      ("FOR", "FOR VALUES { IN (...) | FROM (...) TO (...) | WITH (...) }"),
+      ("DEFAULT", "DEFAULT -- catch-all partition"),
+    ]);
   }
   // DETACH PARTITION <child> -> CONCURRENTLY / FINALIZE.
-  if words.contains(&"DETACH") && words.contains(&"PARTITION") && words.len() >= 6 && !words.contains(&"CONCURRENTLY") && !words.contains(&"FINALIZE") {
-    return Some(&[("CONCURRENTLY", "CONCURRENTLY -- detach without long lock"), ("FINALIZE", "FINALIZE -- complete a concurrent detach")]);
+  if words.contains(&"DETACH")
+    && words.contains(&"PARTITION")
+    && words.len() >= 6
+    && !words.contains(&"CONCURRENTLY")
+    && !words.contains(&"FINALIZE")
+  {
+    return Some(&[
+      ("CONCURRENTLY", "CONCURRENTLY -- detach without long lock"),
+      ("FINALIZE", "FINALIZE -- complete a concurrent detach"),
+    ]);
   }
   if last == "INHERIT" {
     return None; // user types parent table name
@@ -1889,7 +1913,10 @@ pub(crate) fn alter_table_attach_detach_next_keyword(
 /// PARTITION chain. Covers `CREATE TABLE <child> PARTITION OF <parent>
 /// FOR VALUES {IN | FROM ... TO ... | WITH (...)}` and `PARTITION BY
 /// {RANGE | LIST | HASH} (<cols>)`.
-pub(crate) fn partition_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn partition_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -1905,7 +1932,10 @@ pub(crate) fn partition_next_keyword(source: &str, offset: TextSize) -> Option<&
   }
   // `FOR <cursor>` after PARTITION OF <parent>.
   if last == "FOR" && words.contains(&"PARTITION") && words.contains(&"OF") {
-    return Some(&[("VALUES", "FOR VALUES { IN (...) | FROM (...) TO (...) | WITH (MODULUS ..., REMAINDER ...) }"), ("DEFAULT", "FOR VALUES DEFAULT -- catch-all partition")]);
+    return Some(&[
+      ("VALUES", "FOR VALUES { IN (...) | FROM (...) TO (...) | WITH (MODULUS ..., REMAINDER ...) }"),
+      ("DEFAULT", "FOR VALUES DEFAULT -- catch-all partition"),
+    ]);
   }
   if last == "VALUES" && words.contains(&"PARTITION") {
     return Some(&[
@@ -1924,11 +1954,7 @@ pub(crate) fn partition_next_keyword(source: &str, offset: TextSize) -> Option<&
     ]);
   }
   // `FOR VALUES FROM (<lo>) <cursor>` -> TO
-  if last == ")"
-    && words.contains(&"FROM")
-    && words.contains(&"VALUES")
-    && !words.contains(&"TO")
-  {
+  if last == ")" && words.contains(&"FROM") && words.contains(&"VALUES") && !words.contains(&"TO") {
     return Some(&[("TO", "TO (<hi>) -- upper bound of the range")]);
   }
   None
@@ -2081,10 +2107,8 @@ pub(crate) fn insert_into_next_keyword(
     return None;
   }
   // Only fire when body not yet typed (no VALUES/SELECT/DEFAULT).
-  let has_body = words.contains(&"VALUES")
-    || words.contains(&"SELECT")
-    || words.contains(&"DEFAULT")
-    || words.contains(&"CONFLICT");
+  let has_body =
+    words.contains(&"VALUES") || words.contains(&"SELECT") || words.contains(&"DEFAULT") || words.contains(&"CONFLICT");
   if has_body {
     return None;
   }
@@ -2092,9 +2116,7 @@ pub(crate) fn insert_into_next_keyword(
   // (col-list) and VALUES; only defer to `insert_overriding_next_keyword`
   // while the sub-clause is mid-typing (last word OVERRIDING/SYSTEM/USER).
   // Once the user reaches VALUE, fall through so the body-shape menu fires.
-  if words.contains(&"OVERRIDING")
-    && matches!(words.last(), Some(&"OVERRIDING") | Some(&"SYSTEM") | Some(&"USER"))
-  {
+  if words.contains(&"OVERRIDING") && matches!(words.last(), Some(&"OVERRIDING") | Some(&"SYSTEM") | Some(&"USER")) {
     return None;
   }
   // After (cols)? require balanced parens.
@@ -2285,17 +2307,11 @@ pub(crate) fn window_clause_as_paren_keyword(
   }
   // After BETWEEN -> lower bound options
   if last == "BETWEEN" {
-    return Some(&[
-      ("UNBOUNDED PRECEDING", "frame starts at partition start"),
-      ("CURRENT ROW", "current row"),
-    ]);
+    return Some(&[("UNBOUNDED PRECEDING", "frame starts at partition start"), ("CURRENT ROW", "current row")]);
   }
   // After AND inside a BETWEEN -> upper bound options
   if last == "AND" && words.contains(&"BETWEEN") {
-    return Some(&[
-      ("UNBOUNDED FOLLOWING", "frame ends at partition end"),
-      ("CURRENT ROW", "current row"),
-    ]);
+    return Some(&[("UNBOUNDED FOLLOWING", "frame ends at partition end"), ("CURRENT ROW", "current row")]);
   }
   // UNBOUNDED followups: PRECEDING (before AND) or FOLLOWING (after AND).
   if last == "UNBOUNDED" {
@@ -2511,14 +2527,29 @@ pub(crate) fn json_table_column_slot_items(source: &str, offset: TextSize) -> Op
     },
     2 if !matches!(
       words[1].as_str(),
-      "FOR" | "PATH" | "FORMAT" | "EXISTS" | "WRAPPER" | "QUOTES" | "KEEP" | "OMIT" | "DEFAULT" | "NULL" | "ON" | "ERROR" | "NESTED"
+      "FOR"
+        | "PATH"
+        | "FORMAT"
+        | "EXISTS"
+        | "WRAPPER"
+        | "QUOTES"
+        | "KEEP"
+        | "OMIT"
+        | "DEFAULT"
+        | "NULL"
+        | "ON"
+        | "ERROR"
+        | "NESTED"
     ) =>
     {
-      push_keyword_kvs(&mut out, &[
-        ("PATH", "PATH '<json-path>' -- explicit path into the JSON document"),
-        ("FORMAT", "FORMAT JSON -- treat the column value as a nested JSON document"),
-        ("EXISTS", "EXISTS [PATH ...] -- boolean: does the path match anything"),
-      ]);
+      push_keyword_kvs(
+        &mut out,
+        &[
+          ("PATH", "PATH '<json-path>' -- explicit path into the JSON document"),
+          ("FORMAT", "FORMAT JSON -- treat the column value as a nested JSON document"),
+          ("EXISTS", "EXISTS [PATH ...] -- boolean: does the path match anything"),
+        ],
+      );
     },
     _ if words.last().map(String::as_str) == Some("FORMAT") => {
       push_keyword_kvs(&mut out, &[("JSON", "FORMAT JSON -- the only valid FORMAT value")]);
@@ -2600,20 +2631,29 @@ pub(crate) fn select_fetch_offset_next_keyword(
   let words: Vec<&str> = upper.split_ascii_whitespace().collect();
   let last = *words.last()?;
   // Only fire when statement begins with a query verb.
-  let starts_query = upper.starts_with("SELECT") || upper.starts_with("WITH") || upper.starts_with("VALUES") || upper.starts_with("TABLE");
+  let starts_query = upper.starts_with("SELECT")
+    || upper.starts_with("WITH")
+    || upper.starts_with("VALUES")
+    || upper.starts_with("TABLE");
   if !starts_query {
     return None;
   }
   // FETCH <cursor> -> FIRST|NEXT
   if last == "FETCH" {
-    return Some(&[("FIRST", "FETCH FIRST <n> {ROW|ROWS} {ONLY | WITH TIES}"), ("NEXT", "FETCH NEXT <n> {ROW|ROWS} {ONLY | WITH TIES}")]);
+    return Some(&[
+      ("FIRST", "FETCH FIRST <n> {ROW|ROWS} {ONLY | WITH TIES}"),
+      ("NEXT", "FETCH NEXT <n> {ROW|ROWS} {ONLY | WITH TIES}"),
+    ]);
   }
   if matches!(last, "FIRST" | "NEXT") {
     // After a count (we can't easily tell if a count was typed), emit ROW/ROWS as next-best.
     return Some(&[("ROW", "ROW {ONLY | WITH TIES}"), ("ROWS", "ROWS {ONLY | WITH TIES}")]);
   }
   if matches!(last, "ROW" | "ROWS") && words.contains(&"FETCH") {
-    return Some(&[("ONLY", "ONLY -- standard"), ("WITH TIES", "WITH TIES -- include rows that tie on ORDER BY (PG 13+)")]);
+    return Some(&[
+      ("ONLY", "ONLY -- standard"),
+      ("WITH TIES", "WITH TIES -- include rows that tie on ORDER BY (PG 13+)"),
+    ]);
   }
   if matches!(last, "ROW" | "ROWS") && words.contains(&"OFFSET") {
     return Some(&[("FETCH", "FETCH {FIRST|NEXT} <n> {ROW|ROWS} {ONLY | WITH TIES}")]);
@@ -2643,7 +2683,10 @@ pub(crate) fn insert_overriding_next_keyword(
   }
   let last = *words.last()?;
   if last == "OVERRIDING" {
-    return Some(&[("SYSTEM VALUE", "OVERRIDING SYSTEM VALUE -- replace identity"), ("USER VALUE", "OVERRIDING USER VALUE -- accept user's value")]);
+    return Some(&[
+      ("SYSTEM VALUE", "OVERRIDING SYSTEM VALUE -- replace identity"),
+      ("USER VALUE", "OVERRIDING USER VALUE -- accept user's value"),
+    ]);
   }
   if (last == "SYSTEM" || last == "USER") && words.contains(&"OVERRIDING") {
     return Some(&[("VALUE", "VALUE -- close the OVERRIDING clause")]);
@@ -2699,7 +2742,10 @@ pub(crate) fn with_cte_after_paren_close_next_keyword(
   ])
 }
 
-pub(crate) fn on_conflict_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn on_conflict_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -2719,7 +2765,10 @@ pub(crate) fn on_conflict_next_keyword(source: &str, offset: TextSize) -> Option
     ]);
   }
   if last == "DO" {
-    return Some(&[("NOTHING", "DO NOTHING -- skip the conflicting row"), ("UPDATE", "DO UPDATE SET <col>=<val>[, ...]")]);
+    return Some(&[
+      ("NOTHING", "DO NOTHING -- skip the conflicting row"),
+      ("UPDATE", "DO UPDATE SET <col>=<val>[, ...]"),
+    ]);
   }
   if last == "UPDATE" && words.contains(&"CONFLICT") {
     return Some(&[("SET", "SET <col> = <val>[, ...]")]);
@@ -2751,14 +2800,27 @@ pub(crate) fn vacuum_paren_value_keyword(
   let last_raw = *words.last()?;
   let last = last_raw.trim_start_matches(['(', ',']);
   let boolean_opts = [
-    "FULL", "FREEZE", "VERBOSE", "ANALYZE", "DISABLE_PAGE_SKIPPING", "SKIP_LOCKED",
-    "TRUNCATE", "PROCESS_TOAST", "PROCESS_MAIN", "SKIP_DATABASE_STATS", "ONLY_DATABASE_STATS",
+    "FULL",
+    "FREEZE",
+    "VERBOSE",
+    "ANALYZE",
+    "DISABLE_PAGE_SKIPPING",
+    "SKIP_LOCKED",
+    "TRUNCATE",
+    "PROCESS_TOAST",
+    "PROCESS_MAIN",
+    "SKIP_DATABASE_STATS",
+    "ONLY_DATABASE_STATS",
   ];
   if boolean_opts.contains(&last) {
     return Some(&[("true", "true -- enable"), ("false", "false -- disable")]);
   }
   if last == "INDEX_CLEANUP" {
-    return Some(&[("AUTO", "AUTO -- decide based on table state (default)"), ("ON", "ON -- always clean up indexes"), ("OFF", "OFF -- skip index cleanup")]);
+    return Some(&[
+      ("AUTO", "AUTO -- decide based on table state (default)"),
+      ("ON", "ON -- always clean up indexes"),
+      ("OFF", "OFF -- skip index cleanup"),
+    ]);
   }
   // BUFFER_USAGE_LIMIT expects a size literal, not a boolean.
   // PARALLEL expects an integer, not a boolean.
@@ -2868,10 +2930,18 @@ pub(crate) fn truncate_next_keyword(source: &str, offset: TextSize) -> Option<&'
     return Some(&[("IDENTITY", "IDENTITY -- act on sequence-backed columns")]);
   }
   if last == "IDENTITY" {
-    return Some(&[("CASCADE", "CASCADE -- also truncate dependent FK tables"), ("RESTRICT", "RESTRICT -- refuse if dependents exist (default)")]);
+    return Some(&[
+      ("CASCADE", "CASCADE -- also truncate dependent FK tables"),
+      ("RESTRICT", "RESTRICT -- refuse if dependents exist (default)"),
+    ]);
   }
   // After table list -> trailing-clause menu.
-  if words.len() >= 2 && !words.contains(&"CASCADE") && !words.contains(&"RESTRICT") && !words.contains(&"RESTART") && !words.contains(&"CONTINUE") {
+  if words.len() >= 2
+    && !words.contains(&"CASCADE")
+    && !words.contains(&"RESTRICT")
+    && !words.contains(&"RESTART")
+    && !words.contains(&"CONTINUE")
+  {
     return Some(&[
       ("RESTART IDENTITY", "RESTART IDENTITY -- reset owned sequences"),
       ("CONTINUE IDENTITY", "CONTINUE IDENTITY -- keep current sequence values (default)"),
@@ -3064,7 +3134,10 @@ pub(crate) fn fetch_move_direction_keyword(
 
 /// LOCK TABLE chain.
 ///   LOCK [TABLE] [ONLY] <tbl>[, ...] [IN <mode> MODE] [NOWAIT]
-pub(crate) fn lock_mode_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn lock_mode_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -3105,7 +3178,10 @@ pub(crate) fn lock_mode_next_keyword(source: &str, offset: TextSize) -> Option<&
 }
 
 /// DEALLOCATE chain.
-pub(crate) fn deallocate_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn deallocate_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -3115,7 +3191,10 @@ pub(crate) fn deallocate_next_keyword(source: &str, offset: TextSize) -> Option<
     return None;
   }
   if words.len() == 1 {
-    return Some(&[("ALL", "DEALLOCATE ALL -- forget every prepared statement"), ("PREPARE", "DEALLOCATE PREPARE <name>")]);
+    return Some(&[
+      ("ALL", "DEALLOCATE ALL -- forget every prepared statement"),
+      ("PREPARE", "DEALLOCATE PREPARE <name>"),
+    ]);
   }
   None
 }
@@ -3163,7 +3242,10 @@ pub(crate) fn create_transform_next_keyword(
     return Some(&[("FOR TYPE", "FOR TYPE <type> LANGUAGE <lang> (...)")]);
   }
   if tail.len() == 1 {
-    return Some(&[("FOR TYPE", "FOR TYPE <type> LANGUAGE <lang> (...)"), ("LANGUAGE", "LANGUAGE <plpgsql|plperl|...>")]);
+    return Some(&[
+      ("FOR TYPE", "FOR TYPE <type> LANGUAGE <lang> (...)"),
+      ("LANGUAGE", "LANGUAGE <plpgsql|plperl|...>"),
+    ]);
   }
   if tail.contains(&"TYPE") && !tail.contains(&"LANGUAGE") {
     return Some(&[("LANGUAGE", "LANGUAGE <plpgsql|plperl|...>")]);
@@ -3277,10 +3359,7 @@ pub(crate) fn create_operator_class_next_keyword(
   if words.contains(&"USING") && !words.contains(&"AS") {
     let am_idx = words.iter().rposition(|w| *w == "USING")?;
     if words.len() == am_idx + 2 && !matches!(last, "USING") {
-      return Some(&[
-        ("FAMILY", "FAMILY <existing_family>"),
-        ("AS", "AS OPERATOR ... | FUNCTION ... | STORAGE ..."),
-      ]);
+      return Some(&[("FAMILY", "FAMILY <existing_family>"), ("AS", "AS OPERATOR ... | FUNCTION ... | STORAGE ...")]);
     }
     if words.contains(&"FAMILY") && words.len() >= am_idx + 4 {
       return Some(&[("AS", "AS OPERATOR ... | FUNCTION ... | STORAGE ...")]);
@@ -3459,10 +3538,7 @@ pub(crate) fn alter_index_next_keyword(
   if matches!(last, "RENAME" | "SET" | "RESET" | "ATTACH" | "DEPENDS" | "ALTER" | "NO" | "ALL" | "IN" | "OWNED") {
     let menu: &[(&str, &str)] = match last {
       "RENAME" => &[("TO", "RENAME TO <new>")],
-      "SET" => &[
-        ("TABLESPACE", "SET TABLESPACE <ts>"),
-        ("(", "SET ( <param> = <val>[, ...] )"),
-      ],
+      "SET" => &[("TABLESPACE", "SET TABLESPACE <ts>"), ("(", "SET ( <param> = <val>[, ...] )")],
       "RESET" => &[("(", "RESET ( <param>[, ...] )")],
       "ATTACH" => &[("PARTITION", "ATTACH PARTITION <child_idx>")],
       "DEPENDS" => &[("ON EXTENSION", "DEPENDS ON EXTENSION <ext>")],
@@ -3591,9 +3667,14 @@ pub(crate) fn alter_text_search_next_keyword(
       (_, "OWNER") => &[("TO", "OWNER TO <role>")],
       (_, "SET") => &[("SCHEMA", "SET SCHEMA <schema>")],
       ("CONFIGURATION", "ADD") => &[("MAPPING FOR", "ADD MAPPING FOR <token_type>[, ...] WITH <dictionary>[, ...]")],
-      ("CONFIGURATION", "ALTER") => &[("MAPPING FOR", "ALTER MAPPING FOR <token_type> WITH <dictionary>"), ("MAPPING REPLACE", "ALTER MAPPING REPLACE <old_dict> WITH <new_dict>")],
+      ("CONFIGURATION", "ALTER") => &[
+        ("MAPPING FOR", "ALTER MAPPING FOR <token_type> WITH <dictionary>"),
+        ("MAPPING REPLACE", "ALTER MAPPING REPLACE <old_dict> WITH <new_dict>"),
+      ],
       ("CONFIGURATION", "DROP") => &[("MAPPING FOR", "DROP MAPPING [IF EXISTS] FOR <token_type>[, ...]")],
-      ("CONFIGURATION", "MAPPING") => &[("FOR", "MAPPING FOR <token_type>[, ...]"), ("REPLACE", "MAPPING REPLACE <old_dict> WITH <new_dict>")],
+      ("CONFIGURATION", "MAPPING") => {
+        &[("FOR", "MAPPING FOR <token_type>[, ...]"), ("REPLACE", "MAPPING REPLACE <old_dict> WITH <new_dict>")]
+      },
       _ => &[],
     };
     if !menu.is_empty() {
@@ -3612,18 +3693,17 @@ pub(crate) fn alter_text_search_next_keyword(
         ("OWNER TO", "OWNER TO <role>"),
         ("SET SCHEMA", "SET SCHEMA <schema>"),
       ],
-      _ => &[
-        ("RENAME TO", "RENAME TO <new>"),
-        ("OWNER TO", "OWNER TO <role>"),
-        ("SET SCHEMA", "SET SCHEMA <schema>"),
-      ],
+      _ => &[("RENAME TO", "RENAME TO <new>"), ("OWNER TO", "OWNER TO <role>"), ("SET SCHEMA", "SET SCHEMA <schema>")],
     };
     return Some(menu);
   }
   None
 }
 
-pub(crate) fn alter_policy_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn alter_policy_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -3668,7 +3748,10 @@ pub(crate) fn alter_policy_next_keyword(source: &str, offset: TextSize) -> Optio
 ///                         RENAME [CONSTRAINT <old> TO <new> | TO <new_name>] |
 ///                         OWNER TO <role> | SET SCHEMA <schema> |
 ///                         VALIDATE CONSTRAINT <name> }
-pub(crate) fn alter_domain_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn alter_domain_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -3679,11 +3762,7 @@ pub(crate) fn alter_domain_next_keyword(source: &str, offset: TextSize) -> Optio
   }
   let last = *words.last()?;
   if last == "SET" {
-    return Some(&[
-      ("DEFAULT", "SET DEFAULT <expr>"),
-      ("NOT NULL", "SET NOT NULL"),
-      ("SCHEMA", "SET SCHEMA <schema>"),
-    ]);
+    return Some(&[("DEFAULT", "SET DEFAULT <expr>"), ("NOT NULL", "SET NOT NULL"), ("SCHEMA", "SET SCHEMA <schema>")]);
   }
   if last == "DROP" {
     return Some(&[
@@ -3747,11 +3826,7 @@ pub(crate) fn alter_materialized_view_next_keyword(
   }
   let (_, upper) = stmt_slice_upper(source, offset);
   let words: Vec<&str> = upper.split_ascii_whitespace().collect();
-  if words.len() < 3
-    || words[0] != "ALTER"
-    || words[1] != "MATERIALIZED"
-    || words[2] != "VIEW"
-  {
+  if words.len() < 3 || words[0] != "ALTER" || words[1] != "MATERIALIZED" || words[2] != "VIEW" {
     return None;
   }
   let last = *words.last()?;
@@ -3769,7 +3844,10 @@ pub(crate) fn alter_materialized_view_next_keyword(
       "RESET" => &[("(", "RESET ( <param>[, ...] )")],
       "CLUSTER" => &[("ON", "CLUSTER ON <index_name>")],
       "DEPENDS" => &[("ON EXTENSION", "DEPENDS ON EXTENSION <ext>")],
-      "ALTER" => &[("COLUMN", "ALTER COLUMN <col> SET ..."), ("MATERIALIZED VIEW", "ALTER MATERIALIZED VIEW <name> ALL IN TABLESPACE ...")],
+      "ALTER" => &[
+        ("COLUMN", "ALTER COLUMN <col> SET ..."),
+        ("MATERIALIZED VIEW", "ALTER MATERIALIZED VIEW <name> ALL IN TABLESPACE ..."),
+      ],
       _ => &[],
     };
     if !menu.is_empty() {
@@ -4137,7 +4215,10 @@ pub(crate) fn create_access_method_next_keyword(
   }
   let last = *words.last()?;
   if last == "TYPE" {
-    return Some(&[("INDEX", "TYPE INDEX -- index access method"), ("TABLE", "TYPE TABLE -- table access method (PG12+)")]);
+    return Some(&[
+      ("INDEX", "TYPE INDEX -- index access method"),
+      ("TABLE", "TYPE TABLE -- table access method (PG12+)"),
+    ]);
   }
   if last == "HANDLER" {
     return None; // user types function name
@@ -4211,15 +4292,16 @@ pub(crate) fn create_view_post_name_next_keyword(
   let paren_balanced = opens == 0 || opens == closes;
   let last = *words.last()?;
   if last == "USING" && is_mv {
-    return Some(&[
-      ("heap", "USING heap -- default access method"),
-    ]);
+    return Some(&[("heap", "USING heap -- default access method")]);
   }
   if last == "WITH" {
     if is_mv {
       return Some(&[("(", "WITH ( fillfactor = <n>, autovacuum_<param> = <v>, ... )")]);
     }
-    return Some(&[("(", "WITH ( security_barrier = true|false, security_invoker = true|false, check_option = local|cascaded )")]);
+    return Some(&[(
+      "(",
+      "WITH ( security_barrier = true|false, security_invoker = true|false, check_option = local|cascaded )",
+    )]);
   }
   if last == "TABLESPACE" && is_mv {
     return None; // user types tablespace name
@@ -4465,13 +4547,10 @@ pub(crate) fn alter_database_next_keyword(
     let menu: &[(&str, &str)] = match last {
       "RENAME" => &[("TO", "RENAME TO <new_name>")],
       "OWNER" => &[("TO", "OWNER TO <role>")],
-      "SET" => &[
-        ("TABLESPACE", "SET TABLESPACE <tablespace>"),
-        ("ALL", "RESET ALL -- restore every database GUC default"),
-      ],
-      "RESET" => &[
-        ("ALL", "RESET ALL"),
-      ],
+      "SET" => {
+        &[("TABLESPACE", "SET TABLESPACE <tablespace>"), ("ALL", "RESET ALL -- restore every database GUC default")]
+      },
+      "RESET" => &[("ALL", "RESET ALL")],
       _ => &[],
     };
     if !menu.is_empty() {
@@ -4566,7 +4645,10 @@ pub(crate) fn create_user_mapping_next_keyword(
   }
   let last = *words.last()?;
   if last == "MAPPING" {
-    return Some(&[("FOR", "FOR <role> SERVER <name> [OPTIONS (...)]"), ("IF NOT EXISTS", "IF NOT EXISTS -- skip silently when present")]);
+    return Some(&[
+      ("FOR", "FOR <role> SERVER <name> [OPTIONS (...)]"),
+      ("IF NOT EXISTS", "IF NOT EXISTS -- skip silently when present"),
+    ]);
   }
   if last == "FOR" {
     return Some(&[
@@ -4582,7 +4664,13 @@ pub(crate) fn create_user_mapping_next_keyword(
   if last == "OPTIONS" {
     return Some(&[("(", "( <option_name> '<value>'[, ...] )")]);
   }
-  if !words.contains(&"SERVER") && (words.contains(&"CURRENT_USER") || words.contains(&"CURRENT_ROLE") || words.contains(&"PUBLIC") || words.contains(&"USER") || words.len() >= 5) {
+  if !words.contains(&"SERVER")
+    && (words.contains(&"CURRENT_USER")
+      || words.contains(&"CURRENT_ROLE")
+      || words.contains(&"PUBLIC")
+      || words.contains(&"USER")
+      || words.len() >= 5)
+  {
     return Some(&[("SERVER", "SERVER <name>")]);
   }
   if words.contains(&"SERVER") && !words.contains(&"OPTIONS") {
@@ -4631,23 +4719,28 @@ pub(crate) fn alter_user_mapping_next_keyword(
     let trimmed = slice.trim_end();
     let last_char = trimmed.chars().last();
     if matches!(last_char, Some('(') | Some(',')) || slice.ends_with(char::is_whitespace) {
-      return Some(&[
-        ("ADD", "ADD <key> '<value>'"),
-        ("SET", "SET <key> '<value>'"),
-        ("DROP", "DROP <key>"),
-      ]);
+      return Some(&[("ADD", "ADD <key> '<value>'"), ("SET", "SET <key> '<value>'"), ("DROP", "DROP <key>")]);
     }
   }
   if words.contains(&"SERVER") && !words.contains(&"OPTIONS") {
     return Some(&[("OPTIONS", "OPTIONS (<key> '<val>'[, ...])")]);
   }
-  if !words.contains(&"SERVER") && (words.contains(&"CURRENT_USER") || words.contains(&"CURRENT_ROLE") || words.contains(&"PUBLIC") || words.contains(&"USER") || words.len() >= 5) {
+  if !words.contains(&"SERVER")
+    && (words.contains(&"CURRENT_USER")
+      || words.contains(&"CURRENT_ROLE")
+      || words.contains(&"PUBLIC")
+      || words.contains(&"USER")
+      || words.len() >= 5)
+  {
     return Some(&[("SERVER", "SERVER <name>")]);
   }
   None
 }
 
-pub(crate) fn alter_schema_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn alter_schema_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -4696,10 +4789,7 @@ pub(crate) fn create_text_search_next_keyword(
       return None;
     }
     return Some(match kind {
-      "CONFIGURATION" => &[
-        ("PARSER", "PARSER = <parser>"),
-        ("COPY", "COPY = <existing_config>"),
-      ],
+      "CONFIGURATION" => &[("PARSER", "PARSER = <parser>"), ("COPY", "COPY = <existing_config>")],
       "DICTIONARY" => &[("TEMPLATE", "TEMPLATE = <template>")],
       "PARSER" => &[
         ("START", "START = <function>"),
@@ -4735,7 +4825,11 @@ pub(crate) fn create_extension_next_keyword(
     return None; // user types the value
   }
   if last == "WITH" {
-    return Some(&[("SCHEMA", "WITH SCHEMA <schema>"), ("VERSION", "WITH VERSION '<ver>'"), ("CASCADE", "WITH CASCADE -- auto-install required extensions")]);
+    return Some(&[
+      ("SCHEMA", "WITH SCHEMA <schema>"),
+      ("VERSION", "WITH VERSION '<ver>'"),
+      ("CASCADE", "WITH CASCADE -- auto-install required extensions"),
+    ]);
   }
   if words.len() >= 3 {
     return Some(&[
@@ -4761,10 +4855,8 @@ pub(crate) fn create_function_attribute_next_keyword(
   }
   let (_, upper) = stmt_slice_upper(source, offset);
   let trimmed = upper.trim_start();
-  let is_fn = trimmed.starts_with("CREATE FUNCTION")
-    || trimmed.starts_with("CREATE OR REPLACE FUNCTION");
-  let is_proc = trimmed.starts_with("CREATE PROCEDURE")
-    || trimmed.starts_with("CREATE OR REPLACE PROCEDURE");
+  let is_fn = trimmed.starts_with("CREATE FUNCTION") || trimmed.starts_with("CREATE OR REPLACE FUNCTION");
+  let is_proc = trimmed.starts_with("CREATE PROCEDURE") || trimmed.starts_with("CREATE OR REPLACE PROCEDURE");
   if !is_fn && !is_proc {
     return None;
   }
@@ -4804,10 +4896,7 @@ pub(crate) fn create_function_attribute_next_keyword(
   }
   // After RETURNS -- delegate to existing detector (returns type slot
   // suppresses the keyword menu). Don't fire here.
-  if upper.rfind("RETURNS")
-    .map(|p| upper[p + "RETURNS".len()..].trim().is_empty())
-    .unwrap_or(false)
-  {
+  if upper.rfind("RETURNS").map(|p| upper[p + "RETURNS".len()..].trim().is_empty()).unwrap_or(false) {
     return None;
   }
   // Procedure form: after the closing `)` of the args paren -- need the
@@ -4824,9 +4913,7 @@ pub(crate) fn create_function_attribute_next_keyword(
     return None;
   }
   // After RETURNS, ensure the return type token is present.
-  if is_fn
-    && let Some(p) = upper.rfind("RETURNS")
-  {
+  if is_fn && let Some(p) = upper.rfind("RETURNS") {
     let after = upper[p + "RETURNS".len()..].trim();
     if after.is_empty() {
       return None;
@@ -4878,11 +4965,14 @@ pub(crate) fn alter_function_next_keyword(
     return None;
   }
   let last = *words.last()?;
-  if matches!(last, "RENAME" | "OWNER" | "SET" | "RESET" | "DEPENDS" | "PARALLEL" | "SECURITY" | "LANGUAGE" | "SUPPORT") {
+  if matches!(last, "RENAME" | "OWNER" | "SET" | "RESET" | "DEPENDS" | "PARALLEL" | "SECURITY" | "LANGUAGE" | "SUPPORT")
+  {
     let menu: &[(&str, &str)] = match last {
       "RENAME" => &[("TO", "RENAME TO <new_name>")],
       "OWNER" => &[("TO", "OWNER TO <role>")],
-      "SET" => &[("SCHEMA", "SET SCHEMA <schema>"), ("ROLE", "SET ROLE <role>"), ("SEARCH_PATH", "SET search_path = '...'")],
+      "SET" => {
+        &[("SCHEMA", "SET SCHEMA <schema>"), ("ROLE", "SET ROLE <role>"), ("SEARCH_PATH", "SET search_path = '...'")]
+      },
       "RESET" => &[("ALL", "RESET ALL -- restore all session GUCs")],
       "DEPENDS" => &[("ON EXTENSION", "DEPENDS ON EXTENSION <ext>")],
       "PARALLEL" => &[
@@ -4958,10 +5048,9 @@ pub(crate) fn alter_statistics_next_keyword(
     let menu: &[(&str, &str)] = match last {
       "RENAME" => &[("TO", "RENAME TO <new>")],
       "OWNER" => &[("TO", "OWNER TO <role>")],
-      "SET" => &[
-        ("SCHEMA", "SET SCHEMA <schema>"),
-        ("STATISTICS", "SET STATISTICS <n> -- per-extended-stats target (PG13+)"),
-      ],
+      "SET" => {
+        &[("SCHEMA", "SET SCHEMA <schema>"), ("STATISTICS", "SET STATISTICS <n> -- per-extended-stats target (PG13+)")]
+      },
       _ => &[],
     };
     if !menu.is_empty() {
@@ -4979,7 +5068,10 @@ pub(crate) fn alter_statistics_next_keyword(
   None
 }
 
-pub(crate) fn alter_view_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn alter_view_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -5049,9 +5141,18 @@ pub(crate) fn create_database_next_keyword(
   // Value slots -- silence.
   if matches!(
     last,
-    "OWNER" | "TEMPLATE" | "ENCODING" | "LOCALE" | "LC_COLLATE" | "LC_CTYPE"
-      | "ICU_LOCALE" | "ICU_RULES" | "COLLATION_VERSION" | "BUILTIN_LOCALE"
-      | "TABLESPACE" | "OID"
+    "OWNER"
+      | "TEMPLATE"
+      | "ENCODING"
+      | "LOCALE"
+      | "LC_COLLATE"
+      | "LC_CTYPE"
+      | "ICU_LOCALE"
+      | "ICU_RULES"
+      | "COLLATION_VERSION"
+      | "BUILTIN_LOCALE"
+      | "TABLESPACE"
+      | "OID"
   ) {
     return None;
   }
@@ -5190,7 +5291,10 @@ pub(crate) fn create_aggregate_next_keyword(
 /// CREATE CAST phase chain.
 ///   CREATE CAST (src AS dst) {WITH FUNCTION <fn>(args) | WITHOUT FUNCTION | WITH INOUT}
 ///     [AS ASSIGNMENT | AS IMPLICIT]
-pub(crate) fn create_cast_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn create_cast_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -5210,7 +5314,10 @@ pub(crate) fn create_cast_next_keyword(source: &str, offset: TextSize) -> Option
     return Some(&[("FUNCTION", "WITHOUT FUNCTION -- binary-compatible cast")]);
   }
   if last == "AS" {
-    return Some(&[("ASSIGNMENT", "AS ASSIGNMENT -- automatic in assignments"), ("IMPLICIT", "AS IMPLICIT -- automatic everywhere")]);
+    return Some(&[
+      ("ASSIGNMENT", "AS ASSIGNMENT -- automatic in assignments"),
+      ("IMPLICIT", "AS IMPLICIT -- automatic everywhere"),
+    ]);
   }
   // After the (src AS dst) header -> WITH | WITHOUT.
   let closes = upper.matches(')').count();
@@ -5224,7 +5331,10 @@ pub(crate) fn create_cast_next_keyword(source: &str, offset: TextSize) -> Option
   }
   // Trailing AS slot once WITH/WITHOUT chosen.
   if (words.contains(&"WITH") || words.contains(&"WITHOUT")) && !words.contains(&"AS") {
-    return Some(&[("AS ASSIGNMENT", "AS ASSIGNMENT -- automatic in assignments"), ("AS IMPLICIT", "AS IMPLICIT -- automatic everywhere")]);
+    return Some(&[
+      ("AS ASSIGNMENT", "AS ASSIGNMENT -- automatic in assignments"),
+      ("AS IMPLICIT", "AS IMPLICIT -- automatic everywhere"),
+    ]);
   }
   None
 }
@@ -5232,7 +5342,10 @@ pub(crate) fn create_cast_next_keyword(source: &str, offset: TextSize) -> Option
 /// CREATE RULE phase chain.
 ///   CREATE [OR REPLACE] RULE <name> AS ON {SELECT|INSERT|UPDATE|DELETE}
 ///       TO <table> [WHERE <expr>] DO [ALSO|INSTEAD] {NOTHING | <command>}
-pub(crate) fn create_rule_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn create_rule_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -5257,10 +5370,20 @@ pub(crate) fn create_rule_next_keyword(source: &str, offset: TextSize) -> Option
     return Some(&[("TO", "TO <table>")]);
   }
   if last == "DO" {
-    return Some(&[("ALSO", "DO ALSO <command>"), ("INSTEAD", "DO INSTEAD {NOTHING | <command>}"), ("NOTHING", "DO NOTHING")]);
+    return Some(&[
+      ("ALSO", "DO ALSO <command>"),
+      ("INSTEAD", "DO INSTEAD {NOTHING | <command>}"),
+      ("NOTHING", "DO NOTHING"),
+    ]);
   }
   if last == "INSTEAD" {
-    return Some(&[("NOTHING", "INSTEAD NOTHING"), ("SELECT", "INSTEAD SELECT ..."), ("INSERT", "INSTEAD INSERT ..."), ("UPDATE", "INSTEAD UPDATE ..."), ("DELETE", "INSTEAD DELETE ...")]);
+    return Some(&[
+      ("NOTHING", "INSTEAD NOTHING"),
+      ("SELECT", "INSTEAD SELECT ..."),
+      ("INSERT", "INSTEAD INSERT ..."),
+      ("UPDATE", "INSTEAD UPDATE ..."),
+      ("DELETE", "INSTEAD DELETE ..."),
+    ]);
   }
   if tail.contains(&"TO") && !tail.contains(&"DO") {
     return Some(&[("WHERE", "WHERE <predicate>"), ("DO", "DO {ALSO|INSTEAD} {NOTHING | <command>}")]);
@@ -5356,18 +5479,13 @@ pub(crate) fn exclude_constraint_next_keyword(
   if !upper.contains("EXCLUDE") {
     return None;
   }
-  if !upper.contains("CREATE TABLE")
-    && !upper.contains("ALTER TABLE")
-  {
+  if !upper.contains("CREATE TABLE") && !upper.contains("ALTER TABLE") {
     return None;
   }
   let words: Vec<&str> = upper.split_ascii_whitespace().collect();
   let last = *words.last()?;
   if last == "EXCLUDE" {
-    return Some(&[
-      ("USING", "USING <index_method>"),
-      ("(", "( <col> WITH <op>, ... ) -- exclusion list"),
-    ]);
+    return Some(&[("USING", "USING <index_method>"), ("(", "( <col> WITH <op>, ... ) -- exclusion list")]);
   }
   if last == "USING" && words.contains(&"EXCLUDE") {
     return Some(&[
@@ -5430,7 +5548,10 @@ pub(crate) fn create_statistics_next_keyword(
 ///                     | AS ENUM ('a', 'b', ...)
 ///                     | AS RANGE (SUBTYPE = ..., ...)
 ///                     | (INPUT = ..., OUTPUT = ..., LIKE = ..., ...)
-pub(crate) fn create_type_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn create_type_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -5543,10 +5664,7 @@ pub(crate) fn create_event_trigger_next_keyword(
     return Some(&[("(", "( '<cmd_tag1>', '<cmd_tag2>', ... )")]);
   }
   // WHEN tag IN ( <cursor> ) -> common command-tag suggestions
-  if (last == "(" || last.starts_with("('"))
-    && words.contains(&"IN")
-    && words.contains(&"WHEN")
-  {
+  if (last == "(" || last.starts_with("('")) && words.contains(&"IN") && words.contains(&"WHEN") {
     return Some(&[
       ("'CREATE TABLE'", "'CREATE TABLE'"),
       ("'DROP TABLE'", "'DROP TABLE'"),
@@ -5619,10 +5737,7 @@ pub(crate) fn create_language_next_keyword(
     return None;
   }
   // Return a static slice -- emit both (validator second) regardless.
-  Some(&[
-    ("INLINE", "INLINE <inline_handler_fn>"),
-    ("VALIDATOR", "VALIDATOR <validator_fn>"),
-  ])
+  Some(&[("INLINE", "INLINE <inline_handler_fn>"), ("VALIDATOR", "VALIDATOR <validator_fn>")])
 }
 
 /// ALTER LANGUAGE chain.
@@ -5699,11 +5814,7 @@ pub(crate) fn alter_server_next_keyword(
     let trimmed = slice.trim_end();
     let last_char = trimmed.chars().last();
     if matches!(last_char, Some('(') | Some(',')) || slice.ends_with(char::is_whitespace) {
-      return Some(&[
-        ("ADD", "ADD <key> '<value>'"),
-        ("SET", "SET <key> '<value>'"),
-        ("DROP", "DROP <key>"),
-      ]);
+      return Some(&[("ADD", "ADD <key> '<value>'"), ("SET", "SET <key> '<value>'"), ("DROP", "DROP <key>")]);
     }
   }
   if words.len() >= 3 {
@@ -5734,12 +5845,7 @@ pub(crate) fn alter_fdw_next_keyword(
   let (slice_owned, upper) = stmt_slice_upper(source, offset);
   let slice = slice_owned.as_str();
   let words: Vec<&str> = upper.split_ascii_whitespace().collect();
-  if words.len() < 5
-    || words[0] != "ALTER"
-    || words[1] != "FOREIGN"
-    || words[2] != "DATA"
-    || words[3] != "WRAPPER"
-  {
+  if words.len() < 5 || words[0] != "ALTER" || words[1] != "FOREIGN" || words[2] != "DATA" || words[3] != "WRAPPER" {
     return None;
   }
   let last = *words.last()?;
@@ -5765,11 +5871,7 @@ pub(crate) fn alter_fdw_next_keyword(
     let trimmed = slice.trim_end();
     let last_char = trimmed.chars().last();
     if matches!(last_char, Some('(') | Some(',')) || slice.ends_with(char::is_whitespace) {
-      return Some(&[
-        ("ADD", "ADD <key> '<value>'"),
-        ("SET", "SET <key> '<value>'"),
-        ("DROP", "DROP <key>"),
-      ]);
+      return Some(&[("ADD", "ADD <key> '<value>'"), ("SET", "SET <key> '<value>'"), ("DROP", "DROP <key>")]);
     }
   }
   if words.len() >= 5 {
@@ -5786,18 +5888,18 @@ pub(crate) fn alter_fdw_next_keyword(
   None
 }
 
-pub(crate) fn create_server_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn create_server_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
   let (_, upper) = stmt_slice_upper(source, offset);
   let words: Vec<&str> = upper.split_ascii_whitespace().collect();
   let is_server = words.len() >= 2 && words[0] == "CREATE" && words[1] == "SERVER";
-  let is_fdw = words.len() >= 5
-    && words[0] == "CREATE"
-    && words[1] == "FOREIGN"
-    && words[2] == "DATA"
-    && words[3] == "WRAPPER";
+  let is_fdw =
+    words.len() >= 5 && words[0] == "CREATE" && words[1] == "FOREIGN" && words[2] == "DATA" && words[3] == "WRAPPER";
   if !is_server && !is_fdw {
     return None;
   }
@@ -5836,7 +5938,10 @@ pub(crate) fn create_server_next_keyword(source: &str, offset: TextSize) -> Opti
 ///       RIGHTARG = <type>, [COMMUTATOR = OPERATOR(<schema>.<op>)],
 ///       [NEGATOR = ...], [RESTRICT = <selfn>], [JOIN = <joinfn>],
 ///       [HASHES], [MERGES] )
-pub(crate) fn create_operator_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn create_operator_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   let pos: usize = (u32::from(offset) as usize).min(source.len());
   let bytes = source.as_bytes();
   if pos < bytes.len() && !bytes[pos].is_ascii_whitespace() && bytes[pos] != b',' && bytes[pos] != b'(' {
@@ -5876,7 +5981,10 @@ pub(crate) fn create_operator_next_keyword(source: &str, offset: TextSize) -> Op
 /// CREATE DOMAIN phase chain.
 ///   CREATE DOMAIN <name> [AS] <basetype> [DEFAULT <expr>] [<constraint>...]
 ///   where <constraint> = [CONSTRAINT <name>] {NOT NULL | NULL | CHECK (<expr>)}
-pub(crate) fn create_domain_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn create_domain_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -5888,7 +5996,12 @@ pub(crate) fn create_domain_next_keyword(source: &str, offset: TextSize) -> Opti
   let last = *words.last()?;
   // `CREATE DOMAIN name <cursor>` -> AS or constraints.
   if words.len() == 3 {
-    return Some(&[("AS", "AS <base_type>"), ("CHECK", "CHECK ( VALUE > 0 )"), ("DEFAULT", "DEFAULT <expr>"), ("NOT NULL", "NOT NULL")]);
+    return Some(&[
+      ("AS", "AS <base_type>"),
+      ("CHECK", "CHECK ( VALUE > 0 )"),
+      ("DEFAULT", "DEFAULT <expr>"),
+      ("NOT NULL", "NOT NULL"),
+    ]);
   }
   if last == "AS" {
     return None; // user types the base type
@@ -5948,7 +6061,10 @@ pub(crate) fn create_collation_next_keyword(
     return None; // user types an existing collation
   }
   if words.len() >= 3 && !words.contains(&"FROM") && opens == 0 {
-    return Some(&[("FROM", "FROM <existing_collation> -- clone an existing collation"), ("(", "( LOCALE = '...', LC_COLLATE = '...' )")]);
+    return Some(&[
+      ("FROM", "FROM <existing_collation> -- clone an existing collation"),
+      ("(", "( LOCALE = '...', LC_COLLATE = '...' )"),
+    ]);
   }
   None
 }
@@ -5969,10 +6085,7 @@ pub(crate) fn column_generated_next_keyword(
     return None;
   }
   let (slice_owned, upper) = stmt_slice_upper(source, offset);
-  if !upper.contains("CREATE TABLE")
-    && !upper.contains("ALTER TABLE")
-    && !upper.contains("CREATE FOREIGN TABLE")
-  {
+  if !upper.contains("CREATE TABLE") && !upper.contains("ALTER TABLE") && !upper.contains("CREATE FOREIGN TABLE") {
     return None;
   }
   let words: Vec<&str> = upper.split_ascii_whitespace().collect();
@@ -5997,9 +6110,7 @@ pub(crate) fn column_generated_next_keyword(
     return Some(&[("AS IDENTITY", "AS IDENTITY -- sequence-backed column")]);
   }
   // GENERATED ALWAYS AS <cursor> -> IDENTITY | (
-  if last == "AS"
-    && (second_last == Some("ALWAYS") || (second_last == Some("DEFAULT") && third_last == Some("BY")))
-  {
+  if last == "AS" && (second_last == Some("ALWAYS") || (second_last == Some("DEFAULT") && third_last == Some("BY"))) {
     return Some(&[
       ("IDENTITY", "AS IDENTITY [(<seq_options>)]"),
       ("(", "AS ( <expression> ) STORED -- computed column"),
@@ -6029,9 +6140,7 @@ pub(crate) fn create_index_trailing_next_keyword(
   }
   let (_, upper) = stmt_slice_upper(source, offset);
   let trimmed = upper.trim_start();
-  if !trimmed.starts_with("CREATE INDEX")
-    && !trimmed.starts_with("CREATE UNIQUE INDEX")
-  {
+  if !trimmed.starts_with("CREATE INDEX") && !trimmed.starts_with("CREATE UNIQUE INDEX") {
     return None;
   }
   // Must be past a `(` body that closed.
@@ -6067,10 +6176,7 @@ pub(crate) fn check_constraint_no_inherit_next_keyword(
   if !upper.contains("CHECK") {
     return None;
   }
-  if !upper.contains("CREATE TABLE")
-    && !upper.contains("ALTER TABLE")
-    && !upper.contains("CREATE DOMAIN")
-  {
+  if !upper.contains("CREATE TABLE") && !upper.contains("ALTER TABLE") && !upper.contains("CREATE DOMAIN") {
     return None;
   }
   // The latest CHECK must have a matching closing `)`.
@@ -6111,10 +6217,7 @@ pub(crate) fn column_constraint_next_keyword(
   }
   let (_, upper) = stmt_slice_upper(source, offset);
   // Must be inside a TABLE/COLUMN DDL context.
-  if !upper.contains("CREATE TABLE")
-    && !upper.contains("ALTER TABLE")
-    && !upper.contains("CREATE FOREIGN TABLE")
-  {
+  if !upper.contains("CREATE TABLE") && !upper.contains("ALTER TABLE") && !upper.contains("CREATE FOREIGN TABLE") {
     return None;
   }
   let words: Vec<&str> = upper.split_ascii_whitespace().collect();
@@ -6134,10 +6237,7 @@ pub(crate) fn column_constraint_next_keyword(
     ]);
   }
   // ON {DELETE|UPDATE} SET <cursor> -> NULL | DEFAULT
-  if last == "SET"
-    && matches!(second_last, Some("DELETE") | Some("UPDATE"))
-    && third_last == Some("ON")
-  {
+  if last == "SET" && matches!(second_last, Some("DELETE") | Some("UPDATE")) && third_last == Some("ON") {
     return Some(&[("NULL", "SET NULL"), ("DEFAULT", "SET DEFAULT")]);
   }
   // DEFERRABLE <cursor> | NOT DEFERRABLE <cursor>
@@ -6202,7 +6302,10 @@ pub(crate) fn cte_search_cycle_next_keyword(
 }
 
 /// `ALTER SYSTEM {SET|RESET} <param> [= value | TO value]`
-pub(crate) fn alter_system_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn alter_system_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -6213,7 +6316,10 @@ pub(crate) fn alter_system_next_keyword(source: &str, offset: TextSize) -> Optio
   }
   let n = words.len();
   if n == 2 {
-    return Some(&[("SET", "ALTER SYSTEM SET <param> = value -- write to postgresql.auto.conf"), ("RESET", "ALTER SYSTEM RESET <param> | ALL")]);
+    return Some(&[
+      ("SET", "ALTER SYSTEM SET <param> = value -- write to postgresql.auto.conf"),
+      ("RESET", "ALTER SYSTEM RESET <param> | ALL"),
+    ]);
   }
   // After SET -> common GUC names that ALTER SYSTEM is typically used for.
   if n == 3 && words[2] == "SET" {
@@ -6388,7 +6494,10 @@ pub(crate) fn create_publication_next_keyword(
   }
   // After name + extra tokens, suggest FOR | WITH.
   if !words.contains(&"FOR") && !words.contains(&"WITH") && words.len() >= 3 {
-    return Some(&[("FOR", "FOR { ALL TABLES | TABLE ... | TABLES IN SCHEMA ... }"), ("WITH", "WITH (publish = '...')")]);
+    return Some(&[
+      ("FOR", "FOR { ALL TABLES | TABLE ... | TABLES IN SCHEMA ... }"),
+      ("WITH", "WITH (publish = '...')"),
+    ]);
   }
   if words.contains(&"FOR") && !words.contains(&"WITH") {
     return Some(&[("WITH", "WITH (publish = 'insert, update, delete, truncate')")]);
@@ -6493,7 +6602,10 @@ pub(crate) fn import_foreign_schema_next_keyword(
 
 /// CREATE SCHEMA phase chain.
 /// `CREATE SCHEMA [IF NOT EXISTS] [<name>] [AUTHORIZATION <role>] [<schema_element>]`
-pub(crate) fn create_schema_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn create_schema_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -6507,7 +6619,10 @@ pub(crate) fn create_schema_next_keyword(source: &str, offset: TextSize) -> Opti
     return None; // user types the role name
   }
   if words.len() == 2 {
-    return Some(&[("IF NOT EXISTS", "IF NOT EXISTS <name> -- silently skip if present"), ("AUTHORIZATION", "AUTHORIZATION <role> -- omits <name>, uses role name")]);
+    return Some(&[
+      ("IF NOT EXISTS", "IF NOT EXISTS <name> -- silently skip if present"),
+      ("AUTHORIZATION", "AUTHORIZATION <role> -- omits <name>, uses role name"),
+    ]);
   }
   if words.len() >= 3 && !words.contains(&"AUTHORIZATION") {
     return Some(&[("AUTHORIZATION", "AUTHORIZATION <role> -- assign owner")]);
@@ -6554,17 +6669,12 @@ pub(crate) fn create_foreign_table_next_keyword(
   if let Some(srv_idx) = words.iter().rposition(|w| *w == "SERVER")
     && srv_idx == words.len() - 2
   {
-    return Some(&[
-      ("OPTIONS", "OPTIONS (<key> '<value>', ...)"),
-    ]);
+    return Some(&[("OPTIONS", "OPTIONS (<key> '<value>', ...)")]);
   }
   // After top-level closing `)` of the column body -> INHERITS | SERVER.
   // Heuristic: opens == closes and opens >= 1 means body paren closed.
   if opens >= 1 && opens == closes && !words.contains(&"SERVER") {
-    return Some(&[
-      ("INHERITS", "INHERITS (<parent>[, ...])"),
-      ("SERVER", "SERVER <fdw_server_name>"),
-    ]);
+    return Some(&[("INHERITS", "INHERITS (<parent>[, ...])"), ("SERVER", "SERVER <fdw_server_name>")]);
   }
   None
 }
@@ -6626,7 +6736,10 @@ pub(crate) fn call_expects_procedure(source: &str, offset: TextSize) -> bool {
 }
 
 /// SET TRANSACTION / BEGIN ISOLATION ... phase chain.
-pub(crate) fn set_transaction_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn set_transaction_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -6933,7 +7046,10 @@ pub(crate) fn do_block_next_keyword(source: &str, offset: TextSize) -> Option<&'
   let n = words.len();
   // `DO <cursor>` -> LANGUAGE / dollar-quoted code start hint.
   if n == 1 {
-    return Some(&[("LANGUAGE", "LANGUAGE plpgsql/sql -- explicit (default is plpgsql)"), ("$$", "$$ BEGIN ... END; $$ -- anonymous code block")]);
+    return Some(&[
+      ("LANGUAGE", "LANGUAGE plpgsql/sql -- explicit (default is plpgsql)"),
+      ("$$", "$$ BEGIN ... END; $$ -- anonymous code block"),
+    ]);
   }
   if matches!(words.last(), Some(&"LANGUAGE")) {
     return Some(&[
@@ -7030,8 +7146,7 @@ pub(crate) fn create_trigger_when_table(source: &str, offset: TextSize) -> Optio
   while let Some(rel) = upper[from..].find("WHEN") {
     let at = from + rel;
     let prev_ok = at == 0 || !(bytes[at - 1].is_ascii_alphanumeric() || bytes[at - 1] == b'_');
-    let next_ok =
-      at + 4 >= bytes.len() || !(bytes[at + 4].is_ascii_alphanumeric() || bytes[at + 4] == b'_');
+    let next_ok = at + 4 >= bytes.len() || !(bytes[at + 4].is_ascii_alphanumeric() || bytes[at + 4] == b'_');
     if prev_ok && next_ok {
       when_at = Some(at);
     }
@@ -7056,10 +7171,8 @@ pub(crate) fn create_trigger_when_table(source: &str, offset: TextSize) -> Optio
   // Pull the target table from `ON <tbl>` between TRIGGER and WHEN.
   let on_rel = upper[..when_at].rfind(" ON ")?;
   let tbl_start = on_rel + 4;
-  let tbl_str: String = upper[tbl_start..]
-    .chars()
-    .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '.')
-    .collect();
+  let tbl_str: String =
+    upper[tbl_start..].chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '.').collect();
   let tbl = tbl_str.rsplit('.').next().unwrap_or(&tbl_str).to_ascii_lowercase();
   if tbl.is_empty() {
     return None;
@@ -7078,7 +7191,10 @@ pub(crate) fn create_trigger_when_table(source: &str, offset: TextSize) -> Optio
 ///   ... FOR EACH ROW <cursor> -> WHEN | EXECUTE
 ///   ... WHEN <cursor>  -- expression context; stay silent
 ///   ... EXECUTE <cursor> -> FUNCTION | PROCEDURE
-pub(crate) fn create_trigger_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn create_trigger_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -7087,7 +7203,9 @@ pub(crate) fn create_trigger_next_keyword(source: &str, offset: TextSize) -> Opt
   let words: Vec<&str> = upper.split_ascii_whitespace().collect();
   // CREATE [OR REPLACE] [CONSTRAINT] TRIGGER <name> ...
   let trigger_idx = words.iter().position(|w| *w == "TRIGGER")?;
-  if !words[..trigger_idx].iter().all(|w| matches!(*w, "CREATE" | "OR" | "REPLACE" | "CONSTRAINT")) || words[0] != "CREATE" {
+  if !words[..trigger_idx].iter().all(|w| matches!(*w, "CREATE" | "OR" | "REPLACE" | "CONSTRAINT"))
+    || words[0] != "CREATE"
+  {
     return None;
   }
   let after_kw = &words[trigger_idx + 1..];
@@ -7112,17 +7230,26 @@ pub(crate) fn create_trigger_next_keyword(source: &str, offset: TextSize) -> Opt
   let upper_tail: Vec<&str> = tail.to_vec();
   // EXECUTE <cursor>
   if last == "EXECUTE" {
-    return Some(&[("FUNCTION", "EXECUTE FUNCTION <fn>(<args>)"), ("PROCEDURE", "EXECUTE PROCEDURE <fn>(<args>) -- pre-PG11")]);
+    return Some(&[
+      ("FUNCTION", "EXECUTE FUNCTION <fn>(<args>)"),
+      ("PROCEDURE", "EXECUTE PROCEDURE <fn>(<args>) -- pre-PG11"),
+    ]);
   }
   // FOR / FOR EACH
   if last == "FOR" {
     return Some(&[("EACH", "FOR EACH ROW | STATEMENT")]);
   }
   if last == "EACH" {
-    return Some(&[("ROW", "FOR EACH ROW -- per-row trigger"), ("STATEMENT", "FOR EACH STATEMENT -- one fire per statement")]);
+    return Some(&[
+      ("ROW", "FOR EACH ROW -- per-row trigger"),
+      ("STATEMENT", "FOR EACH STATEMENT -- one fire per statement"),
+    ]);
   }
   if matches!(last, "ROW" | "STATEMENT") && upper_tail.contains(&"EACH") {
-    return Some(&[("WHEN", "WHEN (<predicate>) -- conditional"), ("EXECUTE", "EXECUTE {FUNCTION|PROCEDURE} <fn>(<args>)")]);
+    return Some(&[
+      ("WHEN", "WHEN (<predicate>) -- conditional"),
+      ("EXECUTE", "EXECUTE {FUNCTION|PROCEDURE} <fn>(<args>)"),
+    ]);
   }
   // After BEFORE/AFTER/INSTEAD OF, expect an event keyword.
   if matches!(last, "BEFORE" | "AFTER") {
@@ -7138,7 +7265,11 @@ pub(crate) fn create_trigger_next_keyword(source: &str, offset: TextSize) -> Opt
   }
   // After an event word, chain via OR <event> or ON <table>.
   if matches!(last, "INSERT" | "UPDATE" | "DELETE" | "TRUNCATE") {
-    return Some(&[("ON", "ON <table>"), ("OR", "OR <event> -- chain another event"), ("OF", "UPDATE OF <col>[, ...] -- column-list-scoped UPDATE event")]);
+    return Some(&[
+      ("ON", "ON <table>"),
+      ("OR", "OR <event> -- chain another event"),
+      ("OF", "UPDATE OF <col>[, ...] -- column-list-scoped UPDATE event"),
+    ]);
   }
   // REFERENCING chain: REFERENCING { OLD | NEW } TABLE [AS] <alias> [...]
   if last == "REFERENCING" {
@@ -7175,7 +7306,10 @@ pub(crate) fn create_trigger_next_keyword(source: &str, offset: TextSize) -> Opt
 /// slots). Adds: after-table-no-paren -> USING|(; after-USING -> method;
 /// after-closing-paren -> INCLUDE | NULLS [NOT] DISTINCT | WITH |
 /// TABLESPACE | WHERE.
-pub(crate) fn create_index_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn create_index_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -7185,7 +7319,11 @@ pub(crate) fn create_index_next_keyword(source: &str, offset: TextSize) -> Optio
   let starts_index = words.starts_with(&["CREATE", "INDEX"])
     || words.starts_with(&["CREATE", "UNIQUE", "INDEX"])
     || (words.len() >= 3 && words[0] == "CREATE" && words[1] == "INDEX" && words[2] == "CONCURRENTLY")
-    || (words.len() >= 4 && words[0] == "CREATE" && words[1] == "UNIQUE" && words[2] == "INDEX" && words[3] == "CONCURRENTLY");
+    || (words.len() >= 4
+      && words[0] == "CREATE"
+      && words[1] == "UNIQUE"
+      && words[2] == "INDEX"
+      && words[3] == "CONCURRENTLY");
   if !starts_index {
     return None;
   }
@@ -7226,7 +7364,10 @@ pub(crate) fn create_index_next_keyword(source: &str, offset: TextSize) -> Optio
 ///   ALTER TYPE <name> OWNER TO <role>
 ///   ALTER TYPE <name> SET SCHEMA <schema>
 ///   ALTER TYPE <name> ADD ATTRIBUTE <name> <type> [CASCADE|RESTRICT]
-pub(crate) fn alter_type_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn alter_type_next_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -7263,12 +7404,19 @@ pub(crate) fn alter_type_next_keyword(source: &str, offset: TextSize) -> Option<
   if n >= 6 && words[3] == "ADD" && words[4] == "VALUE" && !words.contains(&"BEFORE") && !words.contains(&"AFTER") {
     let last = words.last()?;
     if last.starts_with('\'') && last.ends_with('\'') {
-      return Some(&[("BEFORE", "BEFORE '<existing>' -- insert before this value"), ("AFTER", "AFTER '<existing>' -- insert after this value")]);
+      return Some(&[
+        ("BEFORE", "BEFORE '<existing>' -- insert before this value"),
+        ("AFTER", "AFTER '<existing>' -- insert after this value"),
+      ]);
     }
   }
   // ALTER TYPE <name> RENAME <cursor>
   if n == 4 && words[3] == "RENAME" {
-    return Some(&[("VALUE", "VALUE '<old>' TO '<new>'"), ("TO", "TO <new_type_name>"), ("ATTRIBUTE", "ATTRIBUTE <old> TO <new>")]);
+    return Some(&[
+      ("VALUE", "VALUE '<old>' TO '<new>'"),
+      ("TO", "TO <new_type_name>"),
+      ("ATTRIBUTE", "ATTRIBUTE <old> TO <new>"),
+    ]);
   }
   // ALTER TYPE <name> RENAME VALUE 'lit' <cursor>
   if n == 6 && words[3] == "RENAME" && words[4] == "VALUE" {
@@ -7318,10 +7466,7 @@ pub(crate) fn drop_user_mapping_next_keyword(
   }
   let last = *words.last()?;
   if last == "MAPPING" {
-    return Some(&[
-      ("FOR", "FOR <role> SERVER <srv>"),
-      ("IF EXISTS", "IF EXISTS FOR <role> SERVER <srv>"),
-    ]);
+    return Some(&[("FOR", "FOR <role> SERVER <srv>"), ("IF EXISTS", "IF EXISTS FOR <role> SERVER <srv>")]);
   }
   if last == "EXISTS" && words.contains(&"IF") {
     return Some(&[("FOR", "FOR <role> SERVER <srv>")]);
@@ -7343,7 +7488,10 @@ pub(crate) fn drop_user_mapping_next_keyword(
   None
 }
 
-pub(crate) fn after_top_level_drop_keyword(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn after_top_level_drop_keyword(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   if cursor_not_at_ws_boundary(source, offset) {
     return None;
   }
@@ -7403,7 +7551,10 @@ pub(crate) fn after_top_level_drop_keyword(source: &str, offset: TextSize) -> Op
 /// sub-keywords (COLUMN / CONSTRAINT / TO / ...). Returns None when
 /// the cursor is elsewhere (e.g. mid-name, after the sub-keyword,
 /// inside a column declaration), letting other branches handle it.
-pub(crate) fn alter_table_subaction_at(source: &str, offset: TextSize) -> Option<&'static [(&'static str, &'static str)]> {
+pub(crate) fn alter_table_subaction_at(
+  source: &str,
+  offset: TextSize,
+) -> Option<&'static [(&'static str, &'static str)]> {
   let pos: usize = (u32::from(offset) as usize).min(source.len());
   let bytes = source.as_bytes();
   // Walk back through trailing whitespace.
@@ -7450,11 +7601,7 @@ pub(crate) fn alter_table_subaction_at(source: &str, offset: TextSize) -> Option
     }
     prev_start -= 1;
   }
-  let prev_word = if prev_start < prev_end {
-    source[prev_start..prev_end].to_ascii_uppercase()
-  } else {
-    String::new()
-  };
+  let prev_word = if prev_start < prev_end { source[prev_start..prev_end].to_ascii_uppercase() } else { String::new() };
   if matches!(prev_word.as_str(), "ADD" | "DROP" | "RENAME" | "ALTER") {
     return None;
   }
@@ -7477,10 +7624,9 @@ pub(crate) fn alter_table_subaction_at(source: &str, offset: TextSize) -> Option
       ("CONSTRAINT", "RENAME CONSTRAINT <old> TO <new>"),
       ("TO", "RENAME TO <new_table>"),
     ]),
-    "ALTER" => Some(&[
-      ("COLUMN", "ALTER COLUMN <name> <action>"),
-      ("CONSTRAINT", "ALTER CONSTRAINT <name> DEFERRABLE|...]"),
-    ]),
+    "ALTER" => {
+      Some(&[("COLUMN", "ALTER COLUMN <name> <action>"), ("CONSTRAINT", "ALTER CONSTRAINT <name> DEFERRABLE|...]")])
+    },
     // OWNER TO <role> -- top-level ALTER TABLE action.
     "OWNER" => Some(&[("TO", "OWNER TO <role>")]),
     // NULLS NOT DISTINCT inside a UNIQUE/PRIMARY KEY constraint.
@@ -7684,10 +7830,7 @@ pub(crate) fn alter_table_expects_type(source: &str, offset: TextSize) -> bool {
   //   - There are no more whitespace-separated tokens (just trailing
   //     whitespace after the name), or
   //   - The last token is a single partial identifier (no further tokens).
-  let rest_after_name = stmt[add_at + "ADD COLUMN".len()..]
-    .trim_start()
-    .split_ascii_whitespace()
-    .collect::<Vec<_>>();
+  let rest_after_name = stmt[add_at + "ADD COLUMN".len()..].trim_start().split_ascii_whitespace().collect::<Vec<_>>();
   // rest_after_name[0] is the name (possibly with IF NOT EXISTS prefix
   // tokens already consumed conceptually). We accept the type-slot when
   // there's exactly the name and an optional partial type word, with
@@ -7814,8 +7957,7 @@ pub(crate) fn alter_table_existing_column_target(source: &str, offset: TextSize)
   }
   // Skip optional modifiers, take the first non-modifier token.
   let mods: &[&str] = &["IF", "EXISTS", "ONLY"];
-  let table_tok =
-    tokens.into_iter().find(|t| !mods.iter().any(|m| t.eq_ignore_ascii_case(m)))?;
+  let table_tok = tokens.into_iter().find(|t| !mods.iter().any(|m| t.eq_ignore_ascii_case(m)))?;
   let table = table_tok.rsplit('.').next().unwrap_or(table_tok).trim_matches('"').trim_end_matches(';').to_string();
   if table.is_empty() {
     return None;
@@ -8165,11 +8307,7 @@ pub(crate) fn trigger_target_table(source: &str) -> Option<String> {
     .find(|s| !s.is_empty())?;
   // Strip optional `ONLY` keyword introducing the table name.
   let tok = if tok.eq_ignore_ascii_case("ONLY") {
-    after
-      .trim_start()
-      .split_ascii_whitespace()
-      .nth(1)
-      .unwrap_or(tok)
+    after.trim_start().split_ascii_whitespace().nth(1).unwrap_or(tok)
   } else {
     tok
   };
@@ -8936,11 +9074,7 @@ pub(crate) fn at_fresh_name_slot(source: &str, offset: TextSize) -> bool {
   // `RENAME COLUMN <name> TO`.
   let tokens: Vec<&str> = lead.split_ascii_whitespace().collect();
   let n = tokens.len();
-  if n >= 4
-    && tokens[n - 4] == "RENAME"
-    && tokens[n - 3] == "COLUMN"
-    && tokens[n - 1] == "TO"
-  {
+  if n >= 4 && tokens[n - 4] == "RENAME" && tokens[n - 3] == "COLUMN" && tokens[n - 1] == "TO" {
     return true;
   }
   false

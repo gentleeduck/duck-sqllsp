@@ -94,13 +94,8 @@ impl LintRule for Rule {
       }
       let lit = &raw[lit_start..k];
       let reason = if validate_date {
-        validate_date_prefix(lit).or_else(|| {
-          if validate_time {
-            time_portion_of(lit).and_then(validate_time_hms)
-          } else {
-            None
-          }
-        })
+        validate_date_prefix(lit)
+          .or_else(|| if validate_time { time_portion_of(lit).and_then(validate_time_hms) } else { None })
       } else if validate_time {
         validate_time_hms(lit)
       } else {
@@ -179,7 +174,8 @@ fn validate_time_hms(s: &str) -> Option<String> {
   if b.len() < 5 {
     return None;
   }
-  if !(b[0].is_ascii_digit() && b[1].is_ascii_digit() && b[2] == b':' && b[3].is_ascii_digit() && b[4].is_ascii_digit()) {
+  if !(b[0].is_ascii_digit() && b[1].is_ascii_digit() && b[2] == b':' && b[3].is_ascii_digit() && b[4].is_ascii_digit())
+  {
     return None;
   }
   let h: u32 = std::str::from_utf8(&b[0..2]).ok()?.parse().ok()?;

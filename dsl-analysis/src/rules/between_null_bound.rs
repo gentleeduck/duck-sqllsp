@@ -27,7 +27,10 @@ impl LintRule for Rule {
 
     let mut i = 0usize;
     while i + 7 <= n {
-      if &ub[i..i + 7] != b"BETWEEN" || (i > 0 && is_word(ub[i - 1] as char)) || (i + 7 < n && is_word(ub[i + 7] as char)) {
+      if &ub[i..i + 7] != b"BETWEEN"
+        || (i > 0 && is_word(ub[i - 1] as char))
+        || (i + 7 < n && is_word(ub[i + 7] as char))
+      {
         i += 1;
         continue;
       }

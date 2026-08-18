@@ -31,7 +31,6 @@ fn starts_with_at(s: &str, i: usize, pat: &str) -> bool {
   s.as_bytes().get(i..).is_some_and(|b| b.starts_with(pat.as_bytes()))
 }
 
-
 use dsl_catalog::{
   CATALOG_VERSION, Catalog, Column, Constraint, ConstraintKind, ConstraintRef, Extension, Function, FunctionArg,
   IndexDef, Policy, Schema, Sequence, Table, TableKind, Trigger, Type, TypeKind,
@@ -77,7 +76,8 @@ pub fn from_file(file: &ParsedFile) -> Catalog {
       row_estimate: None,
       owner: None,
       definition: None,
-      strict: false, options: None,
+      strict: false,
+      options: None,
     };
     if schema_name.eq_ignore_ascii_case("public") {
       public.tables.push(table);
@@ -238,7 +238,8 @@ pub fn from_source(file: &ParsedFile, source: &str) -> Catalog {
       row_estimate: None,
       owner: None,
       definition: Some(definition),
-      strict: false, options: None,
+      strict: false,
+      options: None,
     };
     if let Some(s) = cat.schemas.iter_mut().find(|s| s.name.eq_ignore_ascii_case(&schema_name)) {
       s.tables.push(view);
@@ -446,8 +447,7 @@ fn recover_failed_create_tables(cat: &mut Catalog, src: &str) {
     let schema_name = schema.unwrap_or_else(|| "public".to_string()).to_ascii_lowercase();
     let table_name_lc = name.to_ascii_lowercase();
     if cat.schemas.iter().any(|s| {
-      s.name.eq_ignore_ascii_case(&schema_name)
-        && s.tables.iter().any(|t| t.name.eq_ignore_ascii_case(&table_name_lc))
+      s.name.eq_ignore_ascii_case(&schema_name) && s.tables.iter().any(|t| t.name.eq_ignore_ascii_case(&table_name_lc))
     }) {
       continue;
     }
@@ -482,7 +482,8 @@ fn recover_failed_create_tables(cat: &mut Catalog, src: &str) {
       row_estimate: None,
       owner: None,
       definition: None,
-      strict: false, options: None,
+      strict: false,
+      options: None,
     };
     if let Some(s) = cat.schemas.iter_mut().find(|s| s.name.eq_ignore_ascii_case(&schema_name)) {
       s.tables.push(table);
@@ -624,8 +625,7 @@ fn parse_create_table_columns(body: &str) -> Vec<Column> {
     if type_text.is_empty() {
       continue;
     }
-    let nullable = !upper_rest[..cut.min(upper_rest.len())].contains("NOT NULL")
-      && !upper_rest.contains("PRIMARY KEY");
+    let nullable = !upper_rest[..cut.min(upper_rest.len())].contains("NOT NULL") && !upper_rest.contains("PRIMARY KEY");
     out.push(Column {
       name,
       data_type: type_text,
@@ -1233,7 +1233,8 @@ fn scan_owner_for(src: &str, name: &str) -> Option<String> {
       }
     }
     let id_start = k;
-    while k < bytes.len() && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"')
+    while k < bytes.len()
+      && (bytes[k].is_ascii_alphanumeric() || bytes[k] == b'_' || bytes[k] == b'.' || bytes[k] == b'"')
     {
       k += 1;
     }
@@ -1744,12 +1745,7 @@ fn parse_constraints(body: &str) -> Vec<Constraint> {
       });
     }
     if let Some(refs) = inline_references(trimmed) {
-      let def = format!(
-        "FOREIGN KEY ({col}) REFERENCES {}.{} ({})",
-        refs.schema,
-        refs.table,
-        refs.columns.join(", ")
-      );
+      let def = format!("FOREIGN KEY ({col}) REFERENCES {}.{} ({})", refs.schema, refs.table, refs.columns.join(", "));
       out.push(Constraint {
         name: format!("fk_{col}"),
         kind: ConstraintKind::ForeignKey,
@@ -1909,11 +1905,7 @@ fn extract_arguments(src: &str, name_end: usize) -> Vec<FunctionArg> {
       Some(at) => {
         let head = &rest[..at];
         let tail = rest[at..].trim();
-        if tail.is_empty() {
-          (None, head.to_string())
-        } else {
-          (Some(head.to_string()), tail.to_string())
-        }
+        if tail.is_empty() { (None, head.to_string()) } else { (Some(head.to_string()), tail.to_string()) }
       },
       None => (None, rest.to_string()),
     };
@@ -2200,9 +2192,7 @@ fn scan_clears(src: &str) -> Vec<(usize, String, ClearKind)> {
     // delete (best effort). No WHERE = clear table.
     let stmt_end = src[i..].find(';').map(|p| i + p).unwrap_or(n);
     let stmt_tail_upper = upper[i..stmt_end].to_string();
-    let has_where = stmt_tail_upper
-      .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
-      .any(|w| w == "WHERE");
+    let has_where = stmt_tail_upper.split(|c: char| !c.is_ascii_alphanumeric() && c != '_').any(|w| w == "WHERE");
     if !bare.is_empty() {
       out.push((at, bare, if has_where { ClearKind::DeleteWhere } else { ClearKind::DeleteAll }));
     }
@@ -2340,11 +2330,7 @@ fn generate_series_literal_count(chunk: &str) -> Option<i64> {
   }
   let a: i64 = args[0].parse().ok()?;
   let b: i64 = args[1].parse().ok()?;
-  let step: i64 = if args.len() >= 3 {
-    args[2].parse().ok().unwrap_or(1)
-  } else {
-    1
-  };
+  let step: i64 = if args.len() >= 3 { args[2].parse().ok().unwrap_or(1) } else { 1 };
   if step == 0 {
     return None;
   }

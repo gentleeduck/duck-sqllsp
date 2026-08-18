@@ -325,11 +325,8 @@ fn detect_execute_dynamic_sql(
   let span = execute_dynamic_sql_span(source, pos)?;
   let raw = &source[span.content_start..span.content_end];
   let raw_cursor = pos - span.content_start;
-  let (content, inner_offset) = if span.dollar_quoted {
-    (raw.to_string(), raw_cursor)
-  } else {
-    unescape_single_quoted(raw, raw_cursor)
-  };
+  let (content, inner_offset) =
+    if span.dollar_quoted { (raw.to_string(), raw_cursor) } else { unescape_single_quoted(raw, raw_cursor) };
   let inner_file = dsl_parse::parse(&content, dsl_parse::Dialect::Postgres);
   let inner_scopes = dsl_resolve::resolve_with_source(&inner_file.statements, &content);
   Some(complete(&content, &inner_file, &inner_scopes, cat, TextSize::from(inner_offset as u32)))
@@ -549,7 +546,13 @@ fn detect_grouping_sets_inner_paren(
 /// index opclass slot, trigger event slot, trigger ON table). All run
 /// *before* the index/table phases because they're more specific than
 /// the column dump those phases would emit.
-fn detect_contexts(source: &str, offset: TextSize, _file: &ParsedFile, _scopes: &[Scope], cat: &Catalog) -> Option<Vec<Item>> {
+fn detect_contexts(
+  source: &str,
+  offset: TextSize,
+  _file: &ParsedFile,
+  _scopes: &[Scope],
+  cat: &Catalog,
+) -> Option<Vec<Item>> {
   crate::contexts::detect(source, offset, cat)
 }
 
@@ -939,10 +942,13 @@ fn route_phase(
       // slot (BERNOULLI / SYSTEM). The generic AfterTable handler
       // would wrongly offer JOIN keywords.
       if tablesample_expects_method(source, offset) {
-        push_keyword_kvs(&mut out, &[
-          ("BERNOULLI", "TABLESAMPLE BERNOULLI (<percent>) -- row-level uniform sample"),
-          ("SYSTEM", "TABLESAMPLE SYSTEM (<percent>) -- page-level random sample"),
-        ]);
+        push_keyword_kvs(
+          &mut out,
+          &[
+            ("BERNOULLI", "TABLESAMPLE BERNOULLI (<percent>) -- row-level uniform sample"),
+            ("SYSTEM", "TABLESAMPLE SYSTEM (<percent>) -- page-level random sample"),
+          ],
+        );
         return dedup_items(out);
       }
       // `SELECT ... FOR <cursor>` / `... FOR UPDATE|SHARE <cursor>`
@@ -1020,10 +1026,13 @@ fn route_phase(
       // legal continuation is FIRST | LAST. Suppress the full column
       // + function dump for this tightly-scoped slot.
       if order_by_nulls_expects_first_last(source, offset) {
-        push_keyword_kvs(&mut out, &[
-          ("FIRST", "NULLS FIRST -- NULLs sort before non-NULL values"),
-          ("LAST", "NULLS LAST -- NULLs sort after non-NULL values"),
-        ]);
+        push_keyword_kvs(
+          &mut out,
+          &[
+            ("FIRST", "NULLS FIRST -- NULLs sort before non-NULL values"),
+            ("LAST", "NULLS LAST -- NULLs sort after non-NULL values"),
+          ],
+        );
       } else {
         push_scope_columns_or_all(file, scopes, source, cat, offset, &mut out);
         push_aliases(file, scopes, source, offset, &mut out);
@@ -1642,10 +1651,9 @@ fn route_phase(
       } else if reset_expects_subkeyword(source, offset) {
         // `RESET <cursor>` -> ALL | ROLE | <GUC name>. GUC names are
         // freeform so we only emit the two keyword candidates.
-        for (kw, doc) in [
-          ("ALL", "RESET ALL -- reset every GUC to its default"),
-          ("ROLE", "RESET ROLE -- undo a SET ROLE"),
-        ] {
+        for (kw, doc) in
+          [("ALL", "RESET ALL -- reset every GUC to its default"), ("ROLE", "RESET ROLE -- undo a SET ROLE")]
+        {
           out.push(crate::item::Item {
             label: kw.into(),
             kind: crate::item::ItemKind::Keyword,
@@ -2351,4 +2359,3 @@ fn route_phase(
   }
   dedup_items(out)
 }
-

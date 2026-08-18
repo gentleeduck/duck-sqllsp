@@ -32,15 +32,8 @@ impl LintRule for Rule {
     let lb = lower.as_bytes();
     let bytes = cleaned.as_bytes();
     let n = lb.len();
-    let funcs: &[&[u8]] = &[
-      b"jsonb_object_agg",
-      b"json_object_agg",
-      b"array_agg",
-      b"string_agg",
-      b"jsonb_agg",
-      b"json_agg",
-      b"xmlagg",
-    ];
+    let funcs: &[&[u8]] =
+      &[b"jsonb_object_agg", b"json_object_agg", b"array_agg", b"string_agg", b"jsonb_agg", b"json_agg", b"xmlagg"];
     let mut i = 0usize;
     while i < n {
       let mut name_len: Option<usize> = None;

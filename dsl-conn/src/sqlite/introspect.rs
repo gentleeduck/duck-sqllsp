@@ -407,8 +407,8 @@ fn find_kw_parens(s: &str, kw: &str) -> Option<(usize, usize)> {
         i += 1;
       },
       _ if depth == 0 => {
-        let matches_kw = i + kw.len() <= bytes.len()
-          && bytes[i..i + kw.len()].iter().zip(kw).all(|(a, b)| a.eq_ignore_ascii_case(b));
+        let matches_kw =
+          i + kw.len() <= bytes.len() && bytes[i..i + kw.len()].iter().zip(kw).all(|(a, b)| a.eq_ignore_ascii_case(b));
         let prev_boundary = i == 0 || !is_ident(bytes[i - 1]);
         let next_boundary = bytes.get(i + kw.len()).is_none_or(|&b| !is_ident(b));
         if matches_kw && prev_boundary && next_boundary {
@@ -499,14 +499,7 @@ fn parse_check_constraints(create_sql: &str, table: &str) -> Vec<Constraint> {
 
 fn check_constraint(name: String, paren_group: &str, inline: bool, columns: Vec<String>) -> Constraint {
   let definition = if inline { paren_group.to_string() } else { format!("CHECK {paren_group}") };
-  Constraint {
-    name,
-    kind: ConstraintKind::Check,
-    columns,
-    references: None,
-    definition: Some(definition),
-    inline,
-  }
+  Constraint { name, kind: ConstraintKind::Check, columns, references: None, definition: Some(definition), inline }
 }
 
 /// Index of the ')' matching the '(' at `open`, respecting nested parens and
@@ -614,7 +607,8 @@ mod tests {
   fn check_ignores_strings_and_other_constraints() {
     // `CHECK` inside a default string literal must not register, and PK/FK
     // table-level clauses are skipped.
-    let sql = "CREATE TABLE t (note TEXT DEFAULT 'CHECK (x)', a INT, PRIMARY KEY (a), FOREIGN KEY (a) REFERENCES u(id))";
+    let sql =
+      "CREATE TABLE t (note TEXT DEFAULT 'CHECK (x)', a INT, PRIMARY KEY (a), FOREIGN KEY (a) REFERENCES u(id))";
     assert!(parse_check_constraints(sql, "t").is_empty());
   }
 
@@ -660,7 +654,8 @@ mod tests {
 
   #[test]
   fn parses_generated_always_and_shorthand() {
-    let sql = "CREATE TABLE t (\n  a INTEGER,\n  b INTEGER GENERATED ALWAYS AS (a * 2) STORED,\n  c AS (a + 1) VIRTUAL\n)";
+    let sql =
+      "CREATE TABLE t (\n  a INTEGER,\n  b INTEGER GENERATED ALWAYS AS (a * 2) STORED,\n  c AS (a + 1) VIRTUAL\n)";
     let g = parse_generated_columns(sql);
     assert_eq!(g.get("b").map(String::as_str), Some("a * 2"));
     assert_eq!(g.get("c").map(String::as_str), Some("a + 1"));

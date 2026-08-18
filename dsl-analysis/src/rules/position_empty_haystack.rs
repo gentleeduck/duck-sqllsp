@@ -38,7 +38,8 @@ impl LintRule for Rule {
         while k < n && bytes[k].is_ascii_whitespace() {
           k += 1;
         }
-        if k < n && bytes[k] == b'('
+        if k < n
+          && bytes[k] == b'('
           && let Some(close) = match_paren(bytes, k, n)
         {
           let inner_start = k + 1;
@@ -70,7 +71,8 @@ impl LintRule for Rule {
         while k < n && bytes[k].is_ascii_whitespace() {
           k += 1;
         }
-        if k < n && bytes[k] == b'('
+        if k < n
+          && bytes[k] == b'('
           && let Some(close) = match_paren(bytes, k, n)
         {
           let inner_start = k + 1;
@@ -107,7 +109,10 @@ fn find_word(ub: &[u8], w: &[u8], from: usize, to: usize) -> Option<usize> {
   let m = w.len();
   let mut i = from;
   while i + m <= to {
-    if &ub[i..i + m] == w && (i == 0 || !is_word(ub[i - 1] as char)) && (i + m == ub.len() || !is_word(ub[i + m] as char)) {
+    if &ub[i..i + m] == w
+      && (i == 0 || !is_word(ub[i - 1] as char))
+      && (i + m == ub.len() || !is_word(ub[i + m] as char))
+    {
       return Some(i);
     }
     i += 1;

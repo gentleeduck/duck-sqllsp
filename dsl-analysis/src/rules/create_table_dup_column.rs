@@ -9,8 +9,7 @@ use dsl_parse::Statement;
 use dsl_resolve::Scope;
 use std::collections::HashMap;
 
-const CONSTRAINT_KW: &[&str] =
-  &["PRIMARY", "UNIQUE", "FOREIGN", "CONSTRAINT", "CHECK", "EXCLUDE", "LIKE", "INHERITS"];
+const CONSTRAINT_KW: &[&str] = &["PRIMARY", "UNIQUE", "FOREIGN", "CONSTRAINT", "CHECK", "EXCLUDE", "LIKE", "INHERITS"];
 
 pub struct Rule;
 

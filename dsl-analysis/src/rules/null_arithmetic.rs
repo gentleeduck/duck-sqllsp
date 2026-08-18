@@ -55,11 +55,7 @@ impl LintRule for Rule {
           } else {
             true
           };
-          if two_back_ok {
-            Some(c as char)
-          } else {
-            None
-          }
+          if two_back_ok { Some(c as char) } else { None }
         } else {
           None
         }
@@ -80,11 +76,7 @@ impl LintRule for Rule {
           } else {
             true
           };
-          if next_next_ok {
-            Some(c as char)
-          } else {
-            None
-          }
+          if next_next_ok { Some(c as char) } else { None }
         } else {
           None
         }

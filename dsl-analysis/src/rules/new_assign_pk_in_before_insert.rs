@@ -5,8 +5,8 @@
 //! bug: either the trigger should use a different column or it should
 //! call `nextval()` explicitly so the sequence stays in sync.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -77,4 +77,3 @@ impl LintRule for Rule {
     }
   }
 }
-

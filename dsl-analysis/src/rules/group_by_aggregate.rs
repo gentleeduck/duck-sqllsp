@@ -10,11 +10,28 @@ use dsl_parse::Statement;
 use dsl_resolve::Scope;
 
 const AGG_FNS: &[&str] = &[
-  "count", "sum", "avg", "min", "max", "array_agg", "string_agg", "json_agg", "jsonb_agg", "bool_or", "bool_and",
-  "every", "stddev", "stddev_pop", "stddev_samp", "variance", "var_pop", "var_samp",
+  "count",
+  "sum",
+  "avg",
+  "min",
+  "max",
+  "array_agg",
+  "string_agg",
+  "json_agg",
+  "jsonb_agg",
+  "bool_or",
+  "bool_and",
+  "every",
+  "stddev",
+  "stddev_pop",
+  "stddev_samp",
+  "variance",
+  "var_pop",
+  "var_samp",
 ];
 
-const STOPWORDS: &[&str] = &["HAVING", "ORDER", "LIMIT", "OFFSET", "WINDOW", "UNION", "INTERSECT", "EXCEPT", "FETCH", "FOR"];
+const STOPWORDS: &[&str] =
+  &["HAVING", "ORDER", "LIMIT", "OFFSET", "WINDOW", "UNION", "INTERSECT", "EXCEPT", "FETCH", "FOR"];
 
 pub struct Rule;
 

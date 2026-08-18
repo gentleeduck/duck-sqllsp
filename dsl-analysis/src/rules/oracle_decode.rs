@@ -48,8 +48,8 @@ impl LintRule for Rule {
               close = Some(j);
               break;
             }
-          }
-          _ => {}
+          },
+          _ => {},
         }
         j += 1;
       }

@@ -60,7 +60,23 @@ impl LintRule for Rule {
     // Other common wrapping functions (lower/upper/trim/substring/...)
     // -- first arg is the column, fires when arg is column-shape and
     // `=` follows the close paren.
-    const GENERIC_WRAPPERS: &[&str] = &["LOWER(", "UPPER(", "TRIM(", "BTRIM(", "LTRIM(", "RTRIM(", "SUBSTRING(", "SUBSTR(", "LEFT(", "RIGHT(", "ABS(", "ROUND(", "FLOOR(", "CEIL(", "CEILING("];
+    const GENERIC_WRAPPERS: &[&str] = &[
+      "LOWER(",
+      "UPPER(",
+      "TRIM(",
+      "BTRIM(",
+      "LTRIM(",
+      "RTRIM(",
+      "SUBSTRING(",
+      "SUBSTR(",
+      "LEFT(",
+      "RIGHT(",
+      "ABS(",
+      "ROUND(",
+      "FLOOR(",
+      "CEIL(",
+      "CEILING(",
+    ];
     for needle in GENERIC_WRAPPERS {
       let lower_kw = needle.trim_end_matches('(').to_ascii_lowercase();
       let mut from = 0usize;
@@ -271,6 +287,16 @@ fn is_column_shape(s: &str) -> bool {
   }
   let up = s.to_ascii_uppercase();
   let bare = up.rsplit('.').next().unwrap_or(&up);
-  !matches!(bare, "CURRENT_DATE" | "CURRENT_TIME" | "CURRENT_TIMESTAMP" | "LOCALTIME" | "LOCALTIMESTAMP" | "NOW" | "NULL" | "TRUE" | "FALSE")
-    && !bare.chars().all(|c| c.is_ascii_digit() || c == '.')
+  !matches!(
+    bare,
+    "CURRENT_DATE"
+      | "CURRENT_TIME"
+      | "CURRENT_TIMESTAMP"
+      | "LOCALTIME"
+      | "LOCALTIMESTAMP"
+      | "NOW"
+      | "NULL"
+      | "TRUE"
+      | "FALSE"
+  ) && !bare.chars().all(|c| c.is_ascii_digit() || c == '.')
 }

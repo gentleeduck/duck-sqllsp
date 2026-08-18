@@ -21,8 +21,8 @@ fn close_of(b: &[u8], open: usize) -> Option<usize> {
         if depth == 0 {
           return Some(i);
         }
-      }
-      _ => {}
+      },
+      _ => {},
     }
     i += 1;
   }

@@ -28,9 +28,7 @@ impl LintRule for Rule {
     let n = ub.len();
     let mut i = 0usize;
     while i + 4 <= n {
-      if &ub[i..i + 4] == b"ENUM"
-        && (i == 0 || !is_word(ub[i - 1] as char))
-      {
+      if &ub[i..i + 4] == b"ENUM" && (i == 0 || !is_word(ub[i - 1] as char)) {
         let mut j = i + 4;
         while j < n && ub[j].is_ascii_whitespace() {
           j += 1;

@@ -15,8 +15,20 @@ use dsl_parse::Statement;
 use dsl_resolve::Scope;
 use std::collections::HashMap;
 
-const STOPWORDS: &[&str] =
-  &["GROUP", "ORDER", "HAVING", "LIMIT", "OFFSET", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT", "FETCH", "FOR"];
+const STOPWORDS: &[&str] = &[
+  "GROUP",
+  "ORDER",
+  "HAVING",
+  "LIMIT",
+  "OFFSET",
+  "WINDOW",
+  "RETURNING",
+  "UNION",
+  "INTERSECT",
+  "EXCEPT",
+  "FETCH",
+  "FOR",
+];
 
 pub struct Rule;
 

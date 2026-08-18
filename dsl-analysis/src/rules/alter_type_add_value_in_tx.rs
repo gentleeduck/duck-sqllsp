@@ -1,8 +1,8 @@
 //! sql141: `ALTER TYPE x ADD VALUE 'y'` cannot run inside an explicit
 //! transaction block -- PG aborts the statement.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -71,7 +71,6 @@ fn count_word(haystack: &str, needle: &str) -> usize {
   }
   c
 }
-
 
 fn count_with_prev_exclude(haystack: &str, needle: &str, excluded_prev: &[&str], excluded_next: &[&str]) -> usize {
   let h = haystack.as_bytes();

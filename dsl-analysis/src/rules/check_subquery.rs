@@ -63,8 +63,8 @@ impl LintRule for Rule {
                   close = Some(k);
                   break;
                 }
-              }
-              _ => {}
+              },
+              _ => {},
             }
             k += 1;
           }
@@ -73,7 +73,9 @@ impl LintRule for Rule {
               out.push(Diagnostic {
                 code: "sql606",
                 severity: Severity::Error,
-                message: "subquery in a CHECK constraint -- PostgreSQL forbids this; use a trigger or foreign key instead".into(),
+                message:
+                  "subquery in a CHECK constraint -- PostgreSQL forbids this; use a trigger or foreign key instead"
+                    .into(),
                 range: crate::range_at(start + i, start + i + 5),
               });
             }

@@ -37,7 +37,9 @@ impl LintRule for Rule {
       out.push(Diagnostic {
         code: "sql666",
         severity: Severity::Error,
-        message: "`INSERT IGNORE` is MySQL -- PostgreSQL uses `INSERT ... ON CONFLICT DO NOTHING` to skip conflicting rows".into(),
+        message:
+          "`INSERT IGNORE` is MySQL -- PostgreSQL uses `INSERT ... ON CONFLICT DO NOTHING` to skip conflicting rows"
+            .into(),
         range: crate::range_at(start + j, start + j + 6),
       });
     }

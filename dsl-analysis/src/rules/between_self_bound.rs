@@ -27,7 +27,20 @@ impl LintRule for Rule {
     let upper = cleaned.to_ascii_uppercase();
     let bytes_u = upper.as_bytes();
     let bytes = cleaned.as_bytes();
-    let stopwords = ["GROUP BY", "ORDER BY", "LIMIT", "OFFSET", "HAVING", "FOR", "FETCH", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT"];
+    let stopwords = [
+      "GROUP BY",
+      "ORDER BY",
+      "LIMIT",
+      "OFFSET",
+      "HAVING",
+      "FOR",
+      "FETCH",
+      "WINDOW",
+      "RETURNING",
+      "UNION",
+      "INTERSECT",
+      "EXCEPT",
+    ];
 
     // For each WHERE / ON clause: scan its body for BETWEEN occurrences.
     for needle in [&b"WHERE"[..], &b"ON"[..]] {
@@ -146,8 +159,12 @@ fn scan_between(bytes: &[u8], upper_bytes: &[u8], from: usize, to: usize, abs_of
       let detail = match (side, is_not) {
         ("low", false) => format!("low bound is `{x_text}` -- equivalent to `{x_text} <= <high>`"),
         ("high", false) => format!("high bound is `{x_text}` -- equivalent to `{x_text} >= <low>`"),
-        ("low", true) => format!("low bound is `{x_text}` -- with NOT BETWEEN this is equivalent to `{x_text} > <high>`"),
-        ("high", true) => format!("high bound is `{x_text}` -- with NOT BETWEEN this is equivalent to `{x_text} < <low>`"),
+        ("low", true) => {
+          format!("low bound is `{x_text}` -- with NOT BETWEEN this is equivalent to `{x_text} > <high>`")
+        },
+        ("high", true) => {
+          format!("high bound is `{x_text}` -- with NOT BETWEEN this is equivalent to `{x_text} < <low>`")
+        },
         _ => unreachable!(),
       };
       let kw = if is_not { "NOT BETWEEN" } else { "BETWEEN" };

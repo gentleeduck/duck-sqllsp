@@ -4,8 +4,8 @@
 //! Postgres raises `query has too many/few columns` at runtime. Catch
 //! at edit time by counting projection commas vs INTO variable commas.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -219,4 +219,3 @@ fn strip_comments(s: &str) -> String {
   }
   out
 }
-

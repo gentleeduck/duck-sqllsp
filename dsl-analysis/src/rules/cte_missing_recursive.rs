@@ -1,8 +1,8 @@
 //! sql124: `WITH t AS (SELECT ... FROM t)` self-references `t` but
 //! lacks the `RECURSIVE` keyword. PG will refuse to execute it.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;

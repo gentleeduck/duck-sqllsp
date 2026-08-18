@@ -44,10 +44,7 @@ impl LintRule for Rule {
         }
         for &am in NON_BTREE {
           let l = am.len();
-          if j + l <= n
-            && &ub[j..j + l] == am.as_bytes()
-            && ub.get(j + l).is_none_or(|&b| !is_word(b as char))
-          {
+          if j + l <= n && &ub[j..j + l] == am.as_bytes() && ub.get(j + l).is_none_or(|&b| !is_word(b as char)) {
             out.push(Diagnostic {
               code: "sql608",
               severity: Severity::Error,

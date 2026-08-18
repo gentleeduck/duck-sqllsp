@@ -10,8 +10,20 @@ use dsl_parse::Statement;
 use dsl_resolve::Scope;
 use std::collections::HashMap;
 
-const STOPWORDS: &[&str] =
-  &["GROUP", "ORDER", "HAVING", "LIMIT", "OFFSET", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT", "FETCH", "FOR"];
+const STOPWORDS: &[&str] = &[
+  "GROUP",
+  "ORDER",
+  "HAVING",
+  "LIMIT",
+  "OFFSET",
+  "WINDOW",
+  "RETURNING",
+  "UNION",
+  "INTERSECT",
+  "EXCEPT",
+  "FETCH",
+  "FOR",
+];
 
 pub struct Rule;
 
@@ -57,7 +69,9 @@ fn scan(body: &str, abs: usize, from: usize, to: usize, out: &mut Vec<Diagnostic
       out.push(Diagnostic {
         code: "sql535",
         severity: Severity::Hint,
-        message: format!("`{key}` is not-equal-compared to {count} values with AND -- use `{key} NOT IN (...)` instead"),
+        message: format!(
+          "`{key}` is not-equal-compared to {count} values with AND -- use `{key} NOT IN (...)` instead"
+        ),
         range: crate::range_at(abs + lo, abs + hi),
       });
     }

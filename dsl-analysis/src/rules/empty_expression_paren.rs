@@ -87,9 +87,7 @@ impl LintRule for Rule {
           | "BETWEEN"
       );
       if demanded {
-        let msg = format!(
-          "empty `()` after `{kw}` -- expression required (likely a typo or half-deleted condition)"
-        );
+        let msg = format!("empty `()` after `{kw}` -- expression required (likely a typo or half-deleted condition)");
         out.push(Diagnostic {
           code: "sql514",
           severity: Severity::Error,

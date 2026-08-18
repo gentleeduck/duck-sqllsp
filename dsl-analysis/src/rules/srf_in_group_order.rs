@@ -30,8 +30,18 @@ const SRFS: &[&str] = &[
 ];
 
 const STOP: &[&str] = &[
-  "GROUP BY", "ORDER BY", "LIMIT", "OFFSET", "HAVING", "FOR", "FETCH", "WINDOW", "RETURNING", "UNION",
-  "INTERSECT", "EXCEPT",
+  "GROUP BY",
+  "ORDER BY",
+  "LIMIT",
+  "OFFSET",
+  "HAVING",
+  "FOR",
+  "FETCH",
+  "WINDOW",
+  "RETURNING",
+  "UNION",
+  "INTERSECT",
+  "EXCEPT",
 ];
 
 pub struct Rule;
@@ -52,7 +62,8 @@ impl LintRule for Rule {
     let lower = cleaned.to_ascii_lowercase();
     let lb = lower.as_bytes();
 
-    for (needle, label) in [(&b"GROUP BY"[..], "GROUP BY"), (&b"HAVING"[..], "HAVING"), (&b"ORDER BY"[..], "ORDER BY")] {
+    for (needle, label) in [(&b"GROUP BY"[..], "GROUP BY"), (&b"HAVING"[..], "HAVING"), (&b"ORDER BY"[..], "ORDER BY")]
+    {
       let mut from = 0usize;
       while let Some(rel) = find_clause(&ub[from..], needle).map(|p| p + from) {
         let pred_start = rel + needle.len();
@@ -84,8 +95,8 @@ fn scan(lb: &[u8], lo: usize, hi: usize, start: usize, label: &str, out: &mut Ve
               if depth == 0 {
                 break;
               }
-            }
-            _ => {}
+            },
+            _ => {},
           }
           k += 1;
         }

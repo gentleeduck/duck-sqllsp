@@ -67,7 +67,8 @@ fn diag(s: usize, e: usize) -> Diagnostic {
 }
 
 fn is_zero(ub: &[u8], i: usize) -> bool {
-  ub.get(i) == Some(&b'0') && !matches!(ub.get(i + 1), Some(c) if c.is_ascii_digit() || *c == b'.' || is_word(*c as char))
+  ub.get(i) == Some(&b'0')
+    && !matches!(ub.get(i + 1), Some(c) if c.is_ascii_digit() || *c == b'.' || is_word(*c as char))
 }
 
 fn is_operand_end(c: u8) -> bool {

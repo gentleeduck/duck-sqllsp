@@ -5,8 +5,8 @@
 //! `CASE x WHEN 1 THEN .. WHEN 1 THEN .. END` where the constant
 //! WHEN value is duplicated.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -160,4 +160,3 @@ fn norm(s: &str) -> String {
   // regardless of literal case).
   s.split_whitespace().collect::<Vec<_>>().join(" ").to_ascii_lowercase()
 }
-

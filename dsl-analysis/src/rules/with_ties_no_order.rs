@@ -35,7 +35,8 @@ impl LintRule for Rule {
     out.push(Diagnostic {
       code: "sql618",
       severity: Severity::Error,
-      message: "WITH TIES requires an ORDER BY -- PostgreSQL raises 42601; add ORDER BY or use ROWS ONLY / LIMIT".into(),
+      message: "WITH TIES requires an ORDER BY -- PostgreSQL raises 42601; add ORDER BY or use ROWS ONLY / LIMIT"
+        .into(),
       range: crate::range_at(start + at, start + at + 4),
     });
   }
@@ -49,9 +50,7 @@ fn find_phrase(upper: &str, words: &[&str]) -> Option<usize> {
   let first = words[0].as_bytes();
   let mut i = 0usize;
   'outer: while i + first.len() <= n {
-    if &b[i..i + first.len()] == first
-      && (i == 0 || !(b[i - 1] as char).is_alphanumeric() && b[i - 1] != b'_')
-    {
+    if &b[i..i + first.len()] == first && (i == 0 || !(b[i - 1] as char).is_alphanumeric() && b[i - 1] != b'_') {
       let mut j = i + first.len();
       for w in &words[1..] {
         while j < n && b[j].is_ascii_whitespace() {

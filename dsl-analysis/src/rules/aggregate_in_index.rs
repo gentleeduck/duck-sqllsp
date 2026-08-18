@@ -12,9 +12,27 @@ use dsl_parse::Statement;
 use dsl_resolve::Scope;
 
 const AGGREGATES: &[&str] = &[
-  "count", "sum", "avg", "min", "max", "array_agg", "string_agg", "json_agg", "jsonb_agg", "bool_and",
-  "bool_or", "every", "stddev", "stddev_pop", "stddev_samp", "variance", "var_pop", "var_samp", "bit_and",
-  "bit_or", "corr",
+  "count",
+  "sum",
+  "avg",
+  "min",
+  "max",
+  "array_agg",
+  "string_agg",
+  "json_agg",
+  "jsonb_agg",
+  "bool_and",
+  "bool_or",
+  "every",
+  "stddev",
+  "stddev_pop",
+  "stddev_samp",
+  "variance",
+  "var_pop",
+  "var_samp",
+  "bit_and",
+  "bit_or",
+  "corr",
 ];
 
 pub struct Rule;

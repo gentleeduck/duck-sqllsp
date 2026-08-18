@@ -1467,10 +1467,7 @@ fn r2_167_inlay_hints_broken_sql_no_panic() {
     &state,
     InlayHintParams {
       text_document: TextDocumentIdentifier { uri: url },
-      range: Range {
-        start: Position { line: 0, character: 0 },
-        end: Position { line: 100, character: 100 },
-      },
+      range: Range { start: Position { line: 0, character: 0 }, end: Position { line: 100, character: 100 } },
       work_done_progress_params: WorkDoneProgressParams::default(),
     },
   );
@@ -1678,10 +1675,7 @@ fn r2_169_code_action_broken_sql_no_panic() {
     &state,
     CodeActionParams {
       text_document: TextDocumentIdentifier { uri: url },
-      range: Range {
-        start: Position { line: 0, character: 0 },
-        end: Position { line: 0, character: 10 },
-      },
+      range: Range { start: Position { line: 0, character: 0 }, end: Position { line: 0, character: 10 } },
       context: CodeActionContext { diagnostics: Vec::new(), only: None, trigger_kind: None },
       work_done_progress_params: WorkDoneProgressParams::default(),
       partial_result_params: PartialResultParams::default(),
@@ -1958,16 +1952,19 @@ fn r3_290_completion_on_empty_doc_no_panic() {
 
 #[test]
 fn r4_196_hover_unopened_doc_no_panic() {
-  use tower_lsp::lsp_types::{HoverParams, TextDocumentPositionParams, Position, TextDocumentIdentifier};
+  use tower_lsp::lsp_types::{HoverParams, Position, TextDocumentIdentifier, TextDocumentPositionParams};
   let state = ServerState::new();
   let url: Url = "file:///ghost.sql".parse().unwrap();
-  let resp = hover::run(&state, HoverParams {
-    text_document_position_params: TextDocumentPositionParams {
-      text_document: TextDocumentIdentifier { uri: url.clone() },
-      position: Position { line: 0, character: 0 },
+  let resp = hover::run(
+    &state,
+    HoverParams {
+      text_document_position_params: TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: url.clone() },
+        position: Position { line: 0, character: 0 },
+      },
+      work_done_progress_params: Default::default(),
     },
-    work_done_progress_params: Default::default(),
-  });
+  );
   let _ = resp;
 }
 
@@ -2998,8 +2995,5 @@ fn closing_a_document_evicts_its_format_cache_entry() {
   assert!(state.format_cache.read().contains_key(&url.to_string()), "format should populate the cache");
   state.documents.close(&url);
   state.forget_document(&url);
-  assert!(
-    !state.format_cache.read().contains_key(&url.to_string()),
-    "closing must drop the cached copy of the buffer"
-  );
+  assert!(!state.format_cache.read().contains_key(&url.to_string()), "closing must drop the cached copy of the buffer");
 }

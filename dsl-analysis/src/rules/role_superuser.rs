@@ -38,7 +38,8 @@ impl LintRule for Rule {
         out.push(Diagnostic {
           code: "sql572",
           severity: Severity::Warning,
-          message: "granting SUPERUSER -- it bypasses all permission checks; grant only the privileges the role needs".into(),
+          message: "granting SUPERUSER -- it bypasses all permission checks; grant only the privileges the role needs"
+            .into(),
           range: crate::range_at(start + i, start + i + 9),
         });
         return;

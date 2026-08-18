@@ -36,7 +36,9 @@ impl LintRule for Rule {
         out.push(Diagnostic {
           code: "sql580",
           severity: Severity::Hint,
-          message: "UNLOGGED table -- its contents are wiped on a crash and not replicated; only use it for disposable data".into(),
+          message:
+            "UNLOGGED table -- its contents are wiped on a crash and not replicated; only use it for disposable data"
+              .into(),
           range: crate::range_at(start + i, start + i + 8),
         });
         return;

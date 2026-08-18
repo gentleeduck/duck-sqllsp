@@ -17,17 +17,8 @@ use text_size::TextRange;
 
 pub struct Rule;
 
-const INVALID_INTERVAL_FIELDS: &[&str] = &[
-  "dow",
-  "doy",
-  "week",
-  "isodow",
-  "isoyear",
-  "julian",
-  "timezone",
-  "timezone_hour",
-  "timezone_minute",
-];
+const INVALID_INTERVAL_FIELDS: &[&str] =
+  &["dow", "doy", "week", "isodow", "isoyear", "julian", "timezone", "timezone_hour", "timezone_minute"];
 
 impl LintRule for Rule {
   fn code(&self) -> &'static str {
@@ -48,7 +39,10 @@ impl LintRule for Rule {
     let m = needle.len();
     let mut i = 0usize;
     while i + m <= n {
-      if !(&ub[i..i + m] == needle && (i == 0 || !is_word(ub[i - 1] as char)) && (i + m == n || !is_word(ub[i + m] as char))) {
+      if !(&ub[i..i + m] == needle
+        && (i == 0 || !is_word(ub[i - 1] as char))
+        && (i + m == n || !is_word(ub[i + m] as char)))
+      {
         i += 1;
         continue;
       }
@@ -74,7 +68,9 @@ impl LintRule for Rule {
       let field = inner[..from_at].trim();
       let operand_upper = &inner_upper[from_at + 4..];
       // Heuristic: operand recognizable as interval literal.
-      let is_interval = operand_upper.contains("INTERVAL ") || operand_upper.contains("::INTERVAL") || operand_upper.contains("::PG_CATALOG.INTERVAL");
+      let is_interval = operand_upper.contains("INTERVAL ")
+        || operand_upper.contains("::INTERVAL")
+        || operand_upper.contains("::PG_CATALOG.INTERVAL");
       if !is_interval {
         i = close + 1;
         continue;

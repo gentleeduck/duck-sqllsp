@@ -25,7 +25,8 @@ impl LintRule for Rule {
     let cleaned = crate::textutil::strip_noise_full(raw);
     let upper = cleaned.to_ascii_uppercase();
     let ub = upper.as_bytes();
-    let stopwords = ["ORDER BY", "LIMIT", "OFFSET", "FOR", "FETCH", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT"];
+    let stopwords =
+      ["ORDER BY", "LIMIT", "OFFSET", "FOR", "FETCH", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT"];
     let Some(rel) = find_clause(ub, b"HAVING") else {
       return;
     };
@@ -47,12 +48,16 @@ impl LintRule for Rule {
       let (severity, message) = if is_tautology {
         (
           Severity::Hint,
-          format!("`HAVING {trimmed}` is always TRUE -- both sides are constant literals; the predicate has no filter effect"),
+          format!(
+            "`HAVING {trimmed}` is always TRUE -- both sides are constant literals; the predicate has no filter effect"
+          ),
         )
       } else {
         (
           Severity::Warning,
-          format!("`HAVING {trimmed}` is always FALSE -- both sides are constant literals; the query returns zero rows regardless of data"),
+          format!(
+            "`HAVING {trimmed}` is always FALSE -- both sides are constant literals; the query returns zero rows regardless of data"
+          ),
         )
       };
       let leading = c.len() - c.trim_start().len();

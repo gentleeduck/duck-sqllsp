@@ -1,5 +1,11 @@
 //! Hover narrow-by-side for dotted identifiers.
-#![allow(clippy::absurd_extreme_comparisons, unused_comparisons, clippy::len_zero, clippy::const_is_empty, clippy::identity_op)]
+#![allow(
+  clippy::absurd_extreme_comparisons,
+  unused_comparisons,
+  clippy::len_zero,
+  clippy::const_is_empty,
+  clippy::identity_op
+)]
 
 use dsl_catalog::{CATALOG_VERSION, Catalog, Column, Schema, Table, TableKind};
 use dsl_hover::hover;
@@ -36,7 +42,10 @@ fn cat() -> Catalog {
     policies: vec![],
     comment: None,
     row_estimate: None,
-    owner: None, definition: None, strict: false, options: None,
+    owner: None,
+    definition: None,
+    strict: false,
+    options: None,
   };
   Catalog {
     version: CATALOG_VERSION,
@@ -240,10 +249,7 @@ fn hover_inside_plpgsql_body_string_literal_still_suppresses() {
   let cur = src.rfind("WHEN").unwrap();
   let md = hover_at(src, cur);
   if let Some(m) = md {
-    assert!(
-      !m.contains("# WHEN") || m.contains("literal"),
-      "string-literal content wrongly resolved to keyword: {m}"
-    );
+    assert!(!m.contains("# WHEN") || m.contains("literal"), "string-literal content wrongly resolved to keyword: {m}");
   }
 }
 
@@ -255,10 +261,7 @@ fn hover_on_window_clause_keyword() {
   let cur = src.find("WINDOW").unwrap();
   let md = hover_at(src, cur).expect("WINDOW should hover");
   assert!(md.contains("WINDOW"), "expected WINDOW card; got: {md}");
-  assert!(
-    md.to_ascii_lowercase().contains("window"),
-    "expected window-clause explanation; got: {md}"
-  );
+  assert!(md.to_ascii_lowercase().contains("window"), "expected window-clause explanation; got: {md}");
 }
 
 #[test]
@@ -367,10 +370,7 @@ fn hover_inside_double_quoted_identifier_with_select_does_not_return_keyword_car
   let cur = src.rfind("SELECT").unwrap(); // the second SELECT (inside quotes)
   let md = hover_at(src, cur);
   if let Some(md) = md {
-    assert!(
-      !md.contains("Keyword"),
-      "quoted identifier `\"SELECT\"` must not surface SELECT keyword card; got: {md}"
-    );
+    assert!(!md.contains("Keyword"), "quoted identifier `\"SELECT\"` must not surface SELECT keyword card; got: {md}");
   }
 }
 
@@ -463,7 +463,6 @@ fn hover_on_string_literal_inside_coalesce_still_shows_signature() {
   let md = hover_at(src, cur).expect("hover for string literal arg");
   assert!(md.contains("function call") && md.contains("coalesce"), "expected signature card: {md}");
 }
-
 
 #[test]
 fn r3_006_hover_update_from_alias_column_resolves() {
@@ -903,7 +902,6 @@ fn r9_hover_alias_v_2403() {
   let md = hover_at(src, cur).expect("hover on alias.col var");
   assert!(md.contains("email"));
 }
-
 
 #[test]
 fn r10_hover_cast_0001() {
@@ -2768,7 +2766,14 @@ fn r18_probe_hover_more() {
     ("SELECT a -> 'k' FROM t", "json_arrow"),
   ] {
     // find a name token to hover on
-    let cur = s.find(["EXCLUDED", "RETURNING", "WITH", "NOT", "NULL", "->", "+", "=", "<", "||"].iter().find(|t| s.contains(*t)).unwrap_or(&"SELECT")).unwrap();
+    let cur = s
+      .find(
+        ["EXCLUDED", "RETURNING", "WITH", "NOT", "NULL", "->", "+", "=", "<", "||"]
+          .iter()
+          .find(|t| s.contains(*t))
+          .unwrap_or(&"SELECT"),
+      )
+      .unwrap();
     let md = hover_at(s, cur);
     eprintln!("HM|{}|some={}", label, md.is_some());
   }
@@ -4391,7 +4396,8 @@ fn r21_probe_h() {
     ("SELECT id * 2 FROM users", "id"),
     ("SELECT id / 2 FROM users", "id"),
   ] {
-    let cur = s.find(find).unwrap() + if find.starts_with("u.") || find.starts_with("public") { find.len() - 2 } else { 0 };
+    let cur =
+      s.find(find).unwrap() + if find.starts_with("u.") || find.starts_with("public") { find.len() - 2 } else { 0 };
     let md = hover_at(s, cur);
     eprintln!("HE|{}|some={}", find, md.is_some());
   }

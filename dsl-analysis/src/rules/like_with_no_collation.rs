@@ -3,8 +3,8 @@
 //! teams on multi-locale deployments. Hint to add `COLLATE "C"` or
 //! `COLLATE "und-x-icu"` for predictable behaviour.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -57,4 +57,3 @@ impl LintRule for Rule {
     }
   }
 }
-

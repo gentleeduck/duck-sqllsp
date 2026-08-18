@@ -18,10 +18,7 @@ pub struct Rule;
 
 /// (function name, which-arg-is-the-needle, message-tag).
 /// 1 means the 2nd argument (zero-indexed: args[1]).
-const FNS: &[(&[u8], usize, &str)] = &[
-  (b"REPLACE", 1, "replace"),
-  (b"SPLIT_PART", 1, "split_part"),
-];
+const FNS: &[(&[u8], usize, &str)] = &[(b"REPLACE", 1, "replace"), (b"SPLIT_PART", 1, "split_part")];
 
 impl LintRule for Rule {
   fn code(&self) -> &'static str {

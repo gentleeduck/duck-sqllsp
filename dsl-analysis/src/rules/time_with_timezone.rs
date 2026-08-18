@@ -2,8 +2,8 @@
 //! PG docs recommend against TIMETZ -- it's almost never what you want.
 //! Use `TIMESTAMP WITH TIME ZONE` (`TIMESTAMPTZ`) instead. Hint.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -58,4 +58,3 @@ fn find_word_pos(haystack: &str, needle: &str) -> Option<usize> {
   }
   None
 }
-

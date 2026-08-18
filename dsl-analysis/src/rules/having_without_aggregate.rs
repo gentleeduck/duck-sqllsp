@@ -16,14 +16,31 @@ use text_size::TextRange;
 pub struct Rule;
 
 const AGGREGATES: &[&[u8]] = &[
-  b"COUNT", b"SUM", b"AVG", b"MIN", b"MAX",
-  b"ARRAY_AGG", b"STRING_AGG", b"JSON_AGG", b"JSONB_AGG",
-  b"JSON_OBJECT_AGG", b"JSONB_OBJECT_AGG",
-  b"BOOL_AND", b"BOOL_OR", b"EVERY",
-  b"BIT_AND", b"BIT_OR",
-  b"STDDEV", b"STDDEV_POP", b"STDDEV_SAMP",
-  b"VARIANCE", b"VAR_POP", b"VAR_SAMP",
-  b"CORR", b"COVAR_POP", b"COVAR_SAMP",
+  b"COUNT",
+  b"SUM",
+  b"AVG",
+  b"MIN",
+  b"MAX",
+  b"ARRAY_AGG",
+  b"STRING_AGG",
+  b"JSON_AGG",
+  b"JSONB_AGG",
+  b"JSON_OBJECT_AGG",
+  b"JSONB_OBJECT_AGG",
+  b"BOOL_AND",
+  b"BOOL_OR",
+  b"EVERY",
+  b"BIT_AND",
+  b"BIT_OR",
+  b"STDDEV",
+  b"STDDEV_POP",
+  b"STDDEV_SAMP",
+  b"VARIANCE",
+  b"VAR_POP",
+  b"VAR_SAMP",
+  b"CORR",
+  b"COVAR_POP",
+  b"COVAR_SAMP",
 ];
 
 impl LintRule for Rule {
@@ -48,7 +65,8 @@ impl LintRule for Rule {
       return;
     };
     let pred_start = rel_having + 6;
-    let stopwords = ["ORDER BY", "LIMIT", "OFFSET", "FOR", "FETCH", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT"];
+    let stopwords =
+      ["ORDER BY", "LIMIT", "OFFSET", "FOR", "FETCH", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT"];
     let pred_end = find_clause_end(ub, pred_start, &stopwords);
     let pred_upper = &ub[pred_start..pred_end];
     if contains_aggregate_call(pred_upper) {
@@ -71,9 +89,7 @@ fn contains_aggregate_call(upper: &[u8]) -> bool {
     let m = agg.len();
     let mut i = 0usize;
     while i + m <= n {
-      if &upper[i..i + m] == *agg
-        && (i == 0 || !is_word(upper[i - 1] as char))
-      {
+      if &upper[i..i + m] == *agg && (i == 0 || !is_word(upper[i - 1] as char)) {
         let mut k = i + m;
         while k < n && upper[k].is_ascii_whitespace() {
           k += 1;

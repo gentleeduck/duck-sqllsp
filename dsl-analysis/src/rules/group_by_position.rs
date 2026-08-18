@@ -2,8 +2,8 @@
 //! projection-list edit silently changes the grouping. Hint: use
 //! the column expression (or its alias) instead.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -188,4 +188,3 @@ fn strip_quoted_and_comments(s: &str) -> String {
   }
   out
 }
-

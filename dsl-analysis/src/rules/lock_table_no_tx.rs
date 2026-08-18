@@ -1,8 +1,8 @@
 //! sql111: `LOCK TABLE` outside an explicit transaction has no effect
 //! beyond the single statement -- usually a bug.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -65,4 +65,3 @@ fn count_word(haystack: &str, needle: &str) -> usize {
   }
   c
 }
-

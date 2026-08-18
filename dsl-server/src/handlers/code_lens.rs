@@ -88,9 +88,7 @@ pub fn run(state: &ServerState, params: CodeLensParams) -> Option<Vec<CodeLens>>
     // Also skip zero or negative `reltuples` (Postgres sets -1 when the
     // table has never been analysed) -- "~0 rows" is just noise.
     let upper_text = text.to_ascii_uppercase();
-    let has_returning = upper_text
-      .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
-      .any(|w| w == "RETURNING");
+    let has_returning = upper_text.split(|c: char| !c.is_ascii_alphanumeric() && c != '_').any(|w| w == "RETURNING");
     let is_select = matches!(&stmt.kind, StatementKind::Select(_));
     if is_select || has_returning {
       for (table_name, est) in find_row_estimates(&text, &live_catalog) {

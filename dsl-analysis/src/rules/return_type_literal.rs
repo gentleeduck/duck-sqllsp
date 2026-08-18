@@ -9,8 +9,8 @@
 //! (column, expression, function call) -- those need real type
 //! inference, deferred to a follow-up rule.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -206,4 +206,3 @@ fn strip_comments(s: &str) -> String {
   }
   out
 }
-

@@ -5,8 +5,8 @@
 //! reads better and the planner sometimes picks different paths for
 //! boolean expressions in predicate position.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -160,7 +160,6 @@ fn strip_quoted_and_comments(s: &str) -> String {
   }
   out
 }
-
 
 /// True if `s` contains `WITH (` or `OPTIONS (` as a whole keyword
 /// (i.e. preceded by whitespace / start, optionally with whitespace

@@ -33,7 +33,9 @@ impl LintRule for Rule {
     out.push(Diagnostic {
       code: "sql761",
       severity: Severity::Error,
-      message: "DETACH PARTITION ... CONCURRENTLY cannot run inside a transaction (25001) -- move it out of BEGIN/COMMIT".into(),
+      message:
+        "DETACH PARTITION ... CONCURRENTLY cannot run inside a transaction (25001) -- move it out of BEGIN/COMMIT"
+          .into(),
       range: crate::range_at(abs_s, abs_s + "DETACH PARTITION".len()),
     });
   }

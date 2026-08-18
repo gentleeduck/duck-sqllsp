@@ -41,7 +41,9 @@ impl LintRule for Rule {
       out.push(Diagnostic {
         code: "sql578",
         severity: Severity::Hint,
-        message: "CREATE RULE is a legacy feature with surprising rewrite semantics -- prefer a trigger or an updatable view".into(),
+        message:
+          "CREATE RULE is a legacy feature with surprising rewrite semantics -- prefer a trigger or an updatable view"
+            .into(),
         range: crate::range_at(start + p, start + p + 4),
       });
     }

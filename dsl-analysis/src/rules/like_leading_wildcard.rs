@@ -1,8 +1,8 @@
 //! sql088: `LIKE '%foo'` -- leading wildcard prevents B-tree index use.
 //! Suggest `text_pattern_ops` index, `pg_trgm`, or full-text search.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -66,4 +66,3 @@ impl LintRule for Rule {
     }
   }
 }
-

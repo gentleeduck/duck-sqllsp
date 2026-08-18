@@ -41,10 +41,7 @@ impl LintRule for Rule {
     // Same for expression-only indexes (the col list may not match any
     // constraint anyway, but the WHERE clause is the canonical signal).
     let after_index_paren_upper = upper[open + 1 + close..].to_ascii_uppercase();
-    if after_index_paren_upper
-      .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
-      .any(|w| w == "WHERE")
-    {
+    if after_index_paren_upper.split(|c: char| !c.is_ascii_alphanumeric() && c != '_').any(|w| w == "WHERE") {
       return;
     }
     let idx_cols: Vec<String> = list.split(',').map(|s| s.trim().trim_matches('"').to_ascii_lowercase()).collect();

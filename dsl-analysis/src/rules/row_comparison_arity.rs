@@ -25,8 +25,8 @@ fn close_of(b: &[u8], open: usize) -> Option<usize> {
         if depth == 0 {
           return Some(i);
         }
-      }
-      _ => {}
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -45,8 +45,8 @@ fn open_of(b: &[u8], close: usize) -> Option<usize> {
         if depth == 0 {
           return Some(i as usize);
         }
-      }
-      _ => {}
+      },
+      _ => {},
     }
     i -= 1;
   }
@@ -101,7 +101,11 @@ impl LintRule for Rule {
               out.push(Diagnostic {
                 code: "sql650",
                 severity: Severity::Error,
-                message: format!("row comparison has unequal arity ({} vs {}) -- PG raises 42601", lcols.len(), rcols.len()),
+                message: format!(
+                  "row comparison has unequal arity ({} vs {}) -- PG raises 42601",
+                  lcols.len(),
+                  rcols.len()
+                ),
                 range: crate::range_at(start + lopen, start + rclose + 1),
               });
             }

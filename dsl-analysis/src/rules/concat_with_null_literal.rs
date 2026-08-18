@@ -4,8 +4,8 @@
 //! NULL. Use `concat()` (NULL-as-empty-string) or
 //! `coalesce(part, '')` when that's actually what you want.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -52,7 +52,9 @@ impl LintRule for Rule {
         out.push(Diagnostic {
           code: "sql413",
           severity: Severity::Warning,
-          message: "`||` with a NULL operand returns NULL; use `concat(...)` to treat NULL as empty or `coalesce(part, '')`".into(),
+          message:
+            "`||` with a NULL operand returns NULL; use `concat(...)` to treat NULL as empty or `coalesce(part, '')`"
+              .into(),
           range: TextRange::new((abs_s as u32).into(), (abs_e as u32).into()),
         });
         emitted = true;
@@ -81,4 +83,3 @@ fn ends_with_null_keyword(bytes: &[u8], end: usize) -> bool {
     && (start == 0 || !is_word(bytes[start - 1] as char))
     && (end == bytes.len() || !is_word(bytes[end] as char))
 }
-

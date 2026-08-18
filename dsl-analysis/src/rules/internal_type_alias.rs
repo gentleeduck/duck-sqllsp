@@ -33,7 +33,10 @@ impl LintRule for Rule {
 
   fn check(&self, source: &str, stmt: &Statement, _scope: &Scope, _catalog: &Catalog, out: &mut Vec<Diagnostic>) {
     let (start, _body, upper) = crate::stmt_body_upper(stmt, source);
-    let is_ddl = upper.contains("CREATE TABLE") || upper.contains("ALTER TABLE") || upper.contains("CREATE TYPE") || upper.contains("CREATE DOMAIN");
+    let is_ddl = upper.contains("CREATE TABLE")
+      || upper.contains("ALTER TABLE")
+      || upper.contains("CREATE TYPE")
+      || upper.contains("CREATE DOMAIN");
     if !is_ddl && !upper.contains("::") {
       return;
     }
@@ -61,7 +64,10 @@ impl LintRule for Rule {
             out.push(Diagnostic {
               code: "sql584",
               severity: Severity::Hint,
-              message: format!("`{}` is an internal type alias -- prefer the standard `{std}`", alias.to_ascii_lowercase()),
+              message: format!(
+                "`{}` is an internal type alias -- prefer the standard `{std}`",
+                alias.to_ascii_lowercase()
+              ),
               range: crate::range_at(start + i, start + i + a.len()),
             });
             i += a.len();

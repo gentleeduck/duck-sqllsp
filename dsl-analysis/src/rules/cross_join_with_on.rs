@@ -18,8 +18,20 @@ fn kw(b: &[u8], i: usize, w: &[u8]) -> bool {
 
 /// Keywords that end the scan window after a CROSS JOIN's table reference.
 const STOPS: &[&[u8]] = &[
-  b"JOIN", b"WHERE", b"GROUP", b"HAVING", b"ORDER", b"LIMIT", b"OFFSET", b"UNION", b"INTERSECT", b"EXCEPT",
-  b"RETURNING", b"FETCH", b"WINDOW", b"FOR",
+  b"JOIN",
+  b"WHERE",
+  b"GROUP",
+  b"HAVING",
+  b"ORDER",
+  b"LIMIT",
+  b"OFFSET",
+  b"UNION",
+  b"INTERSECT",
+  b"EXCEPT",
+  b"RETURNING",
+  b"FETCH",
+  b"WINDOW",
+  b"FOR",
 ];
 
 pub struct Rule;
@@ -58,7 +70,7 @@ impl LintRule for Rule {
                   break;
                 }
                 depth -= 1;
-              }
+              },
               b',' if depth == 0 => break,
               _ if depth == 0 => {
                 if kw(b, k, b"ON") || kw(b, k, b"USING") {
@@ -74,8 +86,8 @@ impl LintRule for Rule {
                 if STOPS.iter().any(|s| kw(b, k, s)) {
                   break;
                 }
-              }
-              _ => {}
+              },
+              _ => {},
             }
             k += 1;
           }

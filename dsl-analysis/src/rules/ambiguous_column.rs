@@ -169,9 +169,7 @@ fn using_columns(src: &str) -> std::collections::HashSet<String> {
   let n = bytes.len();
   let mut i = 0usize;
   while i + 5 <= n {
-    if (bytes[i] == b'U' || bytes[i] == b'u')
-      && src[i..i + 5].eq_ignore_ascii_case("USING")
-    {
+    if (bytes[i] == b'U' || bytes[i] == b'u') && src[i..i + 5].eq_ignore_ascii_case("USING") {
       let left_ok = i == 0 || !bytes[i - 1].is_ascii_alphanumeric() && bytes[i - 1] != b'_';
       let after = i + 5;
       let right_ok = after >= n || !bytes[after].is_ascii_alphanumeric() && bytes[after] != b'_';

@@ -169,7 +169,6 @@ impl LintRule for Rule {
   }
 }
 
-
 /// First position where `needle` appears as a whole word in `haystack`,
 /// at depth 0 with respect to parens (so `(SELECT ... ORDER BY x)` in
 /// a subquery doesn't stop the predicate scan early). Case-sensitive

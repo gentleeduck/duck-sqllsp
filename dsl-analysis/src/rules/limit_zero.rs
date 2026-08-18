@@ -26,7 +26,8 @@ impl LintRule for Rule {
       out.push(Diagnostic {
         code: "sql292",
         severity: Severity::Hint,
-        message: "LIMIT 0 returns zero rows -- placeholder or metadata-only query? Drop the LIMIT or set a real bound".into(),
+        message: "LIMIT 0 returns zero rows -- placeholder or metadata-only query? Drop the LIMIT or set a real bound"
+          .into(),
         range: crate::range_at(start + s, start + e),
       });
     }
