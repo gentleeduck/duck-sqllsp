@@ -208,14 +208,22 @@ impl DuckSqllspConfig {
   }
 }
 
+/// The wrapper key, in both spellings we accept.
+const WRAPPER_KEYS: [&str; 2] = ["duckSqllsp", "duck_sqllsp"];
+
 /// Parse JSON values from initialize / didChangeConfiguration / project file.
 /// Accepts both wrapped (`duckSqllsp: { ... }`) and bare root forms.
+///
+/// The shape is decided by whether the wrapper key is *present*, not by
+/// whether parsing it produced anything interesting. The previous
+/// version tested for a connection, an active connection, or a scope --
+/// so a wrapped config that set only `style` failed the test, fell
+/// through to the bare branch, and was parsed as a document whose only
+/// field (`duckSqllsp`) is unknown. Serde skips unknown fields, so every
+/// setting silently reverted to its default and the user got no error.
 pub fn parse(value: serde_json::Value) -> RootConfig {
-  if let Ok(cfg) = serde_json::from_value::<RootConfig>(value.clone())
-    && (!cfg.duck_sqllsp.connections.is_empty()
-      || cfg.duck_sqllsp.active_connection.is_some()
-      || cfg.duck_sqllsp.scope.is_some())
-  {
+  let wrapped = WRAPPER_KEYS.iter().any(|k| value.get(k).is_some());
+  if wrapped && let Ok(cfg) = serde_json::from_value::<RootConfig>(value.clone()) {
     return cfg;
   }
   let inner: DuckSqllspConfig = serde_json::from_value(value).unwrap_or_default();
@@ -231,7 +239,17 @@ pub fn load_project_config(start: &Path) -> Option<DuckSqllspConfig> {
     if toml_path.is_file()
       && let Ok(text) = std::fs::read_to_string(&toml_path)
     {
-      if let Ok(parsed) = toml::from_str::<RootConfig>(&text) {
+      // Same rule as `parse`: pick the shape by looking for the
+      // wrapper table, not by trying the wrapped form first. Trying it
+      // first silently wins for *every* bare file, because a document
+      // with no `[duck_sqllsp]` table still deserialises into a
+      // `RootConfig` whose single field just takes its default -- so a
+      // bare `[style]` config parsed "successfully" into nothing.
+      let wrapped = toml::from_str::<toml::Value>(&text)
+        .ok()
+        .and_then(|v| v.as_table().map(|t| WRAPPER_KEYS.iter().any(|k| t.contains_key(*k))))
+        .unwrap_or(false);
+      if wrapped && let Ok(parsed) = toml::from_str::<RootConfig>(&text) {
         tracing::info!(path = %toml_path.display(), single_line = parsed.duck_sqllsp.style.formatter.single_line, "loaded .duck-sqllsp.toml");
         return Some(parsed.duck_sqllsp);
       }
