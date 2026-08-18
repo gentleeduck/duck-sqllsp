@@ -694,6 +694,9 @@ pub mod create_statistics_no_columns;
 pub mod create_statistics_dup_column;
 pub mod merge_when_matched_unreachable;
 pub mod merge_insert_references_target;
+pub mod publication_duplicate_schema;
+pub mod subscription_no_slot_name_with_create_false;
+pub mod publication_duplicate_table;
 
 use crate::LintRule;
 
@@ -1398,5 +1401,8 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(create_statistics_dup_column::Rule),
     Box::new(merge_when_matched_unreachable::Rule),
     Box::new(merge_insert_references_target::Rule),
+    Box::new(publication_duplicate_schema::Rule),
+    Box::new(subscription_no_slot_name_with_create_false::Rule),
+    Box::new(publication_duplicate_table::Rule),
   ]
 }
