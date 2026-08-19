@@ -149,12 +149,18 @@ fn to_lsp_item(it: Item, style: &Style) -> CompletionItem {
 /// parsed as one outer placeholder rather than tripping over the inner
 /// `}`. Recurses on the chosen text so the inner placeholders also get
 /// rendered.
-pub(crate) fn render_snippet_preview(snippet: &str) -> String {
+pub fn render_snippet_preview(snippet: &str) -> String {
   let bytes = snippet.as_bytes();
   let n = bytes.len();
   let mut out = String::with_capacity(n);
   let mut i = 0;
   while i < n {
+    // `\$` escapes a literal dollar in LSP snippet syntax.
+    if bytes[i] == b'\\' && i + 1 < n && bytes[i + 1] == b'$' {
+      out.push('$');
+      i += 2;
+      continue;
+    }
     if bytes[i] == b'$' && i + 1 < n {
       if bytes[i + 1] == b'{' {
         // Balanced match: walk forward counting `{` and `}`,
@@ -217,15 +223,28 @@ pub(crate) fn render_snippet_preview(snippet: &str) -> String {
         }
       }
       // Bare `$0` / `$1` -- skip the digit(s).
-      let mut j = i + 1;
-      while j < n && bytes[j].is_ascii_digit() {
-        j += 1;
+      if bytes[i + 1].is_ascii_digit() {
+        let mut j = i + 1;
+        while j < n && bytes[j].is_ascii_digit() {
+          j += 1;
+        }
+        i = j;
+        continue;
       }
-      i = j;
+      // A `$` that starts neither a placeholder nor a tabstop is a
+      // literal dollar. Dropping it used to eat both delimiters of a
+      // dollar-quoted body, so the `fn` snippet previewed as `AS` with
+      // an empty block -- invalid SQL, shown as the expansion of a
+      // snippet that expands to valid SQL.
+      out.push('$');
+      i += 1;
       continue;
     }
-    out.push(bytes[i] as char);
-    i += 1;
+    // Push the whole character, not the byte: `bytes[i] as char` turns
+    // every continuation byte of a multi-byte character into mojibake.
+    let ch = snippet[i..].chars().next().unwrap_or('\u{fffd}');
+    out.push(ch);
+    i += ch.len_utf8();
   }
   out
 }
@@ -269,6 +288,30 @@ mod tests {
   #[test]
   fn strips_bare_tabstops() {
     assert_eq!(render_snippet_preview("SELECT 1$0;"), "SELECT 1;");
+  }
+
+  #[test]
+  fn keeps_dollar_quote_delimiters() {
+    // A `$` that is neither `${...}` nor `$0` is a literal dollar. This
+    // used to be dropped, so the shipped `fn` snippet previewed as
+    // `AS` followed by an empty block -- an invalid expansion shown as
+    // the expansion of a valid snippet.
+    let snippet = "CREATE FUNCTION f() RETURNS int\nLANGUAGE plpgsql\nAS $$\nBEGIN\n  $0\nEND;\n$$;";
+    let preview = render_snippet_preview(snippet);
+    assert!(preview.contains("AS $$"), "opening delimiter dropped: {preview:?}");
+    assert!(preview.contains("$$;"), "closing delimiter dropped: {preview:?}");
+  }
+
+  #[test]
+  fn unescapes_escaped_dollars() {
+    assert_eq!(render_snippet_preview("AS \\$\\$ body \\$\\$"), "AS $$ body $$");
+  }
+
+  #[test]
+  fn non_ascii_text_survives_intact() {
+    // The renderer used to push raw bytes as chars, turning every
+    // continuation byte into mojibake.
+    assert_eq!(render_snippet_preview("SELECT '${1:café}' -- 空"), "SELECT 'café' -- 空");
   }
 
   #[test]

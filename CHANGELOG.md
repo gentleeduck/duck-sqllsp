@@ -54,6 +54,16 @@ and the project adheres to [Semantic Versioning](https://semver.org).
 - CI now typechecks and bundles the VS Code extension. Nothing built it
   before, so its dependencies could break without any signal -- which
   became live the moment dependabot started watching them.
+- Two shipped VS Code snippets expanded to a syntax error. `sfw` produced
+  `SELECT * FROM table WHERE condition;` and `cidx` produced
+  `CREATE INDEX ix_name ON table_name (column);` -- `table` and `column`
+  are reserved words, so accepting either and tabbing through without
+  renaming left invalid SQL flagged by this very server.
+- Snippet previews dropped dollar-quote delimiters. Any `$` was treated
+  as a tabstop marker, so the `fn` completion snippet previewed as `AS`
+  followed by an empty block: an invalid expansion shown as the
+  expansion of a valid snippet. `$` is now literal unless it starts
+  `${...}` or `$0`, and `\$` is unescaped.
 - The VS Code marketplace listing advertised "150+ analysis rules" -- off
   by nearly five times, in the first thing a prospective user reads. A
   test now checks every documented rule count against the registry.
