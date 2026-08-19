@@ -19749,3 +19749,50 @@ fn r27_strong_0033() {
   let items = complete_at(src, src.len(), &catalog_with_users_and_orders());
   assert!(items.iter().any(|i| i.label == "id"));
 }
+
+#[test]
+fn multibyte_characters_do_not_panic_the_source_scanner() {
+  // Regression: the column-DEFAULT / ALTER / INSERT scanners walk a
+  // byte cursor and used to slice the &str with it, so any multi-byte
+  // character in the buffer blew up with "byte index is not a char
+  // boundary" and took the whole workspace scan down with it.
+  for src in [
+    "-- 空テーブル\nCREATE TABLE t (id int DEFAULT 1);",
+    "CREATE TABLE t (\n  naïve text DEFAULT 'café',\n  id int NOT NULL\n);",
+    "CREATE TABLE t (msg text DEFAULT '🦆 quack');",
+    "ALTER TABLE ONLY 空 ADD COLUMN a int;",
+    "INSERT INTO t (a) VALUES ('日本語');",
+    "-- ✅ done\nALTER TABLE t ALTER COLUMN c SET DEFAULT 'ü';",
+  ] {
+    let file = parse(src, Dialect::Postgres);
+    // Must not panic.
+    let _ = dsl_completion::source_tables::from_source(&file, src);
+  }
+}
+
+#[test]
+fn multibyte_stress_across_every_scanner_shape() {
+  // Broader sweep: every construct the source scanners special-case,
+  // each carrying a multi-byte character somewhere.
+  let cases = [
+    "CREATE TABLE IF NOT EXISTS 日本 (id int);",
+    "CREATE UNLOGGED TABLE ünlogged (id int DEFAULT 0);",
+    "CREATE TEMP TABLE tmp_✓ (a text DEFAULT 'x' NOT NULL);",
+    "ALTER TABLE ONLY \"tëst\" ADD CONSTRAINT c CHECK (a > 0);",
+    "INSERT INTO t (a, b) VALUES ('α', 'β'), ('γ', 'δ');",
+    "COMMENT ON TABLE t IS 'ünicode comment';",
+    "CREATE TYPE mood AS ENUM ('😀', '😢');",
+    "CREATE FUNCTION f() RETURNS int AS $$ SELECT 1 -- 中文\n$$ LANGUAGE sql;",
+    "CREATE INDEX idx ON t (col) WHERE col <> 'ü';",
+    "CREATE TABLE t (a int GENERATED ALWAYS AS (1) STORED, b text COLLATE \"tr_TR\");",
+    "-- ✅\n-- 🦆\nCREATE SEQUENCE s START 1;",
+  ];
+  for src in cases {
+    let file = parse(src, Dialect::Postgres);
+    let _ = dsl_completion::source_tables::from_source(&file, src);
+    // The full completion path too -- it fans out to the same scanners.
+    let scopes = resolve_with_source(&file.statements, src);
+    let cat = Catalog::default();
+    let _ = complete(src, &file, &scopes, &cat, TextSize::from(src.len().min(5) as u32));
+  }
+}
