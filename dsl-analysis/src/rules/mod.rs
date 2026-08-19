@@ -700,6 +700,8 @@ pub mod publication_duplicate_table;
 pub mod loop_no_exit;
 pub mod for_loop_variable_shadows_column;
 pub mod exception_block_swallows_all;
+pub mod execute_using_arg_count_mismatch;
+pub mod execute_into_arity_mismatch;
 
 use crate::LintRule;
 
@@ -1410,5 +1412,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(loop_no_exit::Rule),
     Box::new(for_loop_variable_shadows_column::Rule),
     Box::new(exception_block_swallows_all::Rule),
+    Box::new(execute_using_arg_count_mismatch::Rule),
+    Box::new(execute_into_arity_mismatch::Rule),
   ]
 }
