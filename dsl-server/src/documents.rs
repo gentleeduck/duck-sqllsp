@@ -360,22 +360,34 @@ mod incremental_tests {
     assert_eq!(assert_consistent(&store, &url), "SELECT z;");
   }
 
+  // `ParseCache::version` records the document version the cache was
+  // built from, which is what these two assert on. Comparing
+  // `Arc::as_ptr` instead would be flaky: once the old cache is
+  // dropped the allocator is free to hand the same address back, and
+  // on macOS it does.
+
   #[test]
   fn a_change_invalidates_the_parse_cache() {
     let (store, url) = store_with("SELECT a FROM t;");
-    let before = Arc::as_ptr(&store.get(&url).unwrap().parsed());
+    assert_eq!(store.get(&url).unwrap().parsed().version, 1);
     store.apply_changes(&url, vec![delta(Range { start: at(0, 7), end: at(0, 8) }, "b")], 2);
-    let after = Arc::as_ptr(&store.get(&url).unwrap().parsed());
-    assert_ne!(before, after, "stale parse cache would outlive the edit");
+    assert_eq!(
+      store.get(&url).unwrap().parsed().version,
+      2,
+      "a stale cache would still report the version it was built from"
+    );
   }
 
   #[test]
   fn a_no_op_change_keeps_the_parse_cache_alive() {
     let (store, url) = store_with("SELECT a FROM t;");
-    let before = Arc::as_ptr(&store.get(&url).unwrap().parsed());
+    assert_eq!(store.get(&url).unwrap().parsed().version, 1);
     store.apply_changes(&url, vec![delta(Range { start: at(0, 3), end: at(0, 3) }, "")], 2);
-    let after = Arc::as_ptr(&store.get(&url).unwrap().parsed());
-    assert_eq!(before, after, "an empty edit should not force a re-parse");
+    assert_eq!(
+      store.get(&url).unwrap().parsed().version,
+      1,
+      "an empty edit should not force a re-parse, so the cache keeps its original version"
+    );
     assert_eq!(store.get(&url).unwrap().version, 2, "version must still advance");
   }
 

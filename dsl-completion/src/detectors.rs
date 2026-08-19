@@ -8790,7 +8790,7 @@ pub(crate) fn fresh_name_slot_optional_keyword(source: &str, offset: TextSize) -
     return None; // no trailing whitespace -> user mid-typing the name
   }
   let upper = trimmed.to_ascii_uppercase();
-  let supports_inex: &[&str] = &[
+  let supports_index: &[&str] = &[
     "CREATE TABLE",
     "CREATE TEMP TABLE",
     "CREATE TEMPORARY TABLE",
@@ -8816,7 +8816,7 @@ pub(crate) fn fresh_name_slot_optional_keyword(source: &str, offset: TextSize) -
     "CREATE OR REPLACE PROCEDURE",
     "CREATE OR REPLACE VIEW",
   ];
-  if supports_inex.iter().any(|p| upper.ends_with(p)) {
+  if supports_index.iter().any(|p| upper.ends_with(p)) {
     return Some("IF NOT EXISTS");
   }
   None
