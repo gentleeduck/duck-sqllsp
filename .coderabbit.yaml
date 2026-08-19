@@ -32,24 +32,33 @@ reviews:
     - '!**/Cargo.lock'
     - '!**/pnpm-lock.yaml'
     - '!**/package-lock.json'
-    - '!duck-benchmarks/**/*.json'
-    - '!duck-benchmarks/**/*.svg'
-    - '!**/.dmc/**'
     - '!**/.gentleduck/**'
     - '!**/.next/**'
-    - '!dmc-highlight/assets/**'
+    - '!dsl-analysis/docs/rules.md'
   path_instructions:
-    - path: 'dmc-*/src/**/*.rs'
+    - path: 'dsl-*/src/**/*.rs'
       instructions: |
         Rust crate code. Check for: clippy idioms, error handling
-        without unwrap on user-facing paths, proper Send + Sync on
-        Transformer impls, no AI slop in comments, ASCII-only prose.
-        Comments explain WHY not WHAT.
-    - path: 'dmc-*/tests/**/*.rs'
+        without unwrap on user-facing paths, no AI slop in comments,
+        ASCII-only prose. Comments explain WHY not WHAT.
+        Byte-index arithmetic must never slice a &str directly -- the
+        scanners walk bytes, and slicing panics on any multi-byte
+        character. Compare bytes instead.
+    - path: 'dsl-analysis/src/rules/*.rs'
+      instructions: |
+        Lint rules. The module doc comment must open with
+        `//! sqlNNN: <summary> -- <detail>`; it is the source of truth
+        for the generated rule reference. Check the diagnostic range is
+        aimed at the offending token, not the whole statement, and that
+        a negative case (the lookalike that must NOT fire) is tested.
+    - path: 'dsl-*/tests/**/*.rs'
       instructions: |
         Tests. Defensive unreachable!() and unwrap() in tests are OK.
         Look for missing edge cases (empty input, unicode, large files).
-    - path: 'dmc-docs/**/*.md'
+        Assertions must not depend on allocator behaviour (no
+        Arc::as_ptr identity checks) or on default values that would
+        also pass against a config being discarded.
+    - path: 'dsl-*/docs/**/*.md'
       instructions: |
         Documentation. Reject em-dashes, en-dashes, ellipsis glyphs,
         curly quotes, unicode arrows. Use ASCII: -, ', ", ..., ->.

@@ -11,4 +11,3 @@ semver_check = true
 allow_dirty = false
 
 # Per-crate overrides go in [[package]] blocks below.
-# `publish = false` on dmc-napi is set in dmc-napi/Cargo.toml.

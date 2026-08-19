@@ -1,43 +1,59 @@
 name: Feature request
-description: A new feature, transformer, schema field, or API.
+description: A new lint rule, completion context, or server capability.
 labels: [enhancement]
 body:
   - type: textarea
     id: problem
     attributes:
       label: Problem
-      description: What are you trying to do that the current API does not support.
+      description: What are you trying to do that duck-sqllsp does not help with.
     validations:
       required: true
 
   - type: textarea
     id: proposal
     attributes:
-      label: Proposed API or behaviour
-      description: Pseudo-code or rough sketch is fine.
+      label: Proposal
+      description: >
+        For a lint rule: the SQL that should be flagged, and what the message
+        should say. For anything else, a rough sketch is fine.
       render: markdown
     validations:
       required: true
 
   - type: textarea
-    id: alternatives
+    id: counterexample
     attributes:
-      label: Alternatives considered
+      label: What must NOT be flagged
+      description: >
+        For a proposed lint rule, the lookalike that should stay silent. False
+        positives are the main reason people turn a rule off, so this matters
+        as much as the positive case.
+      render: sql
 
   - type: dropdown
     id: scope
     attributes:
       label: Scope
       options:
-        - "New transformer"
-        - "Schema / validation"
-        - "Config / CLI"
-        - "Performance"
-        - "Framework integration"
+        - "New lint rule"
+        - "Completion coverage"
+        - "Hover content"
+        - "Formatting"
+        - "Code action / refactor"
+        - "LSP capability"
+        - "CLI"
+        - "Dialect support (MySQL / SQLite / MSSQL)"
         - "Docs"
         - "Other"
     validations:
       required: true
+
+  - type: input
+    id: dialect
+    attributes:
+      label: Dialect this applies to
+      placeholder: "postgresql / mysql / sqlite / mssql / all"
 
   - type: checkboxes
     id: terms
@@ -46,5 +62,6 @@ body:
       options:
         - label: I searched existing issues and did not find a duplicate.
           required: true
-        - label: I read the relevant section of dmc-docs/.
-          required: true
+        - label: >
+            For a lint rule, I checked `duck-sqllsp rules` and the rule reference
+            to confirm it does not already exist.

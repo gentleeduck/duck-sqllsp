@@ -6,40 +6,65 @@ body:
     id: description
     attributes:
       label: Description
-      description: What happened. What did you expect.
+      description: What happened, and what you expected instead.
       placeholder: |
-        Compiling `foo.mdx` produces empty output when `math: true` is set.
+        Completion offers no columns after `SELECT ` inside a CREATE FUNCTION body,
+        but works fine in a plain SELECT.
     validations:
       required: true
 
   - type: textarea
     id: repro
     attributes:
-      label: Minimal reproduction
-      description: Smallest input + config that triggers the bug.
-      render: markdown
+      label: Minimal SQL that reproduces it
+      description: >
+        The smallest snippet that shows the problem. If it depends on schema,
+        include the CREATE TABLE too.
+      render: sql
     validations:
       required: true
 
-  - type: input
-    id: dmc-version
+  - type: textarea
+    id: doctor
     attributes:
-      label: dmc version
-      description: Output of `dmc --version` or `@gentleduck/md` version from package.json.
-      placeholder: "0.1.0"
+      label: Output of `duck-sqllsp doctor`
+      description: >
+        Run it in the affected project. It reports the formatter binary, the
+        config file found, the workspace root, the offline catalog size, and
+        connection health -- which is usually enough to spot the cause.
+      render: shell
     validations:
       required: true
 
   - type: dropdown
     id: surface
     attributes:
-      label: Surface
+      label: Which part
       options:
-        - "@gentleduck/md (npm)"
-        - "dmc CLI"
-        - "Rust crate"
-        - "Sidecar"
+        - "Completion"
+        - "Diagnostics / lint rule"
+        - "Hover"
+        - "Formatting"
+        - "Code actions / refactors"
+        - "Inlay hints / code lenses"
+        - "Connection / introspection"
+        - "CLI (lint / format / introspect / rules)"
         - "Other / unsure"
+    validations:
+      required: true
+
+  - type: input
+    id: rule-code
+    attributes:
+      label: Rule code (for a wrong or missing diagnostic)
+      description: e.g. `sql015`. `duck-sqllsp rules` lists them all with a summary.
+      placeholder: "sql015"
+
+  - type: input
+    id: editor
+    attributes:
+      label: Editor and version
+      placeholder: "VS Code 1.9x / neovim 0.11.x / Helix 25.x"
     validations:
       required: true
 
@@ -52,16 +77,18 @@ body:
       required: true
 
   - type: input
-    id: node
+    id: dialect
     attributes:
-      label: Node version (if relevant)
-      placeholder: "v20.11.0"
+      label: Dialect
+      placeholder: "postgresql / mysql / sqlite / mssql"
 
   - type: textarea
     id: logs
     attributes:
-      label: Logs / diagnostics
-      description: Any stderr output, panics, or stack traces.
+      label: Logs
+      description: >
+        LSP log (VS Code: "duck-sqllsp: Show Logs"; neovim: `:LspLog`), plus any
+        panic or stack trace. `RUST_LOG=debug` gives more detail.
       render: shell
 
   - type: checkboxes
@@ -73,3 +100,6 @@ body:
           required: true
         - label: I am on the latest 0.1.x release.
           required: true
+        - label: >
+            For a diagnostic problem, I checked whether `duck-sqllsp lint file.sql`
+            reproduces it outside the editor.
