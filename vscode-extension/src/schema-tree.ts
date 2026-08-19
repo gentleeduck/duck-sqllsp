@@ -83,8 +83,13 @@ export class SchemaProvider implements vscode.TreeDataProvider<Node> {
     }
     if (n.kind === "table") {
       const item = new vscode.TreeItem(n.table.name, vscode.TreeItemCollapsibleState.Collapsed);
+      // Distinct icon per kind: a materialized view is a stored,
+      // pre-computed result set -- visually neither a plain view
+      // (interface) nor a plain table (class) -- previously fell
+      // through to the same icon as a table, losing the distinction
+      // the view case already had.
       const icon = n.table.kind === "view" ? "symbol-interface"
-        : n.table.kind === "materializedview" ? "symbol-class"
+        : n.table.kind === "materializedview" ? "symbol-structure"
         : "symbol-class";
       item.iconPath = new vscode.ThemeIcon(icon);
       const extras: string[] = [];
