@@ -702,6 +702,8 @@ pub mod for_loop_variable_shadows_column;
 pub mod exception_block_swallows_all;
 pub mod execute_using_arg_count_mismatch;
 pub mod execute_into_arity_mismatch;
+pub mod raise_notice_in_hot_loop;
+pub mod variable_declared_unused;
 
 use crate::LintRule;
 
@@ -1414,5 +1416,7 @@ pub fn all() -> Vec<Box<dyn LintRule>> {
     Box::new(exception_block_swallows_all::Rule),
     Box::new(execute_using_arg_count_mismatch::Rule),
     Box::new(execute_into_arity_mismatch::Rule),
+    Box::new(raise_notice_in_hot_loop::Rule),
+    Box::new(variable_declared_unused::Rule),
   ]
 }
