@@ -16,6 +16,11 @@ use tower_lsp::lsp_types::{CodeLens, CodeLensParams, Command, Position, Range};
 pub fn run(state: &ServerState, params: CodeLensParams) -> Option<Vec<CodeLens>> {
   let _g = crate::handlers::perf::Guard::with_uri("code_lens", &params.text_document.uri);
   let doc = state.documents.get(&params.text_document.uri)?;
+  // Oversized buffer: bail rather than block the editor. See
+  // `documents::MAX_DOC_BYTES`.
+  if doc.too_large() {
+    return None;
+  }
   let cache = doc.parsed();
   let live_catalog = state.catalog.read().clone();
 

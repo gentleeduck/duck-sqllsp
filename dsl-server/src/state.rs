@@ -37,6 +37,19 @@ pub struct ServerState {
   /// sql-formatter + align passes. Saves the 30-80ms shell-out per call
   /// when the client re-requests format on an unchanged buffer.
   pub format_cache: Arc<RwLock<std::collections::HashMap<String, (u64, String)>>>,
+  /// Bumped whenever an input to the analysis engine that is *not* the
+  /// document text changes: config (per-rule severity overrides,
+  /// dialect), the live catalog, or the workspace offline scan. Folded
+  /// into the `textDocument/diagnostic` result id so a client holding a
+  /// cached report re-pulls after a schema refresh flips an
+  /// unresolved-table diagnostic, even though its buffer never changed.
+  pub analysis_generation: Arc<std::sync::atomic::AtomicU64>,
+  /// True when the client advertised `textDocument.diagnostic` support
+  /// at initialize -- i.e. it will *pull* diagnostics. In that mode we
+  /// stop pushing `textDocument/publishDiagnostics`, because clients
+  /// render both channels and the user would see every diagnostic
+  /// twice.
+  pub client_pull_diagnostics: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl ServerState {
@@ -46,6 +59,26 @@ impl ServerState {
 
   pub fn set_config(&self, cfg: DuckSqllspConfig) {
     *self.config.write() = cfg;
+    self.bump_analysis_generation();
+  }
+
+  /// Invalidate every cached diagnostic report. Call after mutating any
+  /// non-text analysis input (config, catalog, workspace scan).
+  pub fn bump_analysis_generation(&self) {
+    self.analysis_generation.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+  }
+
+  pub fn analysis_generation(&self) -> u64 {
+    self.analysis_generation.load(std::sync::atomic::Ordering::Relaxed)
+  }
+
+  pub fn set_client_pull_diagnostics(&self, on: bool) {
+    self.client_pull_diagnostics.store(on, std::sync::atomic::Ordering::Relaxed);
+  }
+
+  /// See [`ServerState::client_pull_diagnostics`].
+  pub fn client_pulls_diagnostics(&self) -> bool {
+    self.client_pull_diagnostics.load(std::sync::atomic::Ordering::Relaxed)
   }
 
   pub fn config_snapshot(&self) -> DuckSqllspConfig {
@@ -79,6 +112,16 @@ impl ServerState {
     }
   }
 
+  /// Drop every per-document cache entry for `uri`.
+  ///
+  /// The format cache holds a full copy of each formatted buffer, keyed
+  /// by URI and never otherwise evicted -- without this, a long session
+  /// that opens and closes many files accumulates the entire text of
+  /// every one of them. Call on `didClose`.
+  pub fn forget_document(&self, uri: &tower_lsp::lsp_types::Url) {
+    self.format_cache.write().remove(&uri.to_string());
+  }
+
   /// Walk the workspace root for .sql files (capped for safety) and
   /// rebuild the cached offline catalog. Cheap: each file is parsed +
   /// fed to from_source so tables / sequences / functions / types /
@@ -107,6 +150,7 @@ impl ServerState {
       cat = dsl_completion::source_tables::merge(&cat, &derived);
     });
     *self.workspace_offline.write() = cat;
+    self.bump_analysis_generation();
   }
 
   /// Snapshot the workspace offline catalog (rescan was done at

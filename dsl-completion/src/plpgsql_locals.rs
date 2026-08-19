@@ -247,6 +247,7 @@ pub fn push_items(locals: &Locals, out: &mut Vec<Item>) {
       documentation_md: Some(format!("**{name}**\n\nfunction parameter — `{ty}`")),
       insert_text: name.clone(),
       is_snippet: false,
+      kb_entry: None,
       sort_priority: 5,
     });
   }
@@ -259,6 +260,7 @@ pub fn push_items(locals: &Locals, out: &mut Vec<Item>) {
       documentation_md: Some(format!("**{name}**\n\nlocal — `{ty}` (declared in this function)")),
       insert_text: name.clone(),
       is_snippet: false,
+      kb_entry: None,
       sort_priority: 5,
     });
   }

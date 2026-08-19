@@ -110,6 +110,7 @@ pub(crate) fn push_keyword_kvs(out: &mut Vec<Item>, kws: &[(&'static str, &'stat
       kind: crate::item::ItemKind::Keyword,
       detail: Some((*doc).into()),
       insert_text: (*kw).into(),
+      kb_entry: None,
       sort_priority: 0,
       ..Default::default()
     });
@@ -210,6 +211,7 @@ fn detect_fresh_name_slot(
       kind: crate::item::ItemKind::Keyword,
       detail: Some("optional clarifier before the new object name".into()),
       insert_text: label.into(),
+      kb_entry: None,
       sort_priority: 0,
       ..Default::default()
     }]);
@@ -292,6 +294,7 @@ fn detect_json_path_key(
       documentation_md: None,
       insert_text: k,
       is_snippet: false,
+      kb_entry: None,
       sort_priority: 0,
     });
   }
@@ -424,6 +427,7 @@ fn detect_dot_context(
         documentation_md: None,
         insert_text: col.clone(),
         is_snippet: false,
+        kb_entry: None,
         sort_priority: 0,
       });
     }
@@ -448,6 +452,7 @@ fn detect_dot_context(
         documentation_md: None,
         insert_text: col.clone(),
         is_snippet: false,
+        kb_entry: None,
         sort_priority: 0,
       });
     }
@@ -834,6 +839,7 @@ fn route_phase(
             kind: crate::item::ItemKind::Keyword,
             detail: Some(doc.into()),
             insert_text: kw.into(),
+            kb_entry: None,
             sort_priority: 0,
             ..Default::default()
           });
@@ -898,6 +904,7 @@ fn route_phase(
             documentation_md: None,
             insert_text: kw.into(),
             is_snippet: false,
+            kb_entry: None,
             sort_priority: 0,
           });
         }
@@ -917,6 +924,7 @@ fn route_phase(
             documentation_md: None,
             insert_text: (*label).into(),
             is_snippet: false,
+            kb_entry: None,
             sort_priority: 0,
           });
         }
@@ -950,6 +958,7 @@ fn route_phase(
             documentation_md: None,
             insert_text: (*kw).into(),
             is_snippet: false,
+            kb_entry: None,
             sort_priority: 0,
           });
         }
@@ -975,6 +984,7 @@ fn route_phase(
             documentation_md: None,
             insert_text: (*kw).into(),
             is_snippet: false,
+            kb_entry: None,
             sort_priority: 0,
           });
         }
@@ -1035,6 +1045,7 @@ fn route_phase(
         documentation_md: None,
         insert_text: "OFFSET".into(),
         is_snippet: false,
+        kb_entry: None,
         sort_priority: 0,
       });
     },
@@ -1109,6 +1120,7 @@ fn route_phase(
             kind: crate::item::ItemKind::Keyword,
             detail: Some(doc.into()),
             insert_text: kw.into(),
+            kb_entry: None,
             sort_priority: 0,
             ..Default::default()
           });
@@ -1208,6 +1220,7 @@ fn route_phase(
         kind: crate::item::ItemKind::Keyword,
         detail: Some("CREATE TABLE IF NOT EXISTS <name> -- skip silently if already present".into()),
         insert_text: "IF NOT EXISTS".into(),
+        kb_entry: None,
         sort_priority: 0,
         ..Default::default()
       });
@@ -1257,6 +1270,7 @@ fn route_phase(
             kind: crate::item::ItemKind::Keyword,
             detail: Some((*doc).into()),
             insert_text: (*kw).into(),
+            kb_entry: None,
             sort_priority: 0,
             ..Default::default()
           });
@@ -1299,6 +1313,7 @@ fn route_phase(
               documentation_md: None,
               insert_text: name,
               is_snippet: false,
+              kb_entry: None,
               sort_priority: 0,
             });
           }
@@ -1323,6 +1338,7 @@ fn route_phase(
             documentation_md: None,
             insert_text: name,
             is_snippet: false,
+            kb_entry: None,
             sort_priority: 5,
           });
         }
@@ -1421,6 +1437,7 @@ fn route_phase(
             documentation_md: None,
             insert_text: (*kw).into(),
             is_snippet: false,
+            kb_entry: None,
             sort_priority: 0,
           });
         }
@@ -1445,6 +1462,7 @@ fn route_phase(
             kind: crate::item::ItemKind::Keyword,
             detail: Some((*doc).into()),
             insert_text: (*kw).into(),
+            kb_entry: None,
             sort_priority: 0,
             ..Default::default()
           });
@@ -1478,6 +1496,7 @@ fn route_phase(
           kind: crate::item::ItemKind::Keyword,
           detail: Some("ON <object_class> <name>".into()),
           insert_text: "ON".into(),
+          kb_entry: None,
           sort_priority: 0,
           ..Default::default()
         });
@@ -1491,6 +1510,7 @@ fn route_phase(
             kind: crate::item::ItemKind::Keyword,
             detail: Some("REVOKE GRANT OPTION FOR <priv> -- drop forwarding right, keep the priv".into()),
             insert_text: "GRANT OPTION FOR".into(),
+            kb_entry: None,
             sort_priority: 0,
             ..Default::default()
           });
@@ -1526,6 +1546,7 @@ fn route_phase(
           kind: crate::item::ItemKind::Keyword,
           detail: Some(doc.into()),
           insert_text: kw.into(),
+          kb_entry: None,
           sort_priority: 1,
           ..Default::default()
         });
@@ -1591,6 +1612,7 @@ fn route_phase(
             documentation_md: None,
             insert_text: kw.into(),
             is_snippet: false,
+            kb_entry: None,
             sort_priority: 0,
           });
         }
@@ -1607,6 +1629,7 @@ fn route_phase(
             kind: crate::item::ItemKind::Keyword,
             detail: Some("IF EXISTS -- skip silently when the target does not exist".into()),
             insert_text: "IF EXISTS".into(),
+            kb_entry: None,
             sort_priority: 0,
             ..Default::default()
           });
@@ -1631,6 +1654,7 @@ fn route_phase(
             documentation_md: None,
             insert_text: kw.into(),
             is_snippet: false,
+            kb_entry: None,
             sort_priority: 0,
           });
         }
@@ -1652,6 +1676,7 @@ fn route_phase(
             documentation_md: None,
             insert_text: kw.into(),
             is_snippet: false,
+            kb_entry: None,
             sort_priority: 0,
           });
         }
@@ -1672,6 +1697,7 @@ fn route_phase(
             documentation_md: None,
             insert_text: kw.into(),
             is_snippet: false,
+            kb_entry: None,
             sort_priority: 0,
           });
         }
@@ -1685,6 +1711,7 @@ fn route_phase(
           documentation_md: None,
           insert_text: "ON".into(),
           is_snippet: false,
+          kb_entry: None,
           sort_priority: 0,
         });
       } else if create_policy_expects_on(source, offset) {
@@ -1697,6 +1724,7 @@ fn route_phase(
           documentation_md: None,
           insert_text: "ON".into(),
           is_snippet: false,
+          kb_entry: None,
           sort_priority: 0,
         });
       } else if create_policy_expects_table(source, offset) {
@@ -1718,6 +1746,7 @@ fn route_phase(
             documentation_md: None,
             insert_text: kw.into(),
             is_snippet: false,
+            kb_entry: None,
             sort_priority: 0,
           });
         }
@@ -1743,6 +1772,7 @@ fn route_phase(
             documentation_md: None,
             insert_text: kw.into(),
             is_snippet: false,
+            kb_entry: None,
             sort_priority: 0,
           });
         }
@@ -1757,6 +1787,7 @@ fn route_phase(
           documentation_md: None,
           insert_text: "LANGUAGE".into(),
           is_snippet: false,
+          kb_entry: None,
           sort_priority: 0,
         });
       } else if create_sequence_expects_option(source, offset) {
@@ -1780,6 +1811,7 @@ fn route_phase(
             documentation_md: None,
             insert_text: kw.into(),
             is_snippet: false,
+            kb_entry: None,
             sort_priority: 0,
           });
         }
@@ -1801,6 +1833,7 @@ fn route_phase(
             documentation_md: None,
             insert_text: kw.into(),
             is_snippet: false,
+            kb_entry: None,
             sort_priority: 0,
           });
         }
@@ -1816,6 +1849,7 @@ fn route_phase(
             kind: crate::item::ItemKind::Keyword,
             detail: Some(doc.into()),
             insert_text: kw.into(),
+            kb_entry: None,
             sort_priority: 0,
             ..Default::default()
           });
@@ -1831,6 +1865,7 @@ fn route_phase(
             kind: crate::item::ItemKind::Keyword,
             detail: Some(doc.into()),
             insert_text: kw.into(),
+            kb_entry: None,
             sort_priority: 0,
             ..Default::default()
           });
@@ -1860,6 +1895,7 @@ fn route_phase(
             documentation_md: None,
             insert_text: kw.into(),
             is_snippet: false,
+            kb_entry: None,
             sort_priority: 0,
           });
         }
@@ -1880,6 +1916,7 @@ fn route_phase(
             kind: crate::item::ItemKind::Keyword,
             detail: Some(doc.into()),
             insert_text: kw.into(),
+            kb_entry: None,
             sort_priority: 0,
             ..Default::default()
           });
@@ -1897,6 +1934,7 @@ fn route_phase(
             documentation_md: None,
             insert_text: (*kw).into(),
             is_snippet: false,
+            kb_entry: None,
             sort_priority: 0,
           });
         }
@@ -1916,6 +1954,7 @@ fn route_phase(
             documentation_md: None,
             insert_text: (*kw).into(),
             is_snippet: false,
+            kb_entry: None,
             sort_priority: 0,
           });
         }
@@ -1931,6 +1970,7 @@ fn route_phase(
             documentation_md: None,
             insert_text: (*kw).into(),
             is_snippet: false,
+            kb_entry: None,
             sort_priority: 0,
           });
         }
@@ -2144,6 +2184,7 @@ fn route_phase(
             kind: crate::item::ItemKind::Function,
             detail: Some("procedure / function".into()),
             insert_text: format!("{}(", f.name),
+            kb_entry: None,
             sort_priority: 0,
             ..Default::default()
           });
@@ -2179,6 +2220,7 @@ fn route_phase(
             kind: crate::item::ItemKind::Keyword,
             detail: Some(doc.into()),
             insert_text: kw.into(),
+            kb_entry: None,
             sort_priority: 0,
             ..Default::default()
           });
@@ -2197,6 +2239,7 @@ fn route_phase(
             kind: crate::item::ItemKind::Keyword,
             detail: Some(doc.into()),
             insert_text: kw.into(),
+            kb_entry: None,
             sort_priority: 1,
             ..Default::default()
           });
@@ -2234,6 +2277,7 @@ fn route_phase(
             kind: crate::item::ItemKind::Table,
             detail: Some("MERGE alias".into()),
             insert_text: alias,
+            kb_entry: None,
             sort_priority: 0,
             ..Default::default()
           });
@@ -2270,6 +2314,7 @@ fn route_phase(
             kind: crate::item::ItemKind::Keyword,
             detail: Some(doc.into()),
             insert_text: kw.into(),
+            kb_entry: None,
             sort_priority: 0,
             ..Default::default()
           });

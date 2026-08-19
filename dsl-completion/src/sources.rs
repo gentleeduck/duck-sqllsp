@@ -48,6 +48,7 @@ pub fn db_types(cat: &Catalog, out: &mut Vec<Item>) {
       documentation_md: Some(doc),
       insert_text: t.name.clone(),
       is_snippet: false,
+      kb_entry: None,
       sort_priority: 5,
     });
   }
@@ -91,6 +92,7 @@ pub fn db_functions(cat: &Catalog, out: &mut Vec<Item>) {
       documentation_md: Some(doc),
       insert_text,
       is_snippet: !f.arguments.is_empty(),
+      kb_entry: None,
       sort_priority: 5,
     });
   }
@@ -231,6 +233,7 @@ fn statement_snippets(out: &mut Vec<Item>) {
         ),
         insert_text: "CREATE TABLE ${1:name} (\n    id uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,\n    ${2:col} ${3:type} NOT NULL,\n    created_at timestamptz NOT NULL DEFAULT now()\n);$0".into(),
         is_snippet: true,
+        kb_entry: None,
         sort_priority: 3,
     });
   out.push(Item {
@@ -243,6 +246,7 @@ fn statement_snippets(out: &mut Vec<Item>) {
         ),
         insert_text: "CREATE OR REPLACE FUNCTION ${1:name}(${2:args})\n    RETURNS ${3:void}\n    LANGUAGE plpgsql\nAS $$\nBEGIN\n    $0\nEND;\n$$;".into(),
         is_snippet: true,
+        kb_entry: None,
         sort_priority: 3,
     });
   out.push(Item {
@@ -255,6 +259,7 @@ fn statement_snippets(out: &mut Vec<Item>) {
         ),
         insert_text: "CREATE OR REPLACE FUNCTION ${1:handler}()\n    RETURNS TRIGGER\n    LANGUAGE plpgsql\nAS $$\nBEGIN\n    $0\n    RETURN NEW;\nEND;\n$$;\n\nCREATE TRIGGER ${2:trg_name}\n    AFTER INSERT OR UPDATE ON ${3:table}\n    FOR EACH ROW\n    EXECUTE FUNCTION ${1:handler}();".into(),
         is_snippet: true,
+        kb_entry: None,
         sort_priority: 3,
     });
   out.push(Item {
@@ -265,6 +270,7 @@ fn statement_snippets(out: &mut Vec<Item>) {
     documentation_md: Some("Index on a single column.".into()),
     insert_text: "CREATE INDEX ${1:idx_name} ON ${2:table} (${3:col});$0".into(),
     is_snippet: true,
+    kb_entry: None,
     sort_priority: 3,
   });
   out.push(Item {
@@ -275,6 +281,7 @@ fn statement_snippets(out: &mut Vec<Item>) {
     documentation_md: Some("CREATE OR REPLACE VIEW with a body.".into()),
     insert_text: "CREATE OR REPLACE VIEW ${1:name} AS\nSELECT $0\nFROM ${2:table};".into(),
     is_snippet: true,
+    kb_entry: None,
     sort_priority: 3,
   });
   out.push(Item {
@@ -285,6 +292,7 @@ fn statement_snippets(out: &mut Vec<Item>) {
     documentation_md: Some("Materialised view + REFRESH hint.".into()),
     insert_text: "CREATE MATERIALIZED VIEW ${1:name} AS\nSELECT $0\nFROM ${2:table}\nWITH DATA;".into(),
     is_snippet: true,
+    kb_entry: None,
     sort_priority: 3,
   });
   out.push(Item {
@@ -295,6 +303,7 @@ fn statement_snippets(out: &mut Vec<Item>) {
     documentation_md: Some("Enum type with a couple of starter values.".into()),
     insert_text: "CREATE TYPE ${1:name} AS ENUM (\n    '${2:value_a}',\n    '${3:value_b}'\n);$0".into(),
     is_snippet: true,
+    kb_entry: None,
     sort_priority: 3,
   });
   out.push(Item {
@@ -305,6 +314,7 @@ fn statement_snippets(out: &mut Vec<Item>) {
     documentation_md: Some("Domain over an underlying type with optional CHECK.".into()),
     insert_text: "CREATE DOMAIN ${1:name} AS ${2:text}\n    CHECK (VALUE ${3:~ '^.+$'});$0".into(),
     is_snippet: true,
+    kb_entry: None,
     sort_priority: 3,
   });
   out.push(Item {
@@ -315,6 +325,7 @@ fn statement_snippets(out: &mut Vec<Item>) {
         documentation_md: Some("Row-level security policy.".into()),
         insert_text: "CREATE POLICY ${1:name} ON ${2:table}\n    FOR ${3|ALL,SELECT,INSERT,UPDATE,DELETE|}\n    TO ${4:role}\n    USING (${5:true});$0".into(),
         is_snippet: true,
+        kb_entry: None,
         sort_priority: 3,
     });
   out.push(Item {
@@ -325,6 +336,7 @@ fn statement_snippets(out: &mut Vec<Item>) {
     documentation_md: Some("Anonymous plpgsql block (no function declaration).".into()),
     insert_text: "DO $$\nBEGIN\n    $0\nEND;\n$$;".into(),
     is_snippet: true,
+    kb_entry: None,
     sort_priority: 3,
   });
   out.push(Item {
@@ -336,6 +348,7 @@ fn statement_snippets(out: &mut Vec<Item>) {
     insert_text: "ALTER TABLE ${1:table} ADD COLUMN ${2:name} ${3:type} ${4|NOT NULL,NULL|}${5: DEFAULT ${6:expr}};$0"
       .into(),
     is_snippet: true,
+    kb_entry: None,
     sort_priority: 3,
   });
   out.push(Item {
@@ -346,6 +359,7 @@ fn statement_snippets(out: &mut Vec<Item>) {
     documentation_md: Some("Rename a column.".into()),
     insert_text: "ALTER TABLE ${1:table} RENAME COLUMN ${2:old_name} TO ${3:new_name};$0".into(),
     is_snippet: true,
+    kb_entry: None,
     sort_priority: 3,
   });
   out.push(Item {
@@ -356,6 +370,7 @@ fn statement_snippets(out: &mut Vec<Item>) {
     documentation_md: Some("Rename a table.".into()),
     insert_text: "ALTER TABLE ${1:old_name} RENAME TO ${2:new_name};$0".into(),
     is_snippet: true,
+    kb_entry: None,
     sort_priority: 3,
   });
   out.push(Item {
@@ -366,6 +381,7 @@ fn statement_snippets(out: &mut Vec<Item>) {
         documentation_md: Some("Bulk load from a CSV file with HEADER + DELIMITER.".into()),
         insert_text: "COPY ${1:table} (${2:col1, col2})\nFROM '${3:/path/to/file.csv}'\nWITH (FORMAT csv, HEADER true, DELIMITER ',');$0".into(),
         is_snippet: true,
+        kb_entry: None,
         sort_priority: 3,
     });
   out.push(Item {
@@ -377,6 +393,7 @@ fn statement_snippets(out: &mut Vec<Item>) {
     insert_text: "COPY (SELECT ${1:*} FROM ${2:table})\nTO '${3:/path/to/file.csv}'\nWITH (FORMAT csv, HEADER true);$0"
       .into(),
     is_snippet: true,
+    kb_entry: None,
     sort_priority: 3,
   });
   out.push(Item {
@@ -387,6 +404,7 @@ fn statement_snippets(out: &mut Vec<Item>) {
     documentation_md: Some("LISTEN to a channel; remember to UNLISTEN on session end.".into()),
     insert_text: "LISTEN ${1:channel};\n-- ... do work ...\nUNLISTEN ${1:channel};$0".into(),
     is_snippet: true,
+    kb_entry: None,
     sort_priority: 3,
   });
   out.push(Item {
@@ -397,6 +415,7 @@ fn statement_snippets(out: &mut Vec<Item>) {
     documentation_md: Some("Send a notification on a channel.".into()),
     insert_text: "NOTIFY ${1:channel}, '${2:payload}';$0".into(),
     is_snippet: true,
+    kb_entry: None,
     sort_priority: 3,
   });
   out.push(Item {
@@ -407,6 +426,7 @@ fn statement_snippets(out: &mut Vec<Item>) {
         documentation_md: Some("Insert or update on conflict (PG-native upsert).".into()),
         insert_text: "INSERT INTO ${1:table} (${2:cols})\nVALUES (${3:vals})\nON CONFLICT (${4:conflict_col})\nDO UPDATE SET ${5:col} = EXCLUDED.${5:col};$0".into(),
         is_snippet: true,
+        kb_entry: None,
         sort_priority: 3,
     });
 }
@@ -479,6 +499,7 @@ pub fn create_table_entry_starters(out: &mut Vec<Item>) {
     ),
     insert_text: "CONSTRAINT ${1:name} ${2|PRIMARY KEY,UNIQUE,FOREIGN KEY,CHECK|} (${3:col})$0".into(),
     is_snippet: true,
+    kb_entry: None,
     sort_priority: 4,
   });
 }
@@ -518,6 +539,7 @@ pub fn grant_privileges(out: &mut Vec<Item>) {
       documentation_md: None,
       insert_text: (*label).into(),
       is_snippet: false,
+      kb_entry: None,
       sort_priority: 0,
     });
   }
@@ -529,6 +551,7 @@ pub fn grant_privileges(out: &mut Vec<Item>) {
     documentation_md: None,
     insert_text: "ON".into(),
     is_snippet: false,
+    kb_entry: None,
     sort_priority: 1,
   });
 }
@@ -561,6 +584,7 @@ pub fn grant_object_classes(out: &mut Vec<Item>) {
       documentation_md: None,
       insert_text: (*label).into(),
       is_snippet: false,
+      kb_entry: None,
       sort_priority: 0,
     });
   }
@@ -580,6 +604,7 @@ pub fn grant_roles(cat: &Catalog, out: &mut Vec<Item>) {
     documentation_md: None,
     insert_text: "PUBLIC".into(),
     is_snippet: false,
+    kb_entry: None,
     sort_priority: 1,
   });
   seen.insert("PUBLIC".into());
@@ -593,6 +618,7 @@ pub fn grant_roles(cat: &Catalog, out: &mut Vec<Item>) {
         documentation_md: None,
         insert_text: r.clone(),
         is_snippet: false,
+        kb_entry: None,
         sort_priority: 0,
       });
     }
@@ -609,6 +635,7 @@ pub fn grant_roles(cat: &Catalog, out: &mut Vec<Item>) {
         documentation_md: None,
         insert_text: fallback.into(),
         is_snippet: false,
+        kb_entry: None,
         sort_priority: 5,
       });
     }
@@ -680,6 +707,7 @@ pub fn alter_table_actions(out: &mut Vec<Item>) {
       documentation_md: None,
       insert_text: (*snippet).into(),
       is_snippet: true,
+      kb_entry: None,
       sort_priority: 0,
     });
   }
@@ -771,6 +799,7 @@ pub fn new_old_aliases(out: &mut Vec<Item>) {
     ),
     insert_text: "NEW".into(),
     is_snippet: false,
+    kb_entry: None,
     sort_priority: 5,
   });
   out.push(Item {
@@ -785,6 +814,7 @@ pub fn new_old_aliases(out: &mut Vec<Item>) {
     ),
     insert_text: "OLD".into(),
     is_snippet: false,
+    kb_entry: None,
     sort_priority: 5,
   });
 }
@@ -852,6 +882,7 @@ pub fn functions_in_schema(cat: &Catalog, schema_name: &str, out: &mut Vec<Item>
         documentation_md,
         insert_text: format!("{}(", f.name),
         is_snippet: false,
+        kb_entry: None,
         sort_priority: 0,
       });
     }
@@ -879,6 +910,7 @@ pub fn aliases_in_scope(scope: &Scope, out: &mut Vec<Item>) {
       documentation_md: Some(format!("**Alias** `{}` → table `{}`\n", b.alias, b.table.name,)),
       insert_text: b.alias.clone(),
       is_snippet: false,
+      kb_entry: None,
       sort_priority: 1,
     });
   }
@@ -936,6 +968,7 @@ pub fn schemas(cat: &Catalog, out: &mut Vec<Item>) {
       documentation_md: None,
       insert_text: s.name.clone(),
       is_snippet: false,
+      kb_entry: None,
       sort_priority: 5,
     });
   }
@@ -976,6 +1009,7 @@ fn table_item(t: &Table) -> Item {
     documentation_md: Some(render::table(t)),
     insert_text: t.name.clone(),
     is_snippet: false,
+    kb_entry: None,
     sort_priority: 5,
   }
 }
@@ -989,11 +1023,12 @@ pub fn column_item(t: &Table, c: &Column) -> Item {
     documentation_md: Some(render::column(t, c)),
     insert_text: c.name.clone(),
     is_snippet: false,
+    kb_entry: None,
     sort_priority: 5,
   }
 }
 
-fn from_entry(label: &str, e: &Entry, kind: ItemKind) -> Item {
+fn from_entry(label: &str, e: &'static Entry, kind: ItemKind) -> Item {
   // For functions, `detail` is the signature (highly informative). For
   // keywords / types the signature is None -- fall back to a short doc
   // excerpt so detail isn't blank. The kind icon already conveys what
@@ -1025,7 +1060,9 @@ fn from_entry(label: &str, e: &Entry, kind: ItemKind) -> Item {
     kind,
     detail,
     description: None,
-    documentation_md: Some(kb::render_markdown(e)),
+    // Deliberately not rendered here -- see `Item::kb_entry`.
+    documentation_md: None,
+    kb_entry: Some(e),
     insert_text,
     is_snippet,
     sort_priority: 5,

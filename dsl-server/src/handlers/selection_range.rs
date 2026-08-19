@@ -19,6 +19,11 @@ pub fn run(state: &ServerState, params: SelectionRangeParams) -> Option<Vec<Sele
   let uri = params.text_document.uri;
   let _g = crate::handlers::perf::Guard::with_uri("selection_range", &uri);
   let doc = state.documents.get(&uri)?;
+  // Oversized buffer: bail rather than block the editor. See
+  // `documents::MAX_DOC_BYTES`.
+  if doc.too_large() {
+    return None;
+  }
 
   let mut out = Vec::with_capacity(params.positions.len());
   for pos in params.positions {

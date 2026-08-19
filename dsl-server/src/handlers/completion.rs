@@ -81,10 +81,33 @@ fn to_lsp_item(it: Item, style: &Style) -> CompletionItem {
   // single ASCII digit prefix (0..9) so lower `sort_priority` wins.
   // The label tail breaks ties alphabetically within the same prio.
   let sort_text = format!("{}{}", it.sort_priority.min(9), label);
-  // For snippet items, prepend an "Expands to:" preview to the
-  // documentation so users can see the final scaffold (with $1 / $0
-  // placeholders cleaned out) before they pick it.
-  let documentation = build_documentation(&it.documentation_md, it.is_snippet, &it.insert_text);
+  // Documentation is deferred to `completionItem/resolve` whenever we
+  // can rebuild it there -- knowledge-base entries (rebuilt from label
+  // + kind) and snippets (rebuilt from the insert text). That keeps
+  // ~2700 `render_markdown` calls out of every keystroke. Catalog-
+  // derived markdown has no cheaper key than itself, so it still ships
+  // inline. See `handlers/completion_resolve.rs`.
+  let deferrable = it.kb_entry.is_some() || it.is_snippet;
+  let documentation = if deferrable {
+    None
+  } else {
+    it.documentation_md
+      .as_ref()
+      .map(|m| Documentation::MarkupContent(MarkupContent { kind: MarkupKind::Markdown, value: m.clone() }))
+  };
+  let data = if deferrable {
+    serde_json::to_value(crate::handlers::completion_resolve::ResolveData {
+      l: it.label.clone(),
+      k: crate::handlers::completion_resolve::kind_code(it.kind),
+      s: if it.is_snippet { Some(it.insert_text.clone()) } else { None },
+      // Only snippets carry a hand-written blurb that resolve cannot
+      // look up; keyword/type/function prose comes from the KB.
+      d: if it.is_snippet { it.documentation_md.clone() } else { None },
+    })
+    .ok()
+  } else {
+    None
+  };
   // For snippet items, also surface a one-line preview right next to
   // the label via `label_details.detail` so the user sees the
   // rendered expansion in the menu without opening the doc panel.
@@ -108,25 +131,9 @@ fn to_lsp_item(it: Item, style: &Style) -> CompletionItem {
     insert_text: Some(insert),
     insert_text_format: if it.is_snippet { Some(InsertTextFormat::SNIPPET) } else { None },
     sort_text: Some(sort_text),
+    data,
     ..Default::default()
   }
-}
-
-fn build_documentation(md: &Option<String>, is_snippet: bool, insert_text: &str) -> Option<Documentation> {
-  if !is_snippet {
-    return md
-      .as_ref()
-      .map(|m| Documentation::MarkupContent(MarkupContent { kind: MarkupKind::Markdown, value: m.clone() }));
-  }
-  // Replace `${n:placeholder}` -> `placeholder`,
-  // `${n|a,b,c|}` -> `a`, and bare `$n` / `$0` -> ``.
-  let preview = render_snippet_preview(insert_text);
-  let header = format!("**Expands to:**\n\n```sql\n{preview}\n```\n");
-  let value = match md {
-    Some(m) if !m.trim().is_empty() => format!("{header}\n---\n\n{m}"),
-    _ => header,
-  };
-  Some(Documentation::MarkupContent(MarkupContent { kind: MarkupKind::Markdown, value }))
 }
 
 /// Render an LSP snippet string as a previewable SQL fragment.

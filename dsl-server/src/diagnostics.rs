@@ -1,9 +1,22 @@
-//! Publish diagnostics to the LSP client.
+//! Diagnostics: one analysis pass, two delivery channels.
 //!
-//! Runs the analysis engine on the current document's text and pushes
-//! the result through `textDocument/publishDiagnostics`. Called from
-//! `did_open`, `did_change`, and after a successful catalog refresh
-//! (the catalog change can flip an unresolved-table diagnostic).
+//! [`compute`] is the single source of truth -- it runs the analysis
+//! engine over the current document and maps the results into LSP
+//! `Diagnostic`s, applying the per-rule severity overrides from
+//! `.duck-sqllsp.toml`.
+//!
+//! On top of it sit the two LSP delivery models:
+//!
+//!   * **Push** ([`publish_for`]) -- `textDocument/publishDiagnostics`,
+//!     driven by us from `did_open` / `did_change` / catalog refresh.
+//!   * **Pull** (`handlers/diagnostic.rs`) -- the client asks via
+//!     `textDocument/diagnostic` on its own cadence (LSP 3.17).
+//!
+//! Exactly one is active per session: clients that advertise pull
+//! support render *both* channels, so pushing to a pulling client shows
+//! every diagnostic twice. [`publish_for`] no-ops in pull mode, and
+//! [`invalidate_all`] picks the right way to say "re-run analysis"
+//! after a catalog swap.
 
 use crate::state::ServerState;
 use ropey::Rope;
@@ -11,10 +24,29 @@ use text_size::TextRange;
 use tower_lsp::Client;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
 
-pub async fn publish_for(client: &Client, state: &ServerState, uri: &Url) {
-  let Some(doc) = state.documents.get(uri) else {
-    return;
-  };
+/// Opaque token identifying one diagnostic result for `uri`. Two calls
+/// return the same id exactly when the analysis inputs are unchanged
+/// (document bytes + everything covered by
+/// [`ServerState::analysis_generation`]), which lets the pull handler
+/// answer with an `Unchanged` report instead of re-running the engine.
+pub fn result_id(state: &ServerState, uri: &Url) -> Option<String> {
+  use std::hash::{Hash, Hasher};
+  let doc = state.documents.get(uri)?;
+  let mut hasher = std::collections::hash_map::DefaultHasher::new();
+  doc.text.hash(&mut hasher);
+  doc.dialect.hash(&mut hasher);
+  Some(format!("{:x}.{}", hasher.finish(), state.analysis_generation()))
+}
+
+/// Run the analysis engine over `uri` and map the findings to LSP
+/// diagnostics. Returns `None` when the document is gone or a newer
+/// `didChange` superseded it mid-analysis (the caller should drop the
+/// result rather than ship stale data).
+///
+/// Sync and client-free on purpose, so both the push and the pull path
+/// can call it.
+pub fn compute(state: &ServerState, uri: &Url) -> Option<(Vec<Diagnostic>, i32)> {
+  let doc = state.documents.get(uri)?;
   let snapshot_version = doc.version;
   let cache = doc.parsed();
   // Must run before `doc.text` / `doc.rope` are moved out below --
@@ -26,8 +58,9 @@ pub async fn publish_for(client: &Client, state: &ServerState, uri: &Url) {
   // Offline-mode enrichment: merge live catalog with text-scanned
   // sequences / types / extensions / functions / roles + AST-derived
   // tables so analysis rules still see something useful when the DB
-  // isn't connected. Clone before the upcoming .await so the parking_lot
-  // guard does not cross the suspend point (not Send).
+  // isn't connected. Cloned rather than held so no parking_lot guard
+  // outlives the analysis run (the push caller awaits afterwards, and
+  // the guard is not Send).
   let live = state.catalog.read().clone();
   let ws_offline = state.workspace_offline_snapshot();
   let cat = dsl_completion::source_tables::merge(&dsl_completion::source_tables::merge(&live, &derived), &ws_offline);
@@ -39,7 +72,7 @@ pub async fn publish_for(client: &Client, state: &ServerState, uri: &Url) {
   // for the fresher buffer.
   if state.documents.is_stale(uri, snapshot_version) {
     tracing::debug!(uri = %uri, "diagnostics dropped: doc version superseded mid-analysis");
-    return;
+    return None;
   }
 
   // Per-rule severity overrides from .duck-sqllsp.toml.
@@ -70,13 +103,59 @@ pub async fn publish_for(client: &Client, state: &ServerState, uri: &Url) {
     })
     .collect::<Vec<_>>();
 
-  // Cancellation check #2: right before we ship to the client.
+  // Cancellation check #2: right before we hand the result back.
   if state.documents.is_stale(uri, snapshot_version) {
     tracing::debug!(uri = %uri, "diagnostics dropped: doc version superseded before publish");
-    return;
+    return None;
   }
 
-  client.publish_diagnostics(uri.clone(), diagnostics, Some(snapshot_version)).await;
+  Some((diagnostics, snapshot_version))
+}
+
+/// Push channel: analyse `uri` and send `textDocument/publishDiagnostics`.
+///
+/// No-op when the client pulls -- see the module docs.
+pub async fn publish_for(client: &Client, state: &ServerState, uri: &Url) {
+  if state.client_pulls_diagnostics() {
+    return;
+  }
+  let Some((diagnostics, version)) = compute(state, uri) else { return };
+  client.publish_diagnostics(uri.clone(), diagnostics, Some(version)).await;
+}
+
+/// Retract every diagnostic previously published for `uri`.
+///
+/// The server owns the lifetime of pushed diagnostics: the client holds
+/// whatever we last sent until we send something else. Close a buffer
+/// without this and its findings sit in the Problems panel forever,
+/// pointing at a file the user is no longer editing -- and clicking one
+/// reopens the file just to show a stale complaint.
+///
+/// Pull-mode clients discard a document's report when they close it, so
+/// there is nothing to retract.
+pub async fn clear_for(client: &Client, state: &ServerState, uri: &Url) {
+  if state.client_pulls_diagnostics() {
+    return;
+  }
+  client.publish_diagnostics(uri.clone(), Vec::new(), None).await;
+}
+
+/// Tell the client that previously-delivered diagnostics are stale for
+/// *every* open document. Used after a catalog swap, which can clear a
+/// sql001 unresolved-table finding without the buffer changing at all.
+///
+/// Push clients get a fresh publish per document; pull clients get one
+/// `workspace/diagnostic/refresh` and re-pull on their own schedule.
+pub async fn invalidate_all(client: &Client, state: &ServerState) {
+  if state.client_pulls_diagnostics() {
+    // Ignored by clients without `refreshSupport`; they will re-pull on
+    // the next edit anyway.
+    let _ = client.workspace_diagnostic_refresh().await;
+    return;
+  }
+  for (uri, _) in state.documents.snapshot() {
+    publish_for(client, state, &uri).await;
+  }
 }
 
 fn map_severity(s: dsl_analysis::Severity) -> DiagnosticSeverity {

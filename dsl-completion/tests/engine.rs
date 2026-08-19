@@ -144,7 +144,11 @@ fn items_carry_documentation_for_keywords() {
   let scopes = resolve_with_source(&file.statements, src);
   let items = complete(src, &file, &scopes, &cat, TextSize::from(3));
   let select = items.iter().find(|i| i.label == "SELECT").unwrap();
-  let doc = select.documentation_md.as_ref().expect("doc set");
+  // Knowledge-base docs are rendered on demand via `documentation()`;
+  // `documentation_md` stays None so completion responses don't pay for
+  // ~2700 markdown renders per keystroke.
+  assert!(select.documentation_md.is_none(), "KB docs must not be eagerly rendered");
+  let doc = select.documentation().expect("doc set");
   assert!(doc.contains("Retrieve"));
   // Match the new render header (capital P).
   assert!(doc.contains("[Postgres docs]"));

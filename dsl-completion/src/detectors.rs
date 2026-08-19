@@ -2500,6 +2500,7 @@ pub(crate) fn json_table_column_slot_items(source: &str, offset: TextSize) -> Op
           documentation_md: None,
           insert_text: (*ty).into(),
           is_snippet: false,
+          kb_entry: None,
           sort_priority: 1,
         });
       }
@@ -8238,6 +8239,7 @@ pub(crate) fn policy_expr_items(source: &str, offset: TextSize, cat: &Catalog) -
           documentation_md: None,
           insert_text: name,
           is_snippet: false,
+          kb_entry: None,
           sort_priority: 0,
         });
       }
@@ -9034,6 +9036,7 @@ pub(crate) fn push_cte_names(file: &ParsedFile, scopes: &[Scope], source: &str, 
       documentation_md: Some(format!("**CTE** `{name}` (defined by WITH in this statement)\n")),
       insert_text: name.clone(),
       is_snippet: false,
+      kb_entry: None,
       sort_priority: 0,
     });
   }

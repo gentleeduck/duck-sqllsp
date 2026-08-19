@@ -18,6 +18,11 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
   let uri = params.text_document.uri;
   let _g = crate::handlers::perf::Guard::with_uri("inlay_hints", &uri);
   let doc = state.documents.get(&uri)?;
+  // Oversized buffer: bail rather than block the editor. See
+  // `documents::MAX_DOC_BYTES`.
+  if doc.too_large() {
+    return None;
+  }
   let live = state.catalog.read().clone();
   let cache = doc.parsed();
   let parsed = &cache.file;
