@@ -111,7 +111,7 @@ external formatter.
 | `openParenOnNewLine` | bool | `true` | Put `(` on its own line after the table name. |
 | `constraintsAtEnd` | bool | `true` | Move table-level constraints below the column list. |
 | `columnGap` | integer | `4` | Spaces between aligned sub-columns. `1` is tight, `2`–`4` reads better. |
-| `groupIndexes` | bool | `true` | Pack consecutive `CREATE INDEX` statements with no blank line between them. |
+| `groupIndexes` | bool | `true` | Pack consecutive `CREATE INDEX` statements with no blank line between them. Only affects runs of two or more. |
 
 ### `style.formatter`
 

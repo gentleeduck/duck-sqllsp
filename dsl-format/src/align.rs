@@ -100,13 +100,17 @@ fn rewrite_inner(source: &str, style: &CreateTableStyle) -> String {
   let stage1 = if style.align_columns { rewrite_tables(source, style) } else { source.to_string() };
   let stage2 = break_function_headers(&stage1);
   let stage3 = break_trigger_headers(&stage2);
-  let stage4 = break_index_headers(&stage3);
+  // Collapse index runs BEFORE breaking their headers. `collapse_index_runs`
+  // looks for blank lines immediately after a `CREATE INDEX` line, and
+  // once `break_index_headers` has split the statement across two lines
+  // the blank follows the `ON ...;` line instead -- so the check never
+  // matched and `groupIndexes` did nothing in either position.
+  let stage4 = if style.group_indexes { collapse_index_runs(&stage3) } else { stage3 };
+  let stage5 = break_index_headers(&stage4);
   // Keep FK clauses inline (REFERENCES / ON DELETE / ON UPDATE / MATCH /
   // DEFERRABLE) -- align step already produced single-line constraints
   // and breaking them again pushes the closing `)` onto its own line.
-  let stage5 = stage4;
-  let stage6 = if style.group_indexes { collapse_index_runs(&stage5) } else { stage5 };
-  align_plpgsql_bodies(&stage6)
+  align_plpgsql_bodies(&stage5)
 }
 
 /// Re-indent statements inside `$$ ... $$` bodies. BEGIN / IF / LOOP /
@@ -406,7 +410,12 @@ fn inject_break_in(text: &str, needle_with_space: &str, contexts: &[&str], inden
     if in_ctx && !already_broken {
       out.push('\n');
       out.push_str(&pad);
-      out.push_str(needle_with_space.trim_start());
+      // Emit the keyword in the configured case, not the canonical
+      // uppercase spelling of the needle. Pushing the needle verbatim
+      // upper-cased `ON` while `create index` on the same line kept the
+      // user's lowercase, and ignored `keywordCase` entirely.
+      let as_written = text[i..i + needle_with_space.len()].trim_start();
+      out.push_str(&keyword_case().apply(needle_with_space.trim_start(), as_written));
     } else {
       out.push_str(&text[i..i + needle_with_space.len()]);
     }
