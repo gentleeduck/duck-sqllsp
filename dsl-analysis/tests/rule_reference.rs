@@ -62,6 +62,10 @@ fn extract() -> BTreeMap<String, (String, String, String)> {
       }
     }
     let doc = doc.split_whitespace().collect::<Vec<_>>().join(" ");
+    // rustdoc intra-doc links (`[`x`](super::y)`) are meaningless in
+    // plain markdown and render as broken links. Keep the label, drop
+    // the path.
+    let doc = strip_intra_doc_links(&doc);
     let Some((code, body)) = doc.split_once(':') else { continue };
     let code = code.trim();
     if !code.starts_with("sql") || !code[3..].chars().all(|c| c.is_ascii_digit()) {
@@ -73,6 +77,30 @@ fn extract() -> BTreeMap<String, (String, String, String)> {
     let body = body.trim().to_string();
     out.insert(code.to_string(), (stem, summarise(&body), body));
   }
+  out
+}
+
+/// Rewrite `[label](super::path)` / `[label](crate::path)` to just
+/// `label`. A rustdoc path is not a URL, so leaving it in produces a
+/// link that resolves to nothing.
+fn strip_intra_doc_links(s: &str) -> String {
+  let mut out = String::with_capacity(s.len());
+  let mut rest = s;
+  while let Some(open) = rest.find('[') {
+    let Some(close) = rest[open..].find("](") else { break };
+    let close = open + close;
+    let Some(end) = rest[close..].find(')') else { break };
+    let end = close + end;
+    let target = &rest[close + 2..end];
+    out.push_str(&rest[..open]);
+    if target.starts_with("super::") || target.starts_with("crate::") || target.starts_with("self::") {
+      out.push_str(&rest[open + 1..close]);
+    } else {
+      out.push_str(&rest[open..=end]);
+    }
+    rest = &rest[end + 1..];
+  }
+  out.push_str(rest);
   out
 }
 

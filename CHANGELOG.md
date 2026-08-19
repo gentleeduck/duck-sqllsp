@@ -40,10 +40,23 @@ and the project adheres to [Semantic Versioning](https://semver.org).
   safe in CI.
 - Full [configuration reference](dsl-server/docs/configuration.md), a
   [troubleshooting guide](dsl-server/docs/troubleshooting.md), and a
-  [lint rule reference](dsl-analysis/docs/rules.md).
+  [lint rule reference](dsl-analysis/docs/rules.md), and
+  [editor setup instructions](dsl-server/docs/editors.md) covering VS
+  Code, neovim (both the 0.11+ and lspconfig paths), Helix, Emacs, and
+  Sublime.
 
 ### Changed
 
+- `CONTRIBUTING.md` and `SECURITY.md` rewritten for this project. Both
+  were inherited from a sibling repository and described it instead:
+  contributors were told to run `pnpm install` and
+  `cargo test --features pretty-code` (a flag no package defines), and
+  the security policy's entire threat model covered MDX sanitisation, a
+  Node sidecar, and NAPI binaries -- none of which exist here. The
+  security surfaces that do exist are now documented: connection
+  credentials in the project file, read-only introspection queries, the
+  code lenses that really execute SQL, the external formatter binary
+  taken from `PATH`, and the bounded workspace file walk.
 - `duck-sqllsp rules` now prints a one-line summary next to each code,
   and `--json` gains a `title` field. Previously it emitted only the
   code and severity, so a `sql015` in the editor could not be looked up
