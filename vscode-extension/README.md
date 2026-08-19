@@ -2,18 +2,6 @@
 
 Thin VS Code client for [duck-sqllsp](https://github.com/gentleeduck/duck-sqllsp) -- a Postgres / MySQL / SQLite Language Server written in Rust.
 
-## Upgrading from 0.1.0
-
-If you see `command 'duckSqllsp.addConnection' not found` (or similar for any
-other command), you have an older .vsix installed. Uninstall and reinstall:
-
-```bash
-code --uninstall-extension wildduck.duck-sqllsp-vscode
-code --install-extension vscode-extension/duck-sqllsp-vscode-0.1.1.vsix
-```
-
-Then reload the VS Code window (`Developer: Reload Window` in the palette).
-
 ## What you get
 
 - Context-aware completion (tables, columns, functions, types, roles, GRANT privileges, ALTER TABLE sub-actions, snippet expansions).
@@ -24,10 +12,12 @@ Then reload the VS Code window (`Developer: Reload Window` in the palette).
 - Go-to-definition + go-to-type-definition (cross-buffer).
 - Folding ranges (BEGIN..END, paren bodies, multi-line block comments).
 - On-type indentation.
-- 150+ analysis rules (unknown table, unused alias, GROUP BY position, missing PK, ...).
+- 701 analysis rules -- schema correctness, transaction safety, query smells, migration footguns, PL/pgSQL control flow, partitioning, JSON, and vendor mismatches. Silence or re-level any of them by code.
 - Document + workspace symbols.
 - Code actions (extract subquery to CTE, EXISTS -> LATERAL, IN -> ANY, EXPLAIN ANALYZE wrap, ...).
-- Document formatting via the bundled DataGrip-style aligner (plus `sql-formatter` when installed).
+- Document *and selection* formatting via the bundled DataGrip-style aligner (plus `sql-formatter` when installed). Formatting a selection snaps outward to whole statements, so neighbouring ones stay byte-identical.
+- Semantic highlighting that colours the names a file is *creating* -- table names, column and parameter lists, PL/pgSQL locals -- which a catalog lookup alone cannot do.
+- Clickable document links: psql `\i` includes, `COPY ... FROM/TO` data files, and URLs in comments.
 
 Works offline -- buffer-derived catalog covers tables / functions / sequences / types / extensions / roles. Connect a DB for richer suggestions.
 
@@ -67,7 +57,14 @@ npm run package
 
 ## Troubleshooting
 
-Completion / hover not showing? Walk through these:
+**Start here:** run `duck-sqllsp doctor` in your project. It reports the
+formatter binary, which config file was found and whether it set
+anything, the workspace root it derived, how many `.sql` files the
+offline scan reached, and whether the connection answers -- which is
+usually enough to spot the cause. Its output is also the most useful
+thing to attach to a bug report.
+
+If that looks healthy and completion still is not showing:
 
 1. **Open the status bar entry** -- bottom right, `database` icon. Hover it for the current state (`starting…` / `connected: <name>` / `offline mode` / `error: …`). Click to restart.
 2. **Open the Output panel and pick `duck-sqllsp`** from the dropdown. The activation log shows the exact command the extension spawned and any LSP error.
@@ -76,3 +73,8 @@ Completion / hover not showing? Walk through these:
 5. **Without a DB connection** completion still works offline (tables / functions / sequences / types / roles harvested from the buffer plus default offline roles). Add a connection through the Connections sidebar entry for live introspection.
 6. **Restart the server** with `Cmd/Ctrl+Shift+P` -> `duck-sqllsp: Restart Server` after editing `.duck-sqllsp.toml` or changing connection.
 
+## More
+
+- [Configuration reference](https://github.com/gentleeduck/duck-sqllsp/blob/master/dsl-server/docs/configuration.md) -- every setting, its default, and what it changes.
+- [Troubleshooting guide](https://github.com/gentleeduck/duck-sqllsp/blob/master/dsl-server/docs/troubleshooting.md)
+- [Lint rule reference](https://github.com/gentleeduck/duck-sqllsp/blob/master/dsl-analysis/docs/rules.md) -- what each `sqlNNN` means.

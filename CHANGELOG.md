@@ -47,9 +47,16 @@ and the project adheres to [Semantic Versioning](https://semver.org).
 
 ### Changed
 
+- `duck-sqllsp version` now prints what its help text always claimed:
+  dialects, rule count and severity breakdown, parser backends, and
+  whether the external formatter is on PATH. The bug-report template
+  asks people to paste it, so it should be worth pasting.
 - CI now typechecks and bundles the VS Code extension. Nothing built it
   before, so its dependencies could break without any signal -- which
   became live the moment dependabot started watching them.
+- The VS Code marketplace listing advertised "150+ analysis rules" -- off
+  by nearly five times, in the first thing a prospective user reads. A
+  test now checks every documented rule count against the registry.
 - A README per crate. All eleven publish to crates.io, and every one of
   them was showing the whole project README as its crate page -- so
   `dsl-parse` on crates.io described the language server's editor
