@@ -47,6 +47,9 @@ and the project adheres to [Semantic Versioning](https://semver.org).
 
 ### Changed
 
+- CI now typechecks and bundles the VS Code extension. Nothing built it
+  before, so its dependencies could break without any signal -- which
+  became live the moment dependabot started watching them.
 - A README per crate. All eleven publish to crates.io, and every one of
   them was showing the whole project README as its crate page -- so
   `dsl-parse` on crates.io described the language server's editor

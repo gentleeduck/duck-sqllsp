@@ -74,3 +74,20 @@ jobs:
           shared-key: ${{ github.job }}
       - run: cargo check --workspace --no-default-features
       - run: cargo check --workspace --all-features
+
+  vscode-extension:
+    name: vscode extension (typecheck + bundle)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+      - run: npm ci
+        working-directory: vscode-extension
+      - run: npm run compile
+        working-directory: vscode-extension
+      - run: npm run bundle
+        working-directory: vscode-extension
