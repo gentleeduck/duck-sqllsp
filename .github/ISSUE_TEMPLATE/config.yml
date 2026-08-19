@@ -1,11 +1,20 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Documentation
-    url: https://github.com/gentleeduck/duck-mc/tree/master/dmc-docs
-    about: Read the per-crate, architecture, and integration guides first.
+  - name: Configuration reference
+    url: https://github.com/gentleeduck/duck-sqllsp/blob/master/dsl-server/docs/configuration.md
+    about: Every setting, its default, and what it changes.
+  - name: Troubleshooting
+    url: https://github.com/gentleeduck/duck-sqllsp/blob/master/dsl-server/docs/troubleshooting.md
+    about: Start with `duck-sqllsp doctor` -- it diagnoses most setup problems.
+  - name: Editor setup
+    url: https://github.com/gentleeduck/duck-sqllsp/blob/master/dsl-server/docs/editors.md
+    about: VS Code, neovim, Helix, Emacs, Sublime, and any other LSP client.
+  - name: Lint rule reference
+    url: https://github.com/gentleeduck/duck-sqllsp/blob/master/dsl-analysis/docs/rules.md
+    about: What each sqlNNN diagnostic means.
   - name: Discussions
-    url: https://github.com/gentleeduck/duck-mc/discussions
+    url: https://github.com/gentleeduck/duck-sqllsp/discussions
     about: Ask questions or share ideas without filing an issue.
   - name: Security
-    url: https://github.com/gentleeduck/duck-mc/blob/master/SECURITY.md
+    url: https://github.com/gentleeduck/duck-sqllsp/blob/master/SECURITY.md
     about: For security-sensitive reports, follow the disclosure policy.

@@ -111,6 +111,31 @@ warning that highlights forty lines is a warning people stop reading.
 - [ ] `CHANGELOG.md` updated under `[Unreleased]` for user-visible changes
 - [ ] Docs updated if you changed configuration or behaviour
 
+## A note on the shared scaffolding
+
+Much of this repository's tooling arrived from a sibling project
+(`duck-mc`) via a `sync-rust-scaffolding.sh` script that copies CI
+workflows, issue templates, `.typos.toml`, `deny.toml`,
+`release-plz.toml`, `CONTRIBUTING.md`, and `SECURITY.md` between repos.
+
+That sync is why, for a long time, CI ran
+`cargo test --features pretty-code` (a feature no package here defines,
+so no test ever ran), `deny.toml` ignored advisories for crates not in
+this dependency graph while missing a license this one needs, and
+`SECURITY.md` documented the threat model of a markdown compiler.
+
+**All of those files have since been rewritten for this project.** If
+you re-run a scaffolding sync from another repository, you will
+reintroduce every one of those bugs. Treat these as repo-specific:
+
+```
+.github/workflows/ci.yml   .github/ISSUE_TEMPLATE/   .github/labels.sh
+.github/dependabot.yml     .github/protect-branches.sh
+.typos.toml                deny.toml                 release-plz.toml
+socket.yml                 .coderabbit.yaml          .gitignore
+CONTRIBUTING.md            SECURITY.md
+```
+
 ## Reporting bugs
 
 Include the output of `duck-sqllsp doctor` and `duck-sqllsp version`,

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Apply the dmc label scheme to gentleeduck/duck-mc.
+# Apply the duck-sqllsp label scheme to gentleeduck/duck-sqllsp.
 # Idempotent: existing labels are updated; new ones created.
 #
 # Usage:
@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-REPO="${REPO:-gentleeduck/duck-mc}"
+REPO="${REPO:-gentleeduck/duck-sqllsp}"
 
 # label name | color (hex, no #) | description
 labels=(
@@ -28,28 +28,29 @@ labels=(
   "revert ⏪|B60205|Revert a prior change"
 
   # Crate scope
-  "crate: lexer 🔤|0366D6|dmc-lexer"
-  "crate: parser 🌳|0366D6|dmc-parser"
-  "crate: highlight 🎨|0366D6|dmc-highlight"
-  "crate: transform 🔄|0366D6|dmc-transform"
-  "crate: codegen 📝|0366D6|dmc-codegen"
-  "crate: schema 📐|0366D6|dmc-schema"
-  "crate: core ⚙️|0366D6|dmc-core"
-  "crate: diagnostic 🚨|0366D6|dmc-diagnostic"
-  "crate: napi 🦀|0366D6|dmc-napi (@gentleduck/md)"
-  "crate: sidecar 🚗|0366D6|dmc-sidecar (@gentleduck/md-sidecar)"
+  "crate: parse 🌳|0366D6|dsl-parse"
+  "crate: catalog 📇|0366D6|dsl-catalog"
+  "crate: knowledge 📖|0366D6|dsl-knowledge"
+  "crate: resolve 🔗|0366D6|dsl-resolve"
+  "crate: format 🎨|0366D6|dsl-format"
+  "crate: analysis 🚨|0366D6|dsl-analysis"
+  "crate: completion 💡|0366D6|dsl-completion"
+  "crate: hover 🔍|0366D6|dsl-hover"
+  "crate: conn 🔌|0366D6|dsl-conn"
+  "crate: server 🖥|0366D6|dsl-server"
+  "crate: cli 💻|0366D6|dsl-cli"
 
   # Area
-  "area: cli 💻|6F42C1|CLI surface"
-  "area: api 🔌|6F42C1|Public TS / Rust API"
-  "area: cache 💾|6F42C1|File / math cache"
-  "area: math 🧮|6F42C1|KaTeX / MathML"
-  "area: pretty-code 🌈|6F42C1|Syntax highlighting"
-  "area: mermaid 🧜|6F42C1|Mermaid diagrams"
-  "area: jsx ⚛️|6F42C1|JSX parsing / emission"
-  "area: gfm 📋|6F42C1|GFM tables / strike / autolinks"
-  "area: examples 🧪|6F42C1|Example apps"
-  "area: bench 📊|6F42C1|Benchmarks"
+  "area: lsp 🔌|6F42C1|LSP protocol surface"
+  "area: rules 📏|6F42C1|Lint rule behaviour"
+  "area: completion 💡|6F42C1|Completion contexts"
+  "area: formatting 📐|6F42C1|Formatter output"
+  "area: introspection 🗄|6F42C1|Live DB catalog"
+  "area: dialect 🐬|6F42C1|MySQL / SQLite / MSSQL specifics"
+  "area: vscode 🧩|6F42C1|VS Code extension"
+  "area: editors ⌨️|6F42C1|Other editor integrations"
+  "area: docs 📚|6F42C1|Documentation"
+  "area: perf 📊|6F42C1|Performance"
 
   # Status / triage
   "status: triage 🔍|E4E669|Needs maintainer review"

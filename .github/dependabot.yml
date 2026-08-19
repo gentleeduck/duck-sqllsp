@@ -9,27 +9,13 @@ updates:
       - dependencies
       - rust
 
+  # The VS Code extension is the only npm package in this repository.
+  # There is no root package.json.
   - package-ecosystem: npm
-    directory: /
+    directory: /vscode-extension
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-    labels:
-      - dependencies
-      - javascript
-
-  - package-ecosystem: npm
-    directory: /dmc-napi
-    schedule:
-      interval: weekly
-    labels:
-      - dependencies
-      - javascript
-
-  - package-ecosystem: npm
-    directory: /dmc-sidecar
-    schedule:
-      interval: weekly
     labels:
       - dependencies
       - javascript

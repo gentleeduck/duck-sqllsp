@@ -47,6 +47,15 @@ and the project adheres to [Semantic Versioning](https://semver.org).
 
 ### Changed
 
+- Repository tooling de-duplicated from the sibling project it was
+  copied from. The issue templates asked for a `dmc --version` and
+  pointed Documentation, Discussions, and Security at a different
+  repository entirely; `dependabot.yml` watched two npm directories that
+  do not exist while ignoring `vscode-extension/`, the only npm package
+  here; `.coderabbit.yaml` scoped its review rules to `dmc-*/src`, so
+  none of them ever matched this workspace; `labels.sh` and
+  `protect-branches.sh` targeted `gentleeduck/duck-mc`; and an unused
+  `.changeset/` JS release setup sat alongside release-plz.
 - `CONTRIBUTING.md` and `SECURITY.md` rewritten for this project. Both
   were inherited from a sibling repository and described it instead:
   contributors were told to run `pnpm install` and

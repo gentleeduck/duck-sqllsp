@@ -3,17 +3,7 @@
 Cargo.lock.bak
 node_modules
 **/node_modules
-**/.next
-**/.codex
-**/.gentleduck
-**/.velite
 **/dist
-**/*.node
-dmc-napi/mod.js
-dmc-napi/mod.d.ts
-dmc-napi/index.js
-dmc-napi/index.d.ts
 **/tmp*
 **/temp*
-/docs
 /.claude/

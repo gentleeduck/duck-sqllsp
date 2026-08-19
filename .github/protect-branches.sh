@@ -10,7 +10,7 @@
 #   - block deletion
 #   - admin not enforced (solo merges still possible)
 #
-# duck-mc adds required CI status checks on top.
+# duck-sqllsp adds required CI status checks on top.
 #
 # Usage:
 #   bash .github/protect-branches.sh
@@ -53,8 +53,9 @@ JSON
   echo "   ok"
 }
 
-# duck-mc CI job names from .github/workflows/ci.yml
-duckmc_contexts='[
+# CI job names from .github/workflows/ci.yml -- these must match
+# exactly, or the protection rule silently requires nothing.
+ci_contexts='[
   "cargo fmt",
   "cargo clippy",
   "cargo test (ubuntu-latest)",
@@ -68,11 +69,6 @@ if [ -n "${REPO:-}" ]; then
   exit 0
 fi
 
-# All five pinned repos in the gentleeduck org.
-apply_protection "gentleeduck/duck-mc"          "master" "$duckmc_contexts"
-apply_protection "gentleeduck/duck-ui"          "master" "[]"
-apply_protection "gentleeduck/duck-linux-utils" "main"   "[]"
-apply_protection "gentleeduck/duck-ttlog"       "master" "[]"
-apply_protection "gentleeduck/duck-template"    "master" "[]"
+apply_protection "gentleeduck/duck-sqllsp" "master" "$ci_contexts"
 
 echo "done"
