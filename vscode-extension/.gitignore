@@ -1,4 +1,6 @@
 node_modules/
 out/
 *.vsix
-package-lock.json
+
+# package-lock.json is deliberately committed: this is an application,
+# not a library, so builds and dependabot updates need to be reproducible.
