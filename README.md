@@ -66,6 +66,7 @@ vim.lsp.enable('duck_sqllsp')
 ```sh
 duck-sqllsp --help
 duck-sqllsp version
+duck-sqllsp doctor                     # check formatter, config, workspace, connection
 duck-sqllsp rules
 duck-sqllsp lint file.sql
 duck-sqllsp format file.sql --stdout
@@ -100,8 +101,10 @@ url  = "postgres://user:pass@localhost:5432/mydb"
 ```
 
 Every key accepts `camelCase` or `snake_case`, and the `[duck_sqllsp]`
-wrapper is optional. **[Full configuration reference →](dsl-server/docs/configuration.md)**
-— every setting, its default, and what it changes.
+wrapper is optional.
+
+- **[Configuration reference →](dsl-server/docs/configuration.md)** — every setting, its default, and what it changes.
+- **[Troubleshooting →](dsl-server/docs/troubleshooting.md)** — start with `duck-sqllsp doctor`.
 
 ## Workspace
 

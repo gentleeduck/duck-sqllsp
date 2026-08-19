@@ -33,7 +33,13 @@ and the project adheres to [Semantic Versioning](https://semver.org).
   `CREATE`, column and parameter lists, and PL/pgSQL locals are now
   classified -- previously they emitted no token unless they happened to
   match the live catalog.
-- Full [configuration reference](dsl-server/docs/configuration.md).
+- `duck-sqllsp doctor` -- reports what the server can actually see:
+  formatter binary, which config file was found and whether it set
+  anything, the derived workspace root, the size of the offline catalog,
+  and connection health. Exits non-zero only on real problems, so it is
+  safe in CI.
+- Full [configuration reference](dsl-server/docs/configuration.md) and a
+  [troubleshooting guide](dsl-server/docs/troubleshooting.md).
 
 ### Changed
 
