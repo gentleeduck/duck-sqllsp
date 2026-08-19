@@ -82,6 +82,8 @@ PARMS = "PARMS"
 # "Ned", "rest_after_ine" for IF-NOT-EXISTS).
 mis = "mis"
 Ned = "Ned"
+# "ANDed" -- the SQL operator with an -ed suffix.
+Ded = "Ded"
 ine = "ine"
 # `hom` is verbatim from the PostgreSQL docs example for OVERLAY.
 hom = "hom"
