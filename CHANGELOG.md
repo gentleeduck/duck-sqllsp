@@ -5,6 +5,81 @@ All notable changes to this project will be documented in this file.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com),
 and the project adheres to [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Added
+
+- **700+ lint rules** (up from ~650): PL/pgSQL control flow and unused
+  locals, `EXECUTE ... USING ... INTO` arity mismatches, declarative
+  partitioning DDL, recursive-CTE restrictions, `MERGE` branch
+  reachability, `GROUPING SETS` / `CUBE` / `ROLLUP`, correlated-subquery
+  and join footguns, domain / composite / `EXCLUDE` / statistics-object
+  mistakes, SQL-standard JSON functions, jsonpath and jsonb operators,
+  and logical replication.
+- `textDocument/diagnostic` (LSP 3.17 pull diagnostics). Push and pull
+  share one analysis pass and are mutually exclusive per client, so
+  nothing is rendered twice. Unchanged buffers answer `Unchanged`
+  without re-running the engine.
+- `textDocument/rangeFormatting`. The selection snaps outward to whole
+  statements, since no sub-statement fragment survives being formatted
+  in isolation.
+- `textDocument/documentLink` for psql `\i` includes, `COPY ... FROM/TO`
+  data files, and URLs in comments. File links are emitted only when the
+  path resolves on disk.
+- `completionItem/resolve`. Documentation is now rendered for the item
+  you highlight rather than for every candidate.
+- Semantic token modifiers (`declaration`, `definition`,
+  `defaultLibrary`) and `semanticTokens/range`. Names introduced by
+  `CREATE`, column and parameter lists, and PL/pgSQL locals are now
+  classified -- previously they emitted no token unless they happened to
+  match the live catalog.
+- Full [configuration reference](dsl-server/docs/configuration.md).
+
+### Changed
+
+- Document sync is now incremental. On a 240 KB file this is 0.016 ms
+  per edit instead of 0.070 ms, and 200 bytes of traffic over 200
+  keystrokes instead of 48 MB.
+- Completion responses no longer carry documentation. A `SELECT`
+  projection response drops from ~440 KB to ~209 KB, and 2321 built-in
+  knowledge-base entries (~617 KB, ~1 ms) are no longer rendered per
+  keystroke.
+
+### Fixed
+
+- **Crash on multi-byte characters.** The source scanners walked a byte
+  cursor and sliced the string with it, so a CJK comment, an accented
+  column name, or an emoji in a literal panicked with "byte index is not
+  a char boundary". Because the workspace scan reads every `*.sql` file
+  under the project root, one such file anywhere killed completion for
+  every buffer. Fixed at 20 sites.
+- **Config that set only `style` or only `rules` was silently ignored.**
+  Both the JSON and the `.duck-sqllsp.toml` paths guessed whether a
+  document was wrapped in `[duck_sqllsp]` by trying the wrapped parse and
+  checking whether it produced a connection -- which is not a test of
+  shape, since serde skips unknown fields and returns an all-defaults
+  value. A wrapped config with no connection, and every bare
+  `.duck-sqllsp.toml`, parsed "successfully" into nothing. No error was
+  reported; settings just did not apply.
+- Closing a document left its diagnostics in the client's problem panel
+  and leaked its entry in the format cache, which holds a full copy of
+  the buffer.
+- The `MAX_DOC_BYTES` guard documented as protecting "heavy handlers" was
+  honoured by only three of them; now applied to all whole-document
+  handlers.
+- 416 knowledge-base entries were silently shadowed by `HashMap::insert`
+  collisions, with a panic-on-duplicate guard added so it cannot recur.
+- `CREATE POLICY` expression columns were being reported as roles on
+  hover.
+
+### Internal
+
+- CI had never run a test: the workflow invoked a `--features
+  pretty-code` that no package in the workspace defines, so cargo exited
+  before running anything. Spell-check and `cargo-deny` configuration
+  were likewise inherited from another project and described its
+  dependency graph rather than this one. All five jobs now pass.
+
 ## [0.1.0] -- 2026-05-26
 
 First public release of duck-sqllsp -- a persistent SQL Language Server
