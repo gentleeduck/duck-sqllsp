@@ -22,6 +22,12 @@ extend-exclude = [
   "dmc-parser/tests/fixtures/",
   "fuzz/seeds/",
   "fuzz/corpus/",
+  # Generated from the `//! sqlNNN:` doc comments in
+  # dsl-analysis/src/rules/, which are themselves spell-checked. The
+  # index anchors are slugs -- punctuation stripped and lowercased -- so
+  # "COMMITed" becomes "commited" and "They're" becomes "theyre",
+  # neither of which is a typo in the source.
+  "dsl-analysis/docs/rules.md",
 ]
 
 [default]

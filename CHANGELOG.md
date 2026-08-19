@@ -54,6 +54,16 @@ and the project adheres to [Semantic Versioning](https://semver.org).
 - CI now typechecks and bundles the VS Code extension. Nothing built it
   before, so its dependencies could break without any signal -- which
   became live the moment dependabot started watching them.
+- `duck-sqllsp rules --search <text>` filters by code or summary. With
+  701 rules, scanning the whole table to find the one you saw in the
+  editor was the only option.
+- The rule reference opens with an index linking every code to its
+  entry. It runs to 4900 lines; without one, finding a rule meant
+  already knowing its code.
+- Piping any subcommand into `head` or `less` panicked with
+  `failed printing to stdout: Broken pipe`. Rust ignores SIGPIPE at
+  startup; the default disposition is now restored, so the process
+  exits quietly like every other CLI.
 - Two shipped VS Code snippets expanded to a syntax error. `sfw` produced
   `SELECT * FROM table WHERE condition;` and `cidx` produced
   `CREATE INDEX ix_name ON table_name (column);` -- `table` and `column`
