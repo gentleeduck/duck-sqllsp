@@ -34,7 +34,8 @@ enum Cmd {
   },
   /// Print version and capability info.
   Version,
-  /// List every registered lint rule (code + default severity).
+  /// List every registered lint rule with its code, default severity,
+  /// and one-line summary.
   Rules {
     /// Emit machine-readable JSON instead of the human table.
     #[arg(long)]
@@ -157,15 +158,19 @@ fn main() -> anyhow::Result<()> {
           if i > 0 {
             print!(",");
           }
-          print!("{{\"code\":\"{code}\",\"default_severity\":\"{sev}\"}}");
+          let title = dsl_analysis::rules::title(code).unwrap_or_default();
+          let escaped = title.replace('\\', "\\\\").replace('"', "\\\"");
+          print!("{{\"code\":\"{code}\",\"default_severity\":\"{sev}\",\"title\":\"{escaped}\"}}");
         }
         println!("]");
         return Ok(());
       }
       let mut by_sev: std::collections::BTreeMap<&str, usize> = Default::default();
-      println!("{:6}  {:8}", "code", "severity");
+      println!("{:6}  {:8}  summary", "code", "severity");
       for (code, sev) in &rules {
-        println!("{:6}  {:8}", code, sev);
+        // A code with no summary means `titles.rs` is stale; print the
+        // code alone rather than eliding the row.
+        println!("{:6}  {:8}  {}", code, sev, dsl_analysis::rules::title(code).unwrap_or(""));
         *by_sev.entry(sev).or_insert(0) += 1;
       }
       println!();
