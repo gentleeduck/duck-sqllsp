@@ -3,6 +3,7 @@
 //! Defaults to `server` (LSP over stdio). Future subcommands (`lint`,
 //! `format`, `introspect`, `version`) are sketched but not yet wired.
 
+mod doctor;
 mod server;
 
 use clap::{Parser, Subcommand};
@@ -73,6 +74,15 @@ enum Cmd {
     #[arg(long, default_value = "postgresql")]
     language: String,
   },
+  /// Report what the server can actually see: formatter binary, config
+  /// file, workspace root, offline catalog size, and connection health.
+  ///
+  /// Exit status: 0 when nothing is broken (warnings are fine), 1 when
+  /// a check fails.
+  Doctor {
+    /// Directory to inspect. Defaults to the current directory.
+    path: Option<String>,
+  },
   /// Dump the live DB catalog (when a connection is configured) or the
   /// derived offline catalog (every CREATE TABLE / FUNCTION / TYPE in
   /// the supplied files) as JSON.
@@ -118,6 +128,7 @@ fn main() -> anyhow::Result<()> {
   };
   match cli.cmd.unwrap_or(Cmd::Server { stdio: true, node_ipc: false, socket: None }) {
     Cmd::Server { .. } => server::run(),
+    Cmd::Doctor { path } => doctor::run(path),
     Cmd::Version => {
       println!("duck-sqllsp {}", env!("CARGO_PKG_VERSION"));
       Ok(())
