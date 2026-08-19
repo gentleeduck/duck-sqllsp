@@ -124,7 +124,7 @@ for full reflow.
 |---|---|---|---|
 | `language` | string | `postgresql` | sql-formatter dialect. Left at the default, the open buffer's `dialect` drives it, so `mysql` backticks and `mssql` brackets tokenise correctly. |
 | `tabWidth` | integer | `4` | Indent width. Your editor's own tab setting overrides this per format request. |
-| `keywordCase` | `upper` / `lower` / `preserve` | `upper` | Keyword casing in formatted output. |
+| `keywordCase` | `upper` / `lower` / `preserve` | `upper` | Keyword casing in formatted output. Applies on both paths: the external formatter re-cases everything it recognises, and the built-in alignment pass uses it for the `NOT NULL` / `DEFAULT` it re-emits. Trailing constraints (`primary key`, `check (...)`) keep the case you wrote, since re-casing them would mean rewriting expressions. |
 | `dataTypeCase` | same | `preserve` | Type-name casing. |
 | `functionCase` | same | `lower` | Function-name casing. |
 | `linesBetweenQueries` | integer | `1` | Blank lines between statements. |

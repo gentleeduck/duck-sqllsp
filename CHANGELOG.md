@@ -54,6 +54,11 @@ and the project adheres to [Semantic Versioning](https://semver.org).
 - CI now typechecks and bundles the VS Code extension. Nothing built it
   before, so its dependencies could break without any signal -- which
   became live the moment dependabot started watching them.
+- `formatter.keywordCase` had no effect unless the external
+  `sql-formatter` binary was installed. The built-in alignment pass
+  re-emits `NOT NULL` and `DEFAULT` rather than copying them, and
+  hardcoded uppercase -- so on the documented fallback path the setting
+  silently did nothing.
 - `duck-sqllsp rules --search <text>` filters by code or summary. With
   701 rules, scanning the whole table to find the one you saw in the
   editor was the only option.
