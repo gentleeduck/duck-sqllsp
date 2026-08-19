@@ -180,10 +180,13 @@ fn titles_table_matches_the_rule_doc_comments() {
   }
 }
 
+/// Line endings are normalised first: git checks `.md` out as CRLF on
+/// Windows when `core.autocrlf` is on, while the generator always emits
+/// LF, so a raw comparison fails there and only there.
 #[test]
 fn rules_doc_matches_the_rule_doc_comments() {
-  let want = render_docs(&extract());
-  let have = std::fs::read_to_string(docs_path()).expect("docs/rules.md must exist");
+  let want = render_docs(&extract()).replace("\r\n", "\n");
+  let have = std::fs::read_to_string(docs_path()).expect("docs/rules.md must exist").replace("\r\n", "\n");
   assert_eq!(
     have.trim_end(),
     want.trim_end(),
