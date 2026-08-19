@@ -25,7 +25,7 @@
 
 ## What you get
 
-- **700+ lint rules** (PG-first, dialect-aware) covering schema correctness, transaction safety, query smells, migration footguns, vendor mismatches (MySQL `ENGINE=`, Oracle `DUAL`/`CONNECT BY`, SQL Server `BEGIN TRANSACTION`, ...). Delivered by push (`publishDiagnostics`) or by LSP 3.17 pull (`textDocument/diagnostic`), whichever the client advertises -- never both, so nothing renders twice. Pull requests on an unchanged buffer answer `Unchanged` without re-running the engine.
+- **701 lint rules** (PG-first, dialect-aware) covering schema correctness, transaction safety, query smells, migration footguns, vendor mismatches (MySQL `ENGINE=`, Oracle `DUAL`/`CONNECT BY`, SQL Server `BEGIN TRANSACTION`, ...). Delivered by push (`publishDiagnostics`) or by LSP 3.17 pull (`textDocument/diagnostic`), whichever the client advertises -- never both, so nothing renders twice. Pull requests on an unchanged buffer answer `Unchanged` without re-running the engine.
 - **Context-aware completion** across ~50 phases: `CREATE INDEX ... USING` + opclass slot, `CREATE TRIGGER ... EXECUTE FUNCTION`, `CREATE POLICY ... FOR / TO`, `ALTER COLUMN TYPE`, `CALL <proc>`, PL/pgSQL local-variable scope, JOIN target resolution, etc.
 - **Document links**: psql `\i` / `\ir` / `\include` / `\include_relative` targets, `COPY ... FROM/TO '<file>'` data files, and URLs in comments are all clickable. File links are emitted only when the path actually resolves on disk — a `COPY` path interpreted by the *server* usually doesn't exist locally, and a link that reliably errors is worse than none.
 - **Incremental document sync**: the editor ships only the edited range, spliced into the rope in place. On a 240 KB migration file that's 200 bytes over 200 keystrokes instead of 48 MB, and ~4x less server-side work per edit (0.016 ms vs 0.070 ms).
@@ -105,6 +105,7 @@ wrapper is optional.
 
 - **[Configuration reference →](dsl-server/docs/configuration.md)** — every setting, its default, and what it changes.
 - **[Troubleshooting →](dsl-server/docs/troubleshooting.md)** — start with `duck-sqllsp doctor`.
+- **[Lint rule reference →](dsl-analysis/docs/rules.md)** — all 701 diagnostics by code, with what each one catches.
 
 ## Workspace
 
@@ -115,7 +116,7 @@ wrapper is optional.
 | [`dsl-knowledge`](dsl-knowledge) | Static keyword / type / function reference with PG-doc links |
 | [`dsl-resolve`](dsl-resolve) | Name resolution, FROM / JOIN / LATERAL scope, CTE columns, alias chains |
 | [`dsl-format`](dsl-format) | Formatter - sql-formatter reflow + DataGrip alignment + PL/pgSQL indent + optional one-line DML pass |
-| [`dsl-analysis`](dsl-analysis) | Lint rule engine - 700+ diagnostics with narrow ranges |
+| [`dsl-analysis`](dsl-analysis) | Lint rule engine - 701 diagnostics with narrow ranges |
 | [`dsl-completion`](dsl-completion) | Context-aware completion engine, ~50 phases, alias + scope aware |
 | [`dsl-hover`](dsl-hover) | Hover cards with cursor-side narrowing, schema-qualified resolution |
 | [`dsl-conn`](dsl-conn) | Live PG / MySQL / SQLite catalog introspection (sqlx) |

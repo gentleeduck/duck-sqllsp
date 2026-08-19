@@ -9,7 +9,7 @@ and the project adheres to [Semantic Versioning](https://semver.org).
 
 ### Added
 
-- **700+ lint rules** (up from ~650): PL/pgSQL control flow and unused
+- **701 lint rules** (up from ~650): PL/pgSQL control flow and unused
   locals, `EXECUTE ... USING ... INTO` arity mismatches, declarative
   partitioning DDL, recursive-CTE restrictions, `MERGE` branch
   reachability, `GROUPING SETS` / `CUBE` / `ROLLUP`, correlated-subquery
@@ -38,8 +38,16 @@ and the project adheres to [Semantic Versioning](https://semver.org).
   anything, the derived workspace root, the size of the offline catalog,
   and connection health. Exits non-zero only on real problems, so it is
   safe in CI.
-- Full [configuration reference](dsl-server/docs/configuration.md) and a
-  [troubleshooting guide](dsl-server/docs/troubleshooting.md).
+- Full [configuration reference](dsl-server/docs/configuration.md), a
+  [troubleshooting guide](dsl-server/docs/troubleshooting.md), and a
+  [lint rule reference](dsl-analysis/docs/rules.md).
+
+### Changed
+
+- `duck-sqllsp rules` now prints a one-line summary next to each code,
+  and `--json` gains a `title` field. Previously it emitted only the
+  code and severity, so a `sql015` in the editor could not be looked up
+  without reading the source.
 
 ### Changed
 

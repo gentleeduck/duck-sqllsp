@@ -2,6 +2,9 @@
 //!
 //! New rules: add the module, then push an instance into [`all`].
 
+pub mod titles;
+pub use titles::{TITLES, title};
+
 pub mod acos_asin_domain;
 pub mod acosh_atanh_domain;
 pub mod add_column_notnull_no_default;
