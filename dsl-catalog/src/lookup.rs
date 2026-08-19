@@ -20,9 +20,7 @@ impl Catalog {
   pub fn find_table(&self, schema: Option<&str>, name: &str) -> Option<&Table> {
     // Case-insensitive: PG folds unquoted identifiers to lowercase,
     // so `USERS` must match the catalog's `users` entry.
-    self
-      .tables()
-      .find(|t| t.name.eq_ignore_ascii_case(name) && schema.is_none_or(|s| t.schema.eq_ignore_ascii_case(s)))
+    self.tables().find(|t| t.name.eq_ignore_ascii_case(name) && schema.is_none_or(|s| t.schema.eq_ignore_ascii_case(s)))
   }
 
   /// Find every (table, column) pair where the column has the given name.
@@ -100,7 +98,9 @@ impl Catalog {
 
   /// Find a sequence by name (and optional schema). Case-insensitive.
   pub fn find_sequence(&self, schema: Option<&str>, name: &str) -> Option<&Sequence> {
-    self.sequences().find(|s| s.name.eq_ignore_ascii_case(name) && schema.is_none_or(|sch| s.schema.eq_ignore_ascii_case(sch)))
+    self
+      .sequences()
+      .find(|s| s.name.eq_ignore_ascii_case(name) && schema.is_none_or(|sch| s.schema.eq_ignore_ascii_case(sch)))
   }
 
   /// All installed extensions.

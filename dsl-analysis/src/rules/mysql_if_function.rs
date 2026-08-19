@@ -29,9 +29,7 @@ impl LintRule for Rule {
     let n = lb.len();
     let mut i = 0usize;
     while i + 2 <= n {
-      if &lb[i..i + 2] == b"if"
-        && (i == 0 || !is_word(lb[i - 1] as char))
-      {
+      if &lb[i..i + 2] == b"if" && (i == 0 || !is_word(lb[i - 1] as char)) {
         // require `(` after optional whitespace
         let mut j = i + 2;
         while j < n && lb[j].is_ascii_whitespace() {
@@ -51,8 +49,8 @@ impl LintRule for Rule {
                   close = Some(k);
                   break;
                 }
-              }
-              _ => {}
+              },
+              _ => {},
             }
             k += 1;
           }

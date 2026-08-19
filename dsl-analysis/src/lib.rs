@@ -12,7 +12,7 @@ pub mod rules;
 pub mod textutil;
 pub mod typing;
 
-pub use diagnostic::{range_at, Diagnostic, Severity};
+pub use diagnostic::{Diagnostic, Severity, range_at};
 
 /// Return the `(start, end_clamped)` byte offsets of a statement
 /// within `source`. `end` is clamped to `source.len()` because the
@@ -243,8 +243,7 @@ pub fn run_with_dialect(
   let mut out = parser_diags(source, &file.errors);
   let registered = rules::all();
   // Pre-filter dialect-skipped rules once instead of per-statement.
-  let active: Vec<&Box<dyn LintRule>> =
-    registered.iter().filter(|r| !skip_for_dialect(dialect, r.code())).collect();
+  let active: Vec<&Box<dyn LintRule>> = registered.iter().filter(|r| !skip_for_dialect(dialect, r.code())).collect();
   for (stmt, scope) in file.statements.iter().zip(scopes.iter()) {
     reset_stmt_upper_cache();
     let trimmed = trim_stmt_range(stmt, source);

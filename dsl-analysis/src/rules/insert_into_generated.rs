@@ -100,10 +100,9 @@ impl LintRule for Rule {
           let abs_s = start + col_at;
           let abs_e = abs_s + col_name.len();
           let message = match kind {
-            GenKind::Identity => format!(
-              "`{}` is GENERATED ALWAYS AS IDENTITY -- PG rejects UPDATEs to identity columns",
-              col_name
-            ),
+            GenKind::Identity => {
+              format!("`{}` is GENERATED ALWAYS AS IDENTITY -- PG rejects UPDATEs to identity columns", col_name)
+            },
             GenKind::Stored => format!(
               "`{}` is a STORED GENERATED column -- PG rejects UPDATEs (the value is derived from its expression)",
               col_name

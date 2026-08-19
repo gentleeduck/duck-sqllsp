@@ -21,8 +21,8 @@ fn matching_paren(s: &str, open: usize) -> Option<usize> {
         if depth == 0 {
           return Some(i);
         }
-      }
-      _ => {}
+      },
+      _ => {},
     }
     i += 1;
   }

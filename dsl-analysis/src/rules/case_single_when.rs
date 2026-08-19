@@ -2,8 +2,8 @@
 //! arm. PL/pgSQL `IF`, or PG's `coalesce`/`nullif`/`iif`-like helpers
 //! read better. Hint.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -174,4 +174,3 @@ fn strip_quoted_and_comments(s: &str) -> String {
   }
   out
 }
-

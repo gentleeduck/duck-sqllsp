@@ -7,8 +7,8 @@
 //! We can't fully prove disjointness, so this is a soft Hint that
 //! reminds the author to think about it.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -119,4 +119,3 @@ fn strip_quoted_and_comments(s: &str) -> String {
   }
   out
 }
-

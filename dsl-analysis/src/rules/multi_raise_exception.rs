@@ -1,8 +1,8 @@
 //! sql089: two `RAISE EXCEPTION` calls back-to-back -- the second is
 //! unreachable because the first aborts the transaction.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -74,7 +74,6 @@ impl LintRule for Rule {
     }
   }
 }
-
 
 fn word_at(upper: &str, bytes: &[u8], i: usize, word: &str) -> bool {
   let n = bytes.len();

@@ -2,8 +2,8 @@
 //! it creates a new table `foo`. Usually the user meant PL/pgSQL
 //! variable assignment (which only works inside `$$ ... $$`).
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -93,7 +93,6 @@ fn is_keyword_at(upper: &str, bytes: &[u8], i: usize, word: &str) -> bool {
   let next_ok = i + w == bytes.len() || !is_word(bytes[i + w] as char);
   prev_ok && next_ok
 }
-
 
 /// Count `BEGIN` minus `END` word tokens. Positive means we're inside
 /// an unmatched BEGIN ... END block (PL/pgSQL function body or a

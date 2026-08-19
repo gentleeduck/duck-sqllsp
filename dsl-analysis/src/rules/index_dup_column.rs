@@ -58,10 +58,7 @@ fn find_word(ub: &[u8], kw: &[u8]) -> Option<usize> {
   let m = kw.len();
   let mut i = 0usize;
   while i + m <= n {
-    if ub[i..i + m] == *kw
-      && (i == 0 || !is_word(ub[i - 1]))
-      && (i + m == n || !is_word(ub[i + m]))
-    {
+    if ub[i..i + m] == *kw && (i == 0 || !is_word(ub[i - 1])) && (i + m == n || !is_word(ub[i + m])) {
       return Some(i);
     }
     i += 1;

@@ -59,8 +59,8 @@ impl LintRule for Rule {
             });
             return;
           }
-        }
-        _ => {}
+        },
+        _ => {},
       }
       i += 1;
     }

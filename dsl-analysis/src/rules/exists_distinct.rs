@@ -26,7 +26,10 @@ impl LintRule for Rule {
 
     let mut i = 0usize;
     while i + 6 <= n {
-      if ub[i..i + 6] != *b"EXISTS" || (i > 0 && is_word(ub[i - 1] as char)) || (i + 6 < n && is_word(ub[i + 6] as char)) {
+      if ub[i..i + 6] != *b"EXISTS"
+        || (i > 0 && is_word(ub[i - 1] as char))
+        || (i + 6 < n && is_word(ub[i + 6] as char))
+      {
         i += 1;
         continue;
       }

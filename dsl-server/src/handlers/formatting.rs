@@ -80,7 +80,10 @@ pub fn run(state: &ServerState, params: DocumentFormattingParams) -> Option<Vec<
     let last_line_text = rope.line(last_line as usize);
     let last_col = last_line_text.chars().filter(|c| *c != '\n' && *c != '\r').count() as u32;
     return Some(vec![TextEdit {
-      range: Range { start: Position { line: 0, character: 0 }, end: Position { line: last_line, character: last_col } },
+      range: Range {
+        start: Position { line: 0, character: 0 },
+        end: Position { line: last_line, character: last_col },
+      },
       new_text: cached_out.clone(),
     }]);
   }

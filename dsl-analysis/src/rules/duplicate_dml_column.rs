@@ -49,7 +49,9 @@ fn emit_duplicates(cols: &[String], where_: &str, stmt: &Statement, out: &mut Ve
       out.push(Diagnostic {
         code: "sql406",
         severity: Severity::Error,
-        message: format!("duplicate column `{c}` in {where_} -- PG rejects this with `column specified more than once`"),
+        message: format!(
+          "duplicate column `{c}` in {where_} -- PG rejects this with `column specified more than once`"
+        ),
         range: stmt.range,
       });
     }

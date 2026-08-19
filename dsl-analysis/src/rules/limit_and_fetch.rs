@@ -56,8 +56,8 @@ impl LintRule for Rule {
               fetch_at = Some(i);
             }
           }
-        }
-        _ => {}
+        },
+        _ => {},
       }
       i += 1;
     }

@@ -104,9 +104,9 @@ fn main() -> anyhow::Result<()> {
     Err(e) => {
       use clap::error::ErrorKind;
       match e.kind() {
-        ErrorKind::DisplayHelp
-        | ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
-        | ErrorKind::DisplayVersion => e.exit(),
+        ErrorKind::DisplayHelp | ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand | ErrorKind::DisplayVersion => {
+          e.exit()
+        },
         _ => {
           let filtered: Vec<String> =
             argv.into_iter().enumerate().filter(|(i, a)| *i == 0 || !a.starts_with("--")).map(|(_, a)| a).collect();

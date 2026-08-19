@@ -56,8 +56,7 @@ impl LintRule for Rule {
         }
         let right_ok = r < clause_end
           && bytes[r] == lit_needed
-          && (r + 1 == clause_end
-            || (bytes[r + 1] != b'.' && !bytes[r + 1].is_ascii_digit()));
+          && (r + 1 == clause_end || (bytes[r + 1] != b'.' && !bytes[r + 1].is_ascii_digit()));
         // Left of operator: skip ws, walk back over an ident.
         let mut l = i;
         let pre_op = i;
@@ -88,8 +87,7 @@ impl LintRule for Rule {
           }
           let lit_ok = ll > clause_start
             && bytes[ll - 1] == lit_b
-            && (ll - 1 == clause_start
-              || (!bytes[ll - 2].is_ascii_digit() && bytes[ll - 2] != b'.'));
+            && (ll - 1 == clause_start || (!bytes[ll - 2].is_ascii_digit() && bytes[ll - 2] != b'.'));
           let mut rr = i + 1;
           while rr < clause_end && bytes[rr].is_ascii_whitespace() {
             rr += 1;

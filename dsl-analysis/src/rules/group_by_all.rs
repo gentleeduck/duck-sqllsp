@@ -1,8 +1,8 @@
 //! sql090: PG 17 added `GROUP BY ALL` shorthand. Flag it as a Hint so
 //! callers know about the portability cost (works only on PG 17+).
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -48,4 +48,3 @@ impl LintRule for Rule {
     }
   }
 }
-

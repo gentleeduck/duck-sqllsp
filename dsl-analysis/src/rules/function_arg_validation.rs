@@ -14,8 +14,8 @@
 //!
 //! Empty catalog (no live DB + no offline-derived functions) -> silent.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::{Catalog, Function};
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -130,11 +130,8 @@ impl LintRule for Rule {
           }
         }
         if !any_fit {
-          let best = candidates
-            .iter()
-            .min_by_key(|f| (f.arguments.len() as i64 - call_args as i64).abs())
-            .copied()
-            .unwrap();
+          let best =
+            candidates.iter().min_by_key(|f| (f.arguments.len() as i64 - call_args as i64).abs()).copied().unwrap();
           let declared = best.arguments.len();
           let defaults = best.arguments.iter().filter(|a| a.data_type.to_ascii_uppercase().contains("DEFAULT")).count();
           let min_req = declared.saturating_sub(defaults);
@@ -378,11 +375,7 @@ fn classify_pg_type(ty: &str) -> Option<LitKind> {
   let bare = ty.split('(').next().unwrap_or(ty).trim();
   let bare_upper = bare.to_ascii_uppercase();
   // Strip DEFAULT/VARIADIC/IN/OUT/INOUT noise the offline parser may have left in.
-  let bare = bare_upper
-    .strip_prefix("VARIADIC ").unwrap_or(&bare_upper)
-    .split_whitespace()
-    .next()
-    .unwrap_or("");
+  let bare = bare_upper.strip_prefix("VARIADIC ").unwrap_or(&bare_upper).split_whitespace().next().unwrap_or("");
   match bare {
     "INT" | "INT4" | "INT2" | "INT8" | "INTEGER" | "BIGINT" | "SMALLINT" | "SERIAL" | "BIGSERIAL" | "OID" => {
       Some(LitKind::Int)

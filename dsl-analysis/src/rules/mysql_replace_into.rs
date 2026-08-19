@@ -36,7 +36,8 @@ impl LintRule for Rule {
     out.push(Diagnostic {
       code: "sql595",
       severity: Severity::Error,
-      message: "`REPLACE INTO` is MySQL syntax -- PostgreSQL uses `INSERT ... ON CONFLICT (cols) DO UPDATE SET ...`".into(),
+      message: "`REPLACE INTO` is MySQL syntax -- PostgreSQL uses `INSERT ... ON CONFLICT (cols) DO UPDATE SET ...`"
+        .into(),
       range: crate::range_at(start + lead, start + lead + 7),
     });
   }

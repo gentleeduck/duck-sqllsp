@@ -34,8 +34,20 @@ impl LintRule for Rule {
     let cleaned = crate::textutil::strip_noise_full(raw);
     let upper = cleaned.to_ascii_uppercase();
     let ub = upper.as_bytes();
-    let stopwords =
-      ["GROUP BY", "ORDER BY", "LIMIT", "OFFSET", "HAVING", "FOR", "FETCH", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT"];
+    let stopwords = [
+      "GROUP BY",
+      "ORDER BY",
+      "LIMIT",
+      "OFFSET",
+      "HAVING",
+      "FOR",
+      "FETCH",
+      "WINDOW",
+      "RETURNING",
+      "UNION",
+      "INTERSECT",
+      "EXCEPT",
+    ];
     let Some(rel_where) = find_clause(ub, b"WHERE") else {
       return;
     };
@@ -46,7 +58,14 @@ impl LintRule for Rule {
   }
 }
 
-fn scan_pairs(pred: &str, abs_off: usize, stmt_range: TextRange, scope: &Scope, catalog: &Catalog, out: &mut Vec<Diagnostic>) {
+fn scan_pairs(
+  pred: &str,
+  abs_off: usize,
+  stmt_range: TextRange,
+  scope: &Scope,
+  catalog: &Catalog,
+  out: &mut Vec<Diagnostic>,
+) {
   let bytes = pred.as_bytes();
   let n = bytes.len();
   let mut i = 0usize;
@@ -128,11 +147,7 @@ fn is_ident_start(b: u8) -> bool {
 }
 
 fn split_qualifier(ident: &str) -> (Option<&str>, &str) {
-  if let Some(dot) = ident.rfind('.') {
-    (Some(&ident[..dot]), &ident[dot + 1..])
-  } else {
-    (None, ident)
-  }
+  if let Some(dot) = ident.rfind('.') { (Some(&ident[..dot]), &ident[dot + 1..]) } else { (None, ident) }
 }
 
 fn peek_cmp_op(bytes: &[u8], i: usize) -> usize {

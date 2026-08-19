@@ -64,7 +64,13 @@ pub fn hover_with(source: &str, offset: TextSize, catalog: &Catalog, case: Keywo
 /// that maintains a per-document parse cache (dsl-server's
 /// `ParseCache`) can skip re-parsing the whole buffer on every hover
 /// request. `hover_with` itself parses fresh and delegates here.
-pub fn hover_with_parsed(source: &str, offset: TextSize, file: &dsl_parse::ParsedFile, catalog: &Catalog, case: KeywordCase) -> Option<String> {
+pub fn hover_with_parsed(
+  source: &str,
+  offset: TextSize,
+  file: &dsl_parse::ParsedFile,
+  catalog: &Catalog,
+  case: KeywordCase,
+) -> Option<String> {
   KW_CASE.with(|c| c.set(case));
   // Respect lexical boundaries: cursor inside `'...'` / `"..."` /
   // `-- comment` / `/* ... */` / `$$ ... $$` body for a non-PL/pgSQL
@@ -529,12 +535,8 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
     || catalog.functions.iter().any(|f| f.schema.eq_ignore_ascii_case(token))
     || catalog.types.iter().any(|t| t.schema.eq_ignore_ascii_case(token));
   if schema_known {
-    let name = catalog
-      .schemas
-      .iter()
-      .find(|s| s.name.eq_ignore_ascii_case(token))
-      .map(|s| s.name.as_str())
-      .unwrap_or(token);
+    let name =
+      catalog.schemas.iter().find(|s| s.name.eq_ignore_ascii_case(token)).map(|s| s.name.as_str()).unwrap_or(token);
     let mut card = format!("# `{name}`\n_schema_\n\n");
     let tables: Vec<&dsl_catalog::Table> = catalog
       .schemas
@@ -551,11 +553,8 @@ fn catalog_lookup(token: &str, catalog: &Catalog) -> Option<String> {
         card.push_str(&format!("- _\u{2026} +{} more_\n", tables.len() - 20));
       }
     }
-    let fns: Vec<&dsl_catalog::Function> = catalog
-      .functions
-      .iter()
-      .filter(|f| f.schema.eq_ignore_ascii_case(token))
-      .collect();
+    let fns: Vec<&dsl_catalog::Function> =
+      catalog.functions.iter().filter(|f| f.schema.eq_ignore_ascii_case(token)).collect();
     if !fns.is_empty() {
       card.push_str(&format!("\n**{} function(s):**\n", fns.len()));
       for f in fns.iter().take(20) {
@@ -760,17 +759,21 @@ fn comparison_operator_hover(source: &str, pos: usize) -> Option<String> {
     return None;
   }
   let card = match op {
-    "=" => "# `=`\n\n_Equality comparison_\n\nReturns `true` when both operands are equal, \
+    "=" => {
+      "# `=`\n\n_Equality comparison_\n\nReturns `true` when both operands are equal, \
             `false` when not, and `NULL` if either operand is `NULL` (three-valued logic). \
-            Use `IS NOT DISTINCT FROM` to treat `NULL = NULL` as true.\n",
+            Use `IS NOT DISTINCT FROM` to treat `NULL = NULL` as true.\n"
+    },
     "<>" | "!=" => {
       "# `<>` (also `!=`)\n\n_Inequality comparison_\n\nReturns `true` when operands differ. \
             Like `=`, returns `NULL` when either side is `NULL`. Use `IS DISTINCT FROM` for \
             NULL-aware inequality.\n"
     },
-    "<" => "# `<`\n\n_Less-than comparison_\n\nStandard ordering on the operand type. \
+    "<" => {
+      "# `<`\n\n_Less-than comparison_\n\nStandard ordering on the operand type. \
             Uses lexicographic order for strings, byte order for `bytea`, and the type's natural \
-            ordering for numbers / dates.\n",
+            ordering for numbers / dates.\n"
+    },
     ">" => "# `>`\n\n_Greater-than comparison_\n\nMirror of `<`.\n",
     "<=" => "# `<=`\n\n_Less-than-or-equal comparison_\n",
     ">=" => "# `>=`\n\n_Greater-than-or-equal comparison_\n",
@@ -780,29 +783,53 @@ fn comparison_operator_hover(source: &str, pos: usize) -> Option<String> {
             Returns `NULL` if either operand is `NULL` (text); for arrays, prepending or \
             appending `NULL` returns the other array.\n"
     },
-    "@>" => "# `@>`\n\n_Contains operator_\n\nReturns `true` when the left operand contains the \
-            right (jsonb / arrays / ranges). `'{\"a\":1, \"b\":2}'::jsonb @> '{\"a\":1}'::jsonb` -> `true`.\n",
+    "@>" => {
+      "# `@>`\n\n_Contains operator_\n\nReturns `true` when the left operand contains the \
+            right (jsonb / arrays / ranges). `'{\"a\":1, \"b\":2}'::jsonb @> '{\"a\":1}'::jsonb` -> `true`.\n"
+    },
     "<@" => "# `<@`\n\n_Contained-by operator_\n\nMirror of `@>`. The left operand is contained by the right.\n",
-    "?" => "# `?`\n\n_jsonb key existence_\n\nReturns `true` when the left jsonb has a top-level \
-            key (or array element) equal to the right text. `'{\"a\":1}'::jsonb ? 'a'` -> `true`.\n",
-    "?|" => "# `?|`\n\n_jsonb any-key existence_\n\nReturns `true` when ANY key in the right `text[]` is present in the left jsonb.\n",
-    "?&" => "# `?&`\n\n_jsonb all-keys existence_\n\nReturns `true` when ALL keys in the right `text[]` are present in the left jsonb.\n",
-    "@@" => "# `@@`\n\n_Full-text search match_\n\nReturns `true` when the right-hand `tsquery` matches the left-hand `tsvector`. \
-            `to_tsvector('quick brown fox') @@ to_tsquery('fox & jump:*')`. Index with GIN on the tsvector for fast lookups.\n",
-    "~" => "# `~`\n\n_POSIX regex match (case-sensitive)_\n\nReturns `true` when the left text matches the right regex. \
-            Pair with `||` to build dynamic patterns; for case-insensitive use `~*`. Escape regex metachars with `\\`.\n",
+    "?" => {
+      "# `?`\n\n_jsonb key existence_\n\nReturns `true` when the left jsonb has a top-level \
+            key (or array element) equal to the right text. `'{\"a\":1}'::jsonb ? 'a'` -> `true`.\n"
+    },
+    "?|" => {
+      "# `?|`\n\n_jsonb any-key existence_\n\nReturns `true` when ANY key in the right `text[]` is present in the left jsonb.\n"
+    },
+    "?&" => {
+      "# `?&`\n\n_jsonb all-keys existence_\n\nReturns `true` when ALL keys in the right `text[]` are present in the left jsonb.\n"
+    },
+    "@@" => {
+      "# `@@`\n\n_Full-text search match_\n\nReturns `true` when the right-hand `tsquery` matches the left-hand `tsvector`. \
+            `to_tsvector('quick brown fox') @@ to_tsquery('fox & jump:*')`. Index with GIN on the tsvector for fast lookups.\n"
+    },
+    "~" => {
+      "# `~`\n\n_POSIX regex match (case-sensitive)_\n\nReturns `true` when the left text matches the right regex. \
+            Pair with `||` to build dynamic patterns; for case-insensitive use `~*`. Escape regex metachars with `\\`.\n"
+    },
     "~*" => "# `~*`\n\n_POSIX regex match (case-insensitive)_\n\n`name ~* '^a'` matches both `Alice` and `aaron`.\n",
-    "!~" => "# `!~`\n\n_POSIX regex NON-match (case-sensitive)_\n\nInverse of `~`. NULL-propagates like the other comparison operators.\n",
+    "!~" => {
+      "# `!~`\n\n_POSIX regex NON-match (case-sensitive)_\n\nInverse of `~`. NULL-propagates like the other comparison operators.\n"
+    },
     "!~*" => "# `!~*`\n\n_POSIX regex NON-match (case-insensitive)_\n\nInverse of `~*`.\n",
-    "~~" => "# `~~`\n\n_Internal name of the `LIKE` operator_\n\n`x LIKE 'a%'` is syntactic sugar for `x ~~ 'a%'`. Prefer `LIKE` in source.\n",
-    "~~*" => "# `~~*`\n\n_Internal name of the `ILIKE` operator_\n\n`x ILIKE 'a%'` is syntactic sugar for `x ~~* 'a%'`. Prefer `ILIKE` in source.\n",
+    "~~" => {
+      "# `~~`\n\n_Internal name of the `LIKE` operator_\n\n`x LIKE 'a%'` is syntactic sugar for `x ~~ 'a%'`. Prefer `LIKE` in source.\n"
+    },
+    "~~*" => {
+      "# `~~*`\n\n_Internal name of the `ILIKE` operator_\n\n`x ILIKE 'a%'` is syntactic sugar for `x ~~* 'a%'`. Prefer `ILIKE` in source.\n"
+    },
     "!~~" => "# `!~~`\n\n_Internal name of `NOT LIKE`_\n",
     "!~~*" => "# `!~~*`\n\n_Internal name of `NOT ILIKE`_\n",
-    "^" => "# `^`\n\n_Exponentiation_\n\n`2 ^ 10` -> `1024`. Returns `double precision` or `numeric` depending on operand types.\n",
-    "&" => "# `&`\n\n_Bitwise AND_ (integer / bit / inet)\n\n`5 & 3` -> `1`. For inet: \
-            address-bit AND between the two networks. For bit strings: per-position AND.\n",
-    "|" => "# `|`\n\n_Bitwise OR_ (integer / bit / inet)\n\n`5 | 2` -> `7`. \
-            (Do not confuse with `||` -- text/array concatenation.)\n",
+    "^" => {
+      "# `^`\n\n_Exponentiation_\n\n`2 ^ 10` -> `1024`. Returns `double precision` or `numeric` depending on operand types.\n"
+    },
+    "&" => {
+      "# `&`\n\n_Bitwise AND_ (integer / bit / inet)\n\n`5 & 3` -> `1`. For inet: \
+            address-bit AND between the two networks. For bit strings: per-position AND.\n"
+    },
+    "|" => {
+      "# `|`\n\n_Bitwise OR_ (integer / bit / inet)\n\n`5 | 2` -> `7`. \
+            (Do not confuse with `||` -- text/array concatenation.)\n"
+    },
     "#" => "# `#`\n\n_Bitwise XOR_ (integer / bit)\n\n`5 # 3` -> `6`. Returns the per-bit exclusive-or.\n",
     _ => return None,
   };
@@ -904,36 +931,64 @@ fn geometric_math_operator_hover(source: &str, pos: usize) -> Option<String> {
   }
   let op = &source[s..e];
   let card = match op {
-    "|/" => "# `|/`\n\n_Square root_\n\n`|/ 25.0` -> `5`. Prefix operator. Prefer the SQL-standard `sqrt()` for readability.\n",
+    "|/" => {
+      "# `|/`\n\n_Square root_\n\n`|/ 25.0` -> `5`. Prefix operator. Prefer the SQL-standard `sqrt()` for readability.\n"
+    },
     "||/" => "# `||/`\n\n_Cube root_\n\n`||/ 27.0` -> `3`. Prefix operator. Use `cbrt()` for clarity.\n",
-    "@-@" => "# `@-@`\n\n_Geometric length / circumference_\n\nReturns the length of a path / lseg / line, or the circumference of a circle. \
-              `@-@ lseg '((0,0),(3,4))'` -> `5`.\n",
+    "@-@" => {
+      "# `@-@`\n\n_Geometric length / circumference_\n\nReturns the length of a path / lseg / line, or the circumference of a circle. \
+              `@-@ lseg '((0,0),(3,4))'` -> `5`.\n"
+    },
     "##" => "# `##`\n\n_Closest-point operator_\n\nReturns the point on the first object closest to the second.\n",
-    "&<" => "# `&<`\n\n_Overlaps-to-left_ (geometric / range)\n\nReturns `true` when the left operand does not extend to the right of the right operand.\n",
+    "&<" => {
+      "# `&<`\n\n_Overlaps-to-left_ (geometric / range)\n\nReturns `true` when the left operand does not extend to the right of the right operand.\n"
+    },
     "&>" => "# `&>`\n\n_Overlaps-to-right_ (geometric / range)\n\nMirror of `&<`.\n",
     "&<|" => "# `&<|`\n\n_Overlaps-below_ (geometric)\n\nLeft operand does not extend above the right.\n",
     "|>>" => "# `|>>`\n\n_Strictly above_ (geometric / range)\n\nLeft operand is strictly above the right.\n",
     "<<|" => "# `<<|`\n\n_Strictly below_ (geometric / range)\n\nLeft operand is strictly below the right.\n",
-    "&&" => "# `&&`\n\n_Overlaps_ (range / array / multirange)\n\nReturns `true` when the two ranges (or arrays) share at least one element. \
-              `int4range(1,10) && int4range(5,20)` -> `true`. Index with GiST/SP-GiST for fast lookups.\n",
-    "<<" => "# `<<`\n\n_Strictly left of_ (range / multirange / inet)\n\n`int4range(1,5) << int4range(10,20)` -> `true`. \
-              For inet: subnet is strictly to the left of the other.\n",
+    "&&" => {
+      "# `&&`\n\n_Overlaps_ (range / array / multirange)\n\nReturns `true` when the two ranges (or arrays) share at least one element. \
+              `int4range(1,10) && int4range(5,20)` -> `true`. Index with GiST/SP-GiST for fast lookups.\n"
+    },
+    "<<" => {
+      "# `<<`\n\n_Strictly left of_ (range / multirange / inet)\n\n`int4range(1,5) << int4range(10,20)` -> `true`. \
+              For inet: subnet is strictly to the left of the other.\n"
+    },
     ">>" => "# `>>`\n\n_Strictly right of_ (range / multirange / inet)\n\nMirror of `<<`.\n",
-    "-|-" => "# `-|-`\n\n_Adjacent to_ (range / multirange)\n\nReturns `true` when the two ranges abut but do not overlap. \
-              `int4range(1,5) -|- int4range(5,10)` -> `true`.\n",
-    "?-" => "# `?-`\n\n_Horizontal alignment_ (geometric)\n\nReturns `true` when the operands are on the same horizontal line. \
-              `point '(1,0)' ?- point '(5,0)'` -> `true`.\n",
-    "?|" => "# `?|`\n\n_Vertical alignment_ (geometric -- shared with jsonb any-key existence)\n\nFor points/lines: \
-              true when the operands are on the same vertical line. For jsonb: see jsonb path operator card.\n",
-    "?-|" => "# `?-|`\n\n_Perpendicular_ (line/lseg)\n\nReturns `true` when the two segments / lines are perpendicular.\n",
+    "-|-" => {
+      "# `-|-`\n\n_Adjacent to_ (range / multirange)\n\nReturns `true` when the two ranges abut but do not overlap. \
+              `int4range(1,5) -|- int4range(5,10)` -> `true`.\n"
+    },
+    "?-" => {
+      "# `?-`\n\n_Horizontal alignment_ (geometric)\n\nReturns `true` when the operands are on the same horizontal line. \
+              `point '(1,0)' ?- point '(5,0)'` -> `true`.\n"
+    },
+    "?|" => {
+      "# `?|`\n\n_Vertical alignment_ (geometric -- shared with jsonb any-key existence)\n\nFor points/lines: \
+              true when the operands are on the same vertical line. For jsonb: see jsonb path operator card.\n"
+    },
+    "?-|" => {
+      "# `?-|`\n\n_Perpendicular_ (line/lseg)\n\nReturns `true` when the two segments / lines are perpendicular.\n"
+    },
     "?||" => "# `?||`\n\n_Parallel_ (line/lseg)\n\nReturns `true` when the two segments / lines are parallel.\n",
-    "?#" => "# `?#`\n\n_Intersects_ (geometric)\n\nReturns `true` when the two objects intersect at a point or share an edge.\n",
-    "@" => "# `@`\n\n_Center of_ / contained-by (geometric)\n\nUnary: `@ box '(...)'` returns its center point. Binary: `<obj> @ <obj>` -- left contained by right (geometric).\n",
-    "~=" => "# `~=`\n\n_Same as_ (geometric)\n\nReturns `true` when the two geometric objects are equal (point-wise).\n",
-    ">>=" => "# `>>=`\n\n_Contains-or-equals_ (inet)\n\n`192.168.0.0/16 >>= 192.168.1.0/24` -> `true`. \
-              Left network contains, or equals, the right. Use for CIDR membership checks.\n",
-    "<<=" => "# `<<=`\n\n_Contained-by-or-equals_ (inet)\n\nMirror of `>>=`. The left network is contained by, \
-              or equals, the right.\n",
+    "?#" => {
+      "# `?#`\n\n_Intersects_ (geometric)\n\nReturns `true` when the two objects intersect at a point or share an edge.\n"
+    },
+    "@" => {
+      "# `@`\n\n_Center of_ / contained-by (geometric)\n\nUnary: `@ box '(...)'` returns its center point. Binary: `<obj> @ <obj>` -- left contained by right (geometric).\n"
+    },
+    "~=" => {
+      "# `~=`\n\n_Same as_ (geometric)\n\nReturns `true` when the two geometric objects are equal (point-wise).\n"
+    },
+    ">>=" => {
+      "# `>>=`\n\n_Contains-or-equals_ (inet)\n\n`192.168.0.0/16 >>= 192.168.1.0/24` -> `true`. \
+              Left network contains, or equals, the right. Use for CIDR membership checks.\n"
+    },
+    "<<=" => {
+      "# `<<=`\n\n_Contained-by-or-equals_ (inet)\n\nMirror of `>>=`. The left network is contained by, \
+              or equals, the right.\n"
+    },
     _ => return None,
   };
   Some(card.to_string())
@@ -960,17 +1015,23 @@ fn distance_operator_hover(source: &str, pos: usize) -> Option<String> {
   }
   let op = &source[s..e];
   let card = match op {
-    "<->" => "# `<->`\n\n_KNN distance / phrase distance_\n\nGeometric distance (point/box/circle), \
+    "<->" => {
+      "# `<->`\n\n_KNN distance / phrase distance_\n\nGeometric distance (point/box/circle), \
               vector L2 distance (pgvector), pg_trgm similarity-distance, or FTS phrase distance \
               (immediately adjacent). Index with GiST/SP-GiST/ivfflat for KNN ordering.\n\n\
               ```sql\n\
               ORDER BY position <-> point '(0,0)' LIMIT 10;\n\
               SELECT * FROM articles WHERE doc @@ to_tsquery('quick <-> brown');\n\
-              ```\n",
-    "<#>" => "# `<#>`\n\n_pgvector inner-product distance_\n\nNegative dot product. Use with ivfflat / hnsw \
-              vector indexes for fast approximate nearest neighbour.\n",
-    "<%>" => "# `<%>`\n\n_pg_trgm trigram word-similarity distance_\n\n`1 - word_similarity(a, b)`. \
-              Pair with `ORDER BY a <%> b LIMIT 10` for fuzzy lookup.\n",
+              ```\n"
+    },
+    "<#>" => {
+      "# `<#>`\n\n_pgvector inner-product distance_\n\nNegative dot product. Use with ivfflat / hnsw \
+              vector indexes for fast approximate nearest neighbour.\n"
+    },
+    "<%>" => {
+      "# `<%>`\n\n_pg_trgm trigram word-similarity distance_\n\n`1 - word_similarity(a, b)`. \
+              Pair with `ORDER BY a <%> b LIMIT 10` for fuzzy lookup.\n"
+    },
     "<<->>" => "# `<<->>`\n\n_GiST KNN distance for ranges_\n\nDistance between two range values.\n",
     "<<#>>" => "# `<<#>>`\n\n_Index-only KNN distance variant_\n",
     _ => return None,
@@ -1425,7 +1486,12 @@ fn star_hover(source: &str, offset: TextSize, file: &dsl_parse::ParsedFile, cata
   unqualified_star_hover(offset, file, catalog)
 }
 
-fn qualified_star_hover(offset: TextSize, file: &dsl_parse::ParsedFile, alias: &str, catalog: &Catalog) -> Option<String> {
+fn qualified_star_hover(
+  offset: TextSize,
+  file: &dsl_parse::ParsedFile,
+  alias: &str,
+  catalog: &Catalog,
+) -> Option<String> {
   // Resolve alias -> bound table via the existing alias_lookup path,
   // but we want the column list, not the table card. Find the
   // binding directly.
@@ -1564,7 +1630,12 @@ fn near_role_slot(source: &str, pos: usize) -> bool {
 /// Find the CREATE TABLE body that encloses `offset` and resolve the
 /// column reference against it (using either the live catalog row when
 /// available, or the parsed buffer ColumnDef when not).
-fn enclosing_table_column(offset: TextSize, file: &dsl_parse::ParsedFile, token: &str, catalog: &Catalog) -> Option<String> {
+fn enclosing_table_column(
+  offset: TextSize,
+  file: &dsl_parse::ParsedFile,
+  token: &str,
+  catalog: &Catalog,
+) -> Option<String> {
   let pos: usize = u32::from(offset) as usize;
   for stmt in &file.statements {
     let s: u32 = stmt.range.start().into();
@@ -1593,7 +1664,13 @@ fn enclosing_table_column(offset: TextSize, file: &dsl_parse::ParsedFile, token:
 /// the hover for the actual underlying table instead of "no match". When
 /// the cursor sits inside a `$$ ... $$` function body, the body text is
 /// re-parsed standalone so the alias resolves against its inner SELECT.
-fn alias_lookup(source: &str, offset: TextSize, file: &dsl_parse::ParsedFile, token: &str, catalog: &Catalog) -> Option<String> {
+fn alias_lookup(
+  source: &str,
+  offset: TextSize,
+  file: &dsl_parse::ParsedFile,
+  token: &str,
+  catalog: &Catalog,
+) -> Option<String> {
   let pos: usize = u32::from(offset) as usize;
   // First try resolving in the top-level statement at this offset --
   // uses the caller's already-parsed `file`, no parse of its own.
@@ -1671,7 +1748,13 @@ fn dotted_part_under_cursor(source: &str, offset: TextSize, tok: &str) -> Option
 /// when the column belongs to exactly one in-scope table. Falls back to
 /// `None` so the catalog-wide hover (which shows the "in N tables"
 /// table when ambiguous) still runs.
-fn scope_column_lookup(source: &str, offset: TextSize, file: &dsl_parse::ParsedFile, tok: &str, catalog: &Catalog) -> Option<String> {
+fn scope_column_lookup(
+  source: &str,
+  offset: TextSize,
+  file: &dsl_parse::ParsedFile,
+  tok: &str,
+  catalog: &Catalog,
+) -> Option<String> {
   let pos: usize = u32::from(offset) as usize;
   let scopes = dsl_resolve::resolve_with_source(&file.statements, source);
   let idx = file.statements.iter().position(|s| {
@@ -1745,7 +1828,13 @@ fn scope_column_lookup(source: &str, offset: TextSize, file: &dsl_parse::ParsedF
 /// Run the resolve pipeline against `src`'s pre-parsed `file`, find the
 /// statement containing `pos`, and return the underlying-table hover
 /// for `token` when it's an alias in that statement.
-fn resolve_alias_in(src: &str, pos: usize, file: &dsl_parse::ParsedFile, token: &str, catalog: &Catalog) -> Option<String> {
+fn resolve_alias_in(
+  src: &str,
+  pos: usize,
+  file: &dsl_parse::ParsedFile,
+  token: &str,
+  catalog: &Catalog,
+) -> Option<String> {
   let scopes = dsl_resolve::resolve_with_source(&file.statements, src);
   let idx = file.statements.iter().position(|s| {
     let lo: u32 = s.range.start().into();
@@ -1760,8 +1849,8 @@ fn resolve_alias_in(src: &str, pos: usize, file: &dsl_parse::ParsedFile, token: 
       // path handles that. Synthetic bindings (subquery alias / CTE /
       // function-call FROM) have table.name == alias by construction,
       // so skip this filter for them.
-      let is_synthetic = v.table.schema.as_deref().is_some_and(|s| s.starts_with('<'))
-        || scope.cte_columns_of(&v.table.name).is_some();
+      let is_synthetic =
+        v.table.schema.as_deref().is_some_and(|s| s.starts_with('<')) || scope.cte_columns_of(&v.table.name).is_some();
       if !is_synthetic && v.table.name.eq_ignore_ascii_case(token) {
         return None;
       }
@@ -1782,7 +1871,11 @@ fn resolve_alias_in(src: &str, pos: usize, file: &dsl_parse::ParsedFile, token: 
   buffer_object(src, &binding.table.name)
 }
 
-fn synthetic_alias_card(scope: &dsl_resolve::Scope, binding: &dsl_resolve::binding::Binding, token: &str) -> Option<String> {
+fn synthetic_alias_card(
+  scope: &dsl_resolve::Scope,
+  binding: &dsl_resolve::binding::Binding,
+  token: &str,
+) -> Option<String> {
   // CTE: the binding name matches a cte_columns_of entry. Render the
   // projected columns so the user can see what `t.<col>` would be.
   if let Some(cols) = scope.cte_columns_of(&binding.table.name) {
@@ -1797,10 +1890,12 @@ fn synthetic_alias_card(scope: &dsl_resolve::Scope, binding: &dsl_resolve::bindi
     Some("<subq>") => Some(format!(
       "# `{token}`\n\n_Subquery alias_\n\nThe inner SELECT projects its columns through this alias. Hover the column on the right side of `{token}.col` to inspect each one."
     )),
-    Some("<func>") => Some(format!(
-      "# `{token}`\n\n_Function-call alias_\n\nBound to a set-returning function in the FROM clause."
-    )),
-    Some(other) if other.starts_with('<') => Some(format!("# `{token}`\n\n_{}_", other.trim_matches(|c| c == '<' || c == '>'))),
+    Some("<func>") => {
+      Some(format!("# `{token}`\n\n_Function-call alias_\n\nBound to a set-returning function in the FROM clause."))
+    },
+    Some(other) if other.starts_with('<') => {
+      Some(format!("# `{token}`\n\n_{}_", other.trim_matches(|c| c == '<' || c == '>')))
+    },
     _ => None,
   }
 }
@@ -1852,7 +1947,13 @@ fn enclosing_dollar_body(source: &str, pos: usize) -> Option<(usize, usize)> {
 /// Find the target table for the statement enclosing the cursor when
 /// it's a CREATE INDEX / UPDATE / DELETE FROM / INSERT INTO -- and look
 /// up `token` as a column of that single table.
-fn scoped_column_in_text(source: &str, offset: TextSize, file: &dsl_parse::ParsedFile, token: &str, catalog: &Catalog) -> Option<String> {
+fn scoped_column_in_text(
+  source: &str,
+  offset: TextSize,
+  file: &dsl_parse::ParsedFile,
+  token: &str,
+  catalog: &Catalog,
+) -> Option<String> {
   let pos: usize = u32::from(offset) as usize;
   // Walk back to the last `;` (or start) to bound the current statement.
   let stmt_start = source[..pos].rfind(';').map(|i| i + 1).unwrap_or(0);
@@ -1934,14 +2035,10 @@ fn trigger_target_for_hover(source: &str, pos: usize, catalog: &Catalog) -> Opti
   // First try: a CREATE TRIGGER clause in the buffer before the cursor.
   let upper = source.to_ascii_uppercase();
   let before = &upper[..pos.min(upper.len())];
-  let idx = [
-    "CREATE OR REPLACE TRIGGER",
-    "CREATE CONSTRAINT TRIGGER",
-    "CREATE TRIGGER",
-  ]
-  .iter()
-  .filter_map(|kw| before.rfind(kw))
-  .max();
+  let idx = ["CREATE OR REPLACE TRIGGER", "CREATE CONSTRAINT TRIGGER", "CREATE TRIGGER"]
+    .iter()
+    .filter_map(|kw| before.rfind(kw))
+    .max();
   if let Some(idx) = idx
     && let Some(on_idx) = upper[idx..].find(" ON ")
   {
@@ -1954,12 +2051,7 @@ fn trigger_target_for_hover(source: &str, pos: usize, catalog: &Catalog) -> Opti
       .unwrap_or("")
       .to_string();
     let tok = if tok.eq_ignore_ascii_case("ONLY") {
-      tail
-        .trim_start()
-        .split_ascii_whitespace()
-        .nth(1)
-        .unwrap_or("")
-        .to_string()
+      tail.trim_start().split_ascii_whitespace().nth(1).unwrap_or("").to_string()
     } else {
       tok
     };
@@ -2012,10 +2104,7 @@ fn trigger_target_for_hover(source: &str, pos: usize, catalog: &Catalog) -> Opti
 fn enclosing_create_function_name(source: &str, pos: usize) -> Option<String> {
   let upper = source.to_ascii_uppercase();
   let before = &upper[..pos.min(upper.len())];
-  let idx = ["CREATE OR REPLACE FUNCTION", "CREATE FUNCTION"]
-    .iter()
-    .filter_map(|kw| before.rfind(kw))
-    .max()?;
+  let idx = ["CREATE OR REPLACE FUNCTION", "CREATE FUNCTION"].iter().filter_map(|kw| before.rfind(kw)).max()?;
   let after = source[idx..].split_once(char::is_whitespace)?.1;
   let after = after.trim_start();
   // Skip optional `OR REPLACE FUNCTION` head.
@@ -2026,11 +2115,7 @@ fn enclosing_create_function_name(source: &str, pos: usize) -> Option<String> {
   } else {
     after
   };
-  let tok: String = after
-    .trim_start()
-    .chars()
-    .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '.')
-    .collect();
+  let tok: String = after.trim_start().chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '.').collect();
   let bare = tok.split('.').next_back().unwrap_or(&tok).to_string();
   if bare.is_empty() { None } else { Some(bare) }
 }
@@ -2094,9 +2179,10 @@ fn plpgsql_local_hover(source: &str, offset: TextSize, token: &str) -> Option<St
 /// available -- for `schema.fn` calls the user wants the function
 /// declared under THAT schema, not an unrelated overload elsewhere.
 fn db_function_scoped(name: &str, schema: Option<&str>, catalog: &Catalog) -> Option<String> {
-  let f = catalog.functions.iter().find(|f| {
-    f.name.eq_ignore_ascii_case(name) && schema.is_none_or(|s| f.schema.eq_ignore_ascii_case(s))
-  })?;
+  let f = catalog
+    .functions
+    .iter()
+    .find(|f| f.name.eq_ignore_ascii_case(name) && schema.is_none_or(|s| f.schema.eq_ignore_ascii_case(s)))?;
   let mut s = render::function_full(f);
   let (outgoing, incoming) = call_graph(&f.name, catalog);
   if !outgoing.is_empty() {

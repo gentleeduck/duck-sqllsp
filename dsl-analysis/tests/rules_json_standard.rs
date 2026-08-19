@@ -107,17 +107,13 @@ fn sql765_quiet_wrapper_alone() {
 
 #[test]
 fn sql766_duplicate_output_column() {
-  let d = diags(
-    "SELECT * FROM t766, JSON_TABLE(doc, '$[*]' COLUMNS (a int PATH '$.a', a text PATH '$.b')) AS jt;",
-  );
+  let d = diags("SELECT * FROM t766, JSON_TABLE(doc, '$[*]' COLUMNS (a int PATH '$.a', a text PATH '$.b')) AS jt;");
   assert!(d.iter().any(|x| x.code == "sql766" && x.severity == Severity::Warning));
 }
 
 #[test]
 fn sql766_quiet_when_distinct() {
-  let d = diags(
-    "SELECT * FROM t766, JSON_TABLE(doc, '$[*]' COLUMNS (a int PATH '$.a', b text PATH '$.b')) AS jt;",
-  );
+  let d = diags("SELECT * FROM t766, JSON_TABLE(doc, '$[*]' COLUMNS (a int PATH '$.a', b text PATH '$.b')) AS jt;");
   assert!(!d.iter().any(|x| x.code == "sql766"));
 }
 

@@ -44,7 +44,8 @@ impl LintRule for Rule {
             out.push(Diagnostic {
               code: "sql575",
               severity: Severity::Warning,
-              message: "RLS policy qualifier is always true -- it allows every row, defeating row-level security".into(),
+              message: "RLS policy qualifier is always true -- it allows every row, defeating row-level security"
+                .into(),
               range: crate::range_at(start + i, start + close + 1),
             });
           }

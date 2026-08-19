@@ -10,15 +10,8 @@ use dsl_parse::Statement;
 use dsl_resolve::Scope;
 
 /// (function, minimum required arguments).
-const MIN_ARGS: &[(&str, usize)] = &[
-  ("to_char", 2),
-  ("to_date", 2),
-  ("to_number", 2),
-  ("date_trunc", 2),
-  ("lpad", 2),
-  ("rpad", 2),
-  ("split_part", 3),
-];
+const MIN_ARGS: &[(&str, usize)] =
+  &[("to_char", 2), ("to_date", 2), ("to_number", 2), ("date_trunc", 2), ("lpad", 2), ("rpad", 2), ("split_part", 3)];
 
 pub struct Rule;
 

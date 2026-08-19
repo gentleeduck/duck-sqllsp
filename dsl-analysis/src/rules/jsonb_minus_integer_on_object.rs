@@ -67,7 +67,9 @@ impl LintRule for Rule {
       out.push(Diagnostic {
         code: "sql782",
         severity: Severity::Error,
-        message: "integer-index `-` deletes an array element and is only defined for arrays -- this literal is an object".into(),
+        message:
+          "integer-index `-` deletes an array element and is only defined for arrays -- this literal is an object"
+            .into(),
         range: crate::range_at(start + lit_s, start + j),
       });
       i = j;

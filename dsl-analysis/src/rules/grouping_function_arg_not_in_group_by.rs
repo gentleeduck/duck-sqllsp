@@ -29,8 +29,11 @@ impl LintRule for Rule {
     let ub = upper.as_bytes();
     let Some(gb) = find_clause(ub, b"GROUP BY") else { return };
     let gb_body_start = gb + "GROUP BY".len();
-    let gb_end =
-      find_clause_end(ub, gb_body_start, &["HAVING", "ORDER", "LIMIT", "OFFSET", "WINDOW", "UNION", "INTERSECT", "EXCEPT"]);
+    let gb_end = find_clause_end(
+      ub,
+      gb_body_start,
+      &["HAVING", "ORDER", "LIMIT", "OFFSET", "WINDOW", "UNION", "INTERSECT", "EXCEPT"],
+    );
     let gb_text = &upper[gb_body_start..gb_end];
 
     let mut i = 0usize;

@@ -36,7 +36,8 @@ impl LintRule for Rule {
         out.push(Diagnostic {
           code: "sql636",
           severity: Severity::Error,
-          message: "`AUTOINCREMENT` is SQLite syntax -- PostgreSQL uses `GENERATED ALWAYS AS IDENTITY` (or serial)".into(),
+          message: "`AUTOINCREMENT` is SQLite syntax -- PostgreSQL uses `GENERATED ALWAYS AS IDENTITY` (or serial)"
+            .into(),
           range: crate::range_at(start + i, start + i + len),
         });
         return;

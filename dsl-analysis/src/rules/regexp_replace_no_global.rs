@@ -40,9 +40,7 @@ impl LintRule for Rule {
     let m = needle.len();
     let mut i = 0usize;
     while i + m <= n {
-      if &ub[i..i + m] == needle
-        && (i == 0 || !is_word(ub[i - 1] as char))
-      {
+      if &ub[i..i + m] == needle && (i == 0 || !is_word(ub[i - 1] as char)) {
         // Expect `(` immediately or after whitespace.
         let mut k = i + m;
         while k < n && bytes[k].is_ascii_whitespace() {

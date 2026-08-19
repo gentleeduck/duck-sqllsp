@@ -2,8 +2,8 @@
 //! parentheses/subqueries). Usually a copy/paste mistake -- PG rejects
 //! at parse time.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -90,7 +90,10 @@ impl LintRule for Rule {
               // WHERE and this one means we're in separate set-op
               // branches -- each branch gets its own WHERE.
               let between = &upper[prev_where..i];
-              if crate::textutil::contains_word(between, "UNION") || crate::textutil::contains_word(between, "INTERSECT") || crate::textutil::contains_word(between, "EXCEPT") {
+              if crate::textutil::contains_word(between, "UNION")
+                || crate::textutil::contains_word(between, "INTERSECT")
+                || crate::textutil::contains_word(between, "EXCEPT")
+              {
                 first = Some(i);
                 i += 5;
                 continue;

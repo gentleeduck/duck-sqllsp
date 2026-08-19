@@ -98,7 +98,10 @@ fn no_break_inside_unrelated_contexts() {
 fn fk_clauses_stay_inline() {
   let src = "CREATE TABLE t (id UUID, CONSTRAINT fk_x FOREIGN KEY (id) REFERENCES other (id) ON DELETE CASCADE);";
   let out = rw(src);
-  assert!(out.contains("REFERENCES other(id) ON DELETE CASCADE") || out.contains("REFERENCES other (id) ON DELETE CASCADE"), "FK clauses must stay on one line; got: {out}");
+  assert!(
+    out.contains("REFERENCES other(id) ON DELETE CASCADE") || out.contains("REFERENCES other (id) ON DELETE CASCADE"),
+    "FK clauses must stay on one line; got: {out}"
+  );
 }
 
 #[test]
@@ -110,14 +113,16 @@ fn fk_on_update_and_on_delete_stay_inline() {
 
 #[test]
 fn fk_with_match_full_stays_inline() {
-  let src = "CREATE TABLE t (id UUID, CONSTRAINT fk_x FOREIGN KEY (id) REFERENCES other (id) MATCH FULL ON DELETE CASCADE);";
+  let src =
+    "CREATE TABLE t (id UUID, CONSTRAINT fk_x FOREIGN KEY (id) REFERENCES other (id) MATCH FULL ON DELETE CASCADE);";
   let out = rw(src);
   assert!(!out.contains("\n        MATCH FULL"), "MATCH FULL should stay inline: {out}");
 }
 
 #[test]
 fn fk_deferrable_stays_inline() {
-  let src = "CREATE TABLE t (id UUID, CONSTRAINT fk_x FOREIGN KEY (id) REFERENCES other (id) DEFERRABLE INITIALLY DEFERRED);";
+  let src =
+    "CREATE TABLE t (id UUID, CONSTRAINT fk_x FOREIGN KEY (id) REFERENCES other (id) DEFERRABLE INITIALLY DEFERRED);";
   let out = rw(src);
   assert!(!out.contains("\n        DEFERRABLE"), "DEFERRABLE should stay inline: {out}");
 }
@@ -200,7 +205,9 @@ fn r2_172_long_select_list_idempotent() {
   let ct_style = dsl_format::CreateTableStyle::default();
   let mut src = "SELECT ".to_string();
   for i in 0..200 {
-    if i > 0 { src.push_str(", "); }
+    if i > 0 {
+      src.push_str(", ");
+    }
     src.push_str(&format!("col{i}"));
   }
   src.push_str(" FROM users;");
@@ -565,7 +572,8 @@ fn r4_530_format_create_subscription_idempotent() {
 fn r4_531_format_window_chain_idempotent() {
   let s = dsl_format::FormatterStyle::default();
   let c = dsl_format::CreateTableStyle::default();
-  let src = "SELECT rank() OVER w, row_number() OVER w2 FROM events WINDOW w AS (PARTITION BY uid), w2 AS (ORDER BY ts);";
+  let src =
+    "SELECT rank() OVER w, row_number() OVER w2 FROM events WINDOW w AS (PARTITION BY uid), w2 AS (ORDER BY ts);";
   let o = dsl_format::format(src, &s, &c);
   let o2 = dsl_format::format(&o, &s, &c);
   assert_eq!(o, o2);
@@ -866,7 +874,6 @@ fn r9_fmt_ne_0510() {
   let out = rw("DELETE FROM users WHERE id = 1");
   assert!(!out.is_empty());
 }
-
 
 #[test]
 fn r10_fmt_idem_0001() {
@@ -1447,4 +1454,3 @@ fn r16_fmt_ident_0015() {
   let out = rw("DELETE FROM orders WHERE id = 2");
   assert!(out.contains("orders"));
 }
-

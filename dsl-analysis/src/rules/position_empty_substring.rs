@@ -32,14 +32,13 @@ impl LintRule for Rule {
     let mut i = 0usize;
     while i < n {
       // position(needle IN haystack)
-      if i + 8 <= n && &ub[i..i + 8] == b"POSITION"
-        && (i == 0 || !is_word(ub[i - 1] as char))
-      {
+      if i + 8 <= n && &ub[i..i + 8] == b"POSITION" && (i == 0 || !is_word(ub[i - 1] as char)) {
         let mut k = i + 8;
         while k < n && bytes[k].is_ascii_whitespace() {
           k += 1;
         }
-        if k < n && bytes[k] == b'('
+        if k < n
+          && bytes[k] == b'('
           && let Some(close) = match_paren(bytes, k, n)
         {
           // PG `position(<needle> IN <haystack>)` -- split on
@@ -68,14 +67,13 @@ impl LintRule for Rule {
         continue;
       }
       // strpos(haystack, needle)
-      if i + 6 <= n && &ub[i..i + 6] == b"STRPOS"
-        && (i == 0 || !is_word(ub[i - 1] as char))
-      {
+      if i + 6 <= n && &ub[i..i + 6] == b"STRPOS" && (i == 0 || !is_word(ub[i - 1] as char)) {
         let mut k = i + 6;
         while k < n && bytes[k].is_ascii_whitespace() {
           k += 1;
         }
-        if k < n && bytes[k] == b'('
+        if k < n
+          && bytes[k] == b'('
           && let Some(close) = match_paren(bytes, k, n)
         {
           let inner_start = k + 1;

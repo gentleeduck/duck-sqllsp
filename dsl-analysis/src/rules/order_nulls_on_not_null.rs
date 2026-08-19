@@ -41,7 +41,8 @@ impl LintRule for Rule {
     let Some(rel_clause_start) = find_clause(bytes, b"ORDER BY") else {
       return;
     };
-    let clause_end = find_clause_end(bytes, rel_clause_start + 8, &["LIMIT", "OFFSET", "FOR", "HAVING", "FETCH", "WINDOW"]);
+    let clause_end =
+      find_clause_end(bytes, rel_clause_start + 8, &["LIMIT", "OFFSET", "FOR", "HAVING", "FETCH", "WINDOW"]);
     let clause = &cleaned[rel_clause_start + 8..clause_end];
 
     for (item, item_rel_off) in split_top_level(clause) {

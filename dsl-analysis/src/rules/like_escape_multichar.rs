@@ -49,7 +49,8 @@ impl LintRule for Rule {
           out.push(Diagnostic {
             code: "sql752",
             severity: Severity::Warning,
-            message: "LIKE ESCAPE string must be empty or a single character -- raises an error at runtime (PG 22019)".into(),
+            message: "LIKE ESCAPE string must be empty or a single character -- raises an error at runtime (PG 22019)"
+              .into(),
             range: crate::range_at(start + p, start + j + 1),
           });
         }

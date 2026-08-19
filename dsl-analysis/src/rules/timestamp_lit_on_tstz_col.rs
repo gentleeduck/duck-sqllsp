@@ -61,7 +61,10 @@ impl LintRule for Rule {
       let after_kw = i + 9;
       if after_kw < pred_end && (ub[after_kw] == b'T' || ub[after_kw] == b'Z') {
         // Could be TIMESTAMPTZ; check.
-        if after_kw + 2 <= pred_end && &ub[after_kw..after_kw + 2] == b"TZ" && (after_kw + 2 == pred_end || !is_word(ub[after_kw + 2] as char)) {
+        if after_kw + 2 <= pred_end
+          && &ub[after_kw..after_kw + 2] == b"TZ"
+          && (after_kw + 2 == pred_end || !is_word(ub[after_kw + 2] as char))
+        {
           i = after_kw + 2;
           continue;
         }

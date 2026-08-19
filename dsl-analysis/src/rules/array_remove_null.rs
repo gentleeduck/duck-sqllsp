@@ -45,7 +45,9 @@ impl LintRule for Rule {
         out.push(Diagnostic {
           code: "sql742",
           severity: Severity::Warning,
-          message: "array_remove() can't remove NULL (equality with NULL is never true) -- it returns the array unchanged".into(),
+          message:
+            "array_remove() can't remove NULL (equality with NULL is never true) -- it returns the array unchanged"
+              .into(),
           range: crate::range_at(start + s, start + e),
         });
       }

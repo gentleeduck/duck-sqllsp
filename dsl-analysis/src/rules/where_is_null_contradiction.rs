@@ -29,7 +29,20 @@ impl LintRule for Rule {
     let cleaned = crate::textutil::strip_noise_full(raw);
     let upper = cleaned.to_ascii_uppercase();
     let bytes_u = upper.as_bytes();
-    let stopwords = ["GROUP BY", "ORDER BY", "LIMIT", "OFFSET", "HAVING", "FOR", "FETCH", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT"];
+    let stopwords = [
+      "GROUP BY",
+      "ORDER BY",
+      "LIMIT",
+      "OFFSET",
+      "HAVING",
+      "FOR",
+      "FETCH",
+      "WINDOW",
+      "RETURNING",
+      "UNION",
+      "INTERSECT",
+      "EXCEPT",
+    ];
     let Some(rel_where) = find_clause(bytes_u, b"WHERE") else {
       return;
     };
@@ -169,7 +182,10 @@ fn find_top_level_op(t: &str, op: &str) -> Option<usize> {
         i += 1;
         continue;
       }
-      if op == "=" && i > 0 && (bytes[i - 1] == b'!' || bytes[i - 1] == b'<' || bytes[i - 1] == b'>' || bytes[i - 1] == b'=') {
+      if op == "="
+        && i > 0
+        && (bytes[i - 1] == b'!' || bytes[i - 1] == b'<' || bytes[i - 1] == b'>' || bytes[i - 1] == b'=')
+      {
         i += 1;
         continue;
       }

@@ -2,8 +2,8 @@
 //! other form is `x IS DISTINCT FROM NULL` ≡ `x IS NOT NULL`. Both
 //! confuse readers -- suggest the shorter form.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -78,4 +78,3 @@ impl LintRule for Rule {
     }
   }
 }
-

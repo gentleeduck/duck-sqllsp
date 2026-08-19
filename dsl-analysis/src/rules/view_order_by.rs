@@ -45,7 +45,8 @@ impl LintRule for Rule {
     out.push(Diagnostic {
       code: "sql577",
       severity: Severity::Hint,
-      message: "ORDER BY in a view definition isn't preserved when the view is queried -- sort in the reading query".into(),
+      message: "ORDER BY in a view definition isn't preserved when the view is queried -- sort in the reading query"
+        .into(),
       range: crate::range_at(start + at, start + at + 5),
     });
   }

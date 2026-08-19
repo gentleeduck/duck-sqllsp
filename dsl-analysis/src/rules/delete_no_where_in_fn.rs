@@ -4,8 +4,8 @@
 //! already. This rule narrows the focus: inside a PL/pgSQL function the
 //! mistake is even more likely to wipe the table on every call. Warn.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -104,4 +104,3 @@ fn strip_comments(s: &str) -> String {
   }
   out
 }
-

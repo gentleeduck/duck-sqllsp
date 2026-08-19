@@ -43,7 +43,7 @@ impl LintRule for Rule {
         b'\'' => {
           in_str = true;
           i += 1;
-        }
+        },
         b'`' => {
           // span to the matching backtick (or end of statement)
           let open = i;
@@ -59,7 +59,7 @@ impl LintRule for Rule {
             range: crate::range_at(start + open, start + end),
           });
           i = end;
-        }
+        },
         _ => i += 1,
       }
     }

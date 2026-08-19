@@ -25,9 +25,7 @@ fn find_phrase(upper: &str, words: &[&str]) -> Option<usize> {
   let is_word = |c: u8| c.is_ascii_alphanumeric() || c == b'_';
   let mut i = 0usize;
   'outer: while i + first.len() <= n {
-    if &b[i..i + first.len()] == first
-      && (i == 0 || !is_word(b[i - 1]))
-    {
+    if &b[i..i + first.len()] == first && (i == 0 || !is_word(b[i - 1])) {
       let mut j = i + first.len();
       for w in &words[1..] {
         if j >= n || !b[j].is_ascii_whitespace() {

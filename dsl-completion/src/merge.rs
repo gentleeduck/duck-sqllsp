@@ -222,7 +222,10 @@ pub fn merge_next_keyword(source: &str, offset: TextSize) -> Option<&'static [(&
     return Some(&[("WHEN", "WHEN [NOT] MATCHED [AND ...] THEN ...")]);
   }
   if matches!(words.last(), Some(&"WHEN")) {
-    return Some(&[("MATCHED", "WHEN MATCHED [AND ...] THEN ..."), ("NOT MATCHED", "WHEN NOT MATCHED [AND ...] THEN ...")]);
+    return Some(&[
+      ("MATCHED", "WHEN MATCHED [AND ...] THEN ..."),
+      ("NOT MATCHED", "WHEN NOT MATCHED [AND ...] THEN ..."),
+    ]);
   }
   if matches!(words.last(), Some(&"MATCHED")) && !words.contains(&"THEN") {
     return Some(&[("THEN", "THEN <action>"), ("AND", "AND <extra_condition>")]);

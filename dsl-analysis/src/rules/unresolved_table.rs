@@ -1,8 +1,8 @@
 //! sql001: table referenced by FROM / JOIN / UPDATE / DELETE / INSERT INTO
 //! does not exist in the catalog.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind, TableRef};
 use dsl_resolve::Scope;
@@ -172,7 +172,6 @@ fn collect_cte_names(src: &str) -> Vec<String> {
   }
   out
 }
-
 
 /// Collect names of views (regular + materialized) declared anywhere
 /// in `source`. Returns both the bare and schema-qualified lower-cased

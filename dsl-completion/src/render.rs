@@ -27,6 +27,10 @@ pub fn column(t: &Table, c: &Column) -> String {
     "**column** `{}.{}.{}`\n\n\
          - **type:** `{}`\n\
          - **nullable:** `{}`\n",
-    t.schema, t.name, c.name, display_type(&c.data_type), c.nullable
+    t.schema,
+    t.name,
+    c.name,
+    display_type(&c.data_type),
+    c.nullable
   )
 }

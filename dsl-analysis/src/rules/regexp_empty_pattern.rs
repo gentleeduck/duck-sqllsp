@@ -84,8 +84,12 @@ impl LintRule for Rule {
         let abs_s = start + i;
         let abs_e = start + close + 1;
         let msg = match label {
-          "split" => "`regexp_split_to_array/table(..., '')` -- empty pattern splits between every character; the result is the input broken into single chars. Almost certainly a placeholder where the real pattern should go.",
-          _ => "`regexp_match/matches(..., '')` -- empty pattern matches at every position; the result is `{\"\"}` (an array containing one empty string). Almost certainly a placeholder where the real pattern should go.",
+          "split" => {
+            "`regexp_split_to_array/table(..., '')` -- empty pattern splits between every character; the result is the input broken into single chars. Almost certainly a placeholder where the real pattern should go."
+          },
+          _ => {
+            "`regexp_match/matches(..., '')` -- empty pattern matches at every position; the result is `{\"\"}` (an array containing one empty string). Almost certainly a placeholder where the real pattern should go."
+          },
         };
         out.push(Diagnostic {
           code: "sql485",

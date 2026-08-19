@@ -28,7 +28,10 @@ impl LintRule for Rule {
 
     let mut i = 0usize;
     while i + 3 <= n {
-      if ub[i..i + 3] != *b"NOT" || (i > 0 && is_word(ub[i - 1] as char)) || is_word(*ub.get(i + 3).unwrap_or(&b' ') as char) {
+      if ub[i..i + 3] != *b"NOT"
+        || (i > 0 && is_word(ub[i - 1] as char))
+        || is_word(*ub.get(i + 3).unwrap_or(&b' ') as char)
+      {
         i += 1;
         continue;
       }

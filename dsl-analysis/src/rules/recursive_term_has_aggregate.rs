@@ -48,7 +48,9 @@ impl LintRule for Rule {
           out.push(Diagnostic {
             code: "sql771",
             severity: Severity::Error,
-            message: format!("{name}() is an aggregate -- aggregate functions are not allowed in a recursive query's recursive term"),
+            message: format!(
+              "{name}() is an aggregate -- aggregate functions are not allowed in a recursive query's recursive term"
+            ),
             range: crate::range_at(start + i, start + i + name.len()),
           });
           i += name.len();

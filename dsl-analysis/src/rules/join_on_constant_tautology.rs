@@ -17,8 +17,25 @@ use dsl_resolve::Scope;
 // yields a longer body (a false negative) -- never a false positive, since
 // we flag only when the body is *exactly* a numeric tautology.
 const STOPWORDS: &[&str] = &[
-  "JOIN", "LEFT", "RIGHT", "INNER", "FULL", "CROSS", "NATURAL", "WHERE", "GROUP", "ORDER", "HAVING", "LIMIT", "OFFSET",
-  "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT", "FETCH",
+  "JOIN",
+  "LEFT",
+  "RIGHT",
+  "INNER",
+  "FULL",
+  "CROSS",
+  "NATURAL",
+  "WHERE",
+  "GROUP",
+  "ORDER",
+  "HAVING",
+  "LIMIT",
+  "OFFSET",
+  "WINDOW",
+  "RETURNING",
+  "UNION",
+  "INTERSECT",
+  "EXCEPT",
+  "FETCH",
 ];
 
 pub struct Rule;

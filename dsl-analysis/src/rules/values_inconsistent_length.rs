@@ -41,7 +41,9 @@ impl LintRule for Rule {
           out.push(Diagnostic {
             code: "sql591",
             severity: Severity::Error,
-            message: format!("this VALUES row has {len} columns but an earlier row has {e} -- all rows must match (PG error 21000)"),
+            message: format!(
+              "this VALUES row has {len} columns but an earlier row has {e} -- all rows must match (PG error 21000)"
+            ),
             range: crate::range_at(start + vs + off + lead, start + vs + off + slice.trim_end().len()),
           });
           return;

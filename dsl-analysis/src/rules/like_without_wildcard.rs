@@ -3,8 +3,8 @@
 //!
 //! Example: `WHERE name LIKE 'alice'` -> use `WHERE name = 'alice'`.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -86,4 +86,3 @@ impl LintRule for Rule {
     }
   }
 }
-

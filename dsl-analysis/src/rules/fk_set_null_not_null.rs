@@ -38,8 +38,8 @@ impl LintRule for Rule {
             close = Some(k);
             break;
           }
-        }
-        _ => {}
+        },
+        _ => {},
       }
     }
     let Some(close) = close else { return };

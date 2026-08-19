@@ -7,8 +7,8 @@
 //! accepts and executes it; we surface a warning so it surfaces in
 //! review.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -30,9 +30,7 @@ impl LintRule for Rule {
     let n = bytes.len();
     let mut i = 0;
     while i + 6 <= n {
-      if &upper[i..i + 5] == "WHERE"
-        && bytes[i + 5].is_ascii_whitespace()
-        && (i == 0 || !is_word(bytes[i - 1] as char))
+      if &upper[i..i + 5] == "WHERE" && bytes[i + 5].is_ascii_whitespace() && (i == 0 || !is_word(bytes[i - 1] as char))
       {
         // Take everything from after WHERE until clause boundary
         // (top-level GROUP, ORDER, LIMIT, OFFSET, HAVING, FOR, FETCH,
@@ -43,12 +41,15 @@ impl LintRule for Rule {
         let pred_end = find_predicate_end(bytes, pred_start);
         let pred = body[pred_start..pred_end].trim();
         if is_always_false_literal(pred) {
-          let abs_s = start + pred_start + (body[pred_start..pred_end].len() - body[pred_start..pred_end].trim_start().len());
+          let abs_s =
+            start + pred_start + (body[pred_start..pred_end].len() - body[pred_start..pred_end].trim_start().len());
           let abs_e = abs_s + pred.len();
           out.push(Diagnostic {
             code: "sql407",
             severity: Severity::Warning,
-            message: format!("WHERE predicate `{pred}` is trivially false -- query returns zero rows regardless of data"),
+            message: format!(
+              "WHERE predicate `{pred}` is trivially false -- query returns zero rows regardless of data"
+            ),
             range: crate::range_at(abs_s, abs_e),
           });
         }
@@ -61,8 +62,20 @@ impl LintRule for Rule {
 }
 
 fn find_predicate_end(bytes: &[u8], from: usize) -> usize {
-  let stopwords: &[&str] =
-    &["GROUP BY", "ORDER BY", "LIMIT", "OFFSET", "HAVING", "FOR ", "FETCH ", "RETURNING", "UNION", "INTERSECT", "EXCEPT", "WINDOW"];
+  let stopwords: &[&str] = &[
+    "GROUP BY",
+    "ORDER BY",
+    "LIMIT",
+    "OFFSET",
+    "HAVING",
+    "FOR ",
+    "FETCH ",
+    "RETURNING",
+    "UNION",
+    "INTERSECT",
+    "EXCEPT",
+    "WINDOW",
+  ];
   let n = bytes.len();
   let mut depth: i32 = 0;
   let mut i = from;
@@ -94,13 +107,7 @@ fn find_predicate_end(bytes: &[u8], from: usize) -> usize {
 /// match is intentionally narrow -- only obvious constants, no
 /// inferred contradictions. False positives here would be confusing.
 fn is_always_false_literal(pred: &str) -> bool {
-  let canon = pred
-    .trim_matches(|c: char| c == '(' || c == ')' || c.is_whitespace())
-    .to_ascii_uppercase();
+  let canon = pred.trim_matches(|c: char| c == '(' || c == ')' || c.is_whitespace()).to_ascii_uppercase();
   let stripped: String = canon.chars().filter(|c| !c.is_whitespace()).collect();
-  matches!(
-    stripped.as_str(),
-    "FALSE" | "1=2" | "2=1" | "0=1" | "1=0" | "1<>1" | "1!=1" | "TRUE=FALSE" | "FALSE=TRUE"
-  )
+  matches!(stripped.as_str(), "FALSE" | "1=2" | "2=1" | "0=1" | "1=0" | "1<>1" | "1!=1" | "TRUE=FALSE" | "FALSE=TRUE")
 }
-

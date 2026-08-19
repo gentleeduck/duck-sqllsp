@@ -24,7 +24,8 @@ impl LintRule for Rule {
       out.push(Diagnostic {
         code: "sql594",
         severity: Severity::Error,
-        message: "`ON DUPLICATE KEY UPDATE` is MySQL syntax -- PostgreSQL uses `ON CONFLICT (cols) DO UPDATE SET ...`".into(),
+        message: "`ON DUPLICATE KEY UPDATE` is MySQL syntax -- PostgreSQL uses `ON CONFLICT (cols) DO UPDATE SET ...`"
+          .into(),
         range: crate::range_at(start + at, start + at + 2),
       });
     }

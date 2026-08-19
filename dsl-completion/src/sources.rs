@@ -79,10 +79,7 @@ pub fn db_functions(cat: &Catalog, out: &mut Vec<Item>) {
         if t.starts_with("```") { format!("\n\n{t}") } else { format!("\n\n```sql\n{t}\n```") }
       })
       .unwrap_or_default();
-    let doc = format!(
-      "**DB function** `{}.{}`\n\n```sql\n{}\n```{}\n",
-      f.schema, f.name, signature, body_block
-    );
+    let doc = format!("**DB function** `{}.{}`\n\n```sql\n{}\n```{}\n", f.schema, f.name, signature, body_block);
     let insert_text = if f.arguments.is_empty() { format!("{}()", f.name) } else { format!("{}($0)", f.name) };
     out.push(Item {
       label: f.name.clone(),
@@ -685,9 +682,17 @@ pub fn alter_table_actions(out: &mut Vec<Item>) {
     ("DISABLE ROW LEVEL SECURITY", "turn RLS off for the table", "DISABLE ROW LEVEL SECURITY"),
     ("FORCE ROW LEVEL SECURITY", "apply RLS even to the table owner", "FORCE ROW LEVEL SECURITY"),
     ("NO FORCE ROW LEVEL SECURITY", "revert FORCE RLS (default)", "NO FORCE ROW LEVEL SECURITY"),
-    ("ENABLE REPLICA TRIGGER", "ENABLE REPLICA TRIGGER -- fire only when in replica role", "ENABLE REPLICA TRIGGER ${1:name}"),
+    (
+      "ENABLE REPLICA TRIGGER",
+      "ENABLE REPLICA TRIGGER -- fire only when in replica role",
+      "ENABLE REPLICA TRIGGER ${1:name}",
+    ),
     ("ENABLE ALWAYS TRIGGER", "ENABLE ALWAYS TRIGGER -- fire even in replica role", "ENABLE ALWAYS TRIGGER ${1:name}"),
-    ("REPLICA IDENTITY", "REPLICA IDENTITY {DEFAULT|FULL|USING INDEX <ix>|NOTHING}", "REPLICA IDENTITY ${1|DEFAULT,FULL,NOTHING|}"),
+    (
+      "REPLICA IDENTITY",
+      "REPLICA IDENTITY {DEFAULT|FULL|USING INDEX <ix>|NOTHING}",
+      "REPLICA IDENTITY ${1|DEFAULT,FULL,NOTHING|}",
+    ),
     ("RESET", "RESET (<storage_param>[, ...])", "RESET (${1:storage_param})"),
     ("SET", "SET (<storage_param> = <value>[, ...])", "SET (${1:storage_param} = ${2:value})"),
     ("OF", "OF <type> -- bind table to a composite type", "OF ${1:type_name}"),
@@ -858,21 +863,14 @@ pub fn functions_in_schema(cat: &Catalog, schema_name: &str, out: &mut Vec<Item>
   let start = out.len();
   for f in &cat.functions {
     if f.schema.eq_ignore_ascii_case(schema_name) {
-      let detail = if f.return_type.is_empty() {
-        "function".to_string()
-      } else {
-        format!("function -> {}", f.return_type)
-      };
+      let detail =
+        if f.return_type.is_empty() { "function".to_string() } else { format!("function -> {}", f.return_type) };
       // Wrap the raw DDL in a fenced sql code block so the editor's
       // markdown renderer picks it up for syntax-highlighted display.
       // Without the fence the body shows as plain monospace text.
       let documentation_md = f.comment.as_ref().map(|c| {
         let trimmed = c.trim();
-        if trimmed.starts_with("```") {
-          c.clone()
-        } else {
-          format!("```sql\n{trimmed}\n```")
-        }
+        if trimmed.starts_with("```") { c.clone() } else { format!("```sql\n{trimmed}\n```") }
       });
       out.push(Item {
         label: f.name.clone(),

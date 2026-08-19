@@ -23,7 +23,11 @@ impl LintRule for Rule {
     // Only meaningful in a type position -- scope to DDL to avoid columns or
     // aliases that happen to be called `money`.
     let (start, _body, upper) = crate::stmt_body_upper(stmt, source);
-    if !(upper.contains("CREATE TABLE") || upper.contains("ALTER TABLE") || upper.contains("CREATE TYPE") || upper.contains("::MONEY")) {
+    if !(upper.contains("CREATE TABLE")
+      || upper.contains("ALTER TABLE")
+      || upper.contains("CREATE TYPE")
+      || upper.contains("::MONEY"))
+    {
       return;
     }
     let ub = upper.as_bytes();
@@ -38,11 +42,14 @@ impl LintRule for Rule {
           }
         },
         b'M' if i + 5 <= n && &ub[i..i + 5] == b"MONEY" => {
-          if (i == 0 || !is_word(ub[i - 1] as char)) && ub.get(i + 5).is_none_or(|&b| !is_word(b as char) && b != b'(') {
+          if (i == 0 || !is_word(ub[i - 1] as char)) && ub.get(i + 5).is_none_or(|&b| !is_word(b as char) && b != b'(')
+          {
             out.push(Diagnostic {
               code: "sql582",
               severity: Severity::Hint,
-              message: "the `money` type has locale-dependent formatting and rounding quirks -- use `numeric` for currency".into(),
+              message:
+                "the `money` type has locale-dependent formatting and rounding quirks -- use `numeric` for currency"
+                  .into(),
               range: crate::range_at(start + i, start + i + 5),
             });
             return;

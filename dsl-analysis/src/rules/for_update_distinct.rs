@@ -27,10 +27,7 @@ fn has_select_distinct(upper: &str) -> bool {
       while j > 0 && ub[j - 1].is_ascii_whitespace() {
         j -= 1;
       }
-      if j >= 6
-        && &ub[j - 6..j] == b"SELECT"
-        && (j == 6 || !is_word(ub[j - 7] as char))
-      {
+      if j >= 6 && &ub[j - 6..j] == b"SELECT" && (j == 6 || !is_word(ub[j - 7] as char)) {
         return true;
       }
     }
@@ -61,7 +58,8 @@ impl LintRule for Rule {
       out.push(Diagnostic {
         code: "sql609",
         severity: Severity::Error,
-        message: "FOR UPDATE/SHARE is not allowed with DISTINCT -- PG raises 0A000; lock a plain row source instead".into(),
+        message: "FOR UPDATE/SHARE is not allowed with DISTINCT -- PG raises 0A000; lock a plain row source instead"
+          .into(),
         range: crate::range_at(start + at, start + at + upper[at..].find([';', '\n']).unwrap_or(upper.len() - at)),
       });
     }

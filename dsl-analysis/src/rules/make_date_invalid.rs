@@ -47,7 +47,15 @@ impl LintRule for Rule {
   }
 }
 
-fn flag_if(ub: &[u8], upper: &str, arg: (usize, usize), bad: impl Fn(f64) -> bool, field: &str, start: usize, out: &mut Vec<Diagnostic>) {
+fn flag_if(
+  ub: &[u8],
+  upper: &str,
+  arg: (usize, usize),
+  bad: impl Fn(f64) -> bool,
+  field: &str,
+  start: usize,
+  out: &mut Vec<Diagnostic>,
+) {
   if let Some((s, e)) = trim_range(ub, arg.0, arg.1)
     && upper[s..e].parse::<f64>().is_ok_and(bad)
   {

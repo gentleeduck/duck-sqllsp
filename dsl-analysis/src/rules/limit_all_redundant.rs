@@ -24,7 +24,10 @@ impl LintRule for Rule {
     let n = ub.len();
     let mut i = 0usize;
     while i + 5 <= n {
-      if &ub[i..i + 5] == b"LIMIT" && (i == 0 || !is_word(ub[i - 1] as char)) && !is_word(*ub.get(i + 5).unwrap_or(&b' ') as char) {
+      if &ub[i..i + 5] == b"LIMIT"
+        && (i == 0 || !is_word(ub[i - 1] as char))
+        && !is_word(*ub.get(i + 5).unwrap_or(&b' ') as char)
+      {
         let mut p = i + 5;
         while p < n && ub[p].is_ascii_whitespace() {
           p += 1;

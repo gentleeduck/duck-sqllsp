@@ -34,7 +34,8 @@ fn sql774_duplicate_column() {
 
 #[test]
 fn sql774_quiet_distinct_columns() {
-  let d = diags("CREATE TABLE t774bg (id int, during tsrange, room int, EXCLUDE USING gist (room WITH =, during WITH &&));");
+  let d =
+    diags("CREATE TABLE t774bg (id int, during tsrange, room int, EXCLUDE USING gist (room WITH =, during WITH &&));");
   assert!(!d.iter().any(|x| x.code == "sql774"));
 }
 

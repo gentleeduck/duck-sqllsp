@@ -27,7 +27,20 @@ impl LintRule for Rule {
     let upper = cleaned.to_ascii_uppercase();
     let bytes_u = upper.as_bytes();
     let bytes = cleaned.as_bytes();
-    let stopwords = ["GROUP BY", "ORDER BY", "LIMIT", "OFFSET", "HAVING", "FOR", "FETCH", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT"];
+    let stopwords = [
+      "GROUP BY",
+      "ORDER BY",
+      "LIMIT",
+      "OFFSET",
+      "HAVING",
+      "FOR",
+      "FETCH",
+      "WINDOW",
+      "RETURNING",
+      "UNION",
+      "INTERSECT",
+      "EXCEPT",
+    ];
 
     for needle in [&b"WHERE"[..], &b"ON"[..]] {
       let mut from = 0usize;

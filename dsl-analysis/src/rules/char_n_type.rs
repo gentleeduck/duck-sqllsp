@@ -1,8 +1,8 @@
 //! sql104: `CHAR(n)` / `CHARACTER(n)` -- fixed-width type that
 //! right-pads with spaces. PG docs explicitly recommend VARCHAR or TEXT.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -88,4 +88,3 @@ impl LintRule for Rule {
     }
   }
 }
-

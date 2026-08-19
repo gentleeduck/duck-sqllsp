@@ -3,8 +3,8 @@
 //! name -- prefer `TEXT` when no cap is wanted, or spell the cap when
 //! it is.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -61,4 +61,3 @@ impl LintRule for Rule {
     }
   }
 }
-

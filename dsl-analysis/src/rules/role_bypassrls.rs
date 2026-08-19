@@ -36,7 +36,8 @@ impl LintRule for Rule {
         out.push(Diagnostic {
           code: "sql573",
           severity: Severity::Warning,
-          message: "BYPASSRLS lets this role skip all row-level security policies -- grant it only to trusted roles".into(),
+          message: "BYPASSRLS lets this role skip all row-level security policies -- grant it only to trusted roles"
+            .into(),
           range: crate::range_at(start + i, start + i + 9),
         });
         return;

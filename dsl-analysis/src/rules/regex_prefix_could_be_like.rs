@@ -69,9 +69,13 @@ impl LintRule for Rule {
           },
           Rewrite::Exact(p) => {
             if case_insensitive {
-              format!("regex `{pat}` is an exact-match literal -- consider `lower(col) = '{p}'` (or `ILIKE '{p}'` for the case-insensitive comparison)")
+              format!(
+                "regex `{pat}` is an exact-match literal -- consider `lower(col) = '{p}'` (or `ILIKE '{p}'` for the case-insensitive comparison)"
+              )
             } else {
-              format!("regex `{pat}` is an exact-match literal -- consider `= '{p}'` (equality uses any btree index; regex usually doesn't)")
+              format!(
+                "regex `{pat}` is an exact-match literal -- consider `= '{p}'` (equality uses any btree index; regex usually doesn't)"
+              )
             }
           },
         };

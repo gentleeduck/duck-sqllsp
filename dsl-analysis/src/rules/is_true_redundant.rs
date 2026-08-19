@@ -43,7 +43,10 @@ impl LintRule for Rule {
 fn scan(ub: &[u8], abs: usize, from: usize, to: usize, out: &mut Vec<Diagnostic>) {
   let mut i = from;
   while i + 2 <= to {
-    if &ub[i..i + 2] == b"IS" && (i == from || !is_word(ub[i - 1] as char)) && !is_word(*ub.get(i + 2).unwrap_or(&b' ') as char) {
+    if &ub[i..i + 2] == b"IS"
+      && (i == from || !is_word(ub[i - 1] as char))
+      && !is_word(*ub.get(i + 2).unwrap_or(&b' ') as char)
+    {
       let mut p = i + 2;
       while p < to && ub[p].is_ascii_whitespace() {
         p += 1;

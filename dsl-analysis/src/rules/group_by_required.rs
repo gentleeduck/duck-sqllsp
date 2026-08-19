@@ -11,8 +11,8 @@
 //!   4. If aggregates exist and any bare column is not present in the
 //!      GROUP BY column list (case-insensitive whole-word match), flag.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;

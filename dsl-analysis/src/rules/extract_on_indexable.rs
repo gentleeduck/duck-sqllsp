@@ -130,7 +130,18 @@ fn is_column_shape(s: &str) -> bool {
   }
   let up = s.to_ascii_uppercase();
   let bare = up.rsplit('.').next().unwrap_or(&up);
-  if matches!(bare, "CURRENT_DATE" | "CURRENT_TIME" | "CURRENT_TIMESTAMP" | "LOCALTIME" | "LOCALTIMESTAMP" | "NOW" | "NULL" | "TRUE" | "FALSE") {
+  if matches!(
+    bare,
+    "CURRENT_DATE"
+      | "CURRENT_TIME"
+      | "CURRENT_TIMESTAMP"
+      | "LOCALTIME"
+      | "LOCALTIMESTAMP"
+      | "NOW"
+      | "NULL"
+      | "TRUE"
+      | "FALSE"
+  ) {
     return false;
   }
   // Bare digits are literals.

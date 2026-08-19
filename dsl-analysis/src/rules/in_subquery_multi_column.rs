@@ -25,8 +25,8 @@ fn matching(b: &[u8], open: usize) -> Option<usize> {
         if depth == 0 {
           return Some(i);
         }
-      }
-      _ => {}
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -47,8 +47,8 @@ fn from_at(b: &[u8], lo: usize, hi: usize) -> usize {
         && b.get(i + 4).is_none_or(|&c| !is_word(c as char)) =>
       {
         return i;
-      }
-      _ => {}
+      },
+      _ => {},
     }
     i += 1;
   }

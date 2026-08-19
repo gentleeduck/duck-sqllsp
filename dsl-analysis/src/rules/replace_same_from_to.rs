@@ -54,11 +54,7 @@ impl LintRule for Rule {
 /// Case-insensitive unless a string literal is involved (so `REPLACE(s, 'A',
 /// 'a')` -- genuinely different -- is not flagged).
 fn args_identical(a: &str, b: &str) -> bool {
-  if a.contains('\'') || b.contains('\'') {
-    a == b
-  } else {
-    a.eq_ignore_ascii_case(b)
-  }
+  if a.contains('\'') || b.contains('\'') { a == b } else { a.eq_ignore_ascii_case(b) }
 }
 
 fn split_args(inner: &str) -> Vec<&str> {

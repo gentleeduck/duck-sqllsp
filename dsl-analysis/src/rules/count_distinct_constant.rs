@@ -47,7 +47,8 @@ impl LintRule for Rule {
           out.push(Diagnostic {
             code: "sql676",
             severity: Severity::Warning,
-            message: "COUNT(DISTINCT <constant>) is always 1 (or 0) -- count rows with COUNT(*) or a real column".into(),
+            message: "COUNT(DISTINCT <constant>) is always 1 (or 0) -- count rows with COUNT(*) or a real column"
+              .into(),
             range: crate::range_at(start + a, start + lit_end),
           });
         }

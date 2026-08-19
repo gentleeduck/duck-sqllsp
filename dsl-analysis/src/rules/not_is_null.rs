@@ -32,7 +32,10 @@ impl LintRule for Rule {
     let mut emitted: std::collections::HashSet<usize> = std::collections::HashSet::new();
     while i + 3 <= n {
       // Find word-bounded NOT.
-      if !(&ub[i..i + 3] == b"NOT" && (i == 0 || !is_word(ub[i - 1] as char)) && (i + 3 == n || !is_word(ub[i + 3] as char))) {
+      if !(&ub[i..i + 3] == b"NOT"
+        && (i == 0 || !is_word(ub[i - 1] as char))
+        && (i + 3 == n || !is_word(ub[i + 3] as char)))
+      {
         i += 1;
         continue;
       }

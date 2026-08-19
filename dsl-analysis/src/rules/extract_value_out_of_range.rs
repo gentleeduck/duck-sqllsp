@@ -48,11 +48,8 @@ impl LintRule for Rule {
         }
         let open = at + needle.len() - 1;
         let Some(close) = match_paren(bytes, open) else { break };
-        let field = if is_date_part {
-          first_string_arg(&lower, open + 1, close)
-        } else {
-          first_word(&lower, open + 1, close)
-        };
+        let field =
+          if is_date_part { first_string_arg(&lower, open + 1, close) } else { first_word(&lower, open + 1, close) };
         from = close + 1;
         let Some(field) = field else { continue };
         let Some(&(_, lo, hi)) = RANGES.iter().find(|(f, _, _)| *f == field) else { continue };
@@ -64,11 +61,7 @@ impl LintRule for Rule {
         p = skip_ws(bytes, p + 1);
         let Some((val, end)) = read_int(bytes, p, n) else { continue };
         if val < lo || val > hi {
-          let hint = if field == "dow" && val == 7 {
-            " (DOW is 0-6, Sunday=0; use ISODOW for 1-7)"
-          } else {
-            ""
-          };
+          let hint = if field == "dow" && val == 7 { " (DOW is 0-6, Sunday=0; use ISODOW for 1-7)" } else { "" };
           out.push(Diagnostic {
             code: "sql545",
             severity: Severity::Warning,

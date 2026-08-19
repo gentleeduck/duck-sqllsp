@@ -2,8 +2,8 @@
 //! row-level triggers have NEW/OLD. Statement-level triggers cannot
 //! reference them.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -88,4 +88,3 @@ impl LintRule for Rule {
     }
   }
 }
-

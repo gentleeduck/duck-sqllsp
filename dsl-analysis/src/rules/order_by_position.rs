@@ -1,8 +1,8 @@
 //! sql099: `ORDER BY 1, 2` -- positional ORDER BY is fragile because
 //! changing the SELECT list silently changes the sort.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -54,4 +54,3 @@ impl LintRule for Rule {
     }
   }
 }
-

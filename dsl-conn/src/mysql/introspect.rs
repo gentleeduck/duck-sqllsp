@@ -325,7 +325,7 @@ async fn routines(pool: &MySqlPool) -> Result<Vec<Function>, DriverError> {
         let data_type: String = row.try_get("DTD_IDENTIFIER").or_else(|_| row.try_get(3)).unwrap_or_default();
         params.entry((schema, routine)).or_default().push(FunctionArg { name, data_type });
       }
-    }
+    },
     Err(_) => return Ok(Vec::new()),
   }
 
@@ -457,7 +457,14 @@ mod tests {
   #[test]
   fn procedure_source_omits_returns() {
     let args = [arg("id", "int")];
-    let src = render_routine_source("app", "touch", "PROCEDURE", &args, "void", "BEGIN UPDATE t SET seen = 1 WHERE id = id; END");
+    let src = render_routine_source(
+      "app",
+      "touch",
+      "PROCEDURE",
+      &args,
+      "void",
+      "BEGIN UPDATE t SET seen = 1 WHERE id = id; END",
+    );
     assert!(src.starts_with("CREATE PROCEDURE app.touch(id int)\n"), "{src}");
     assert!(!src.contains("RETURNS"), "{src}");
   }
@@ -469,7 +476,9 @@ mod tests {
     let opts = render_table_options(Some("InnoDB"), Some("utf8mb4_0900_ai_ci"), Some(1000), Some("Compressed"));
     assert_eq!(
       opts.as_deref(),
-      Some("ENGINE=InnoDB AUTO_INCREMENT=1000 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED")
+      Some(
+        "ENGINE=InnoDB AUTO_INCREMENT=1000 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ROW_FORMAT=COMPRESSED"
+      )
     );
   }
 

@@ -43,7 +43,10 @@ fn tbl(name: &str, columns: Vec<Column>, constraints: Vec<Constraint>) -> Table 
     policies: vec![],
     comment: None,
     row_estimate: None,
-    owner: None, definition: None, strict: false, options: None,
+    owner: None,
+    definition: None,
+    strict: false,
+    options: None,
   }
 }
 
@@ -59,11 +62,8 @@ fn pk(name: &str, cols: &[&str]) -> Constraint {
 }
 
 fn cat_idioms() -> Catalog {
-  let users = tbl(
-    "users",
-    vec![col("id", "uuid"), col("email", "text"), col("name", "text")],
-    vec![pk("pk_users_id", &["id"])],
-  );
+  let users =
+    tbl("users", vec![col("id", "uuid"), col("email", "text"), col("name", "text")], vec![pk("pk_users_id", &["id"])]);
   let other = tbl("other", vec![col("id", "uuid"), col("col", "text"), col("v", "text")], vec![]);
   let t = tbl(
     "t",
@@ -359,17 +359,11 @@ fn idiom_extract_epoch_from_column() {
 #[test]
 fn idiom_negative_unknown_column_still_fires() {
   let d = diags("SELECT bogus_nope_xyz FROM users;");
-  assert!(
-    d.iter().any(|x| x.code == "sql002"),
-    "real unknown column must still fire sql002: {d:?}"
-  );
+  assert!(d.iter().any(|x| x.code == "sql002"), "real unknown column must still fire sql002: {d:?}");
 }
 
 #[test]
 fn idiom_negative_unknown_table_still_fires() {
   let d = diags("SELECT * FROM nonexistent_table_xyz;");
-  assert!(
-    d.iter().any(|x| x.code == "sql001"),
-    "real unresolved table must still fire sql001: {d:?}"
-  );
+  assert!(d.iter().any(|x| x.code == "sql001"), "real unresolved table must still fire sql001: {d:?}");
 }

@@ -8,8 +8,8 @@
 //! We surface this as a hint (not a hard error) so the diagnostic
 //! doesn't fight users who deliberately spelled the table name.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -81,7 +81,6 @@ fn find_qualified_uses(body: &str, table: &str) -> Vec<(usize, usize)> {
   }
   out
 }
-
 
 fn shift_range(stmt: text_size::TextRange, rel_start: usize, rel_end: usize) -> text_size::TextRange {
   let base: usize = u32::from(stmt.start()) as usize;

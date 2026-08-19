@@ -5,8 +5,8 @@
 //! sighting in code review turns out to be a typo for `FOR n`. Make
 //! it explicit.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -56,7 +56,6 @@ impl LintRule for Rule {
     }
   }
 }
-
 
 fn match_paren(bytes: &[u8], open: usize) -> Option<usize> {
   let mut depth = 0i32;

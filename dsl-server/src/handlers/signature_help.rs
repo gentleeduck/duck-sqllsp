@@ -214,7 +214,12 @@ fn insert_values_signature(
       .into_iter()
       .map(|name| {
         let ty = t
-          .and_then(|t| t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(&name)).map(|c| dsl_catalog::display_type(&c.data_type).to_string()))
+          .and_then(|t| {
+            t.columns
+              .iter()
+              .find(|c| c.name.eq_ignore_ascii_case(&name))
+              .map(|c| dsl_catalog::display_type(&c.data_type).to_string())
+          })
           .unwrap_or_default();
         (name, ty)
       })
@@ -311,7 +316,12 @@ fn update_set_tuple_signature(
     .iter()
     .map(|n| {
       let ty = t
-        .and_then(|t| t.columns.iter().find(|c| c.name.eq_ignore_ascii_case(n)).map(|c| dsl_catalog::display_type(&c.data_type).to_string()))
+        .and_then(|t| {
+          t.columns
+            .iter()
+            .find(|c| c.name.eq_ignore_ascii_case(n))
+            .map(|c| dsl_catalog::display_type(&c.data_type).to_string())
+        })
         .unwrap_or_default();
       if ty.is_empty() { n.clone() } else { format!("{n} {ty}") }
     })

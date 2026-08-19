@@ -27,7 +27,20 @@ impl LintRule for Rule {
     let cleaned = crate::textutil::strip_noise_full(raw);
     let upper = cleaned.to_ascii_uppercase();
     let ub = upper.as_bytes();
-    let stopwords = ["GROUP BY", "ORDER BY", "LIMIT", "OFFSET", "HAVING", "FOR", "FETCH", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT"];
+    let stopwords = [
+      "GROUP BY",
+      "ORDER BY",
+      "LIMIT",
+      "OFFSET",
+      "HAVING",
+      "FOR",
+      "FETCH",
+      "WINDOW",
+      "RETURNING",
+      "UNION",
+      "INTERSECT",
+      "EXCEPT",
+    ];
     let Some(rel_where) = find_clause(ub, b"WHERE") else {
       return;
     };
@@ -52,9 +65,7 @@ impl LintRule for Rule {
       let (severity, message) = if is_tautology {
         (
           Severity::Hint,
-          format!(
-            "`{trimmed}` is always TRUE -- both sides are constant literals; the predicate has no filter effect"
-          ),
+          format!("`{trimmed}` is always TRUE -- both sides are constant literals; the predicate has no filter effect"),
         )
       } else {
         (

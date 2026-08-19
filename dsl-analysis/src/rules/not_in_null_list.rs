@@ -31,7 +31,20 @@ impl LintRule for Rule {
     let upper = cleaned.to_ascii_uppercase();
     let ub = upper.as_bytes();
     let bytes = cleaned.as_bytes();
-    let stopwords = ["GROUP BY", "ORDER BY", "HAVING", "LIMIT", "OFFSET", "FOR", "FETCH", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT"];
+    let stopwords = [
+      "GROUP BY",
+      "ORDER BY",
+      "HAVING",
+      "LIMIT",
+      "OFFSET",
+      "FOR",
+      "FETCH",
+      "WINDOW",
+      "RETURNING",
+      "UNION",
+      "INTERSECT",
+      "EXCEPT",
+    ];
     let Some(rel_where) = find_clause(ub, b"WHERE") else {
       return;
     };

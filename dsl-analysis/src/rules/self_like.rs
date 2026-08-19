@@ -29,7 +29,20 @@ impl LintRule for Rule {
     let upper = cleaned.to_ascii_uppercase();
     let ub = upper.as_bytes();
     let bytes = cleaned.as_bytes();
-    let stopwords = ["GROUP BY", "ORDER BY", "HAVING", "LIMIT", "OFFSET", "FOR", "FETCH", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT"];
+    let stopwords = [
+      "GROUP BY",
+      "ORDER BY",
+      "HAVING",
+      "LIMIT",
+      "OFFSET",
+      "FOR",
+      "FETCH",
+      "WINDOW",
+      "RETURNING",
+      "UNION",
+      "INTERSECT",
+      "EXCEPT",
+    ];
     let Some(rel_where) = find_clause(ub, b"WHERE") else { return };
     let pred_start = rel_where + 5;
     let pred_end = find_clause_end(ub, pred_start, &stopwords).min(ub.len());
@@ -89,9 +102,17 @@ fn push_diag(stmt_start: usize, abs_s: usize, abs_e: usize, op: &str, col: &str,
 /// position `i`. Returns (op_text, op_start, op_end).
 fn try_word_op(ub: &[u8], i: usize, pred_end: usize) -> Option<(String, usize, usize)> {
   // `LIKE` / `ILIKE` at i?
-  let (op_len, op_text) = if i + 4 <= pred_end && &ub[i..i + 4] == b"LIKE" && (i + 4 == ub.len() || !is_word(ub[i + 4] as char)) && (i == 0 || !is_word(ub[i - 1] as char)) {
+  let (op_len, op_text) = if i + 4 <= pred_end
+    && &ub[i..i + 4] == b"LIKE"
+    && (i + 4 == ub.len() || !is_word(ub[i + 4] as char))
+    && (i == 0 || !is_word(ub[i - 1] as char))
+  {
     (4, "LIKE".to_string())
-  } else if i + 5 <= pred_end && &ub[i..i + 5] == b"ILIKE" && (i + 5 == ub.len() || !is_word(ub[i + 5] as char)) && (i == 0 || !is_word(ub[i - 1] as char)) {
+  } else if i + 5 <= pred_end
+    && &ub[i..i + 5] == b"ILIKE"
+    && (i + 5 == ub.len() || !is_word(ub[i + 5] as char))
+    && (i == 0 || !is_word(ub[i - 1] as char))
+  {
     (5, "ILIKE".to_string())
   } else {
     return None;
@@ -131,7 +152,14 @@ fn try_symbol_op(bytes: &[u8], i: usize, pred_end: usize) -> Option<(String, usi
 /// Read LHS (walking back from op_start) and RHS (walking forward
 /// from op_end). Returns (lhs, rhs, abs_s, abs_e) where abs_s/abs_e
 /// span the full `lhs op rhs` expression in raw.
-fn extract_lhs_rhs<'a>(raw: &'a str, bytes: &[u8], op_start: usize, op_end: usize, pred_start: usize, pred_end: usize) -> Option<(&'a str, &'a str, usize, usize)> {
+fn extract_lhs_rhs<'a>(
+  raw: &'a str,
+  bytes: &[u8],
+  op_start: usize,
+  op_end: usize,
+  pred_start: usize,
+  pred_end: usize,
+) -> Option<(&'a str, &'a str, usize, usize)> {
   let mut l = op_start;
   while l > pred_start && bytes[l - 1].is_ascii_whitespace() {
     l -= 1;

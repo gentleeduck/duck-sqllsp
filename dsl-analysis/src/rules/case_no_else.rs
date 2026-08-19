@@ -2,8 +2,8 @@
 //! Unmatched rows return NULL silently. Hint to add `ELSE` explicitly
 //! so the author's intent is on the page.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -93,4 +93,3 @@ impl LintRule for Rule {
     }
   }
 }
-

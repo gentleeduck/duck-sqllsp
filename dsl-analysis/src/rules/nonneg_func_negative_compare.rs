@@ -10,7 +10,8 @@ use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
 
-const FNS: &[&str] = &["abs(", "length(", "char_length(", "octet_length(", "character_length(", "bit_length(", "cardinality("];
+const FNS: &[&str] =
+  &["abs(", "length(", "char_length(", "octet_length(", "character_length(", "bit_length(", "cardinality("];
 
 pub struct Rule;
 

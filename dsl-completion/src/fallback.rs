@@ -243,11 +243,7 @@ pub fn cte_columns_from_text(src: &str, target: &str) -> Option<Vec<String>> {
       }
       let end = (i - 1).min(n);
       explicit_cols = Some(
-        src[start..end]
-          .split(',')
-          .map(|s| s.trim().trim_matches('"').to_string())
-          .filter(|s| !s.is_empty())
-          .collect(),
+        src[start..end].split(',').map(|s| s.trim().trim_matches('"').to_string()).filter(|s| !s.is_empty()).collect(),
       );
       while i < n && bytes[i].is_ascii_whitespace() {
         i += 1;

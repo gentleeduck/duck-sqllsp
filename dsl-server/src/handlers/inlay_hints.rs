@@ -363,7 +363,6 @@ pub fn run(state: &ServerState, params: InlayHintParams) -> Option<Vec<InlayHint
   if hints.is_empty() { None } else { Some(hints) }
 }
 
-
 /// A JOIN clause located in the buffer text that lacks an ON / USING
 /// predicate. Carries both sides' table names + aliases, plus the byte
 /// position where the hint should land (right after the JOIN's table /
@@ -841,4 +840,3 @@ fn byte_to_position(rope: &Rope, byte: usize) -> Position {
 fn _unused(_p: Position) {
   let _ = position::to_offset;
 }
-

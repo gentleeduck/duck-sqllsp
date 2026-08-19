@@ -193,11 +193,8 @@ pub fn table(t: &Table) -> String {
 fn render_view(t: &Table, def: &str) -> String {
   let case = crate::current_keyword_case();
   let kw = |k: &str| case.apply(k);
-  let create = if matches!(t.kind, TableKind::MaterializedView) {
-    kw("CREATE MATERIALIZED VIEW")
-  } else {
-    kw("CREATE VIEW")
-  };
+  let create =
+    if matches!(t.kind, TableKind::MaterializedView) { kw("CREATE MATERIALIZED VIEW") } else { kw("CREATE VIEW") };
 
   let mut s = String::new();
   s.push_str("```sql\n");
@@ -290,7 +287,8 @@ pub fn table_ddl(t: &Table) -> String {
           ConstraintKind::ForeignKey => {
             row.push_str(&kw("REFERENCES"));
             if let Some(r) = &con.references {
-              let target_cols = if r.columns.is_empty() { String::new() } else { format!(" ({})", r.columns.join(", ")) };
+              let target_cols =
+                if r.columns.is_empty() { String::new() } else { format!(" ({})", r.columns.join(", ")) };
               row.push(' ');
               if r.schema.is_empty() || r.schema.eq_ignore_ascii_case("public") {
                 row.push_str(&format!("{}{target_cols}", r.table));
@@ -459,7 +457,11 @@ pub fn column_in_tables(items: &[(&Table, &Column)]) -> String {
   let rows: Vec<Vec<String>> = items
     .iter()
     .map(|(t, c)| {
-      vec![format!("{}.{}", t.schema, t.name), display_type(&c.data_type).to_string(), if c.nullable { "YES" } else { "NO" }.into()]
+      vec![
+        format!("{}.{}", t.schema, t.name),
+        display_type(&c.data_type).to_string(),
+        if c.nullable { "YES" } else { "NO" }.into(),
+      ]
     })
     .collect();
   s.push_str(&crate::md_table::render(&["table", "type", "nullable"], &rows));
@@ -623,7 +625,8 @@ mod tests {
       row_estimate: None,
       owner: None,
       definition: definition.map(str::to_string),
-      strict: false, options: None,
+      strict: false,
+      options: None,
     }
   }
 

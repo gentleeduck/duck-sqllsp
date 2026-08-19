@@ -10,8 +10,20 @@ use dsl_parse::Statement;
 use dsl_resolve::Scope;
 use std::collections::HashMap;
 
-const STOPWORDS: &[&str] =
-  &["GROUP", "ORDER", "HAVING", "LIMIT", "OFFSET", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT", "FETCH", "FOR"];
+const STOPWORDS: &[&str] = &[
+  "GROUP",
+  "ORDER",
+  "HAVING",
+  "LIMIT",
+  "OFFSET",
+  "WINDOW",
+  "RETURNING",
+  "UNION",
+  "INTERSECT",
+  "EXCEPT",
+  "FETCH",
+  "FOR",
+];
 
 pub struct Rule;
 
@@ -40,8 +52,8 @@ impl LintRule for Rule {
 }
 
 struct Bounds {
-  ge: Option<f64>, // an inclusive `>=` value
-  le: Option<f64>, // an inclusive `<=` value
+  ge: Option<f64>,  // an inclusive `>=` value
+  le: Option<f64>,  // an inclusive `<=` value
   has_strict: bool, // any `<`/`>` seen -> not a pure inclusive single point
   span: (usize, usize),
 }

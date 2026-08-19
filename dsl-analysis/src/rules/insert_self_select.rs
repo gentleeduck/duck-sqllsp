@@ -103,10 +103,7 @@ fn find_word_from(ub: &[u8], w: &[u8], from: usize) -> Option<usize> {
   let n = ub.len();
   let mut i = from;
   while i + m <= n {
-    if &ub[i..i + m] == w
-      && (i == 0 || !is_word(ub[i - 1] as char))
-      && (i + m == n || !is_word(ub[i + m] as char))
-    {
+    if &ub[i..i + m] == w && (i == 0 || !is_word(ub[i - 1] as char)) && (i + m == n || !is_word(ub[i + m] as char)) {
       return Some(i);
     }
     i += 1;

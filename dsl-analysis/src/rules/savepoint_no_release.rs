@@ -5,8 +5,8 @@
 //! matching `RELEASE [SAVEPOINT] name` or `ROLLBACK TO [SAVEPOINT]
 //! name`. Inter-file flows are out of scope.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -73,7 +73,6 @@ impl LintRule for Rule {
     }
   }
 }
-
 
 fn savepoint_name(upper: &str, original: &str) -> Option<String> {
   let idx = upper.find("SAVEPOINT")?;

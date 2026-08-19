@@ -28,8 +28,8 @@ fn matching(bytes: &[u8], open: usize) -> Option<usize> {
         if depth == 0 {
           return Some(i);
         }
-      }
-      _ => {}
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -79,11 +79,7 @@ impl LintRule for Rule {
         }
         let Some(win_close) = matching(lb, j) else { continue };
         let spec = &lower[j + 1..win_close];
-        if spec.contains("order by")
-          && !spec.contains("rows")
-          && !spec.contains("range")
-          && !spec.contains("groups")
-        {
+        if spec.contains("order by") && !spec.contains("rows") && !spec.contains("range") && !spec.contains("groups") {
           let name = needle.trim_end_matches('(');
           out.push(Diagnostic {
             code: "sql631",

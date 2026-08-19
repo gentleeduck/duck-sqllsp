@@ -1,8 +1,8 @@
 //! sql113: `TIMESTAMP` without time zone -- ambiguous across sessions.
 //! Prefer `TIMESTAMPTZ` (`TIMESTAMP WITH TIME ZONE`).
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -61,4 +61,3 @@ impl LintRule for Rule {
     }
   }
 }
-

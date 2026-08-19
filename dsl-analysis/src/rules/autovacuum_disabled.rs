@@ -36,7 +36,9 @@ impl LintRule for Rule {
       // value: false / off / 0
       let end = (p + 5).min(bytes.len());
       let val = &lower[p..end];
-      let off = val.starts_with("false") || val.starts_with("off") || (bytes.get(p) == Some(&b'0') && !bytes.get(p + 1).is_some_and(|b| b.is_ascii_digit()));
+      let off = val.starts_with("false")
+        || val.starts_with("off")
+        || (bytes.get(p) == Some(&b'0') && !bytes.get(p + 1).is_some_and(|b| b.is_ascii_digit()));
       if off {
         out.push(Diagnostic {
           code: "sql579",

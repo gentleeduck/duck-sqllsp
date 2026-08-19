@@ -5,8 +5,8 @@
 //! `too many parameters specified for RAISE` at runtime. Catch it at
 //! edit time.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::{Statement, StatementKind};
 use dsl_resolve::Scope;
@@ -166,4 +166,3 @@ fn dollar_body(text: &str) -> Option<&str> {
   let end_rel = text[after..].find("$$")?;
   Some(&text[after..after + end_rel])
 }
-

@@ -23,8 +23,8 @@ fn close_of(b: &[u8], open: usize) -> Option<usize> {
         if depth == 0 {
           return Some(i);
         }
-      }
-      _ => {}
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -97,7 +97,9 @@ impl LintRule for Rule {
       out.push(Diagnostic {
         code: "sql655",
         severity: Severity::Error,
-        message: format!("UPDATE assigns {rcols} values to {lcols} columns -- PG raises 42601; the column and value lists must match"),
+        message: format!(
+          "UPDATE assigns {rcols} values to {lcols} columns -- PG raises 42601; the column and value lists must match"
+        ),
         range: crate::range_at(start + j, start + rclose + 1),
       });
     }

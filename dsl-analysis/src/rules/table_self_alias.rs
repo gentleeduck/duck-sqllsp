@@ -9,8 +9,30 @@ use dsl_parse::Statement;
 use dsl_resolve::Scope;
 
 const NON_ALIAS: &[&str] = &[
-  "ON", "USING", "WHERE", "GROUP", "ORDER", "HAVING", "LIMIT", "OFFSET", "JOIN", "LEFT", "RIGHT", "INNER", "FULL",
-  "CROSS", "NATURAL", "UNION", "INTERSECT", "EXCEPT", "RETURNING", "FETCH", "FOR", "WINDOW", "TABLESAMPLE", "LATERAL",
+  "ON",
+  "USING",
+  "WHERE",
+  "GROUP",
+  "ORDER",
+  "HAVING",
+  "LIMIT",
+  "OFFSET",
+  "JOIN",
+  "LEFT",
+  "RIGHT",
+  "INNER",
+  "FULL",
+  "CROSS",
+  "NATURAL",
+  "UNION",
+  "INTERSECT",
+  "EXCEPT",
+  "RETURNING",
+  "FETCH",
+  "FOR",
+  "WINDOW",
+  "TABLESAMPLE",
+  "LATERAL",
   "AS",
 ];
 

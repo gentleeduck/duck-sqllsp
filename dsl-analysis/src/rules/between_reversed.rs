@@ -4,8 +4,8 @@
 //! (lex-order swap, which is correct for TEXT columns and ISO-format
 //! date/timestamp literals).
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -82,23 +82,24 @@ impl LintRule for Rule {
             let (severity, message) = if is_not {
               (
                 Severity::Warning,
-                format!("NOT BETWEEN {low_text} AND {high_text}: low > high makes the inner BETWEEN always false, so NOT BETWEEN matches every row -- almost certainly a swapped-bound typo"),
+                format!(
+                  "NOT BETWEEN {low_text} AND {high_text}: low > high makes the inner BETWEEN always false, so NOT BETWEEN matches every row -- almost certainly a swapped-bound typo"
+                ),
               )
             } else {
               (
                 Severity::Error,
                 match low_kind {
-                  BoundKind::Numeric => format!("BETWEEN {low_text} AND {high_text}: low > high, the expression matches no rows"),
-                  BoundKind::String => format!("BETWEEN {low_text} AND {high_text}: low > high in lex order (correct for TEXT columns and ISO-format date/timestamp literals); the expression matches no rows -- swap the bounds"),
+                  BoundKind::Numeric => {
+                    format!("BETWEEN {low_text} AND {high_text}: low > high, the expression matches no rows")
+                  },
+                  BoundKind::String => format!(
+                    "BETWEEN {low_text} AND {high_text}: low > high in lex order (correct for TEXT columns and ISO-format date/timestamp literals); the expression matches no rows -- swap the bounds"
+                  ),
                 },
               )
             };
-            out.push(Diagnostic {
-              code: "sql087",
-              severity,
-              message,
-              range: crate::range_at(abs_start, abs_end),
-            });
+            out.push(Diagnostic { code: "sql087", severity, message, range: crate::range_at(abs_start, abs_end) });
             return;
           }
         }
@@ -155,13 +156,8 @@ fn read_bound(raw: &[u8], _upper: &[u8], from: usize, n: usize) -> Option<(Bound
 
 fn strip_quotes(s: &str) -> &str {
   let s = s.trim();
-  if s.len() >= 2 && s.starts_with('\'') && s.ends_with('\'') {
-    &s[1..s.len() - 1]
-  } else {
-    s
-  }
+  if s.len() >= 2 && s.starts_with('\'') && s.ends_with('\'') { &s[1..s.len() - 1] } else { s }
 }
-
 
 /// Walk backwards from `between_pos` over whitespace; if the previous
 /// word is `NOT`, return (true, start-of-NOT) so the diagnostic range

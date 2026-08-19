@@ -3,8 +3,8 @@
 //! says alias names aren't in scope for GROUP BY; many other engines
 //! reject it. Hint to use the underlying column expression.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -110,7 +110,6 @@ fn find_kw_top_level(s: &str, kw: &str) -> Option<usize> {
   }
   None
 }
-
 
 fn split_top_level_commas(s: &str) -> Vec<&str> {
   let bytes = s.as_bytes();

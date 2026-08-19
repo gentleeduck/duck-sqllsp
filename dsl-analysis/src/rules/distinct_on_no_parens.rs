@@ -48,7 +48,9 @@ impl LintRule for Rule {
             out.push(Diagnostic {
               code: "sql662",
               severity: Severity::Error,
-              message: "DISTINCT ON requires parentheses around the expression list -- write `DISTINCT ON (expr)` (PG 42601)".into(),
+              message:
+                "DISTINCT ON requires parentheses around the expression list -- write `DISTINCT ON (expr)` (PG 42601)"
+                  .into(),
               range: crate::range_at(start + j, start + j + 2),
             });
             return;

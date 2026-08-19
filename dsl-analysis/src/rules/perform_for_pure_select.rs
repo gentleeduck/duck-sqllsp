@@ -2,8 +2,8 @@
 //! no function with side effects -- the result is silently discarded.
 //! Suggest dropping PERFORM (cheap NO-OP) or using the result.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -86,4 +86,3 @@ impl LintRule for Rule {
     }
   }
 }
-

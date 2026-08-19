@@ -34,7 +34,10 @@ impl LintRule for Rule {
     let mut i = 0usize;
     while i + 2 <= n {
       // Match word-bounded IN.
-      if !(&ub[i..i + 2] == b"IN" && (i == 0 || !is_word(ub[i - 1] as char)) && (i + 2 == n || !is_word(ub[i + 2] as char))) {
+      if !(&ub[i..i + 2] == b"IN"
+        && (i == 0 || !is_word(ub[i - 1] as char))
+        && (i + 2 == n || !is_word(ub[i + 2] as char)))
+      {
         i += 1;
         continue;
       }

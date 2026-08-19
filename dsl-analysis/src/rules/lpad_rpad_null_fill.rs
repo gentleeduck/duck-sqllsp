@@ -44,7 +44,8 @@ impl LintRule for Rule {
         out.push(Diagnostic {
           code: "sql708",
           severity: Severity::Warning,
-          message: "lpad()/rpad() with a NULL fill string returns NULL when padding is needed -- use a real pad string".into(),
+          message: "lpad()/rpad() with a NULL fill string returns NULL when padding is needed -- use a real pad string"
+            .into(),
           range: crate::range_at(start + s, start + e),
         });
       }

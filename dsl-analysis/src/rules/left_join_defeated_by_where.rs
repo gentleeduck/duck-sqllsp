@@ -17,8 +17,20 @@ use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
 
-const STOPWORDS: &[&str] =
-  &["GROUP", "ORDER", "HAVING", "LIMIT", "OFFSET", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT", "FETCH", "FOR"];
+const STOPWORDS: &[&str] = &[
+  "GROUP",
+  "ORDER",
+  "HAVING",
+  "LIMIT",
+  "OFFSET",
+  "WINDOW",
+  "RETURNING",
+  "UNION",
+  "INTERSECT",
+  "EXCEPT",
+  "FETCH",
+  "FOR",
+];
 
 pub struct Rule;
 
@@ -156,9 +168,7 @@ fn leading_alias_predicate(conj: &str, aliases: &[String]) -> Option<String> {
 fn starts_word(s: &str, kw: &str) -> bool {
   let u = s.as_bytes();
   let k = kw.as_bytes();
-  u.len() >= k.len()
-    && u[..k.len()].eq_ignore_ascii_case(k)
-    && u.get(k.len()).is_none_or(|&b| !is_word(b as char))
+  u.len() >= k.len() && u[..k.len()].eq_ignore_ascii_case(k) && u.get(k.len()).is_none_or(|&b| !is_word(b as char))
 }
 
 fn has_top_level_or(s: &str) -> bool {

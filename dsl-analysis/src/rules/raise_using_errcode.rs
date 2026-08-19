@@ -2,8 +2,8 @@
 //! unquoted identifier as the errcode value is almost always a typo
 //! for a SQLSTATE string literal like `'P0001'` or `'23505'`.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -74,4 +74,3 @@ impl LintRule for Rule {
     }
   }
 }
-

@@ -11,8 +11,22 @@ use dsl_parse::Statement;
 use dsl_resolve::Scope;
 
 const SINGLE_ARG_AGGS: &[&[u8]] = &[
-  b"COUNT", b"SUM", b"AVG", b"MIN", b"MAX", b"BOOL_AND", b"BOOL_OR", b"EVERY", b"BIT_AND", b"BIT_OR", b"STDDEV",
-  b"VARIANCE", b"VAR_POP", b"VAR_SAMP", b"STDDEV_POP", b"STDDEV_SAMP",
+  b"COUNT",
+  b"SUM",
+  b"AVG",
+  b"MIN",
+  b"MAX",
+  b"BOOL_AND",
+  b"BOOL_OR",
+  b"EVERY",
+  b"BIT_AND",
+  b"BIT_OR",
+  b"STDDEV",
+  b"VARIANCE",
+  b"VAR_POP",
+  b"VAR_SAMP",
+  b"STDDEV_POP",
+  b"STDDEV_SAMP",
 ];
 
 pub struct Rule;
@@ -49,7 +63,8 @@ impl LintRule for Rule {
         out.push(Diagnostic {
           code: "sql755",
           severity: Severity::Error,
-          message: "a single-argument aggregate can't take multiple DISTINCT expressions -- use count(DISTINCT (a, b))".into(),
+          message: "a single-argument aggregate can't take multiple DISTINCT expressions -- use count(DISTINCT (a, b))"
+            .into(),
           range: crate::range_at(start + comma, start + comma + 1),
         });
       }

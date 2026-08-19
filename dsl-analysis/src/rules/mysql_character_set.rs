@@ -49,19 +49,13 @@ impl LintRule for Rule {
     // CHARACTER SET (two words; avoids CHARACTER VARYING)
     let mut i = 0usize;
     while i + 9 <= n {
-      if &ub[i..i + 9] == b"CHARACTER"
-        && (i == 0 || !is_word(ub[i - 1] as char))
-      {
+      if &ub[i..i + 9] == b"CHARACTER" && (i == 0 || !is_word(ub[i - 1] as char)) {
         let mut j = i + 9;
         let ws_start = j;
         while j < n && ub[j].is_ascii_whitespace() {
           j += 1;
         }
-        if j > ws_start
-          && j + 3 <= n
-          && &ub[j..j + 3] == b"SET"
-          && ub.get(j + 3).is_none_or(|&b| !is_word(b as char))
-        {
+        if j > ws_start && j + 3 <= n && &ub[j..j + 3] == b"SET" && ub.get(j + 3).is_none_or(|&b| !is_word(b as char)) {
           out.push(Diagnostic {
             code: "sql616",
             severity: Severity::Error,

@@ -33,9 +33,7 @@ impl LintRule for Rule {
     let mut i = 0usize;
     while i + 4 <= n {
       // Word-bounded NULL.
-      if &ub[i..i + 4] != b"NULL"
-        || (i > 0 && is_word(ub[i - 1] as char))
-        || (i + 4 < n && is_word(ub[i + 4] as char))
+      if &ub[i..i + 4] != b"NULL" || (i > 0 && is_word(ub[i - 1] as char)) || (i + 4 < n && is_word(ub[i + 4] as char))
       {
         i += 1;
         continue;
@@ -45,26 +43,24 @@ impl LintRule for Rule {
       while j < n && bytes[j].is_ascii_whitespace() {
         j += 1;
       }
-      let (is_not_in, after_op) = if j + 3 <= n
-        && &ub[j..j + 3] == b"NOT"
-        && (j + 3 == n || !is_word(ub[j + 3] as char))
-      {
-        let mut k = j + 3;
-        while k < n && bytes[k].is_ascii_whitespace() {
-          k += 1;
-        }
-        if k + 2 <= n && &ub[k..k + 2] == b"IN" && (k + 2 == n || !is_word(ub[k + 2] as char)) {
-          (true, k + 2)
+      let (is_not_in, after_op) =
+        if j + 3 <= n && &ub[j..j + 3] == b"NOT" && (j + 3 == n || !is_word(ub[j + 3] as char)) {
+          let mut k = j + 3;
+          while k < n && bytes[k].is_ascii_whitespace() {
+            k += 1;
+          }
+          if k + 2 <= n && &ub[k..k + 2] == b"IN" && (k + 2 == n || !is_word(ub[k + 2] as char)) {
+            (true, k + 2)
+          } else {
+            i += 1;
+            continue;
+          }
+        } else if j + 2 <= n && &ub[j..j + 2] == b"IN" && (j + 2 == n || !is_word(ub[j + 2] as char)) {
+          (false, j + 2)
         } else {
           i += 1;
           continue;
-        }
-      } else if j + 2 <= n && &ub[j..j + 2] == b"IN" && (j + 2 == n || !is_word(ub[j + 2] as char)) {
-        (false, j + 2)
-      } else {
-        i += 1;
-        continue;
-      };
+        };
       // After IN must come `(` (after optional whitespace).
       let mut k = after_op;
       while k < n && bytes[k].is_ascii_whitespace() {

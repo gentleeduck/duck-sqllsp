@@ -104,6 +104,7 @@ fn sql800_null_only_handler() {
 
 #[test]
 fn sql800_quiet_with_real_handling() {
-  let d = diags("DO $$ BEGIN RAISE EXCEPTION 'test'; EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'caught: %', SQLERRM; END; $$;");
+  let d =
+    diags("DO $$ BEGIN RAISE EXCEPTION 'test'; EXCEPTION WHEN OTHERS THEN RAISE NOTICE 'caught: %', SQLERRM; END; $$;");
   assert!(!d.iter().any(|x| x.code == "sql800"));
 }

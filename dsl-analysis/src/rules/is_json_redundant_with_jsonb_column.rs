@@ -36,7 +36,10 @@ impl LintRule for Rule {
         continue;
       }
       let after_json = skip_ws(bytes, after + 4);
-      if word_at(bytes, after_json, b"OBJECT") || word_at(bytes, after_json, b"ARRAY") || word_at(bytes, after_json, b"SCALAR") {
+      if word_at(bytes, after_json, b"OBJECT")
+        || word_at(bytes, after_json, b"ARRAY")
+        || word_at(bytes, after_json, b"SCALAR")
+      {
         i = rel + 2;
         continue;
       }

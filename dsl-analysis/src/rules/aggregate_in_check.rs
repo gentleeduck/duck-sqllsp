@@ -12,9 +12,27 @@ use dsl_parse::Statement;
 use dsl_resolve::Scope;
 
 const AGGREGATES: &[&str] = &[
-  "count", "sum", "avg", "min", "max", "array_agg", "string_agg", "json_agg", "jsonb_agg", "bool_and",
-  "bool_or", "every", "stddev", "stddev_pop", "stddev_samp", "variance", "var_pop", "var_samp", "bit_and",
-  "bit_or", "corr",
+  "count",
+  "sum",
+  "avg",
+  "min",
+  "max",
+  "array_agg",
+  "string_agg",
+  "json_agg",
+  "jsonb_agg",
+  "bool_and",
+  "bool_or",
+  "every",
+  "stddev",
+  "stddev_pop",
+  "stddev_samp",
+  "variance",
+  "var_pop",
+  "var_samp",
+  "bit_and",
+  "bit_or",
+  "corr",
 ];
 
 fn close_of(b: &[u8], open: usize) -> Option<usize> {
@@ -28,8 +46,8 @@ fn close_of(b: &[u8], open: usize) -> Option<usize> {
         if depth == 0 {
           return Some(i);
         }
-      }
-      _ => {}
+      },
+      _ => {},
     }
     i += 1;
   }
@@ -93,7 +111,9 @@ impl LintRule for Rule {
             out.push(Diagnostic {
               code: "sql653",
               severity: Severity::Error,
-              message: format!("aggregate `{agg}` in a CHECK constraint -- PG forbids this (42803); use a trigger for cross-row rules"),
+              message: format!(
+                "aggregate `{agg}` in a CHECK constraint -- PG forbids this (42803); use a trigger for cross-row rules"
+              ),
               range: crate::range_at(start + at, start + at + agg.len()),
             });
           }

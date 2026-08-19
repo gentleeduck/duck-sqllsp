@@ -3,9 +3,9 @@
 //! the fact that some rows had no opinion. Suggest COALESCE(col, false)
 //! or an explicit IS NULL filter.
 
+use crate::textutil::is_word;
 use crate::typing::column_nullable;
 use crate::{Diagnostic, LintRule, Severity};
-use crate::textutil::is_word;
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -63,7 +63,6 @@ impl LintRule for Rule {
     }
   }
 }
-
 
 fn split_dotted(s: &str) -> (Option<String>, String) {
   let s = s.trim().trim_matches('"');

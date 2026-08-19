@@ -35,7 +35,9 @@ impl LintRule for Rule {
           out.push(Diagnostic {
             code: "sql597",
             severity: Severity::Error,
-            message: format!("`{name}` is a MySQL operator -- PostgreSQL uses `~` (case-sensitive) or `~*` (case-insensitive)"),
+            message: format!(
+              "`{name}` is a MySQL operator -- PostgreSQL uses `~` (case-sensitive) or `~*` (case-insensitive)"
+            ),
             range: crate::range_at(start + i, start + i + len),
           });
           i += len;

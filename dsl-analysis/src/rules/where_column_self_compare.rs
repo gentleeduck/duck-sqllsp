@@ -28,7 +28,20 @@ impl LintRule for Rule {
     // Scan each WHERE clause (multiple SELECTs in one statement is
     // rare but possible via subselects -- text-scanner walks them
     // all because find_clause iterates the whole body).
-    let stopwords = ["GROUP BY", "ORDER BY", "LIMIT", "OFFSET", "HAVING", "FOR", "FETCH", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT"];
+    let stopwords = [
+      "GROUP BY",
+      "ORDER BY",
+      "LIMIT",
+      "OFFSET",
+      "HAVING",
+      "FOR",
+      "FETCH",
+      "WINDOW",
+      "RETURNING",
+      "UNION",
+      "INTERSECT",
+      "EXCEPT",
+    ];
     let mut search_from = 0usize;
     let mut emitted: std::collections::HashSet<String> = std::collections::HashSet::new();
     while let Some(rel) = find_clause_starting_at(&bytes_u[search_from..], b"WHERE").map(|p| p + search_from) {

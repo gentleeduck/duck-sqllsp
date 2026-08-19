@@ -95,10 +95,7 @@ fn find_word(ub: &[u8], w: &[u8]) -> bool {
   let n = ub.len();
   let mut i = 0usize;
   while i + m <= n {
-    if &ub[i..i + m] == w
-      && (i == 0 || !is_word(ub[i - 1] as char))
-      && (i + m == n || !is_word(ub[i + m] as char))
-    {
+    if &ub[i..i + m] == w && (i == 0 || !is_word(ub[i - 1] as char)) && (i + m == n || !is_word(ub[i + m] as char)) {
       return true;
     }
     i += 1;

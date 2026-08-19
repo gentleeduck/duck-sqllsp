@@ -28,7 +28,20 @@ impl LintRule for Rule {
     let upper = cleaned.to_ascii_uppercase();
     let ub = upper.as_bytes();
     let bytes = cleaned.as_bytes();
-    let stopwords = ["GROUP BY", "ORDER BY", "HAVING", "LIMIT", "OFFSET", "FOR", "FETCH", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT"];
+    let stopwords = [
+      "GROUP BY",
+      "ORDER BY",
+      "HAVING",
+      "LIMIT",
+      "OFFSET",
+      "FOR",
+      "FETCH",
+      "WINDOW",
+      "RETURNING",
+      "UNION",
+      "INTERSECT",
+      "EXCEPT",
+    ];
     let Some(rel_where) = find_clause(ub, b"WHERE") else { return };
     let pred_start = rel_where + 5;
     let pred_end = find_clause_end(ub, pred_start, &stopwords).min(ub.len());
@@ -37,7 +50,10 @@ impl LintRule for Rule {
     let mut i = pred_start;
     while i + 7 <= pred_end {
       // Match `SIMILAR` at word boundary.
-      if !(&ub[i..i + 7] == b"SIMILAR" && (i == 0 || !is_word(ub[i - 1] as char)) && (i + 7 == ub.len() || !is_word(ub[i + 7] as char))) {
+      if !(&ub[i..i + 7] == b"SIMILAR"
+        && (i == 0 || !is_word(ub[i - 1] as char))
+        && (i + 7 == ub.len() || !is_word(ub[i + 7] as char)))
+      {
         i += 1;
         continue;
       }
@@ -56,11 +72,12 @@ impl LintRule for Rule {
       while prev > pred_start && ub[prev - 1].is_ascii_whitespace() {
         prev -= 1;
       }
-      let (op_text, op_start) = if prev >= 3 && &ub[prev - 3..prev] == b"NOT" && (prev == 3 || !is_word(ub[prev - 4] as char)) {
-        ("NOT SIMILAR TO".to_string(), prev - 3)
-      } else {
-        ("SIMILAR TO".to_string(), i)
-      };
+      let (op_text, op_start) =
+        if prev >= 3 && &ub[prev - 3..prev] == b"NOT" && (prev == 3 || !is_word(ub[prev - 4] as char)) {
+          ("NOT SIMILAR TO".to_string(), prev - 3)
+        } else {
+          ("SIMILAR TO".to_string(), i)
+        };
       // LHS: walk back from op_start over ws + ident.
       let mut l = op_start;
       while l > pred_start && bytes[l - 1].is_ascii_whitespace() {

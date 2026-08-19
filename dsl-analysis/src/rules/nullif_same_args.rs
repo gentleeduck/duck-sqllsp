@@ -1,7 +1,7 @@
 //! sql085: `NULLIF(x, x)` always returns NULL -- pointless. Error.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -108,4 +108,3 @@ fn split_top_level_commas(s: &str) -> Vec<String> {
   out.push(s[start..].to_string());
   out
 }
-

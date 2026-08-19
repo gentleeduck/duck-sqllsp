@@ -3,8 +3,8 @@
 //! Suggest `UNIQUE NULLS NOT DISTINCT` (PG 15+) or making the column
 //! `NOT NULL`.
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -211,4 +211,3 @@ fn parse_columns(body: &str) -> Vec<(String, bool)> {
   }
   out
 }
-

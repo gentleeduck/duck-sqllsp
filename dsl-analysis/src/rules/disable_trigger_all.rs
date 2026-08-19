@@ -25,7 +25,9 @@ impl LintRule for Rule {
       out.push(Diagnostic {
         code: "sql576",
         severity: Severity::Warning,
-        message: "DISABLE TRIGGER ALL also disables foreign-key enforcement -- use DISABLE TRIGGER USER to keep FK checks".into(),
+        message:
+          "DISABLE TRIGGER ALL also disables foreign-key enforcement -- use DISABLE TRIGGER USER to keep FK checks"
+            .into(),
         range: crate::range_at(start + at, start + at + 7),
       });
     }

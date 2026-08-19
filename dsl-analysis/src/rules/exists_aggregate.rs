@@ -12,8 +12,22 @@ use dsl_parse::Statement;
 use dsl_resolve::Scope;
 
 const AGGS: &[&[u8]] = &[
-  b"COUNT", b"SUM", b"AVG", b"MIN", b"MAX", b"BOOL_AND", b"BOOL_OR", b"EVERY", b"BIT_AND", b"BIT_OR", b"STRING_AGG",
-  b"ARRAY_AGG", b"JSON_AGG", b"JSONB_AGG", b"STDDEV", b"VARIANCE",
+  b"COUNT",
+  b"SUM",
+  b"AVG",
+  b"MIN",
+  b"MAX",
+  b"BOOL_AND",
+  b"BOOL_OR",
+  b"EVERY",
+  b"BIT_AND",
+  b"BIT_OR",
+  b"STRING_AGG",
+  b"ARRAY_AGG",
+  b"JSON_AGG",
+  b"JSONB_AGG",
+  b"STDDEV",
+  b"VARIANCE",
 ];
 
 pub struct Rule;
@@ -52,7 +66,8 @@ impl LintRule for Rule {
           out.push(Diagnostic {
             code: "sql735",
             severity: Severity::Warning,
-            message: "EXISTS over a bare-aggregate subquery is always true -- the aggregate always returns one row".into(),
+            message: "EXISTS over a bare-aggregate subquery is always true -- the aggregate always returns one row"
+              .into(),
             range: crate::range_at(start + i, start + a),
           });
         }

@@ -218,11 +218,7 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
   let estimate_lookup: BTreeMap<(String, String), f64> = row_estimates
     .into_iter()
     .map(|(s, n, reltuples, live)| {
-      let chosen = if reltuples > 0.0 {
-        reltuples as f64
-      } else {
-        live.map(|v| v as f64).unwrap_or(0.0)
-      };
+      let chosen = if reltuples > 0.0 { reltuples as f64 } else { live.map(|v| v as f64).unwrap_or(0.0) };
       ((s, n), chosen)
     })
     .collect();
@@ -265,7 +261,8 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
       row_estimate: estimate_lookup.get(&(schema_name.clone(), table_name.clone())).copied(),
       owner: owner_lookup.get(&(schema_name.clone(), table_name.clone())).cloned(),
       definition: None,
-      strict: false, options: None,
+      strict: false,
+      options: None,
     });
     table_index.insert((schema_name, table_name), (entry.name.clone(), idx));
   }
@@ -352,14 +349,7 @@ pub async fn run(pool: &PgPool, spec: &ConnectionSpec) -> Result<Catalog, Driver
         && let Some(s) = schemas.get_mut(&schema)
         && let Some(t) = s.tables.get_mut(*idx)
       {
-        t.constraints.push(Constraint {
-          name,
-          kind,
-          columns: cols,
-          references,
-          definition: check_expr,
-          inline: false,
-        });
+        t.constraints.push(Constraint { name, kind, columns: cols, references, definition: check_expr, inline: false });
       }
     }
   }

@@ -28,7 +28,20 @@ impl LintRule for Rule {
     let cleaned = crate::textutil::strip_noise_full(raw);
     let upper = cleaned.to_ascii_uppercase();
     let bytes_u = upper.as_bytes();
-    let stopwords = ["GROUP BY", "ORDER BY", "LIMIT", "OFFSET", "HAVING", "FOR", "FETCH", "WINDOW", "RETURNING", "UNION", "INTERSECT", "EXCEPT"];
+    let stopwords = [
+      "GROUP BY",
+      "ORDER BY",
+      "LIMIT",
+      "OFFSET",
+      "HAVING",
+      "FOR",
+      "FETCH",
+      "WINDOW",
+      "RETURNING",
+      "UNION",
+      "INTERSECT",
+      "EXCEPT",
+    ];
     let Some(rel_where) = find_clause(bytes_u, b"WHERE") else {
       return;
     };
@@ -97,7 +110,12 @@ fn strip_not_prefix(s: &str) -> (bool, &str) {
 }
 
 fn canon(s: &str) -> String {
-  s.trim().trim_matches(|c: char| c == '(' || c == ')' || c.is_whitespace()).split_whitespace().collect::<Vec<_>>().join(" ").to_ascii_lowercase()
+  s.trim()
+    .trim_matches(|c: char| c == '(' || c == ')' || c.is_whitespace())
+    .split_whitespace()
+    .collect::<Vec<_>>()
+    .join(" ")
+    .to_ascii_lowercase()
 }
 
 fn split_top_level_or(s: &str) -> Vec<String> {

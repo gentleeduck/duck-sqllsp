@@ -2,8 +2,8 @@
 //! function reads from `t.col` but no `LATERAL` keyword. PG rejects:
 //! "missing FROM-clause entry for table t".
 
-use crate::{Diagnostic, LintRule, Severity};
 use crate::textutil::is_word;
+use crate::{Diagnostic, LintRule, Severity};
 use dsl_catalog::Catalog;
 use dsl_parse::Statement;
 use dsl_resolve::Scope;
@@ -109,4 +109,3 @@ impl LintRule for Rule {
     }
   }
 }
-

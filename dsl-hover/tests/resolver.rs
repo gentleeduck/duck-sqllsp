@@ -32,7 +32,10 @@ fn cat() -> Catalog {
     policies: vec![],
     comment: None,
     row_estimate: None,
-    owner: None, definition: None, strict: false, options: None,
+    owner: None,
+    definition: None,
+    strict: false,
+    options: None,
   };
   Catalog {
     version: CATALOG_VERSION,
@@ -458,7 +461,22 @@ fn sweep_keywords_replication() {
 
 #[test]
 fn sweep_types_pseudo() {
-  for t in ["ANY", "ANYARRAY", "ANYELEMENT", "ANYENUM", "ANYRANGE", "VOID", "UNKNOWN", "INTERNAL", "OPAQUE", "CSTRING", "RECORD", "TRIGGER", "EVENT_TRIGGER", "JSONPATH"] {
+  for t in [
+    "ANY",
+    "ANYARRAY",
+    "ANYELEMENT",
+    "ANYENUM",
+    "ANYRANGE",
+    "VOID",
+    "UNKNOWN",
+    "INTERNAL",
+    "OPAQUE",
+    "CSTRING",
+    "RECORD",
+    "TRIGGER",
+    "EVENT_TRIGGER",
+    "JSONPATH",
+  ] {
     assert_known(t);
   }
 }
@@ -472,7 +490,8 @@ fn sweep_types_reg_family() {
 
 #[test]
 fn sweep_types_standard_time_spellings() {
-  for t in ["TIME WITH TIME ZONE", "TIME WITHOUT TIME ZONE", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITHOUT TIME ZONE"] {
+  for t in ["TIME WITH TIME ZONE", "TIME WITHOUT TIME ZONE", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITHOUT TIME ZONE"]
+  {
     assert_known(t);
   }
 }
@@ -485,24 +504,40 @@ fn sweep_fns_localtime_localtimestamp() {
 
 #[test]
 fn sweep_fns_trig_degrees_r93() {
-  for f in ["sind","cosd","tand","asind","acosd","atand","atan2d"] { assert_known(f); }
+  for f in ["sind", "cosd", "tand", "asind", "acosd", "atand", "atan2d"] {
+    assert_known(f);
+  }
 }
 
 #[test]
 fn sweep_fns_trig_hyperbolic_r93() {
-  for f in ["sinh","cosh","tanh","asinh","acosh","atanh"] { assert_known(f); }
+  for f in ["sinh", "cosh", "tanh", "asinh", "acosh", "atanh"] {
+    assert_known(f);
+  }
 }
 
 #[test]
 fn sweep_fns_inet_r93() {
-  for f in ["abbrev","broadcast","family","hostmask","masklen","inet_merge","inet_same_family","inet_client_addr","inet_server_addr"] {
+  for f in [
+    "abbrev",
+    "broadcast",
+    "family",
+    "hostmask",
+    "masklen",
+    "inet_merge",
+    "inet_same_family",
+    "inet_client_addr",
+    "inet_server_addr",
+  ] {
     assert_known(f);
   }
 }
 
 #[test]
 fn sweep_fns_pgcrypto_r93() {
-  for f in ["pgp_sym_encrypt","pgp_sym_decrypt","pgp_pub_encrypt","pgp_pub_decrypt"] { assert_known(f); }
+  for f in ["pgp_sym_encrypt", "pgp_sym_decrypt", "pgp_pub_encrypt", "pgp_pub_decrypt"] {
+    assert_known(f);
+  }
 }
 
 #[test]
@@ -970,7 +1005,24 @@ fn r146_sweep_kw_copy() {
 
 #[test]
 fn r146_sweep_kw_grant_revoke_extras() {
-  for kw in ["GRANT", "REVOKE", "PRIVILEGES", "PUBLIC", "USAGE", "EXECUTE", "TRIGGER", "TRUNCATE", "REFERENCES", "CONNECT", "TEMPORARY", "CREATE", "DELETE", "INSERT", "UPDATE", "SELECT"] {
+  for kw in [
+    "GRANT",
+    "REVOKE",
+    "PRIVILEGES",
+    "PUBLIC",
+    "USAGE",
+    "EXECUTE",
+    "TRIGGER",
+    "TRUNCATE",
+    "REFERENCES",
+    "CONNECT",
+    "TEMPORARY",
+    "CREATE",
+    "DELETE",
+    "INSERT",
+    "UPDATE",
+    "SELECT",
+  ] {
     let _ = resolve(kw, &Catalog::default());
   }
 }
@@ -1005,7 +1057,16 @@ fn r146_sweep_fns_pg_introspect() {
 
 #[test]
 fn r147_sweep_kw_pg16_json_table() {
-  for kw in ["JSON_TABLE", "JSON_VALUE", "JSON_QUERY", "JSON_EXISTS", "JSON_OBJECT", "JSON_ARRAY", "JSON_OBJECTAGG", "JSON_ARRAYAGG"] {
+  for kw in [
+    "JSON_TABLE",
+    "JSON_VALUE",
+    "JSON_QUERY",
+    "JSON_EXISTS",
+    "JSON_OBJECT",
+    "JSON_ARRAY",
+    "JSON_OBJECTAGG",
+    "JSON_ARRAYAGG",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing PG16+ kw {kw}");
   }
@@ -1013,7 +1074,17 @@ fn r147_sweep_kw_pg16_json_table() {
 
 #[test]
 fn r147_sweep_kw_pg16_misc() {
-  for kw in ["IS JSON", "NULLS NOT DISTINCT", "INCLUDING", "EXCLUDING", "ON_ERROR", "LOG_VERBOSITY", "BUFFER_USAGE_LIMIT", "PROCESS_TOAST", "PROCESS_MAIN"] {
+  for kw in [
+    "IS JSON",
+    "NULLS NOT DISTINCT",
+    "INCLUDING",
+    "EXCLUDING",
+    "ON_ERROR",
+    "LOG_VERBOSITY",
+    "BUFFER_USAGE_LIMIT",
+    "PROCESS_TOAST",
+    "PROCESS_MAIN",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing kw {kw}");
   }
@@ -1029,7 +1100,14 @@ fn r148_sweep_fns_range_ops() {
 
 #[test]
 fn r148_sweep_fns_pg_admin() {
-  for f in ["pg_notify", "pg_listening_channels", "pg_tablespace_size", "pg_size_bytes", "pg_column_size", "pg_relation_filenode"] {
+  for f in [
+    "pg_notify",
+    "pg_listening_channels",
+    "pg_tablespace_size",
+    "pg_size_bytes",
+    "pg_column_size",
+    "pg_relation_filenode",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing fn {f}");
   }
@@ -1045,7 +1123,8 @@ fn r148_sweep_fns_xact() {
 
 #[test]
 fn r149_sweep_fns_pg_admin_session() {
-  for f in ["pg_blocking_pids", "pg_backend_pid", "pg_my_temp_schema", "pg_postmaster_start_time", "pg_conf_load_time"] {
+  for f in ["pg_blocking_pids", "pg_backend_pid", "pg_my_temp_schema", "pg_postmaster_start_time", "pg_conf_load_time"]
+  {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing fn {f}");
   }
@@ -1069,7 +1148,14 @@ fn r149_sweep_fns_commit_xact() {
 
 #[test]
 fn r150_sweep_fns_replication_slot() {
-  for f in ["pg_create_logical_replication_slot", "pg_create_physical_replication_slot", "pg_drop_replication_slot", "pg_replication_slot_advance", "pg_logical_slot_get_changes", "pg_logical_emit_message"] {
+  for f in [
+    "pg_create_logical_replication_slot",
+    "pg_create_physical_replication_slot",
+    "pg_drop_replication_slot",
+    "pg_replication_slot_advance",
+    "pg_logical_slot_get_changes",
+    "pg_logical_emit_message",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing fn {f}");
   }
@@ -1077,7 +1163,17 @@ fn r150_sweep_fns_replication_slot() {
 
 #[test]
 fn r150_sweep_fns_wal() {
-  for f in ["pg_current_wal_lsn", "pg_current_wal_insert_lsn", "pg_current_wal_flush_lsn", "pg_last_wal_receive_lsn", "pg_last_wal_replay_lsn", "pg_switch_wal", "pg_wal_lsn_diff", "pg_walfile_name", "pg_walfile_name_offset"] {
+  for f in [
+    "pg_current_wal_lsn",
+    "pg_current_wal_insert_lsn",
+    "pg_current_wal_flush_lsn",
+    "pg_last_wal_receive_lsn",
+    "pg_last_wal_replay_lsn",
+    "pg_switch_wal",
+    "pg_wal_lsn_diff",
+    "pg_walfile_name",
+    "pg_walfile_name_offset",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing fn {f}");
   }
@@ -1101,7 +1197,20 @@ fn r151_sweep_fns_array() {
 
 #[test]
 fn r151_sweep_fns_stats_regression() {
-  for f in ["corr", "covar_pop", "covar_samp", "regr_avgx", "regr_avgy", "regr_count", "regr_intercept", "regr_r2", "regr_slope", "regr_sxx", "regr_sxy", "regr_syy"] {
+  for f in [
+    "corr",
+    "covar_pop",
+    "covar_samp",
+    "regr_avgx",
+    "regr_avgy",
+    "regr_count",
+    "regr_intercept",
+    "regr_r2",
+    "regr_slope",
+    "regr_sxx",
+    "regr_sxy",
+    "regr_syy",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1133,7 +1242,9 @@ fn r151_sweep_fns_string_set_returning() {
 
 #[test]
 fn r152_sweep_fns_session_misc() {
-  for f in ["current_role", "current_query", "current_catalog", "pg_current_logfile", "inet_client_port", "inet_server_port"] {
+  for f in
+    ["current_role", "current_query", "current_catalog", "pg_current_logfile", "inet_client_port", "inet_server_port"]
+  {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1141,7 +1252,14 @@ fn r152_sweep_fns_session_misc() {
 
 #[test]
 fn r152_sweep_fns_privilege_table() {
-  for f in ["has_table_privilege", "has_schema_privilege", "has_database_privilege", "has_column_privilege", "has_function_privilege", "has_any_column_privilege"] {
+  for f in [
+    "has_table_privilege",
+    "has_schema_privilege",
+    "has_database_privilege",
+    "has_column_privilege",
+    "has_function_privilege",
+    "has_any_column_privilege",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1149,7 +1267,16 @@ fn r152_sweep_fns_privilege_table() {
 
 #[test]
 fn r152_sweep_fns_privilege_other() {
-  for f in ["has_sequence_privilege", "has_tablespace_privilege", "has_foreign_data_wrapper_privilege", "has_language_privilege", "has_server_privilege", "has_type_privilege", "pg_has_role", "row_security_active"] {
+  for f in [
+    "has_sequence_privilege",
+    "has_tablespace_privilege",
+    "has_foreign_data_wrapper_privilege",
+    "has_language_privilege",
+    "has_server_privilege",
+    "has_type_privilege",
+    "pg_has_role",
+    "row_security_active",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1157,7 +1284,15 @@ fn r152_sweep_fns_privilege_other() {
 
 #[test]
 fn r153_sweep_fns_partition_catalog() {
-  for f in ["pg_get_partition_constraintdef", "pg_get_partkeydef", "pg_partition_root", "pg_partition_ancestors", "pg_partition_tree", "pg_relation_is_publishable", "pg_get_replica_identity_index"] {
+  for f in [
+    "pg_get_partition_constraintdef",
+    "pg_get_partkeydef",
+    "pg_partition_root",
+    "pg_partition_ancestors",
+    "pg_partition_tree",
+    "pg_relation_is_publishable",
+    "pg_get_replica_identity_index",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing fn {f}");
   }
@@ -1173,7 +1308,13 @@ fn r153_sweep_fns_object_address() {
 
 #[test]
 fn r153_sweep_fns_pg_misc() {
-  for f in ["pg_locks", "pg_stat_get_backend_idset", "pg_get_ruledef", "pg_get_function_identity_arguments", "pg_get_publication_tables"] {
+  for f in [
+    "pg_locks",
+    "pg_stat_get_backend_idset",
+    "pg_get_ruledef",
+    "pg_get_function_identity_arguments",
+    "pg_get_publication_tables",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing fn {f}");
   }
@@ -1261,7 +1402,9 @@ fn r156_sweep_kw_with_data_using_index() {
 
 #[test]
 fn r157_sweep_kw_fk_on_delete() {
-  for kw in ["ON DELETE CASCADE", "ON DELETE SET NULL", "ON DELETE SET DEFAULT", "ON DELETE RESTRICT", "ON DELETE NO ACTION"] {
+  for kw in
+    ["ON DELETE CASCADE", "ON DELETE SET NULL", "ON DELETE SET DEFAULT", "ON DELETE RESTRICT", "ON DELETE NO ACTION"]
+  {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1293,7 +1436,13 @@ fn r157_sweep_kw_fk_match() {
 
 #[test]
 fn r157_sweep_kw_replica_identity() {
-  for kw in ["REPLICA IDENTITY", "REPLICA IDENTITY FULL", "REPLICA IDENTITY NOTHING", "REPLICA IDENTITY USING INDEX", "REPLICA IDENTITY DEFAULT"] {
+  for kw in [
+    "REPLICA IDENTITY",
+    "REPLICA IDENTITY FULL",
+    "REPLICA IDENTITY NOTHING",
+    "REPLICA IDENTITY USING INDEX",
+    "REPLICA IDENTITY DEFAULT",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1301,7 +1450,9 @@ fn r157_sweep_kw_replica_identity() {
 
 #[test]
 fn r158_sweep_kw_window_frame_bounds() {
-  for kw in ["CURRENT ROW", "UNBOUNDED PRECEDING", "UNBOUNDED FOLLOWING", "RANGE BETWEEN", "ROWS BETWEEN", "GROUPS BETWEEN"] {
+  for kw in
+    ["CURRENT ROW", "UNBOUNDED PRECEDING", "UNBOUNDED FOLLOWING", "RANGE BETWEEN", "ROWS BETWEEN", "GROUPS BETWEEN"]
+  {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1333,7 +1484,9 @@ fn r158_sweep_kw_trigger_events_after() {
 
 #[test]
 fn r159_sweep_kw_default_privileges_set() {
-  for kw in ["DEFAULT PRIVILEGES", "SET CONSTRAINTS", "SET ROLE", "SET SESSION AUTHORIZATION", "SET LOCAL", "SET SESSION"] {
+  for kw in
+    ["DEFAULT PRIVILEGES", "SET CONSTRAINTS", "SET ROLE", "SET SESSION AUTHORIZATION", "SET LOCAL", "SET SESSION"]
+  {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1341,7 +1494,14 @@ fn r159_sweep_kw_default_privileges_set() {
 
 #[test]
 fn r159_sweep_kw_commit_chain() {
-  for kw in ["COMMIT AND CHAIN", "ROLLBACK AND CHAIN", "COMMIT AND NO CHAIN", "ROLLBACK AND NO CHAIN", "ROLLBACK TO SAVEPOINT", "RELEASE SAVEPOINT"] {
+  for kw in [
+    "COMMIT AND CHAIN",
+    "ROLLBACK AND CHAIN",
+    "COMMIT AND NO CHAIN",
+    "ROLLBACK AND NO CHAIN",
+    "ROLLBACK TO SAVEPOINT",
+    "RELEASE SAVEPOINT",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1357,7 +1517,16 @@ fn r159_sweep_kw_transaction_modes() {
 
 #[test]
 fn r159_sweep_kw_grant_all() {
-  for kw in ["ALL TABLES", "ALL FUNCTIONS", "ALL PROCEDURES", "ALL SEQUENCES", "ALL ROUTINES", "ALL TYPES", "ALL TABLESPACES", "ALL SCHEMAS"] {
+  for kw in [
+    "ALL TABLES",
+    "ALL FUNCTIONS",
+    "ALL PROCEDURES",
+    "ALL SEQUENCES",
+    "ALL ROUTINES",
+    "ALL TYPES",
+    "ALL TABLESPACES",
+    "ALL SCHEMAS",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1389,7 +1558,18 @@ fn r160_sweep_fns_text_helpers() {
 
 #[test]
 fn r161_sweep_fns_datetime_add_subtract() {
-  for f in ["date_add", "date_subtract", "date_bin", "date_trunc", "date_part", "make_interval", "make_date", "make_time", "make_timestamp", "make_timestamptz"] {
+  for f in [
+    "date_add",
+    "date_subtract",
+    "date_bin",
+    "date_trunc",
+    "date_part",
+    "make_interval",
+    "make_date",
+    "make_time",
+    "make_timestamp",
+    "make_timestamptz",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1397,7 +1577,17 @@ fn r161_sweep_fns_datetime_add_subtract() {
 
 #[test]
 fn r161_sweep_fns_now_variants() {
-  for f in ["now", "current_timestamp", "current_date", "current_time", "clock_timestamp", "statement_timestamp", "transaction_timestamp", "localtimestamp", "localtime"] {
+  for f in [
+    "now",
+    "current_timestamp",
+    "current_date",
+    "current_time",
+    "clock_timestamp",
+    "statement_timestamp",
+    "transaction_timestamp",
+    "localtimestamp",
+    "localtime",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1413,7 +1603,15 @@ fn r161_sweep_fns_justify() {
 
 #[test]
 fn r162_sweep_fns_jsonb_record() {
-  for f in ["jsonb_to_record", "json_to_record", "jsonb_to_recordset", "json_to_recordset", "jsonb_populate_record", "json_populate_record", "jsonb_populate_recordset"] {
+  for f in [
+    "jsonb_to_record",
+    "json_to_record",
+    "jsonb_to_recordset",
+    "json_to_recordset",
+    "jsonb_populate_record",
+    "json_populate_record",
+    "jsonb_populate_recordset",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1421,7 +1619,14 @@ fn r162_sweep_fns_jsonb_record() {
 
 #[test]
 fn r162_sweep_fns_jsonb_ops() {
-  for f in ["jsonb_concat", "jsonb_delete_path", "jsonb_strip_nulls", "jsonb_pretty", "jsonb_object_keys", "jsonb_array_elements"] {
+  for f in [
+    "jsonb_concat",
+    "jsonb_delete_path",
+    "jsonb_strip_nulls",
+    "jsonb_pretty",
+    "jsonb_object_keys",
+    "jsonb_array_elements",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1429,7 +1634,16 @@ fn r162_sweep_fns_jsonb_ops() {
 
 #[test]
 fn r163_sweep_fns_json_operator() {
-  for f in ["json_array_element", "json_array_element_text", "jsonb_array_element", "jsonb_array_element_text", "json_object_field", "json_object_field_text", "jsonb_object_field", "jsonb_object_field_text"] {
+  for f in [
+    "json_array_element",
+    "json_array_element_text",
+    "jsonb_array_element",
+    "jsonb_array_element_text",
+    "json_object_field",
+    "json_object_field_text",
+    "jsonb_object_field",
+    "jsonb_object_field_text",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1445,7 +1659,20 @@ fn r163_sweep_fns_xml_export() {
 
 #[test]
 fn r163_sweep_fns_xml_xpath() {
-  for f in ["xpath", "xpath_exists", "xmltable", "xmlcomment", "xmlconcat", "xmlelement", "xmlexists", "xmlforest", "xmlroot", "xmlserialize", "xmlpi", "xmltext"] {
+  for f in [
+    "xpath",
+    "xpath_exists",
+    "xmltable",
+    "xmlcomment",
+    "xmlconcat",
+    "xmlelement",
+    "xmlexists",
+    "xmlforest",
+    "xmlroot",
+    "xmlserialize",
+    "xmlpi",
+    "xmltext",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1453,7 +1680,18 @@ fn r163_sweep_fns_xml_xpath() {
 
 #[test]
 fn r164_sweep_fns_range_ops() {
-  for f in ["range_contains", "range_overlaps", "range_eq", "range_lt", "range_le", "range_gt", "range_ge", "range_after", "range_before", "range_adjacent"] {
+  for f in [
+    "range_contains",
+    "range_overlaps",
+    "range_eq",
+    "range_lt",
+    "range_le",
+    "range_gt",
+    "range_ge",
+    "range_after",
+    "range_before",
+    "range_adjacent",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1475,7 +1713,10 @@ fn r164_sweep_fns_multirange_misc() {
 
 #[test]
 fn r165_sweep_fns_geometric() {
-  for f in ["area", "diameter", "height", "width", "slope", "center", "distance", "isclosed", "isopen", "npoints", "pclose", "popen", "radius"] {
+  for f in [
+    "area", "diameter", "height", "width", "slope", "center", "distance", "isclosed", "isopen", "npoints", "pclose",
+    "popen", "radius",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1515,7 +1756,9 @@ fn r166_sweep_fns_array_text_conv() {
 
 #[test]
 fn r166_sweep_fns_jsonb_path_query_variants() {
-  for f in ["jsonb_path_query", "jsonb_path_query_array", "jsonb_path_query_first", "jsonb_path_match", "jsonb_path_exists"] {
+  for f in
+    ["jsonb_path_query", "jsonb_path_query_array", "jsonb_path_query_first", "jsonb_path_match", "jsonb_path_exists"]
+  {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1523,7 +1766,21 @@ fn r166_sweep_fns_jsonb_path_query_variants() {
 
 #[test]
 fn r167_sweep_fns_inet_full() {
-  for f in ["set_masklen", "network", "host", "broadcast", "abbrev", "hostmask", "masklen", "netmask", "family", "inet_merge", "inet_same_family", "inet_client_addr", "inet_server_addr"] {
+  for f in [
+    "set_masklen",
+    "network",
+    "host",
+    "broadcast",
+    "abbrev",
+    "hostmask",
+    "masklen",
+    "netmask",
+    "family",
+    "inet_merge",
+    "inet_same_family",
+    "inet_client_addr",
+    "inet_server_addr",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1563,7 +1820,9 @@ fn r167_sweep_fns_array_subscript() {
 
 #[test]
 fn r167_sweep_fns_aggregate_orderedset() {
-  for f in ["mode", "percentile_cont", "percentile_disc", "rank", "dense_rank", "row_number", "percent_rank", "cume_dist"] {
+  for f in
+    ["mode", "percentile_cont", "percentile_disc", "rank", "dense_rank", "row_number", "percent_rank", "cume_dist"]
+  {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1587,7 +1846,9 @@ fn r168_sweep_kw_select_clauses() {
 
 #[test]
 fn r168_sweep_kw_constraint_clauses() {
-  for kw in ["PRIMARY", "FOREIGN", "REFERENCES", "UNIQUE", "CHECK", "DEFAULT", "GENERATED", "IDENTITY", "STORED", "NULL"] {
+  for kw in
+    ["PRIMARY", "FOREIGN", "REFERENCES", "UNIQUE", "CHECK", "DEFAULT", "GENERATED", "IDENTITY", "STORED", "NULL"]
+  {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1595,7 +1856,22 @@ fn r168_sweep_kw_constraint_clauses() {
 
 #[test]
 fn r168_sweep_kw_ddl_essentials() {
-  for kw in ["CREATE", "ALTER", "DROP", "RENAME", "TRUNCATE", "COMMENT", "TABLE", "INDEX", "VIEW", "FUNCTION", "PROCEDURE", "TRIGGER", "TYPE", "DOMAIN"] {
+  for kw in [
+    "CREATE",
+    "ALTER",
+    "DROP",
+    "RENAME",
+    "TRUNCATE",
+    "COMMENT",
+    "TABLE",
+    "INDEX",
+    "VIEW",
+    "FUNCTION",
+    "PROCEDURE",
+    "TRIGGER",
+    "TYPE",
+    "DOMAIN",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1619,7 +1895,20 @@ fn r168_sweep_kw_predicate_essentials() {
 
 #[test]
 fn r169_sweep_kw_role_clauses() {
-  for kw in ["LOGIN", "NOLOGIN", "SUPERUSER", "NOSUPERUSER", "CREATEDB", "NOCREATEDB", "CREATEROLE", "NOCREATEROLE", "REPLICATION", "NOREPLICATION", "BYPASSRLS", "NOBYPASSRLS"] {
+  for kw in [
+    "LOGIN",
+    "NOLOGIN",
+    "SUPERUSER",
+    "NOSUPERUSER",
+    "CREATEDB",
+    "NOCREATEDB",
+    "CREATEROLE",
+    "NOCREATEROLE",
+    "REPLICATION",
+    "NOREPLICATION",
+    "BYPASSRLS",
+    "NOBYPASSRLS",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1627,7 +1916,19 @@ fn r169_sweep_kw_role_clauses() {
 
 #[test]
 fn r169_sweep_kw_grant_targets() {
-  for kw in ["TABLE", "SEQUENCE", "FUNCTION", "PROCEDURE", "ROUTINE", "SCHEMA", "TYPE", "DOMAIN", "TABLESPACE", "DATABASE", "LANGUAGE"] {
+  for kw in [
+    "TABLE",
+    "SEQUENCE",
+    "FUNCTION",
+    "PROCEDURE",
+    "ROUTINE",
+    "SCHEMA",
+    "TYPE",
+    "DOMAIN",
+    "TABLESPACE",
+    "DATABASE",
+    "LANGUAGE",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1659,7 +1960,15 @@ fn r169_sweep_kw_index_methods_names() {
 
 #[test]
 fn r170_sweep_kw_discard_reset() {
-  for kw in ["DISCARD ALL", "DISCARD PLANS", "DISCARD SEQUENCES", "DISCARD TEMP", "DISCARD TEMPORARY", "RESET ALL", "RESET ROLE"] {
+  for kw in [
+    "DISCARD ALL",
+    "DISCARD PLANS",
+    "DISCARD SEQUENCES",
+    "DISCARD TEMP",
+    "DISCARD TEMPORARY",
+    "RESET ALL",
+    "RESET ROLE",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1675,7 +1984,18 @@ fn r170_sweep_kw_ts_helpers() {
 
 #[test]
 fn r170_sweep_fns_ts_phrase() {
-  for f in ["to_tsvector", "to_tsquery", "phraseto_tsquery", "plainto_tsquery", "websearch_to_tsquery", "ts_rank", "ts_rank_cd", "ts_headline", "setweight", "strip"] {
+  for f in [
+    "to_tsvector",
+    "to_tsquery",
+    "phraseto_tsquery",
+    "plainto_tsquery",
+    "websearch_to_tsquery",
+    "ts_rank",
+    "ts_rank_cd",
+    "ts_headline",
+    "setweight",
+    "strip",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1747,7 +2067,26 @@ fn r172_sweep_fns_string_position_ops() {
 
 #[test]
 fn r172_sweep_fns_math_full() {
-  for f in ["abs", "ceil", "ceiling", "floor", "round", "trunc", "mod", "div", "gcd", "lcm", "factorial", "power", "exp", "ln", "log", "log10", "sqrt", "cbrt"] {
+  for f in [
+    "abs",
+    "ceil",
+    "ceiling",
+    "floor",
+    "round",
+    "trunc",
+    "mod",
+    "div",
+    "gcd",
+    "lcm",
+    "factorial",
+    "power",
+    "exp",
+    "ln",
+    "log",
+    "log10",
+    "sqrt",
+    "cbrt",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1787,7 +2126,14 @@ fn r173_sweep_fns_pg16_dates() {
 
 #[test]
 fn r173_sweep_fns_jsonb_records() {
-  for f in ["jsonb_to_record", "jsonb_to_recordset", "jsonb_populate_record", "jsonb_populate_recordset", "jsonb_concat", "jsonb_delete_path"] {
+  for f in [
+    "jsonb_to_record",
+    "jsonb_to_recordset",
+    "jsonb_populate_record",
+    "jsonb_populate_recordset",
+    "jsonb_concat",
+    "jsonb_delete_path",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1795,7 +2141,19 @@ fn r173_sweep_fns_jsonb_records() {
 
 #[test]
 fn r173_sweep_fns_xml_basics() {
-  for f in ["xmlelement", "xmlforest", "xmlconcat", "xmlroot", "xmlserialize", "xmlpi", "xmltext", "xmlcomment", "xmltable", "xpath", "xpath_exists"] {
+  for f in [
+    "xmlelement",
+    "xmlforest",
+    "xmlconcat",
+    "xmlroot",
+    "xmlserialize",
+    "xmlpi",
+    "xmltext",
+    "xmlcomment",
+    "xmltable",
+    "xpath",
+    "xpath_exists",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1803,7 +2161,18 @@ fn r173_sweep_fns_xml_basics() {
 
 #[test]
 fn r173_sweep_fns_range_predicate() {
-  for f in ["range_contains", "range_overlaps", "range_eq", "range_lt", "range_gt", "range_adjacent", "range_after", "range_before", "lower_inf", "upper_inf"] {
+  for f in [
+    "range_contains",
+    "range_overlaps",
+    "range_eq",
+    "range_lt",
+    "range_gt",
+    "range_adjacent",
+    "range_after",
+    "range_before",
+    "lower_inf",
+    "upper_inf",
+  ] {
     let md = resolve(f, &Catalog::default());
     assert!(md.is_some(), "missing {f}");
   }
@@ -1827,7 +2196,16 @@ fn r173_sweep_fns_xml_helpers_extra() {
 
 #[test]
 fn r174_sweep_kw_ddl_clarifiers() {
-  for kw in ["FOREIGN DATA WRAPPER", "EVENT TRIGGER", "ACCESS METHOD", "USER MAPPING", "FOREIGN TABLE", "TEXT SEARCH", "OWNED BY", "ROW LEVEL SECURITY"] {
+  for kw in [
+    "FOREIGN DATA WRAPPER",
+    "EVENT TRIGGER",
+    "ACCESS METHOD",
+    "USER MAPPING",
+    "FOREIGN TABLE",
+    "TEXT SEARCH",
+    "OWNED BY",
+    "ROW LEVEL SECURITY",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1835,7 +2213,8 @@ fn r174_sweep_kw_ddl_clarifiers() {
 
 #[test]
 fn r174_sweep_kw_alter_column_extras() {
-  for kw in ["SET STORAGE", "SET STATISTICS", "ADD GENERATED", "DROP IDENTITY", "RESTART IDENTITY", "CONTINUE IDENTITY"] {
+  for kw in ["SET STORAGE", "SET STATISTICS", "ADD GENERATED", "DROP IDENTITY", "RESTART IDENTITY", "CONTINUE IDENTITY"]
+  {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1843,7 +2222,9 @@ fn r174_sweep_kw_alter_column_extras() {
 
 #[test]
 fn r174_sweep_kw_function_returns() {
-  for kw in ["RETURNS TABLE", "RETURNS TRIGGER", "RETURNS SETOF", "AS IDENTITY", "BY IDENTITY", "FROM CURRENT", "USING METHOD"] {
+  for kw in
+    ["RETURNS TABLE", "RETURNS TRIGGER", "RETURNS SETOF", "AS IDENTITY", "BY IDENTITY", "FROM CURRENT", "USING METHOD"]
+  {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1851,7 +2232,18 @@ fn r174_sweep_kw_function_returns() {
 
 #[test]
 fn r175_sweep_kw_function_attrs() {
-  for kw in ["LANGUAGE SQL", "LANGUAGE PLPGSQL", "OR REPLACE", "SECURITY DEFINER", "SECURITY INVOKER", "PARALLEL SAFE", "PARALLEL RESTRICTED", "PARALLEL UNSAFE", "RETURNS NULL ON NULL INPUT", "CALLED ON NULL INPUT"] {
+  for kw in [
+    "LANGUAGE SQL",
+    "LANGUAGE PLPGSQL",
+    "OR REPLACE",
+    "SECURITY DEFINER",
+    "SECURITY INVOKER",
+    "PARALLEL SAFE",
+    "PARALLEL RESTRICTED",
+    "PARALLEL UNSAFE",
+    "RETURNS NULL ON NULL INPUT",
+    "CALLED ON NULL INPUT",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1875,7 +2267,16 @@ fn r175_sweep_kw_oracle_compat() {
 
 #[test]
 fn r176_sweep_kw_cast_create() {
-  for kw in ["AS RESTRICT", "AS ASSIGNMENT", "AS IMPLICIT", "AS ENUM", "AS RANGE", "WITH FUNCTION", "WITHOUT FUNCTION", "WITH INOUT"] {
+  for kw in [
+    "AS RESTRICT",
+    "AS ASSIGNMENT",
+    "AS IMPLICIT",
+    "AS ENUM",
+    "AS RANGE",
+    "WITH FUNCTION",
+    "WITHOUT FUNCTION",
+    "WITH INOUT",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1899,7 +2300,8 @@ fn r176_sweep_kw_grant_to_special() {
 
 #[test]
 fn r176_sweep_kw_constraint_timing() {
-  for kw in ["DEFERRABLE INITIALLY DEFERRED", "DEFERRABLE INITIALLY IMMEDIATE", "NOT DEFERRABLE", "VALIDATE CONSTRAINT"] {
+  for kw in ["DEFERRABLE INITIALLY DEFERRED", "DEFERRABLE INITIALLY IMMEDIATE", "NOT DEFERRABLE", "VALIDATE CONSTRAINT"]
+  {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1915,7 +2317,9 @@ fn r176_sweep_kw_oncommit_modes() {
 
 #[test]
 fn r177_sweep_kw_trigger_transition() {
-  for kw in ["OLD TABLE", "NEW TABLE", "OLD AS", "NEW AS", "OLD ROW", "NEW ROW", "TRANSITION", "UPDATE OF", "INSERT OR UPDATE"] {
+  for kw in
+    ["OLD TABLE", "NEW TABLE", "OLD AS", "NEW AS", "OLD ROW", "NEW ROW", "TRANSITION", "UPDATE OF", "INSERT OR UPDATE"]
+  {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1931,7 +2335,14 @@ fn r177_sweep_kw_alter_constraint() {
 
 #[test]
 fn r177_sweep_kw_cursor_view() {
-  for kw in ["WHERE CURRENT OF", "CURRENT OF", "CHECK OPTION", "WITH CHECK OPTION", "WITH LOCAL CHECK OPTION", "WITH CASCADED CHECK OPTION"] {
+  for kw in [
+    "WHERE CURRENT OF",
+    "CURRENT OF",
+    "CHECK OPTION",
+    "WITH CHECK OPTION",
+    "WITH LOCAL CHECK OPTION",
+    "WITH CASCADED CHECK OPTION",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1947,7 +2358,13 @@ fn r178_sweep_kw_instead_of() {
 
 #[test]
 fn r178_sweep_kw_rls_force_set() {
-  for kw in ["FORCE ROW LEVEL SECURITY", "NO FORCE ROW LEVEL SECURITY", "SET CONSTRAINTS DEFERRED", "SET CONSTRAINTS IMMEDIATE", "SET CONSTRAINTS ALL"] {
+  for kw in [
+    "FORCE ROW LEVEL SECURITY",
+    "NO FORCE ROW LEVEL SECURITY",
+    "SET CONSTRAINTS DEFERRED",
+    "SET CONSTRAINTS IMMEDIATE",
+    "SET CONSTRAINTS ALL",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1979,7 +2396,13 @@ fn r178_sweep_kw_for_clauses() {
 
 #[test]
 fn r179_sweep_kw_create_or_replace() {
-  for kw in ["CREATE OR REPLACE FUNCTION", "CREATE OR REPLACE PROCEDURE", "CREATE OR REPLACE VIEW", "CREATE OR REPLACE TRIGGER", "CREATE OR REPLACE RULE"] {
+  for kw in [
+    "CREATE OR REPLACE FUNCTION",
+    "CREATE OR REPLACE PROCEDURE",
+    "CREATE OR REPLACE VIEW",
+    "CREATE OR REPLACE TRIGGER",
+    "CREATE OR REPLACE RULE",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -1995,7 +2418,13 @@ fn r179_sweep_kw_create_index_variants() {
 
 #[test]
 fn r179_sweep_kw_create_relation_kinds() {
-  for kw in ["CREATE TEMP TABLE", "CREATE TEMPORARY TABLE", "CREATE UNLOGGED TABLE", "CREATE FOREIGN TABLE", "CREATE EVENT TRIGGER"] {
+  for kw in [
+    "CREATE TEMP TABLE",
+    "CREATE TEMPORARY TABLE",
+    "CREATE UNLOGGED TABLE",
+    "CREATE FOREIGN TABLE",
+    "CREATE EVENT TRIGGER",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2003,7 +2432,16 @@ fn r179_sweep_kw_create_relation_kinds() {
 
 #[test]
 fn r179_sweep_kw_drop_variants() {
-  for kw in ["DROP INDEX CONCURRENTLY", "DROP CONSTRAINT IF EXISTS", "DROP TABLE IF EXISTS", "DROP INDEX IF EXISTS", "DROP MATERIALIZED VIEW", "DROP FOREIGN TABLE", "DROP EVENT TRIGGER", "DROP ACCESS METHOD"] {
+  for kw in [
+    "DROP INDEX CONCURRENTLY",
+    "DROP CONSTRAINT IF EXISTS",
+    "DROP TABLE IF EXISTS",
+    "DROP INDEX IF EXISTS",
+    "DROP MATERIALIZED VIEW",
+    "DROP FOREIGN TABLE",
+    "DROP EVENT TRIGGER",
+    "DROP ACCESS METHOD",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2011,7 +2449,13 @@ fn r179_sweep_kw_drop_variants() {
 
 #[test]
 fn r180_sweep_kw_alter_table_qualifiers() {
-  for kw in ["ALTER TABLE IF EXISTS", "ALTER TABLE ONLY", "ALTER MATERIALIZED VIEW", "ALTER VIEW IF EXISTS", "ALTER SEQUENCE IF EXISTS"] {
+  for kw in [
+    "ALTER TABLE IF EXISTS",
+    "ALTER TABLE ONLY",
+    "ALTER MATERIALIZED VIEW",
+    "ALTER VIEW IF EXISTS",
+    "ALTER SEQUENCE IF EXISTS",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2019,7 +2463,14 @@ fn r180_sweep_kw_alter_table_qualifiers() {
 
 #[test]
 fn r180_sweep_kw_alter_misc_objects() {
-  for kw in ["ALTER EVENT TRIGGER", "ALTER ACCESS METHOD", "ALTER OPERATOR FAMILY", "ALTER OPERATOR CLASS", "ALTER FOREIGN TABLE", "ALTER FOREIGN DATA WRAPPER"] {
+  for kw in [
+    "ALTER EVENT TRIGGER",
+    "ALTER ACCESS METHOD",
+    "ALTER OPERATOR FAMILY",
+    "ALTER OPERATOR CLASS",
+    "ALTER FOREIGN TABLE",
+    "ALTER FOREIGN DATA WRAPPER",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2027,7 +2478,15 @@ fn r180_sweep_kw_alter_misc_objects() {
 
 #[test]
 fn r180_sweep_kw_alter_publication_misc() {
-  for kw in ["ALTER PUBLICATION", "ALTER SUBSCRIPTION", "ALTER POLICY", "ALTER STATISTICS", "ALTER LANGUAGE", "ALTER CONVERSION", "ALTER COLLATION"] {
+  for kw in [
+    "ALTER PUBLICATION",
+    "ALTER SUBSCRIPTION",
+    "ALTER POLICY",
+    "ALTER STATISTICS",
+    "ALTER LANGUAGE",
+    "ALTER CONVERSION",
+    "ALTER COLLATION",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2043,7 +2502,16 @@ fn r180_sweep_kw_alter_function_class() {
 
 #[test]
 fn r181_sweep_kw_comment_on_data() {
-  for kw in ["COMMENT ON TABLE", "COMMENT ON COLUMN", "COMMENT ON SCHEMA", "COMMENT ON DATABASE", "COMMENT ON INDEX", "COMMENT ON VIEW", "COMMENT ON MATERIALIZED VIEW", "COMMENT ON SEQUENCE"] {
+  for kw in [
+    "COMMENT ON TABLE",
+    "COMMENT ON COLUMN",
+    "COMMENT ON SCHEMA",
+    "COMMENT ON DATABASE",
+    "COMMENT ON INDEX",
+    "COMMENT ON VIEW",
+    "COMMENT ON MATERIALIZED VIEW",
+    "COMMENT ON SEQUENCE",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2051,7 +2519,17 @@ fn r181_sweep_kw_comment_on_data() {
 
 #[test]
 fn r181_sweep_kw_comment_on_routines() {
-  for kw in ["COMMENT ON FUNCTION", "COMMENT ON PROCEDURE", "COMMENT ON TYPE", "COMMENT ON DOMAIN", "COMMENT ON EXTENSION", "COMMENT ON ROLE", "COMMENT ON TRIGGER", "COMMENT ON CONSTRAINT", "COMMENT ON POLICY"] {
+  for kw in [
+    "COMMENT ON FUNCTION",
+    "COMMENT ON PROCEDURE",
+    "COMMENT ON TYPE",
+    "COMMENT ON DOMAIN",
+    "COMMENT ON EXTENSION",
+    "COMMENT ON ROLE",
+    "COMMENT ON TRIGGER",
+    "COMMENT ON CONSTRAINT",
+    "COMMENT ON POLICY",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2059,7 +2537,9 @@ fn r181_sweep_kw_comment_on_routines() {
 
 #[test]
 fn r181_sweep_kw_drop_role_db() {
-  for kw in ["DROP DATABASE", "DROP SCHEMA", "DROP ROLE", "DROP USER", "DROP GROUP", "DROP TABLESPACE", "DROP EXTENSION"] {
+  for kw in
+    ["DROP DATABASE", "DROP SCHEMA", "DROP ROLE", "DROP USER", "DROP GROUP", "DROP TABLESPACE", "DROP EXTENSION"]
+  {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2067,7 +2547,9 @@ fn r181_sweep_kw_drop_role_db() {
 
 #[test]
 fn r181_sweep_kw_drop_objects() {
-  for kw in ["DROP PUBLICATION", "DROP SUBSCRIPTION", "DROP SERVER", "DROP TRIGGER", "DROP TYPE", "DROP DOMAIN", "DROP POLICY"] {
+  for kw in
+    ["DROP PUBLICATION", "DROP SUBSCRIPTION", "DROP SERVER", "DROP TRIGGER", "DROP TYPE", "DROP DOMAIN", "DROP POLICY"]
+  {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2075,7 +2557,15 @@ fn r181_sweep_kw_drop_objects() {
 
 #[test]
 fn r182_sweep_kw_create_role_db() {
-  for kw in ["CREATE DATABASE", "CREATE SCHEMA", "CREATE ROLE", "CREATE USER", "CREATE GROUP", "CREATE TABLESPACE", "CREATE EXTENSION"] {
+  for kw in [
+    "CREATE DATABASE",
+    "CREATE SCHEMA",
+    "CREATE ROLE",
+    "CREATE USER",
+    "CREATE GROUP",
+    "CREATE TABLESPACE",
+    "CREATE EXTENSION",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2091,7 +2581,16 @@ fn r182_sweep_kw_create_replication() {
 
 #[test]
 fn r182_sweep_kw_create_routine() {
-  for kw in ["CREATE TRIGGER", "CREATE TYPE", "CREATE DOMAIN", "CREATE POLICY", "CREATE FUNCTION", "CREATE PROCEDURE", "CREATE SEQUENCE", "CREATE RULE"] {
+  for kw in [
+    "CREATE TRIGGER",
+    "CREATE TYPE",
+    "CREATE DOMAIN",
+    "CREATE POLICY",
+    "CREATE FUNCTION",
+    "CREATE PROCEDURE",
+    "CREATE SEQUENCE",
+    "CREATE RULE",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2099,7 +2598,16 @@ fn r182_sweep_kw_create_routine() {
 
 #[test]
 fn r182_sweep_kw_create_misc_objects() {
-  for kw in ["CREATE CAST", "CREATE LANGUAGE", "CREATE OPERATOR", "CREATE AGGREGATE", "CREATE CONVERSION", "CREATE COLLATION", "CREATE TRANSFORM", "CREATE STATISTICS"] {
+  for kw in [
+    "CREATE CAST",
+    "CREATE LANGUAGE",
+    "CREATE OPERATOR",
+    "CREATE AGGREGATE",
+    "CREATE CONVERSION",
+    "CREATE COLLATION",
+    "CREATE TRANSFORM",
+    "CREATE STATISTICS",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2107,7 +2615,14 @@ fn r182_sweep_kw_create_misc_objects() {
 
 #[test]
 fn r182_sweep_kw_create_fdw_text_search() {
-  for kw in ["CREATE FOREIGN DATA WRAPPER", "CREATE USER MAPPING", "CREATE TEXT SEARCH CONFIGURATION", "CREATE TEXT SEARCH DICTIONARY", "CREATE TEXT SEARCH PARSER", "CREATE TEXT SEARCH TEMPLATE"] {
+  for kw in [
+    "CREATE FOREIGN DATA WRAPPER",
+    "CREATE USER MAPPING",
+    "CREATE TEXT SEARCH CONFIGURATION",
+    "CREATE TEXT SEARCH DICTIONARY",
+    "CREATE TEXT SEARCH PARSER",
+    "CREATE TEXT SEARCH TEMPLATE",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2115,7 +2630,21 @@ fn r182_sweep_kw_create_fdw_text_search() {
 
 #[test]
 fn r183_sweep_kw_alter_starters() {
-  for kw in ["ALTER FUNCTION", "ALTER PROCEDURE", "ALTER ROUTINE", "ALTER INDEX", "ALTER VIEW", "ALTER SEQUENCE", "ALTER ROLE", "ALTER USER", "ALTER GROUP", "ALTER DATABASE", "ALTER SCHEMA", "ALTER EXTENSION", "ALTER TRIGGER"] {
+  for kw in [
+    "ALTER FUNCTION",
+    "ALTER PROCEDURE",
+    "ALTER ROUTINE",
+    "ALTER INDEX",
+    "ALTER VIEW",
+    "ALTER SEQUENCE",
+    "ALTER ROLE",
+    "ALTER USER",
+    "ALTER GROUP",
+    "ALTER DATABASE",
+    "ALTER SCHEMA",
+    "ALTER EXTENSION",
+    "ALTER TRIGGER",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2123,7 +2652,15 @@ fn r183_sweep_kw_alter_starters() {
 
 #[test]
 fn r183_sweep_kw_alter_if_exists() {
-  for kw in ["ALTER FUNCTION IF EXISTS", "ALTER PROCEDURE IF EXISTS", "ALTER INDEX IF EXISTS", "ALTER MATERIALIZED VIEW IF EXISTS", "ALTER FOREIGN TABLE IF EXISTS", "ALTER TYPE IF EXISTS", "ALTER DOMAIN IF EXISTS"] {
+  for kw in [
+    "ALTER FUNCTION IF EXISTS",
+    "ALTER PROCEDURE IF EXISTS",
+    "ALTER INDEX IF EXISTS",
+    "ALTER MATERIALIZED VIEW IF EXISTS",
+    "ALTER FOREIGN TABLE IF EXISTS",
+    "ALTER TYPE IF EXISTS",
+    "ALTER DOMAIN IF EXISTS",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2131,7 +2668,23 @@ fn r183_sweep_kw_alter_if_exists() {
 
 #[test]
 fn r184_sweep_kw_grant_starters() {
-  for kw in ["GRANT ALL", "GRANT ALL PRIVILEGES", "GRANT SELECT", "GRANT INSERT", "GRANT UPDATE", "GRANT DELETE", "GRANT TRUNCATE", "GRANT REFERENCES", "GRANT TRIGGER", "GRANT USAGE", "GRANT EXECUTE", "GRANT CONNECT", "GRANT TEMPORARY", "GRANT CREATE", "GRANT MAINTAIN"] {
+  for kw in [
+    "GRANT ALL",
+    "GRANT ALL PRIVILEGES",
+    "GRANT SELECT",
+    "GRANT INSERT",
+    "GRANT UPDATE",
+    "GRANT DELETE",
+    "GRANT TRUNCATE",
+    "GRANT REFERENCES",
+    "GRANT TRIGGER",
+    "GRANT USAGE",
+    "GRANT EXECUTE",
+    "GRANT CONNECT",
+    "GRANT TEMPORARY",
+    "GRANT CREATE",
+    "GRANT MAINTAIN",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2139,7 +2692,18 @@ fn r184_sweep_kw_grant_starters() {
 
 #[test]
 fn r184_sweep_kw_revoke_starters() {
-  for kw in ["REVOKE ALL", "REVOKE ALL PRIVILEGES", "REVOKE SELECT", "REVOKE INSERT", "REVOKE UPDATE", "REVOKE DELETE", "REVOKE USAGE", "REVOKE EXECUTE", "REVOKE GRANT OPTION FOR", "REVOKE ADMIN OPTION FOR"] {
+  for kw in [
+    "REVOKE ALL",
+    "REVOKE ALL PRIVILEGES",
+    "REVOKE SELECT",
+    "REVOKE INSERT",
+    "REVOKE UPDATE",
+    "REVOKE DELETE",
+    "REVOKE USAGE",
+    "REVOKE EXECUTE",
+    "REVOKE GRANT OPTION FOR",
+    "REVOKE ADMIN OPTION FOR",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2147,7 +2711,17 @@ fn r184_sweep_kw_revoke_starters() {
 
 #[test]
 fn r185_sweep_kw_joins() {
-  for kw in ["FULL JOIN", "LEFT OUTER JOIN", "RIGHT OUTER JOIN", "NATURAL JOIN", "NATURAL INNER JOIN", "JOIN LATERAL", "LEFT JOIN LATERAL", "INNER JOIN LATERAL", "CROSS JOIN LATERAL"] {
+  for kw in [
+    "FULL JOIN",
+    "LEFT OUTER JOIN",
+    "RIGHT OUTER JOIN",
+    "NATURAL JOIN",
+    "NATURAL INNER JOIN",
+    "JOIN LATERAL",
+    "LEFT JOIN LATERAL",
+    "INNER JOIN LATERAL",
+    "CROSS JOIN LATERAL",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2171,7 +2745,17 @@ fn r185_sweep_kw_inheritance_only() {
 
 #[test]
 fn r186_sweep_kw_merge_structure() {
-  for kw in ["MERGE INTO", "USING TABLE", "USING SELECT", "WHEN MATCHED", "WHEN NOT MATCHED", "WHEN MATCHED THEN", "WHEN NOT MATCHED THEN", "WHEN MATCHED AND", "WHEN NOT MATCHED AND"] {
+  for kw in [
+    "MERGE INTO",
+    "USING TABLE",
+    "USING SELECT",
+    "WHEN MATCHED",
+    "WHEN NOT MATCHED",
+    "WHEN MATCHED THEN",
+    "WHEN NOT MATCHED THEN",
+    "WHEN MATCHED AND",
+    "WHEN NOT MATCHED AND",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2179,7 +2763,14 @@ fn r186_sweep_kw_merge_structure() {
 
 #[test]
 fn r186_sweep_kw_on_conflict_full() {
-  for kw in ["DO UPDATE SET", "ON CONFLICT DO NOTHING", "ON CONFLICT DO UPDATE", "ON CONFLICT DO UPDATE SET", "ON CONFLICT ON CONSTRAINT", "RETURNING ALL"] {
+  for kw in [
+    "DO UPDATE SET",
+    "ON CONFLICT DO NOTHING",
+    "ON CONFLICT DO UPDATE",
+    "ON CONFLICT DO UPDATE SET",
+    "ON CONFLICT ON CONSTRAINT",
+    "RETURNING ALL",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2195,7 +2786,9 @@ fn r186_sweep_kw_merge_pg17() {
 
 #[test]
 fn r187_sweep_kw_cast_as_types() {
-  for kw in ["CAST AS", "AS DECIMAL", "AS TEXT", "AS NUMERIC", "AS INT", "AS BIGINT", "AS BOOLEAN", "AS JSONB", "AS JSON"] {
+  for kw in
+    ["CAST AS", "AS DECIMAL", "AS TEXT", "AS NUMERIC", "AS INT", "AS BIGINT", "AS BOOLEAN", "AS JSONB", "AS JSON"]
+  {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2227,7 +2820,17 @@ fn r188_sweep_kw_order_nulls() {
 
 #[test]
 fn r188_sweep_kw_between_not_predicates() {
-  for kw in ["BETWEEN SYMMETRIC", "BETWEEN ASYMMETRIC", "NOT BETWEEN", "NOT BETWEEN SYMMETRIC", "NOT LIKE", "NOT ILIKE", "NOT SIMILAR TO", "NOT IN", "NOT EXISTS"] {
+  for kw in [
+    "BETWEEN SYMMETRIC",
+    "BETWEEN ASYMMETRIC",
+    "NOT BETWEEN",
+    "NOT BETWEEN SYMMETRIC",
+    "NOT LIKE",
+    "NOT ILIKE",
+    "NOT SIMILAR TO",
+    "NOT IN",
+    "NOT EXISTS",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2267,7 +2870,18 @@ fn r189_sweep_kw_is_doc_normalized() {
 
 #[test]
 fn r189_sweep_kw_string_builtins() {
-  for kw in ["EXTRACT FROM", "OVERLAY PLACING", "POSITION IN", "SUBSTRING FROM", "SUBSTRING FOR", "TRIM FROM", "TRIM LEADING", "TRIM TRAILING", "TRIM BOTH", "COLLATION FOR"] {
+  for kw in [
+    "EXTRACT FROM",
+    "OVERLAY PLACING",
+    "POSITION IN",
+    "SUBSTRING FROM",
+    "SUBSTRING FOR",
+    "TRIM FROM",
+    "TRIM LEADING",
+    "TRIM TRAILING",
+    "TRIM BOTH",
+    "COLLATION FOR",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2283,7 +2897,14 @@ fn r190_sweep_kw_xml_window_misc() {
 
 #[test]
 fn r190_sweep_kw_limit_fetch_explicit() {
-  for kw in ["LIMIT ALL", "LIMIT NULL", "FETCH FIRST ROW ONLY", "FETCH NEXT ROW ONLY", "FETCH FIRST ROWS ONLY", "FETCH NEXT ROWS ONLY"] {
+  for kw in [
+    "LIMIT ALL",
+    "LIMIT NULL",
+    "FETCH FIRST ROW ONLY",
+    "FETCH NEXT ROW ONLY",
+    "FETCH FIRST ROWS ONLY",
+    "FETCH NEXT ROWS ONLY",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2307,7 +2928,12 @@ fn r191_sweep_kw_rule_action_clauses() {
 
 #[test]
 fn r191_sweep_kw_event_trigger_events() {
-  for kw in ["EVENT TRIGGER DDL_COMMAND_START", "EVENT TRIGGER DDL_COMMAND_END", "EVENT TRIGGER SQL_DROP", "EVENT TRIGGER TABLE_REWRITE"] {
+  for kw in [
+    "EVENT TRIGGER DDL_COMMAND_START",
+    "EVENT TRIGGER DDL_COMMAND_END",
+    "EVENT TRIGGER SQL_DROP",
+    "EVENT TRIGGER TABLE_REWRITE",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2315,7 +2941,17 @@ fn r191_sweep_kw_event_trigger_events() {
 
 #[test]
 fn r191_sweep_kw_constraint_alters() {
-  for kw in ["DEFAULT NULL", "DEFAULT TRUE", "DEFAULT FALSE", "CHECK NOT VALID", "ADD CHECK", "ADD UNIQUE", "ADD PRIMARY KEY", "ADD FOREIGN KEY", "ADD EXCLUDE"] {
+  for kw in [
+    "DEFAULT NULL",
+    "DEFAULT TRUE",
+    "DEFAULT FALSE",
+    "CHECK NOT VALID",
+    "ADD CHECK",
+    "ADD UNIQUE",
+    "ADD PRIMARY KEY",
+    "ADD FOREIGN KEY",
+    "ADD EXCLUDE",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2323,7 +2959,17 @@ fn r191_sweep_kw_constraint_alters() {
 
 #[test]
 fn r192_sweep_kw_sql_standard_types() {
-  for kw in ["BIT VARYING", "CHARACTER VARYING", "DOUBLE PRECISION", "WITH TIME ZONE", "WITHOUT TIME ZONE", "TIME WITH TIME ZONE", "TIME WITHOUT TIME ZONE", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITHOUT TIME ZONE"] {
+  for kw in [
+    "BIT VARYING",
+    "CHARACTER VARYING",
+    "DOUBLE PRECISION",
+    "WITH TIME ZONE",
+    "WITHOUT TIME ZONE",
+    "TIME WITH TIME ZONE",
+    "TIME WITHOUT TIME ZONE",
+    "TIMESTAMP WITH TIME ZONE",
+    "TIMESTAMP WITHOUT TIME ZONE",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2339,7 +2985,20 @@ fn r192_sweep_kw_trigger_refs_misc() {
 
 #[test]
 fn r193_sweep_kw_create_alter_drop_mix() {
-  for kw in ["CREATE TABLE", "ALTER TABLE", "DROP TABLE IF EXISTS", "CREATE VIEW", "ALTER VIEW", "DROP MATERIALIZED VIEW", "CREATE INDEX CONCURRENTLY", "ALTER INDEX", "DROP INDEX CONCURRENTLY", "CREATE OR REPLACE FUNCTION", "ALTER FUNCTION", "DROP TYPE"] {
+  for kw in [
+    "CREATE TABLE",
+    "ALTER TABLE",
+    "DROP TABLE IF EXISTS",
+    "CREATE VIEW",
+    "ALTER VIEW",
+    "DROP MATERIALIZED VIEW",
+    "CREATE INDEX CONCURRENTLY",
+    "ALTER INDEX",
+    "DROP INDEX CONCURRENTLY",
+    "CREATE OR REPLACE FUNCTION",
+    "ALTER FUNCTION",
+    "DROP TYPE",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2347,7 +3006,18 @@ fn r193_sweep_kw_create_alter_drop_mix() {
 
 #[test]
 fn r193_sweep_kw_dml_mix() {
-  for kw in ["INSERT INTO", "UPDATE", "DELETE FROM", "MERGE INTO", "VALUES", "RETURNING", "ON CONFLICT DO UPDATE", "WHEN MATCHED THEN", "WHEN NOT MATCHED THEN", "DEFAULT VALUES"] {
+  for kw in [
+    "INSERT INTO",
+    "UPDATE",
+    "DELETE FROM",
+    "MERGE INTO",
+    "VALUES",
+    "RETURNING",
+    "ON CONFLICT DO UPDATE",
+    "WHEN MATCHED THEN",
+    "WHEN NOT MATCHED THEN",
+    "DEFAULT VALUES",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2355,7 +3025,19 @@ fn r193_sweep_kw_dml_mix() {
 
 #[test]
 fn r193_sweep_kw_select_mix() {
-  for kw in ["SELECT DISTINCT", "SELECT DISTINCT ON", "GROUP BY", "ORDER BY", "FETCH FIRST", "FETCH NEXT", "LIMIT", "OFFSET", "FOR UPDATE", "FOR SHARE", "WITH RECURSIVE"] {
+  for kw in [
+    "SELECT DISTINCT",
+    "SELECT DISTINCT ON",
+    "GROUP BY",
+    "ORDER BY",
+    "FETCH FIRST",
+    "FETCH NEXT",
+    "LIMIT",
+    "OFFSET",
+    "FOR UPDATE",
+    "FOR SHARE",
+    "WITH RECURSIVE",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2363,7 +3045,20 @@ fn r193_sweep_kw_select_mix() {
 
 #[test]
 fn r193_sweep_kw_security_mix() {
-  for kw in ["GRANT", "REVOKE", "GRANT ALL", "GRANT ALL PRIVILEGES", "REVOKE ALL", "GRANT SELECT", "GRANT USAGE", "GRANT EXECUTE", "ON ALL TABLES IN SCHEMA", "FOR ROLE", "WITH GRANT OPTION", "WITH ADMIN OPTION"] {
+  for kw in [
+    "GRANT",
+    "REVOKE",
+    "GRANT ALL",
+    "GRANT ALL PRIVILEGES",
+    "REVOKE ALL",
+    "GRANT SELECT",
+    "GRANT USAGE",
+    "GRANT EXECUTE",
+    "ON ALL TABLES IN SCHEMA",
+    "FOR ROLE",
+    "WITH GRANT OPTION",
+    "WITH ADMIN OPTION",
+  ] {
     let md = resolve(kw, &Catalog::default());
     let _ = md;
   }
@@ -2371,7 +3066,17 @@ fn r193_sweep_kw_security_mix() {
 
 #[test]
 fn r193_sweep_kw_rls_policy_mix() {
-  for kw in ["CREATE POLICY", "ALTER POLICY", "DROP POLICY", "ENABLE ROW LEVEL SECURITY", "DISABLE ROW LEVEL SECURITY", "FORCE ROW LEVEL SECURITY", "NO FORCE ROW LEVEL SECURITY", "USING", "WITH CHECK"] {
+  for kw in [
+    "CREATE POLICY",
+    "ALTER POLICY",
+    "DROP POLICY",
+    "ENABLE ROW LEVEL SECURITY",
+    "DISABLE ROW LEVEL SECURITY",
+    "FORCE ROW LEVEL SECURITY",
+    "NO FORCE ROW LEVEL SECURITY",
+    "USING",
+    "WITH CHECK",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2379,7 +3084,21 @@ fn r193_sweep_kw_rls_policy_mix() {
 
 #[test]
 fn r193_sweep_kw_trigger_full_chain() {
-  for kw in ["CREATE TRIGGER", "BEFORE INSERT", "AFTER UPDATE", "INSTEAD OF UPDATE", "FOR EACH ROW", "FOR EACH STATEMENT", "EXECUTE FUNCTION", "EXECUTE PROCEDURE", "WHEN", "REFERENCES OLD", "REFERENCES NEW", "OLD TABLE", "NEW TABLE"] {
+  for kw in [
+    "CREATE TRIGGER",
+    "BEFORE INSERT",
+    "AFTER UPDATE",
+    "INSTEAD OF UPDATE",
+    "FOR EACH ROW",
+    "FOR EACH STATEMENT",
+    "EXECUTE FUNCTION",
+    "EXECUTE PROCEDURE",
+    "WHEN",
+    "REFERENCES OLD",
+    "REFERENCES NEW",
+    "OLD TABLE",
+    "NEW TABLE",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2387,7 +3106,19 @@ fn r193_sweep_kw_trigger_full_chain() {
 
 #[test]
 fn r194_sweep_kw_temporal_info() {
-  for kw in ["CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP", "LOCALTIME", "LOCALTIMESTAMP", "CURRENT_USER", "CURRENT_ROLE", "SESSION_USER", "SYSTEM_USER", "CURRENT_SCHEMA", "CURRENT_CATALOG"] {
+  for kw in [
+    "CURRENT_DATE",
+    "CURRENT_TIME",
+    "CURRENT_TIMESTAMP",
+    "LOCALTIME",
+    "LOCALTIMESTAMP",
+    "CURRENT_USER",
+    "CURRENT_ROLE",
+    "SESSION_USER",
+    "SYSTEM_USER",
+    "CURRENT_SCHEMA",
+    "CURRENT_CATALOG",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
     let s = md.unwrap();
@@ -2397,7 +3128,24 @@ fn r194_sweep_kw_temporal_info() {
 
 #[test]
 fn r194_sweep_kw_window_agg() {
-  for kw in ["OVER", "PARTITION BY", "ROWS BETWEEN", "RANGE BETWEEN", "GROUPS BETWEEN", "UNBOUNDED PRECEDING", "UNBOUNDED FOLLOWING", "CURRENT ROW", "EXCLUDE CURRENT ROW", "EXCLUDE GROUP", "EXCLUDE TIES", "EXCLUDE NO OTHERS", "FILTER WHERE", "OVER PARTITION", "WITHIN GROUP", "GROUPING"] {
+  for kw in [
+    "OVER",
+    "PARTITION BY",
+    "ROWS BETWEEN",
+    "RANGE BETWEEN",
+    "GROUPS BETWEEN",
+    "UNBOUNDED PRECEDING",
+    "UNBOUNDED FOLLOWING",
+    "CURRENT ROW",
+    "EXCLUDE CURRENT ROW",
+    "EXCLUDE GROUP",
+    "EXCLUDE TIES",
+    "EXCLUDE NO OTHERS",
+    "FILTER WHERE",
+    "OVER PARTITION",
+    "WITHIN GROUP",
+    "GROUPING",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2405,7 +3153,20 @@ fn r194_sweep_kw_window_agg() {
 
 #[test]
 fn r194_sweep_kw_conditional_mix() {
-  for kw in ["CASE", "WHEN", "THEN", "ELSE", "END", "COALESCE", "NULLIF", "GREATEST", "LEAST", "EXTRACT", "NULLS FIRST", "NULLS LAST"] {
+  for kw in [
+    "CASE",
+    "WHEN",
+    "THEN",
+    "ELSE",
+    "END",
+    "COALESCE",
+    "NULLIF",
+    "GREATEST",
+    "LEAST",
+    "EXTRACT",
+    "NULLS FIRST",
+    "NULLS LAST",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2413,7 +3174,22 @@ fn r194_sweep_kw_conditional_mix() {
 
 #[test]
 fn r195_sweep_kw_types_upgraded() {
-  for kw in ["BIGINT", "BOOLEAN", "CHARACTER", "DEC", "DECIMAL", "DOUBLE", "FLOAT", "INT", "INTEGER", "NUMERIC", "REAL", "SMALLINT", "TEXT", "VARYING"] {
+  for kw in [
+    "BIGINT",
+    "BOOLEAN",
+    "CHARACTER",
+    "DEC",
+    "DECIMAL",
+    "DOUBLE",
+    "FLOAT",
+    "INT",
+    "INTEGER",
+    "NUMERIC",
+    "REAL",
+    "SMALLINT",
+    "TEXT",
+    "VARYING",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
     let s = md.unwrap();
@@ -2423,7 +3199,9 @@ fn r195_sweep_kw_types_upgraded() {
 
 #[test]
 fn r195_sweep_kw_sequence_cursor_upgraded() {
-  for kw in ["CACHE", "CYCLE", "CURSOR", "FORWARD", "HOLD", "INCREMENT", "MAXVALUE", "MINVALUE", "MOVE", "RESTART", "START"] {
+  for kw in
+    ["CACHE", "CYCLE", "CURSOR", "FORWARD", "HOLD", "INCREMENT", "MAXVALUE", "MINVALUE", "MOVE", "RESTART", "START"]
+  {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
     let s = md.unwrap();
@@ -2433,7 +3211,19 @@ fn r195_sweep_kw_sequence_cursor_upgraded() {
 
 #[test]
 fn r195_sweep_kw_mixed_data_ddl() {
-  for kw in ["CREATE TABLE", "ALTER TABLE", "ADD COLUMN", "DROP COLUMN", "ALTER COLUMN", "SET DEFAULT", "DROP DEFAULT", "SET NOT NULL", "DROP NOT NULL", "RENAME TO", "RENAME COLUMN"] {
+  for kw in [
+    "CREATE TABLE",
+    "ALTER TABLE",
+    "ADD COLUMN",
+    "DROP COLUMN",
+    "ALTER COLUMN",
+    "SET DEFAULT",
+    "DROP DEFAULT",
+    "SET NOT NULL",
+    "DROP NOT NULL",
+    "RENAME TO",
+    "RENAME COLUMN",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2471,7 +3261,23 @@ fn r196_sweep_kw_ddl_misc_upgraded() {
 
 #[test]
 fn r197_sweep_kw_misc1_upgraded() {
-  for kw in ["ABSOLUTE", "ACTION", "ADMIN", "AGGREGATE", "ASYMMETRIC", "AT", "ATTACH", "AUTHORIZATION", "BACKWARD", "BINARY", "BIT", "CALLED", "CASCADED", "CHAIN", "CHAR"] {
+  for kw in [
+    "ABSOLUTE",
+    "ACTION",
+    "ADMIN",
+    "AGGREGATE",
+    "ASYMMETRIC",
+    "AT",
+    "ATTACH",
+    "AUTHORIZATION",
+    "BACKWARD",
+    "BINARY",
+    "BIT",
+    "CALLED",
+    "CASCADED",
+    "CHAIN",
+    "CHAR",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
     let s = md.unwrap();
@@ -2481,7 +3287,25 @@ fn r197_sweep_kw_misc1_upgraded() {
 
 #[test]
 fn r197_sweep_kw_misc2_upgraded() {
-  for kw in ["CHARACTERISTICS", "CLASS", "CLOSE", "COLLATION", "COLUMNS", "COMMITTED", "COMPRESSION", "CONFIGURATION", "CONNECTION", "CONSTRAINTS", "CONTENT", "CONVERSION", "DATA", "DEFAULTS", "DELIMITERS", "DEPENDS", "COMMENTS"] {
+  for kw in [
+    "CHARACTERISTICS",
+    "CLASS",
+    "CLOSE",
+    "COLLATION",
+    "COLUMNS",
+    "COMMITTED",
+    "COMPRESSION",
+    "CONFIGURATION",
+    "CONNECTION",
+    "CONSTRAINTS",
+    "CONTENT",
+    "CONVERSION",
+    "DATA",
+    "DEFAULTS",
+    "DELIMITERS",
+    "DEPENDS",
+    "COMMENTS",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
     let s = md.unwrap();
@@ -2491,7 +3315,17 @@ fn r197_sweep_kw_misc2_upgraded() {
 
 #[test]
 fn r197_sweep_kw_grant_revoke_mix() {
-  for kw in ["GRANT", "REVOKE", "WITH ADMIN OPTION", "WITH GRANT OPTION", "ON ALL TABLES IN SCHEMA", "ON ALL FUNCTIONS IN SCHEMA", "FOR ROLE", "FOR USER", "TO PUBLIC"] {
+  for kw in [
+    "GRANT",
+    "REVOKE",
+    "WITH ADMIN OPTION",
+    "WITH GRANT OPTION",
+    "ON ALL TABLES IN SCHEMA",
+    "ON ALL FUNCTIONS IN SCHEMA",
+    "FOR ROLE",
+    "FOR USER",
+    "TO PUBLIC",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2499,7 +3333,27 @@ fn r197_sweep_kw_grant_revoke_mix() {
 
 #[test]
 fn r198_sweep_kw_partition_aux_upgraded() {
-  for kw in ["ANALYSE", "DETACH", "DICTIONARY", "DISCARD", "DOCUMENT", "ENUM", "EVENT", "EXCLUDING", "EXPRESSION", "EXTERNAL", "FINALIZE", "FUNCTIONS", "GLOBAL", "GRANTED", "IMPLICIT", "IMPORT", "INDEXES", "INITIALLY", "INOUT"] {
+  for kw in [
+    "ANALYSE",
+    "DETACH",
+    "DICTIONARY",
+    "DISCARD",
+    "DOCUMENT",
+    "ENUM",
+    "EVENT",
+    "EXCLUDING",
+    "EXPRESSION",
+    "EXTERNAL",
+    "FINALIZE",
+    "FUNCTIONS",
+    "GLOBAL",
+    "GRANTED",
+    "IMPLICIT",
+    "IMPORT",
+    "INDEXES",
+    "INITIALLY",
+    "INOUT",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
     let s = md.unwrap();
@@ -2509,7 +3363,20 @@ fn r198_sweep_kw_partition_aux_upgraded() {
 
 #[test]
 fn r198_sweep_kw_misc_logic_upgraded() {
-  for kw in ["LOAD", "LOCATION", "LOGGED", "MAPPING", "METHOD", "NORMALIZE", "NORMALIZED", "NFC", "NFD", "NFKC", "NFKD", "NOTNULL"] {
+  for kw in [
+    "LOAD",
+    "LOCATION",
+    "LOGGED",
+    "MAPPING",
+    "METHOD",
+    "NORMALIZE",
+    "NORMALIZED",
+    "NFC",
+    "NFD",
+    "NFKC",
+    "NFKD",
+    "NOTNULL",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
     let s = md.unwrap();
@@ -2519,7 +3386,17 @@ fn r198_sweep_kw_misc_logic_upgraded() {
 
 #[test]
 fn r198_sweep_kw_pubsub_mix() {
-  for kw in ["CREATE PUBLICATION", "ALTER PUBLICATION", "DROP PUBLICATION", "CREATE SUBSCRIPTION", "ALTER SUBSCRIPTION", "DROP SUBSCRIPTION", "WITH (PUBLISH)", "WITH (COPY_DATA)", "WITH (CREATE_SLOT)"] {
+  for kw in [
+    "CREATE PUBLICATION",
+    "ALTER PUBLICATION",
+    "DROP PUBLICATION",
+    "CREATE SUBSCRIPTION",
+    "ALTER SUBSCRIPTION",
+    "DROP SUBSCRIPTION",
+    "WITH (PUBLISH)",
+    "WITH (COPY_DATA)",
+    "WITH (CREATE_SLOT)",
+  ] {
     let md = resolve(kw, &Catalog::default());
     let _ = md;
   }
@@ -2527,7 +3404,9 @@ fn r198_sweep_kw_pubsub_mix() {
 
 #[test]
 fn r199_sweep_kw_object_options_upgraded() {
-  for kw in ["OBJECT", "OFF", "OIDS", "OPERATOR", "OPTION", "OPTIONS", "ORDINALITY", "OTHERS", "OUT", "OVERLAY", "OVERRIDING"] {
+  for kw in
+    ["OBJECT", "OFF", "OIDS", "OPERATOR", "OPTION", "OPTIONS", "ORDINALITY", "OTHERS", "OUT", "OVERLAY", "OVERRIDING"]
+  {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
     let s = md.unwrap();
@@ -2537,7 +3416,26 @@ fn r199_sweep_kw_object_options_upgraded() {
 
 #[test]
 fn r199_sweep_kw_policy_xml_upgraded() {
-  for kw in ["PARSER", "PARTIAL", "PASSING", "PLACING", "PLANS", "POLICY", "POSITION", "PRECISION", "PREPARED", "PRESERVE", "PRIOR", "PROCEDURAL", "PROCEDURES", "PUBLICATION", "READ", "REASSIGN", "REFERENCING", "RELATIVE"] {
+  for kw in [
+    "PARSER",
+    "PARTIAL",
+    "PASSING",
+    "PLACING",
+    "PLANS",
+    "POLICY",
+    "POSITION",
+    "PRECISION",
+    "PREPARED",
+    "PRESERVE",
+    "PRIOR",
+    "PROCEDURAL",
+    "PROCEDURES",
+    "PUBLICATION",
+    "READ",
+    "REASSIGN",
+    "REFERENCING",
+    "RELATIVE",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
     let s = md.unwrap();
@@ -2547,7 +3445,25 @@ fn r199_sweep_kw_policy_xml_upgraded() {
 
 #[test]
 fn r199_sweep_kw_full_dml_chain() {
-  for kw in ["SELECT", "FROM", "WHERE", "GROUP BY", "HAVING", "ORDER BY", "LIMIT", "OFFSET", "INSERT INTO", "UPDATE", "DELETE FROM", "RETURNING", "WITH", "WITH RECURSIVE", "VALUES", "TABLE", "MERGE INTO"] {
+  for kw in [
+    "SELECT",
+    "FROM",
+    "WHERE",
+    "GROUP BY",
+    "HAVING",
+    "ORDER BY",
+    "LIMIT",
+    "OFFSET",
+    "INSERT INTO",
+    "UPDATE",
+    "DELETE FROM",
+    "RETURNING",
+    "WITH",
+    "WITH RECURSIVE",
+    "VALUES",
+    "TABLE",
+    "MERGE INTO",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
   }
@@ -2559,52 +3475,145 @@ fn r200_final_consolidation_mixed_bag() {
   // dml + ddl + dcl + dml_extra + transaction + types + temporal_info + window + frame + agg + conditional + cursor + sequence + partition + rls + replication + fts + xml + json + unicode + grant_target + on_conflict + trigger_ref + tablesample + plpgsql + system
   for kw in [
     // DML core
-    "SELECT", "FROM", "WHERE", "GROUP BY", "HAVING", "ORDER BY",
-    "INSERT INTO", "UPDATE", "DELETE FROM", "MERGE INTO", "VALUES", "RETURNING",
-    "WITH", "WITH RECURSIVE", "WITHIN GROUP",
+    "SELECT",
+    "FROM",
+    "WHERE",
+    "GROUP BY",
+    "HAVING",
+    "ORDER BY",
+    "INSERT INTO",
+    "UPDATE",
+    "DELETE FROM",
+    "MERGE INTO",
+    "VALUES",
+    "RETURNING",
+    "WITH",
+    "WITH RECURSIVE",
+    "WITHIN GROUP",
     // DDL core
-    "CREATE TABLE", "ALTER TABLE", "DROP TABLE IF EXISTS",
-    "CREATE INDEX CONCURRENTLY", "CREATE OR REPLACE FUNCTION",
-    "ADD COLUMN", "DROP COLUMN", "RENAME TO", "RENAME COLUMN",
-    "SET NOT NULL", "DROP NOT NULL", "SET DEFAULT", "DROP DEFAULT",
+    "CREATE TABLE",
+    "ALTER TABLE",
+    "DROP TABLE IF EXISTS",
+    "CREATE INDEX CONCURRENTLY",
+    "CREATE OR REPLACE FUNCTION",
+    "ADD COLUMN",
+    "DROP COLUMN",
+    "RENAME TO",
+    "RENAME COLUMN",
+    "SET NOT NULL",
+    "DROP NOT NULL",
+    "SET DEFAULT",
+    "DROP DEFAULT",
     // DCL
-    "GRANT", "REVOKE", "WITH GRANT OPTION", "WITH ADMIN OPTION",
-    "ON ALL TABLES IN SCHEMA", "ON ALL FUNCTIONS IN SCHEMA",
+    "GRANT",
+    "REVOKE",
+    "WITH GRANT OPTION",
+    "WITH ADMIN OPTION",
+    "ON ALL TABLES IN SCHEMA",
+    "ON ALL FUNCTIONS IN SCHEMA",
     // Transaction
-    "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "CHAIN", "READ", "COMMITTED",
+    "BEGIN",
+    "COMMIT",
+    "ROLLBACK",
+    "SAVEPOINT",
+    "CHAIN",
+    "READ",
+    "COMMITTED",
     // Types
-    "BIGINT", "INTEGER", "SMALLINT", "NUMERIC", "TEXT", "BOOLEAN", "REAL", "DOUBLE",
-    "BIT VARYING", "CHARACTER VARYING", "DOUBLE PRECISION", "WITH TIME ZONE", "WITHOUT TIME ZONE",
+    "BIGINT",
+    "INTEGER",
+    "SMALLINT",
+    "NUMERIC",
+    "TEXT",
+    "BOOLEAN",
+    "REAL",
+    "DOUBLE",
+    "BIT VARYING",
+    "CHARACTER VARYING",
+    "DOUBLE PRECISION",
+    "WITH TIME ZONE",
+    "WITHOUT TIME ZONE",
     // Temporal/info
-    "CURRENT_DATE", "CURRENT_TIMESTAMP", "LOCALTIMESTAMP", "CURRENT_USER", "SESSION_USER", "SYSTEM_USER", "CURRENT_SCHEMA", "AT",
+    "CURRENT_DATE",
+    "CURRENT_TIMESTAMP",
+    "LOCALTIMESTAMP",
+    "CURRENT_USER",
+    "SESSION_USER",
+    "SYSTEM_USER",
+    "CURRENT_SCHEMA",
+    "AT",
     // Window/frame/agg
-    "OVER", "PARTITION BY", "ROWS BETWEEN", "UNBOUNDED PRECEDING", "CURRENT ROW",
-    "EXCLUDE NO OTHERS", "FILTER WHERE", "GROUPING",
+    "OVER",
+    "PARTITION BY",
+    "ROWS BETWEEN",
+    "UNBOUNDED PRECEDING",
+    "CURRENT ROW",
+    "EXCLUDE NO OTHERS",
+    "FILTER WHERE",
+    "GROUPING",
     // Conditional
-    "COALESCE", "NULLIF", "GREATEST", "LEAST", "EXTRACT",
+    "COALESCE",
+    "NULLIF",
+    "GREATEST",
+    "LEAST",
+    "EXTRACT",
     // Cursor/seq
-    "CURSOR", "FORWARD", "BACKWARD", "ABSOLUTE", "RELATIVE", "PRIOR",
-    "CACHE", "CYCLE", "INCREMENT", "MAXVALUE", "MINVALUE", "RESTART",
+    "CURSOR",
+    "FORWARD",
+    "BACKWARD",
+    "ABSOLUTE",
+    "RELATIVE",
+    "PRIOR",
+    "CACHE",
+    "CYCLE",
+    "INCREMENT",
+    "MAXVALUE",
+    "MINVALUE",
+    "RESTART",
     // Partition
-    "ATTACH", "DETACH", "FINALIZE",
+    "ATTACH",
+    "DETACH",
+    "FINALIZE",
     // RLS
-    "ENABLE ROW LEVEL SECURITY", "DISABLE ROW LEVEL SECURITY",
-    "FORCE ROW LEVEL SECURITY", "NO FORCE ROW LEVEL SECURITY",
-    "POLICY", "WITH CHECK",
+    "ENABLE ROW LEVEL SECURITY",
+    "DISABLE ROW LEVEL SECURITY",
+    "FORCE ROW LEVEL SECURITY",
+    "NO FORCE ROW LEVEL SECURITY",
+    "POLICY",
+    "WITH CHECK",
     // Replication
-    "PUBLICATION", "CONNECTION",
+    "PUBLICATION",
+    "CONNECTION",
     // FTS
-    "CONFIGURATION", "DICTIONARY", "PARSER",
+    "CONFIGURATION",
+    "DICTIONARY",
+    "PARSER",
     // XML
-    "DOCUMENT", "CONTENT", "PASSING",
+    "DOCUMENT",
+    "CONTENT",
+    "PASSING",
     // Unicode
-    "NORMALIZE", "NORMALIZED", "NFC", "NFKD",
+    "NORMALIZE",
+    "NORMALIZED",
+    "NFC",
+    "NFKD",
     // Misc
-    "OVERLAY", "PLACING", "POSITION", "OVERRIDING",
-    "REFERENCING", "DEPENDS", "COMPRESSION", "GLOBAL", "LOGGED",
+    "OVERLAY",
+    "PLACING",
+    "POSITION",
+    "OVERRIDING",
+    "REFERENCING",
+    "DEPENDS",
+    "COMPRESSION",
+    "GLOBAL",
+    "LOGGED",
     // Trigger
-    "REFERENCES OLD", "REFERENCES NEW", "FOR EACH ROW", "FOR EACH STATEMENT",
-    "EXECUTE FUNCTION", "EXECUTE PROCEDURE",
+    "REFERENCES OLD",
+    "REFERENCES NEW",
+    "FOR EACH ROW",
+    "FOR EACH STATEMENT",
+    "EXECUTE FUNCTION",
+    "EXECUTE PROCEDURE",
   ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
@@ -2625,7 +3634,20 @@ fn r2_001_sweep_kw_release_routine_search_upgraded() {
 
 #[test]
 fn r2_001_sweep_kw_misc_inline_label_upgraded() {
-  for kw in ["INLINE", "INPUT", "INSENSITIVE", "LABEL", "LARGE", "NAME", "NAMES", "NATIONAL", "NCHAR", "NONE", "PARAMETER", "RECHECK"] {
+  for kw in [
+    "INLINE",
+    "INPUT",
+    "INSENSITIVE",
+    "LABEL",
+    "LARGE",
+    "NAME",
+    "NAMES",
+    "NATIONAL",
+    "NCHAR",
+    "NONE",
+    "PARAMETER",
+    "RECHECK",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
     let s = md.unwrap();
@@ -2635,7 +3657,19 @@ fn r2_001_sweep_kw_misc_inline_label_upgraded() {
 
 #[test]
 fn r2_002_sweep_kw_iso_replication_upgraded() {
-  for kw in ["SERIALIZABLE", "REPEATABLE", "SNAPSHOT", "SERVER", "SESSION", "SUBSCRIPTION", "PUBLICATION", "RELEASE", "RESET", "STDIN", "STDOUT"] {
+  for kw in [
+    "SERIALIZABLE",
+    "REPEATABLE",
+    "SNAPSHOT",
+    "SERVER",
+    "SESSION",
+    "SUBSCRIPTION",
+    "PUBLICATION",
+    "RELEASE",
+    "RESET",
+    "STDIN",
+    "STDOUT",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
     let s = md.unwrap();
@@ -2645,7 +3679,25 @@ fn r2_002_sweep_kw_iso_replication_upgraded() {
 
 #[test]
 fn r2_002_sweep_kw_string_xml_misc_upgraded() {
-  for kw in ["SETOF", "SETS", "SIMPLE", "SQL", "STANDALONE", "STATISTICS", "STORAGE", "STRIP", "SUBSTRING", "SUPPORT", "SYMMETRIC", "SYSID", "SYSTEM", "TABLES", "REF", "BREADTH", "DEPTH"] {
+  for kw in [
+    "SETOF",
+    "SETS",
+    "SIMPLE",
+    "SQL",
+    "STANDALONE",
+    "STATISTICS",
+    "STORAGE",
+    "STRIP",
+    "SUBSTRING",
+    "SUPPORT",
+    "SYMMETRIC",
+    "SYSID",
+    "SYSTEM",
+    "TABLES",
+    "REF",
+    "BREADTH",
+    "DEPTH",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
     let s = md.unwrap();
@@ -2655,7 +3707,21 @@ fn r2_002_sweep_kw_string_xml_misc_upgraded() {
 
 #[test]
 fn r2_003_sweep_kw_sample_fetch_upgraded() {
-  for kw in ["TABLESAMPLE", "TEMPLATE", "TIES", "TIME", "TIMESTAMP", "TRANSFORM", "TREAT", "TRIM", "TYPES", "UESCAPE", "UNCOMMITTED", "UNENCRYPTED", "UNKNOWN"] {
+  for kw in [
+    "TABLESAMPLE",
+    "TEMPLATE",
+    "TIES",
+    "TIME",
+    "TIMESTAMP",
+    "TRANSFORM",
+    "TREAT",
+    "TRIM",
+    "TYPES",
+    "UESCAPE",
+    "UNCOMMITTED",
+    "UNENCRYPTED",
+    "UNKNOWN",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
     let s = md.unwrap();
@@ -2665,7 +3731,25 @@ fn r2_003_sweep_kw_sample_fetch_upgraded() {
 
 #[test]
 fn r2_003_sweep_kw_misc_role_value_upgraded() {
-  for kw in ["UNTIL", "USAGE", "VALID", "VALUE", "VARCHAR", "VARIADIC", "VERSION", "VIEWS", "WHITESPACE", "WITHOUT", "WORK", "ASSERTION", "ASSIGNMENT", "ATTRIBUTE", "CATALOG", "ALSO", "ASENSITIVE"] {
+  for kw in [
+    "UNTIL",
+    "USAGE",
+    "VALID",
+    "VALUE",
+    "VARCHAR",
+    "VARIADIC",
+    "VERSION",
+    "VIEWS",
+    "WHITESPACE",
+    "WITHOUT",
+    "WORK",
+    "ASSERTION",
+    "ASSIGNMENT",
+    "ATTRIBUTE",
+    "CATALOG",
+    "ALSO",
+    "ASENSITIVE",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
     let s = md.unwrap();
@@ -2675,7 +3759,24 @@ fn r2_003_sweep_kw_misc_role_value_upgraded() {
 
 #[test]
 fn r2_004_sweep_kw_xml_zone_finalized() {
-  for kw in ["WRAPPER", "WRITE", "XML", "XMLATTRIBUTES", "XMLCONCAT", "XMLELEMENT", "XMLEXISTS", "XMLFOREST", "XMLNAMESPACES", "XMLPARSE", "XMLPI", "XMLROOT", "XMLSERIALIZE", "XMLTABLE", "YES", "ZONE"] {
+  for kw in [
+    "WRAPPER",
+    "WRITE",
+    "XML",
+    "XMLATTRIBUTES",
+    "XMLCONCAT",
+    "XMLELEMENT",
+    "XMLEXISTS",
+    "XMLFOREST",
+    "XMLNAMESPACES",
+    "XMLPARSE",
+    "XMLPI",
+    "XMLROOT",
+    "XMLSERIALIZE",
+    "XMLTABLE",
+    "YES",
+    "ZONE",
+  ] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "missing {kw}");
     let s = md.unwrap();
@@ -2685,7 +3786,37 @@ fn r2_004_sweep_kw_xml_zone_finalized() {
 
 #[test]
 fn r2_004_sweep_fn_temporal_format_added() {
-  for fn_ in ["age", "date_part", "date_trunc", "to_char", "to_date", "to_number", "to_timestamp", "justify_days", "justify_hours", "justify_interval", "make_date", "make_time", "make_timestamp", "make_timestamptz", "make_interval", "to_regclass", "to_regtype", "to_regproc", "to_regprocedure", "jsonb_set", "jsonb_strip_nulls", "jsonb_pretty", "pg_size_pretty", "pg_database_size", "pg_table_size", "pg_indexes_size", "pg_relation_size", "pg_total_relation_size", "xmlagg"] {
+  for fn_ in [
+    "age",
+    "date_part",
+    "date_trunc",
+    "to_char",
+    "to_date",
+    "to_number",
+    "to_timestamp",
+    "justify_days",
+    "justify_hours",
+    "justify_interval",
+    "make_date",
+    "make_time",
+    "make_timestamp",
+    "make_timestamptz",
+    "make_interval",
+    "to_regclass",
+    "to_regtype",
+    "to_regproc",
+    "to_regprocedure",
+    "jsonb_set",
+    "jsonb_strip_nulls",
+    "jsonb_pretty",
+    "pg_size_pretty",
+    "pg_database_size",
+    "pg_table_size",
+    "pg_indexes_size",
+    "pg_relation_size",
+    "pg_total_relation_size",
+    "xmlagg",
+  ] {
     let md = resolve(fn_, &Catalog::default());
     assert!(md.is_some(), "missing fn {fn_}");
     let s = md.unwrap();
@@ -2695,7 +3826,42 @@ fn r2_004_sweep_fn_temporal_format_added() {
 
 #[test]
 fn r2_005_sweep_fn_string_basics() {
-  for fn_ in ["lower", "upper", "initcap", "left", "right", "substr", "trim", "translate", "replace", "overlay", "position", "octet_length", "bit_length", "char_length", "character_length", "length", "encode", "decode", "ascii", "lpad", "rpad", "btrim", "ltrim", "rtrim", "repeat", "reverse", "split_part", "starts_with", "concat", "concat_ws", "format", "quote_ident", "quote_literal", "quote_nullable"] {
+  for fn_ in [
+    "lower",
+    "upper",
+    "initcap",
+    "left",
+    "right",
+    "substr",
+    "trim",
+    "translate",
+    "replace",
+    "overlay",
+    "position",
+    "octet_length",
+    "bit_length",
+    "char_length",
+    "character_length",
+    "length",
+    "encode",
+    "decode",
+    "ascii",
+    "lpad",
+    "rpad",
+    "btrim",
+    "ltrim",
+    "rtrim",
+    "repeat",
+    "reverse",
+    "split_part",
+    "starts_with",
+    "concat",
+    "concat_ws",
+    "format",
+    "quote_ident",
+    "quote_literal",
+    "quote_nullable",
+  ] {
     let md = resolve(fn_, &Catalog::default());
     assert!(md.is_some(), "missing fn {fn_}");
   }
@@ -2703,7 +3869,28 @@ fn r2_005_sweep_fn_string_basics() {
 
 #[test]
 fn r2_005_sweep_fn_array_added() {
-  for fn_ in ["string_to_array", "array_to_string", "string_agg", "array_agg", "array_append", "array_prepend", "array_cat", "array_remove", "array_replace", "array_position", "array_positions", "array_length", "array_lower", "array_upper", "array_ndims", "array_dims", "cardinality", "unnest", "array_fill", "generate_subscripts"] {
+  for fn_ in [
+    "string_to_array",
+    "array_to_string",
+    "string_agg",
+    "array_agg",
+    "array_append",
+    "array_prepend",
+    "array_cat",
+    "array_remove",
+    "array_replace",
+    "array_position",
+    "array_positions",
+    "array_length",
+    "array_lower",
+    "array_upper",
+    "array_ndims",
+    "array_dims",
+    "cardinality",
+    "unnest",
+    "array_fill",
+    "generate_subscripts",
+  ] {
     let md = resolve(fn_, &Catalog::default());
     assert!(md.is_some(), "missing fn {fn_}");
   }
@@ -2711,7 +3898,27 @@ fn r2_005_sweep_fn_array_added() {
 
 #[test]
 fn r2_005_sweep_fn_json_path_added() {
-  for fn_ in ["jsonb_path_query", "jsonb_path_query_array", "jsonb_path_query_first", "jsonb_path_exists", "jsonb_path_match", "jsonb_array_length", "jsonb_object_keys", "jsonb_each", "jsonb_each_text", "jsonb_typeof", "json_object_agg", "jsonb_object_agg", "json_agg", "jsonb_agg", "row_to_json", "json_build_object", "jsonb_build_object", "json_build_array", "jsonb_build_array"] {
+  for fn_ in [
+    "jsonb_path_query",
+    "jsonb_path_query_array",
+    "jsonb_path_query_first",
+    "jsonb_path_exists",
+    "jsonb_path_match",
+    "jsonb_array_length",
+    "jsonb_object_keys",
+    "jsonb_each",
+    "jsonb_each_text",
+    "jsonb_typeof",
+    "json_object_agg",
+    "jsonb_object_agg",
+    "json_agg",
+    "jsonb_agg",
+    "row_to_json",
+    "json_build_object",
+    "jsonb_build_object",
+    "json_build_array",
+    "jsonb_build_array",
+  ] {
     let md = resolve(fn_, &Catalog::default());
     assert!(md.is_some(), "missing fn {fn_}");
   }
@@ -2719,53 +3926,172 @@ fn r2_005_sweep_fn_json_path_added() {
 
 #[test]
 fn r2_006_sweep_fn_math_added() {
-  for fn_ in ["abs", "ceiling", "floor", "round", "trunc", "div", "mod", "power", "log", "sqrt", "sign", "cos", "tan", "asin", "acos", "atan", "atan2", "degrees", "radians", "random", "setseed", "scale", "min_scale", "trim_scale"] {
+  for fn_ in [
+    "abs",
+    "ceiling",
+    "floor",
+    "round",
+    "trunc",
+    "div",
+    "mod",
+    "power",
+    "log",
+    "sqrt",
+    "sign",
+    "cos",
+    "tan",
+    "asin",
+    "acos",
+    "atan",
+    "atan2",
+    "degrees",
+    "radians",
+    "random",
+    "setseed",
+    "scale",
+    "min_scale",
+    "trim_scale",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing math fn {fn_}");
   }
 }
 
 #[test]
 fn r2_006_sweep_fn_regex_fts_added() {
-  for fn_ in ["regexp_match", "regexp_matches", "regexp_replace", "regexp_split_to_array", "regexp_split_to_table", "regexp_count", "regexp_substr",
-              "to_tsvector", "to_tsquery", "plainto_tsquery", "phraseto_tsquery", "websearch_to_tsquery", "ts_rank", "ts_rank_cd", "ts_headline", "numnode", "queries_to_xml"] {
+  for fn_ in [
+    "regexp_match",
+    "regexp_matches",
+    "regexp_replace",
+    "regexp_split_to_array",
+    "regexp_split_to_table",
+    "regexp_count",
+    "regexp_substr",
+    "to_tsvector",
+    "to_tsquery",
+    "plainto_tsquery",
+    "phraseto_tsquery",
+    "websearch_to_tsquery",
+    "ts_rank",
+    "ts_rank_cd",
+    "ts_headline",
+    "numnode",
+    "queries_to_xml",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
 
 #[test]
 fn r2_006_sweep_fn_range_added() {
-  for fn_ in ["isempty", "lower_inc", "upper_inc", "range_merge", "int4range", "int8range", "numrange", "tsrange", "tstzrange", "daterange", "multirange", "range_agg"] {
+  for fn_ in [
+    "isempty",
+    "lower_inc",
+    "upper_inc",
+    "range_merge",
+    "int4range",
+    "int8range",
+    "numrange",
+    "tsrange",
+    "tstzrange",
+    "daterange",
+    "multirange",
+    "range_agg",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing range fn {fn_}");
   }
 }
 
 #[test]
 fn r2_007_sweep_fn_agg_window_added() {
-  for fn_ in ["sum", "avg", "count", "min", "max", "bool_and", "bool_or", "every", "bit_and", "bit_or",
-              "stddev", "stddev_pop", "stddev_samp", "variance", "var_pop", "var_samp",
-              "covar_pop", "covar_samp", "corr",
-              "regr_slope", "regr_intercept", "regr_r2", "regr_count", "regr_avgx", "regr_avgy", "regr_sxx", "regr_syy", "regr_sxy",
-              "mode", "percentile_cont", "percentile_disc",
-              "rank", "dense_rank", "percent_rank", "cume_dist", "row_number", "ntile",
-              "lag", "lead", "first_value", "last_value", "nth_value"] {
+  for fn_ in [
+    "sum",
+    "avg",
+    "count",
+    "min",
+    "max",
+    "bool_and",
+    "bool_or",
+    "every",
+    "bit_and",
+    "bit_or",
+    "stddev",
+    "stddev_pop",
+    "stddev_samp",
+    "variance",
+    "var_pop",
+    "var_samp",
+    "covar_pop",
+    "covar_samp",
+    "corr",
+    "regr_slope",
+    "regr_intercept",
+    "regr_r2",
+    "regr_count",
+    "regr_avgx",
+    "regr_avgy",
+    "regr_sxx",
+    "regr_syy",
+    "regr_sxy",
+    "mode",
+    "percentile_cont",
+    "percentile_disc",
+    "rank",
+    "dense_rank",
+    "percent_rank",
+    "cume_dist",
+    "row_number",
+    "ntile",
+    "lag",
+    "lead",
+    "first_value",
+    "last_value",
+    "nth_value",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing agg/win fn {fn_}");
   }
 }
 
 #[test]
 fn r2_007_sweep_fn_conv_bit_net_added() {
-  for fn_ in ["int4", "int8", "int2", "float4", "float8",
-              "get_bit", "set_bit", "get_byte", "set_byte",
-              "host", "netmask", "network", "set_masklen", "inet"] {
+  for fn_ in [
+    "int4",
+    "int8",
+    "int2",
+    "float4",
+    "float8",
+    "get_bit",
+    "set_bit",
+    "get_byte",
+    "set_byte",
+    "host",
+    "netmask",
+    "network",
+    "set_masklen",
+    "inet",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
 
 #[test]
 fn r2_007_sweep_fn_uuid_crypto_added() {
-  for fn_ in ["gen_random_uuid", "uuid_generate_v1", "uuid_generate_v4", "uuid_generate_v5",
-              "sha224", "sha256", "sha384", "sha512", "hashtext",
-              "crypt", "gen_salt", "encrypt", "decrypt", "hmac", "digest"] {
+  for fn_ in [
+    "gen_random_uuid",
+    "uuid_generate_v1",
+    "uuid_generate_v4",
+    "uuid_generate_v5",
+    "sha224",
+    "sha256",
+    "sha384",
+    "sha512",
+    "hashtext",
+    "crypt",
+    "gen_salt",
+    "encrypt",
+    "decrypt",
+    "hmac",
+    "digest",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
@@ -2779,56 +4105,177 @@ fn r2_008_sweep_type_added() {
 
 #[test]
 fn r2_008_sweep_fn_seq_lock_admin() {
-  for fn_ in ["nextval", "currval", "lastval", "setval",
-              "pg_advisory_lock", "pg_advisory_lock_shared", "pg_advisory_unlock", "pg_advisory_unlock_shared", "pg_advisory_unlock_all",
-              "pg_advisory_xact_lock", "pg_advisory_xact_lock_shared",
-              "pg_try_advisory_lock", "pg_try_advisory_lock_shared", "pg_try_advisory_xact_lock", "pg_try_advisory_xact_lock_shared",
-              "generate_series", "pg_sleep", "pg_sleep_for", "pg_sleep_until",
-              "pg_cancel_backend", "pg_terminate_backend",
-              "pg_stat_reset", "pg_stat_reset_shared", "pg_stat_reset_single_table_counters", "pg_stat_reset_single_function_counters",
-              "pg_is_other_temp_schema"] {
+  for fn_ in [
+    "nextval",
+    "currval",
+    "lastval",
+    "setval",
+    "pg_advisory_lock",
+    "pg_advisory_lock_shared",
+    "pg_advisory_unlock",
+    "pg_advisory_unlock_shared",
+    "pg_advisory_unlock_all",
+    "pg_advisory_xact_lock",
+    "pg_advisory_xact_lock_shared",
+    "pg_try_advisory_lock",
+    "pg_try_advisory_lock_shared",
+    "pg_try_advisory_xact_lock",
+    "pg_try_advisory_xact_lock_shared",
+    "generate_series",
+    "pg_sleep",
+    "pg_sleep_for",
+    "pg_sleep_until",
+    "pg_cancel_backend",
+    "pg_terminate_backend",
+    "pg_stat_reset",
+    "pg_stat_reset_shared",
+    "pg_stat_reset_single_table_counters",
+    "pg_stat_reset_single_function_counters",
+    "pg_is_other_temp_schema",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
 
 #[test]
 fn r2_009_sweep_fn_pg_get_introspection() {
-  for fn_ in ["pg_get_viewdef", "pg_get_indexdef", "pg_get_constraintdef", "pg_get_functiondef", "pg_get_triggerdef", "pg_get_userbyid", "pg_get_serial_sequence", "pg_get_expr", "pg_get_statisticsobjdef", "pg_relation_filepath", "pg_filenode_relation", "pg_log_backend_memory_contexts", "pg_typeof", "pg_column_compression", "pg_tablespace_databases", "pg_tablespace_location", "pg_options_to_table"] {
+  for fn_ in [
+    "pg_get_viewdef",
+    "pg_get_indexdef",
+    "pg_get_constraintdef",
+    "pg_get_functiondef",
+    "pg_get_triggerdef",
+    "pg_get_userbyid",
+    "pg_get_serial_sequence",
+    "pg_get_expr",
+    "pg_get_statisticsobjdef",
+    "pg_relation_filepath",
+    "pg_filenode_relation",
+    "pg_log_backend_memory_contexts",
+    "pg_typeof",
+    "pg_column_compression",
+    "pg_tablespace_databases",
+    "pg_tablespace_location",
+    "pg_options_to_table",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
 
 #[test]
 fn r2_009_sweep_fn_encoding_visibility_event() {
-  for fn_ in ["pg_safe_snapshot_blocking_pids", "pg_isolation_test_session_is_blocked", "pg_collation_actual_version", "pg_collation_for", "pg_encoding_to_char", "pg_char_to_encoding", "pg_client_encoding", "format_type", "pg_type_is_visible", "pg_table_is_visible", "pg_function_is_visible", "pg_event_trigger_ddl_commands", "pg_event_trigger_dropped_objects", "pg_event_trigger_table_rewrite_oid", "pg_event_trigger_table_rewrite_reason"] {
+  for fn_ in [
+    "pg_safe_snapshot_blocking_pids",
+    "pg_isolation_test_session_is_blocked",
+    "pg_collation_actual_version",
+    "pg_collation_for",
+    "pg_encoding_to_char",
+    "pg_char_to_encoding",
+    "pg_client_encoding",
+    "format_type",
+    "pg_type_is_visible",
+    "pg_table_is_visible",
+    "pg_function_is_visible",
+    "pg_event_trigger_ddl_commands",
+    "pg_event_trigger_dropped_objects",
+    "pg_event_trigger_table_rewrite_oid",
+    "pg_event_trigger_table_rewrite_reason",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
 
 #[test]
 fn r2_009_sweep_fn_sqljson_fts() {
-  for fn_ in ["json_table", "jsonb_to_tsvector", "json_to_tsvector", "json_query", "json_value", "json_exists", "pg_input_is_valid", "pg_input_error_info", "ts_lexize", "ts_token_type", "ts_parse", "ts_debug"] {
+  for fn_ in [
+    "json_table",
+    "jsonb_to_tsvector",
+    "json_to_tsvector",
+    "json_query",
+    "json_value",
+    "json_exists",
+    "pg_input_is_valid",
+    "pg_input_error_info",
+    "ts_lexize",
+    "ts_token_type",
+    "ts_parse",
+    "ts_debug",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
 
 #[test]
 fn r2_010_sweep_fn_repl_wal() {
-  for fn_ in ["pg_replication_origin_create", "pg_replication_origin_drop", "pg_replication_origin_session_setup", "pg_replication_origin_session_reset", "pg_logical_slot_peek_changes", "pg_logical_slot_get_binary_changes", "pg_logical_slot_peek_binary_changes", "pg_replication_origin_oid", "pg_replication_origin_session_progress", "pg_show_replication_origin_status", "pg_get_wal_resource_managers", "pg_get_wal_replay_pause_state", "pg_is_wal_replay_paused", "pg_wal_replay_pause", "pg_wal_replay_resume"] {
+  for fn_ in [
+    "pg_replication_origin_create",
+    "pg_replication_origin_drop",
+    "pg_replication_origin_session_setup",
+    "pg_replication_origin_session_reset",
+    "pg_logical_slot_peek_changes",
+    "pg_logical_slot_get_binary_changes",
+    "pg_logical_slot_peek_binary_changes",
+    "pg_replication_origin_oid",
+    "pg_replication_origin_session_progress",
+    "pg_show_replication_origin_status",
+    "pg_get_wal_resource_managers",
+    "pg_get_wal_replay_pause_state",
+    "pg_is_wal_replay_paused",
+    "pg_wal_replay_pause",
+    "pg_wal_replay_resume",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
 
 #[test]
 fn r2_010_sweep_fn_lo_fs() {
-  for fn_ in ["pg_notification_queue_usage", "lo_create", "lo_unlink", "lo_open", "lo_close", "lo_read", "lo_write", "lo_lseek", "lo_lseek64", "lo_tell", "lo_tell64", "lo_truncate", "lo_truncate64", "lo_put", "lo_get", "lo_from_bytea", "lo_export", "lo_import", "pg_ls_dir", "pg_ls_logdir", "pg_ls_waldir", "pg_ls_tmpdir", "pg_ls_archive_statusdir", "pg_read_file", "pg_read_binary_file", "pg_stat_file"] {
+  for fn_ in [
+    "pg_notification_queue_usage",
+    "lo_create",
+    "lo_unlink",
+    "lo_open",
+    "lo_close",
+    "lo_read",
+    "lo_write",
+    "lo_lseek",
+    "lo_lseek64",
+    "lo_tell",
+    "lo_tell64",
+    "lo_truncate",
+    "lo_truncate64",
+    "lo_put",
+    "lo_get",
+    "lo_from_bytea",
+    "lo_export",
+    "lo_import",
+    "pg_ls_dir",
+    "pg_ls_logdir",
+    "pg_ls_waldir",
+    "pg_ls_tmpdir",
+    "pg_ls_archive_statusdir",
+    "pg_read_file",
+    "pg_read_binary_file",
+    "pg_stat_file",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
 
 #[test]
 fn r2_010_sweep_fn_dblink_misc() {
-  for fn_ in ["dblink", "dblink_exec", "dblink_connect", "dblink_disconnect", "dblink_get_connections", "num_nonnulls", "num_nulls", "suppress_redundant_updates_trigger", "tsmatchsel", "tsmatchjoinsel"] {
+  for fn_ in [
+    "dblink",
+    "dblink_exec",
+    "dblink_connect",
+    "dblink_disconnect",
+    "dblink_get_connections",
+    "num_nonnulls",
+    "num_nulls",
+    "suppress_redundant_updates_trigger",
+    "tsmatchsel",
+    "tsmatchjoinsel",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
@@ -2907,8 +4354,17 @@ fn r2_033_overlaps_operator_hover() {
 
 #[test]
 fn r2_068_sweep_kw_new_entries() {
-  for kw in ["PRIMARY KEY", "FOREIGN KEY", "EXCLUDE USING", "UNIQUE NULLS NOT DISTINCT",
-             "AT TIME ZONE", "WITH ORDINALITY", "AS MATERIALIZED", "AS NOT MATERIALIZED", "FORCE NULL"] {
+  for kw in [
+    "PRIMARY KEY",
+    "FOREIGN KEY",
+    "EXCLUDE USING",
+    "UNIQUE NULLS NOT DISTINCT",
+    "AT TIME ZONE",
+    "WITH ORDINALITY",
+    "AS MATERIALIZED",
+    "AS NOT MATERIALIZED",
+    "FORCE NULL",
+  ] {
     assert!(resolve(kw, &Catalog::default()).is_some(), "missing {kw}");
   }
 }
@@ -2960,35 +4416,62 @@ fn r2_068_sweep_op_concat() {
 
 #[test]
 fn r2_069_sweep_fn_misc_guc_added() {
-  for fn_ in ["width_bucket", "bound_box", "convert", "convert_from", "convert_to",
-              "set_config", "current_setting", "cluster_name", "pg_jit_available",
-              "pg_index_column_has_property", "pg_index_has_property", "pg_indexam_has_property"] {
+  for fn_ in [
+    "width_bucket",
+    "bound_box",
+    "convert",
+    "convert_from",
+    "convert_to",
+    "set_config",
+    "current_setting",
+    "cluster_name",
+    "pg_jit_available",
+    "pg_index_column_has_property",
+    "pg_index_has_property",
+    "pg_indexam_has_property",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
 
 #[test]
 fn r2_069_sweep_fn_json_added() {
-  for fn_ in ["to_jsonb", "json_strip_nulls", "json_array_length", "json_typeof",
-              "json_extract_path", "json_extract_path_text", "json_each", "json_each_text",
-              "json_object_keys", "json_populate_recordset"] {
+  for fn_ in [
+    "to_jsonb",
+    "json_strip_nulls",
+    "json_array_length",
+    "json_typeof",
+    "json_extract_path",
+    "json_extract_path_text",
+    "json_each",
+    "json_each_text",
+    "json_object_keys",
+    "json_populate_recordset",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
 
 #[test]
 fn r2_069_sweep_fn_reg_hash_added() {
-  for fn_ in ["to_regnamespace", "to_regrole", "to_regoperator",
-              "hashtextextended", "hashbpchar"] {
+  for fn_ in ["to_regnamespace", "to_regrole", "to_regoperator", "hashtextextended", "hashbpchar"] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
 
 #[test]
 fn r2_070_sweep_fn_fts_trgm_added() {
-  for fn_ in ["tsvector_to_array", "array_to_tsvector", "ts_strip",
-              "similarity", "word_similarity", "strict_word_similarity",
-              "show_trgm", "show_limit", "set_limit"] {
+  for fn_ in [
+    "tsvector_to_array",
+    "array_to_tsvector",
+    "ts_strip",
+    "similarity",
+    "word_similarity",
+    "strict_word_similarity",
+    "show_trgm",
+    "show_limit",
+    "set_limit",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
@@ -3002,43 +4485,48 @@ fn r2_070_sweep_fn_geom_added() {
 
 #[test]
 fn r2_070_sweep_fn_datetime_added() {
-  for fn_ in ["extract", "isfinite", "timezone", "timeofday",
-              "clock_timestamp", "transaction_timestamp", "statement_timestamp"] {
+  for fn_ in
+    ["extract", "isfinite", "timezone", "timeofday", "clock_timestamp", "transaction_timestamp", "statement_timestamp"]
+  {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
 
 #[test]
 fn r2_071_sweep_fn_interval_introspection_added() {
-  for fn_ in ["date_bin", "date_diff",
-              "pg_get_function_arguments", "pg_get_function_result"] {
+  for fn_ in ["date_bin", "date_diff", "pg_get_function_arguments", "pg_get_function_result"] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
 
 #[test]
 fn r2_071_verify_math_fns() {
-  for fn_ in ["exp", "ln", "log", "log10", "cbrt", "sqrt", "power",
-              "trunc", "round", "ceil", "ceiling", "floor",
-              "acosh", "asinh", "atanh", "cosh", "sinh", "tanh",
-              "acosd", "asind", "atand", "cosd", "sind", "tand", "atan2d"] {
+  for fn_ in [
+    "exp", "ln", "log", "log10", "cbrt", "sqrt", "power", "trunc", "round", "ceil", "ceiling", "floor", "acosh",
+    "asinh", "atanh", "cosh", "sinh", "tanh", "acosd", "asind", "atand", "cosd", "sind", "tand", "atan2d",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
 
 #[test]
 fn r2_071_verify_admin_pg_fns() {
-  for fn_ in ["pg_get_keywords", "pg_export_snapshot", "pg_listening_channels",
-              "pg_notify", "pg_walfile_name", "pg_walfile_name_offset",
-              "overlaps"] {
+  for fn_ in [
+    "pg_get_keywords",
+    "pg_export_snapshot",
+    "pg_listening_channels",
+    "pg_notify",
+    "pg_walfile_name",
+    "pg_walfile_name_offset",
+    "overlaps",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
 
 #[test]
 fn r2_072_sweep_fn_str_array_added() {
-  for fn_ in ["ord", "to_hex", "array_subscript", "hash_array",
-              "bit_count", "bit_xor"] {
+  for fn_ in ["ord", "to_hex", "array_subscript", "hash_array", "bit_count", "bit_xor"] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
@@ -3052,41 +4540,74 @@ fn r2_072_sweep_fn_enum_added() {
 
 #[test]
 fn r2_072_sweep_fn_sqljson_constructors() {
-  for fn_ in ["json_array", "json_object", "json_scalar",
-              "json_serialize", "jsonb_insert"] {
+  for fn_ in ["json_array", "json_object", "json_scalar", "json_serialize", "jsonb_insert"] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
 
 #[test]
 fn r2_072_verify_range_ops() {
-  for fn_ in ["range_eq", "range_lt", "range_le", "range_gt", "range_ge",
-              "range_adjacent", "range_after", "range_before",
-              "range_merge", "range_minus", "range_intersect", "range_union",
-              "isempty", "lower_inc", "upper_inc"] {
+  for fn_ in [
+    "range_eq",
+    "range_lt",
+    "range_le",
+    "range_gt",
+    "range_ge",
+    "range_adjacent",
+    "range_after",
+    "range_before",
+    "range_merge",
+    "range_minus",
+    "range_intersect",
+    "range_union",
+    "isempty",
+    "lower_inc",
+    "upper_inc",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
 
 #[test]
 fn r2_073_sweep_fn_xact_signal_added() {
-  for fn_ in ["pg_xact_status", "pg_current_xact_id", "pg_log_standby_snapshot",
-              "pg_trigger_depth", "pg_log_query_plan", "pg_signal_backend",
-              "pg_xlog_replay_pause", "pg_xlogfile_name", "inet_send"] {
+  for fn_ in [
+    "pg_xact_status",
+    "pg_current_xact_id",
+    "pg_log_standby_snapshot",
+    "pg_trigger_depth",
+    "pg_log_query_plan",
+    "pg_signal_backend",
+    "pg_xlog_replay_pause",
+    "pg_xlogfile_name",
+    "inet_send",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
 
 #[test]
 fn r2_073_verify_admin_breadth() {
-  for fn_ in ["pg_xact_commit_timestamp", "pg_current_xact_id_if_assigned",
-              "pg_last_committed_xact", "pg_get_replica_identity_index",
-              "pg_relation_is_publishable", "pg_partition_ancestors",
-              "pg_partition_tree", "pg_partition_root", "pg_my_temp_schema",
-              "pg_is_other_temp_schema", "pg_relation_filenode",
-              "pg_export_snapshot", "pg_safe_snapshot_blocking_pids",
-              "inet_client_addr", "inet_server_addr", "pg_blocking_pids",
-              "pg_promote", "pg_rotate_logfile", "pg_logical_emit_message"] {
+  for fn_ in [
+    "pg_xact_commit_timestamp",
+    "pg_current_xact_id_if_assigned",
+    "pg_last_committed_xact",
+    "pg_get_replica_identity_index",
+    "pg_relation_is_publishable",
+    "pg_partition_ancestors",
+    "pg_partition_tree",
+    "pg_partition_root",
+    "pg_my_temp_schema",
+    "pg_is_other_temp_schema",
+    "pg_relation_filenode",
+    "pg_export_snapshot",
+    "pg_safe_snapshot_blocking_pids",
+    "inet_client_addr",
+    "inet_server_addr",
+    "pg_blocking_pids",
+    "pg_promote",
+    "pg_rotate_logfile",
+    "pg_logical_emit_message",
+  ] {
     assert!(resolve(fn_, &Catalog::default()).is_some(), "missing fn {fn_}");
   }
 }
@@ -3594,65 +5115,72 @@ fn r2_157_hover_fk_uppercase_public_drops_prefix() {
   let mut cat = Catalog::default();
   cat.schemas.push(Schema {
     name: "public".into(),
-    tables: vec![Table {
-      schema: "public".into(),
-      name: "orders".into(),
-      kind: TableKind::Table,
-      columns: vec![Column {
-        name: "id".into(),
-        data_type: "int4".into(),
-        nullable: false,
-        default: None,
+    tables: vec![
+      Table {
+        schema: "public".into(),
+        name: "orders".into(),
+        kind: TableKind::Table,
+        columns: vec![Column {
+          name: "id".into(),
+          data_type: "int4".into(),
+          nullable: false,
+          default: None,
+          comment: None,
+          generated: None,
+          json_keys: None,
+        }],
+        constraints: Vec::new(),
+        indexes: Vec::new(),
+        triggers: Vec::new(),
+        policies: Vec::new(),
         comment: None,
-        generated: None,
-        json_keys: None,
-      }],
-      constraints: Vec::new(),
-      indexes: Vec::new(),
-      triggers: Vec::new(),
-      policies: Vec::new(),
-      comment: None,
-      row_estimate: None,
-      owner: None, definition: None, strict: false, options: None,
-    }, Table {
-      schema: "public".into(),
-      name: "users".into(),
-      kind: TableKind::Table,
-      columns: vec![Column {
-        name: "order_id".into(),
-        data_type: "int4".into(),
-        nullable: false,
-        default: None,
-        comment: None,
-        generated: None,
-        json_keys: None,
-      }],
-      constraints: vec![dsl_catalog::Constraint {
-        name: "fk_users_order".into(),
-        kind: ConstraintKind::ForeignKey,
-        columns: vec!["order_id".into()],
-        references: Some(dsl_catalog::ConstraintRef {
-          schema: "PUBLIC".into(),
-          table: "orders".into(),
-          columns: vec!["id".into()],
-        }),
+        row_estimate: None,
+        owner: None,
         definition: None,
-        inline: false,
-      }],
-      indexes: Vec::new(),
-      triggers: Vec::new(),
-      policies: Vec::new(),
-      comment: None,
-      row_estimate: None,
-      owner: None, definition: None, strict: false, options: None,
-    }],
+        strict: false,
+        options: None,
+      },
+      Table {
+        schema: "public".into(),
+        name: "users".into(),
+        kind: TableKind::Table,
+        columns: vec![Column {
+          name: "order_id".into(),
+          data_type: "int4".into(),
+          nullable: false,
+          default: None,
+          comment: None,
+          generated: None,
+          json_keys: None,
+        }],
+        constraints: vec![dsl_catalog::Constraint {
+          name: "fk_users_order".into(),
+          kind: ConstraintKind::ForeignKey,
+          columns: vec!["order_id".into()],
+          references: Some(dsl_catalog::ConstraintRef {
+            schema: "PUBLIC".into(),
+            table: "orders".into(),
+            columns: vec!["id".into()],
+          }),
+          definition: None,
+          inline: false,
+        }],
+        indexes: Vec::new(),
+        triggers: Vec::new(),
+        policies: Vec::new(),
+        comment: None,
+        row_estimate: None,
+        owner: None,
+        definition: None,
+        strict: false,
+        options: None,
+      },
+    ],
   });
   let md = resolve("users", &cat).expect("users hover");
   // Schema prefix dropped: should show `REFERENCES orders (id)` not `PUBLIC.orders`.
-  assert!(md.contains("REFERENCES orders"),
-    "hover did not strip PUBLIC schema prefix: {md}");
-  assert!(!md.contains("PUBLIC.orders"),
-    "hover kept PUBLIC. prefix: {md}");
+  assert!(md.contains("REFERENCES orders"), "hover did not strip PUBLIC schema prefix: {md}");
+  assert!(!md.contains("PUBLIC.orders"), "hover kept PUBLIC. prefix: {md}");
 }
 
 #[test]
@@ -3681,7 +5209,10 @@ fn r2_154_hover_column_dot_case_insensitive() {
       policies: Vec::new(),
       comment: None,
       row_estimate: None,
-      owner: None, definition: None, strict: false, options: None,
+      owner: None,
+      definition: None,
+      strict: false,
+      options: None,
     }],
   });
   let md = resolve("USERS.ID", &cat);
@@ -3960,13 +5491,7 @@ fn r2_107_hover_range_strictly_left_right_adjacent() {
 
 #[test]
 fn r2_106_hover_pg17_maintain_explain_lobjects() {
-  for kw in [
-    "MAINTAIN",
-    "EXPLAIN SERIALIZE",
-    "EXPLAIN MEMORY",
-    "LARGE OBJECTS IN SCHEMA",
-    "ALL LARGE OBJECTS",
-  ] {
+  for kw in ["MAINTAIN", "EXPLAIN SERIALIZE", "EXPLAIN MEMORY", "LARGE OBJECTS IN SCHEMA", "ALL LARGE OBJECTS"] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "{kw} hover missing");
     let s = md.unwrap();
@@ -3976,14 +5501,7 @@ fn r2_106_hover_pg17_maintain_explain_lobjects() {
 
 #[test]
 fn r2_105_hover_pg18_returning_old_new() {
-  for kw in [
-    "RETURNING OLD",
-    "RETURNING NEW",
-    "OLD.",
-    "NEW.",
-    "GENERATED ALWAYS AS VIRTUAL",
-    "VIRTUAL",
-  ] {
+  for kw in ["RETURNING OLD", "RETURNING NEW", "OLD.", "NEW.", "GENERATED ALWAYS AS VIRTUAL", "VIRTUAL"] {
     let md = resolve(kw, &Catalog::default());
     assert!(md.is_some(), "{kw} hover missing");
     let s = md.unwrap();

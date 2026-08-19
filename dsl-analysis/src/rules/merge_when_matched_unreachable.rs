@@ -49,7 +49,8 @@ impl LintRule for Rule {
           out.push(Diagnostic {
             code: "sql793",
             severity: Severity::Warning,
-            message: "unreachable WHEN MATCHED clause -- an earlier unconditional WHEN MATCHED always matches first".into(),
+            message: "unreachable WHEN MATCHED clause -- an earlier unconditional WHEN MATCHED always matches first"
+              .into(),
             range: crate::range_at(start + pos, start + pos + 4),
           });
         }

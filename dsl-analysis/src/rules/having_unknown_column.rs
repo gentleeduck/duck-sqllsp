@@ -48,7 +48,8 @@ impl LintRule for Rule {
     let Some(rel_clause_start) = find_clause(bytes_u, b"HAVING") else {
       return;
     };
-    let clause_end = find_clause_end(bytes_u, rel_clause_start + 6, &["ORDER BY", "LIMIT", "OFFSET", "FOR", "FETCH", "WINDOW"]);
+    let clause_end =
+      find_clause_end(bytes_u, rel_clause_start + 6, &["ORDER BY", "LIMIT", "OFFSET", "FOR", "FETCH", "WINDOW"]);
     let clause_start = rel_clause_start + 6;
     let bytes = cleaned.as_bytes();
 
@@ -131,11 +132,7 @@ impl LintRule for Rule {
 }
 
 fn strip_quotes(s: &str) -> &str {
-  if s.len() >= 2 && s.starts_with('"') && s.ends_with('"') {
-    &s[1..s.len() - 1]
-  } else {
-    s
-  }
+  if s.len() >= 2 && s.starts_with('"') && s.ends_with('"') { &s[1..s.len() - 1] } else { s }
 }
 
 /// Uppercase, **sorted** keyword list. SQL keywords + boolean / null

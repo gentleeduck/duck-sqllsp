@@ -141,7 +141,10 @@ fn resolve_with_source_handles_quoted_identifier_alias() {
 
 #[test]
 fn r2_075_binds_multiple_joins() {
-  let p = parse("SELECT * FROM users u JOIN orders o ON u.id = o.user_id JOIN payments p ON o.id = p.order_id", Dialect::Postgres);
+  let p = parse(
+    "SELECT * FROM users u JOIN orders o ON u.id = o.user_id JOIN payments p ON o.id = p.order_id",
+    Dialect::Postgres,
+  );
   let scopes = resolve(&p.statements);
   assert!(scopes[0].get("u").is_some(), "u missing");
   assert!(scopes[0].get("o").is_some(), "o missing");
@@ -184,7 +187,6 @@ fn r2_075_resolves_insert_target() {
   assert!(scopes[0].get("users").is_some(), "users missing");
 }
 
-
 #[test]
 fn r2_126_binds_cte_with_column_list() {
   let p = parse("WITH t(a, b) AS (SELECT 1, 2) SELECT t.a, t.b FROM t", Dialect::Postgres);
@@ -194,20 +196,14 @@ fn r2_126_binds_cte_with_column_list() {
 
 #[test]
 fn r2_126_binds_lateral_with_set_returning_fn() {
-  let p = parse(
-    "SELECT * FROM users u, LATERAL generate_series(1, 3) AS gs(n)",
-    Dialect::Postgres,
-  );
+  let p = parse("SELECT * FROM users u, LATERAL generate_series(1, 3) AS gs(n)", Dialect::Postgres);
   let scopes = resolve(&p.statements);
   assert!(scopes[0].get("u").is_some(), "u missing");
 }
 
 #[test]
 fn r2_126_binds_update_target_in_returning() {
-  let p = parse(
-    "UPDATE users u SET name = 'x' WHERE id = 1 RETURNING u.id, u.name",
-    Dialect::Postgres,
-  );
+  let p = parse("UPDATE users u SET name = 'x' WHERE id = 1 RETURNING u.id, u.name", Dialect::Postgres);
   let scopes = resolve(&p.statements);
   assert!(
     scopes[0].get("u").is_some() || scopes[0].get("users").is_some(),
@@ -222,10 +218,7 @@ fn r2_126_binds_delete_target_alias() {
   // needed before resolver can pick them up).
   let p = parse("DELETE FROM orders o WHERE o.user_id = 1", Dialect::Postgres);
   let scopes = resolve(&p.statements);
-  assert!(
-    scopes[0].get("o").is_some() || scopes[0].get("orders").is_some(),
-    "delete target / alias missing"
-  );
+  assert!(scopes[0].get("o").is_some() || scopes[0].get("orders").is_some(), "delete target / alias missing");
 }
 
 #[test]
@@ -240,10 +233,7 @@ fn r2_126_binds_recursive_cte_self_reference() {
 
 #[test]
 fn r2_127_binds_nested_cte_references() {
-  let p = parse(
-    "WITH a AS (SELECT 1 AS x), b AS (SELECT x FROM a) SELECT * FROM a, b",
-    Dialect::Postgres,
-  );
+  let p = parse("WITH a AS (SELECT 1 AS x), b AS (SELECT x FROM a) SELECT * FROM a, b", Dialect::Postgres);
   let scopes = resolve(&p.statements);
   assert!(scopes[0].get("a").is_some(), "CTE a missing");
   assert!(scopes[0].get("b").is_some(), "CTE b missing");
@@ -262,10 +252,7 @@ fn r2_127_binds_multiple_ctes_with_recursive() {
 
 #[test]
 fn r2_127_binds_subquery_alias_in_from() {
-  let p = parse(
-    "SELECT t.id FROM (SELECT id FROM users) AS t",
-    Dialect::Postgres,
-  );
+  let p = parse("SELECT t.id FROM (SELECT id FROM users) AS t", Dialect::Postgres);
   let scopes = resolve(&p.statements);
   assert!(scopes[0].get("t").is_some(), "subquery alias t missing");
 }
@@ -277,22 +264,14 @@ fn r2_127_binds_insert_target_alias() {
     Dialect::Postgres,
   );
   let scopes = resolve(&p.statements);
-  assert!(
-    scopes[0].get("u").is_some() || scopes[0].get("users").is_some(),
-    "INSERT target / alias missing"
-  );
+  assert!(scopes[0].get("u").is_some() || scopes[0].get("users").is_some(), "INSERT target / alias missing");
 }
 
 #[test]
 fn r2_127_binds_cte_column_list_columns() {
-  let p = parse(
-    "WITH t(alpha, beta) AS (SELECT 1, 2) SELECT alpha FROM t",
-    Dialect::Postgres,
-  );
-  let scopes = ::dsl_resolve::resolve_with_source(
-    &p.statements,
-    "WITH t(alpha, beta) AS (SELECT 1, 2) SELECT alpha FROM t",
-  );
+  let p = parse("WITH t(alpha, beta) AS (SELECT 1, 2) SELECT alpha FROM t", Dialect::Postgres);
+  let scopes =
+    ::dsl_resolve::resolve_with_source(&p.statements, "WITH t(alpha, beta) AS (SELECT 1, 2) SELECT alpha FROM t");
   let cols = scopes[0].cte_columns_of("t").expect("CTE t cte_columns_of missing");
   assert!(cols.iter().any(|c| c.eq_ignore_ascii_case("alpha")), "alpha missing");
   assert!(cols.iter().any(|c| c.eq_ignore_ascii_case("beta")), "beta missing");
@@ -300,10 +279,8 @@ fn r2_127_binds_cte_column_list_columns() {
 
 #[test]
 fn r2_127_binds_join_then_lateral() {
-  let p = parse(
-    "SELECT * FROM users u JOIN orders o ON o.user_id = u.id, LATERAL (SELECT 1 AS k) AS k",
-    Dialect::Postgres,
-  );
+  let p =
+    parse("SELECT * FROM users u JOIN orders o ON o.user_id = u.id, LATERAL (SELECT 1 AS k) AS k", Dialect::Postgres);
   let scopes = resolve(&p.statements);
   assert!(scopes[0].get("u").is_some(), "u missing");
   assert!(scopes[0].get("o").is_some(), "o missing");
@@ -326,10 +303,7 @@ fn r2_128_binds_cross_join() {
 
 #[test]
 fn r2_128_binds_left_outer_join() {
-  let p = parse(
-    "SELECT * FROM users u LEFT OUTER JOIN orders o ON u.id = o.user_id",
-    Dialect::Postgres,
-  );
+  let p = parse("SELECT * FROM users u LEFT OUTER JOIN orders o ON u.id = o.user_id", Dialect::Postgres);
   let scopes = resolve(&p.statements);
   assert!(scopes[0].get("u").is_some(), "u missing");
   assert!(scopes[0].get("o").is_some(), "o missing");
@@ -337,10 +311,7 @@ fn r2_128_binds_left_outer_join() {
 
 #[test]
 fn r2_128_binds_right_outer_join() {
-  let p = parse(
-    "SELECT * FROM users u RIGHT OUTER JOIN orders o ON u.id = o.user_id",
-    Dialect::Postgres,
-  );
+  let p = parse("SELECT * FROM users u RIGHT OUTER JOIN orders o ON u.id = o.user_id", Dialect::Postgres);
   let scopes = resolve(&p.statements);
   assert!(scopes[0].get("u").is_some(), "u missing");
   assert!(scopes[0].get("o").is_some(), "o missing");
@@ -348,10 +319,7 @@ fn r2_128_binds_right_outer_join() {
 
 #[test]
 fn r2_128_binds_full_outer_join() {
-  let p = parse(
-    "SELECT * FROM users u FULL OUTER JOIN orders o ON u.id = o.user_id",
-    Dialect::Postgres,
-  );
+  let p = parse("SELECT * FROM users u FULL OUTER JOIN orders o ON u.id = o.user_id", Dialect::Postgres);
   let scopes = resolve(&p.statements);
   assert!(scopes[0].get("u").is_some(), "u missing");
   assert!(scopes[0].get("o").is_some(), "o missing");
@@ -359,10 +327,7 @@ fn r2_128_binds_full_outer_join() {
 
 #[test]
 fn r2_128_binds_natural_join() {
-  let p = parse(
-    "SELECT * FROM users u NATURAL JOIN orders o",
-    Dialect::Postgres,
-  );
+  let p = parse("SELECT * FROM users u NATURAL JOIN orders o", Dialect::Postgres);
   let scopes = resolve(&p.statements);
   assert!(scopes[0].get("u").is_some(), "u missing");
   assert!(scopes[0].get("o").is_some(), "o missing");
@@ -370,10 +335,7 @@ fn r2_128_binds_natural_join() {
 
 #[test]
 fn r2_128_binds_inner_join_using() {
-  let p = parse(
-    "SELECT * FROM users u INNER JOIN orders o USING (id)",
-    Dialect::Postgres,
-  );
+  let p = parse("SELECT * FROM users u INNER JOIN orders o USING (id)", Dialect::Postgres);
   let scopes = resolve(&p.statements);
   assert!(scopes[0].get("u").is_some(), "u missing");
   assert!(scopes[0].get("o").is_some(), "o missing");
@@ -381,16 +343,10 @@ fn r2_128_binds_inner_join_using() {
 
 #[test]
 fn r2_128_binds_quoted_alias() {
-  let p = parse(
-    "SELECT \"User\".id FROM users \"User\"",
-    Dialect::Postgres,
-  );
+  let p = parse("SELECT \"User\".id FROM users \"User\"", Dialect::Postgres);
   let scopes = resolve(&p.statements);
   // Quoted alias should bind under both quoted and bare form (case-sensitive).
-  assert!(
-    scopes[0].get("User").is_some() || scopes[0].get("\"User\"").is_some(),
-    "quoted alias `User` missing"
-  );
+  assert!(scopes[0].get("User").is_some() || scopes[0].get("\"User\"").is_some(), "quoted alias `User` missing");
 }
 
 #[test]
@@ -405,10 +361,7 @@ fn r3_003_update_from_binds_extra_tables() {
   // CYCLE 3: `UPDATE t SET ... FROM <list> WHERE ...` adds the
   // FROM list as additional bindings. Previously only `users` was
   // bound; `orders` was invisible in WHERE clause scope.
-  let p = parse(
-    "UPDATE users SET active = o.flag FROM orders o WHERE o.user_id = users.id;",
-    Dialect::Postgres,
-  );
+  let p = parse("UPDATE users SET active = o.flag FROM orders o WHERE o.user_id = users.id;", Dialect::Postgres);
   let scopes = resolve(&p.statements);
   assert!(scopes[0].get("users").is_some(), "users target missing");
   assert!(scopes[0].get("o").is_some(), "FROM-list alias o missing");
@@ -419,10 +372,7 @@ fn r3_003_update_from_binds_extra_tables() {
 fn r3_003_delete_using_binds_extra_tables() {
   // CYCLE 3: `DELETE FROM tgt USING <list> WHERE ...` adds the
   // USING list as additional bindings.
-  let p = parse(
-    "DELETE FROM users USING orders o WHERE o.user_id = users.id;",
-    Dialect::Postgres,
-  );
+  let p = parse("DELETE FROM users USING orders o WHERE o.user_id = users.id;", Dialect::Postgres);
   let scopes = resolve(&p.statements);
   assert!(scopes[0].get("users").is_some(), "users target missing");
   assert!(scopes[0].get("o").is_some(), "USING-list alias o missing");
@@ -431,10 +381,7 @@ fn r3_003_delete_using_binds_extra_tables() {
 
 #[test]
 fn r3_003_update_from_multi_table() {
-  let p = parse(
-    "UPDATE users SET x = 1 FROM orders o, products p WHERE 1=1;",
-    Dialect::Postgres,
-  );
+  let p = parse("UPDATE users SET x = 1 FROM orders o, products p WHERE 1=1;", Dialect::Postgres);
   let scopes = resolve(&p.statements);
   assert!(scopes[0].get("o").is_some());
   assert!(scopes[0].get("p").is_some());
@@ -442,10 +389,7 @@ fn r3_003_update_from_multi_table() {
 
 #[test]
 fn r3_003_delete_using_multi_table() {
-  let p = parse(
-    "DELETE FROM users USING orders o, products p WHERE 1=1;",
-    Dialect::Postgres,
-  );
+  let p = parse("DELETE FROM users USING orders o, products p WHERE 1=1;", Dialect::Postgres);
   let scopes = resolve(&p.statements);
   assert!(scopes[0].get("o").is_some());
   assert!(scopes[0].get("p").is_some());
@@ -643,5 +587,3 @@ fn r9_resolve_idem_0612() {
   let s2 = resolve(&p.statements);
   assert_eq!(s1.len(), s2.len());
 }
-
-

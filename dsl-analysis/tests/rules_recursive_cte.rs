@@ -44,13 +44,17 @@ fn sql769_quiet_when_using_col_is_new() {
 
 #[test]
 fn sql770_multiple_self_reference() {
-  let d = diags("WITH RECURSIVE t770(id) AS (SELECT 1 UNION ALL SELECT a.id FROM t770 a JOIN t770 b ON a.id = b.id + 1) SELECT * FROM t770;");
+  let d = diags(
+    "WITH RECURSIVE t770(id) AS (SELECT 1 UNION ALL SELECT a.id FROM t770 a JOIN t770 b ON a.id = b.id + 1) SELECT * FROM t770;",
+  );
   assert!(d.iter().any(|x| x.code == "sql770" && x.severity == Severity::Error));
 }
 
 #[test]
 fn sql770_quiet_single_self_reference() {
-  let d = diags("WITH RECURSIVE t770g(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM t770g WHERE id < 10) SELECT * FROM t770g;");
+  let d = diags(
+    "WITH RECURSIVE t770g(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM t770g WHERE id < 10) SELECT * FROM t770g;",
+  );
   assert!(!d.iter().any(|x| x.code == "sql770"));
 }
 
@@ -62,30 +66,40 @@ fn sql771_aggregate_in_recursive_term() {
 
 #[test]
 fn sql771_quiet_no_aggregate() {
-  let d = diags("WITH RECURSIVE t771g(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM t771g WHERE id < 10) SELECT * FROM t771g;");
+  let d = diags(
+    "WITH RECURSIVE t771g(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM t771g WHERE id < 10) SELECT * FROM t771g;",
+  );
   assert!(!d.iter().any(|x| x.code == "sql771"));
 }
 
 #[test]
 fn sql772_order_by_limit_in_recursive_term() {
-  let d = diags("WITH RECURSIVE t772(id) AS (SELECT 1 UNION ALL (SELECT id + 1 FROM t772 ORDER BY id LIMIT 5)) SELECT * FROM t772;");
+  let d = diags(
+    "WITH RECURSIVE t772(id) AS (SELECT 1 UNION ALL (SELECT id + 1 FROM t772 ORDER BY id LIMIT 5)) SELECT * FROM t772;",
+  );
   assert!(d.iter().any(|x| x.code == "sql772" && x.severity == Severity::Error));
 }
 
 #[test]
 fn sql772_quiet_without_order_or_limit() {
-  let d = diags("WITH RECURSIVE t772g(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM t772g WHERE id < 10) SELECT * FROM t772g;");
+  let d = diags(
+    "WITH RECURSIVE t772g(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM t772g WHERE id < 10) SELECT * FROM t772g;",
+  );
   assert!(!d.iter().any(|x| x.code == "sql772"));
 }
 
 #[test]
 fn sql773_self_reference_on_left_join_nullable_side() {
-  let d = diags("WITH RECURSIVE t773(id) AS (SELECT 1 UNION ALL SELECT n.id FROM nodes n LEFT JOIN t773 ON n.parent_id = t773.id) SELECT * FROM t773;");
+  let d = diags(
+    "WITH RECURSIVE t773(id) AS (SELECT 1 UNION ALL SELECT n.id FROM nodes n LEFT JOIN t773 ON n.parent_id = t773.id) SELECT * FROM t773;",
+  );
   assert!(d.iter().any(|x| x.code == "sql773" && x.severity == Severity::Error));
 }
 
 #[test]
 fn sql773_quiet_on_inner_join() {
-  let d = diags("WITH RECURSIVE t773g(id) AS (SELECT 1 UNION ALL SELECT n.id FROM nodes n JOIN t773g ON n.parent_id = t773g.id) SELECT * FROM t773g;");
+  let d = diags(
+    "WITH RECURSIVE t773g(id) AS (SELECT 1 UNION ALL SELECT n.id FROM nodes n JOIN t773g ON n.parent_id = t773g.id) SELECT * FROM t773g;",
+  );
   assert!(!d.iter().any(|x| x.code == "sql773"));
 }
