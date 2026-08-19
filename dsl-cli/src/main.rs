@@ -62,9 +62,11 @@ enum Cmd {
     /// Treat warnings as errors (exit 1 if any warnings found).
     #[arg(long)]
     warnings_as_errors: bool,
-    /// SQL dialect: postgres (default), mysql, sqlite, generic.
-    #[arg(long, default_value = "postgres")]
-    dialect: String,
+    /// SQL dialect: postgres, mysql, sqlite, mssql, generic.
+    ///
+    /// Defaults to the `dialect` in `.duck-sqllsp.toml`, then postgres.
+    #[arg(long)]
+    dialect: Option<String>,
   },
   /// Format one or more .sql files in place (or to stdout with `-`).
   ///
@@ -248,7 +250,25 @@ fn main() -> anyhow::Result<()> {
       Ok(())
     },
     Cmd::Lint { files, format, warnings_as_errors, dialect } => {
-      let dialect = match dialect.to_ascii_lowercase().as_str() {
+      // Read the project config, so `lint` in CI behaves like the
+      // server in the editor. Without this, `[duck_sqllsp.rules]`
+      // severity overrides -- which the docs present as the way to
+      // silence a rule -- applied only inside the editor, and a rule
+      // silenced for the repository still failed the build.
+      let cfg = files
+        .iter()
+        .find(|f| *f != "-")
+        .map(std::path::Path::new)
+        .and_then(dsl_server::config::load_project_config)
+        .unwrap_or_default();
+
+      let dialect_name = dialect.unwrap_or_else(|| match cfg.effective_dialect() {
+        dsl_server::config::Dialect::Postgresql => "postgres".into(),
+        dsl_server::config::Dialect::Mysql => "mysql".into(),
+        dsl_server::config::Dialect::Sqlite => "sqlite".into(),
+        dsl_server::config::Dialect::Mssql => "mssql".into(),
+      });
+      let dialect = match dialect_name.to_ascii_lowercase().as_str() {
         "postgres" | "pg" => dsl_parse::Dialect::Postgres,
         "mysql" => dsl_parse::Dialect::MySql,
         "sqlite" => dsl_parse::Dialect::SQLite,
@@ -314,7 +334,25 @@ fn main() -> anyhow::Result<()> {
             catalog = dsl_completion::source_tables::merge(&catalog, &derived);
           }
         }
-        let diags = dsl_analysis::run_with_dialect(&source, &parsed, &scopes, &catalog, dialect);
+        let raw = dsl_analysis::run_with_dialect(&source, &parsed, &scopes, &catalog, dialect);
+        // Apply `[duck_sqllsp.rules]` overrides, exactly as the server
+        // does -- including dropping a rule set to off/ignore/none, so
+        // a silenced rule cannot fail the build either.
+        let diags: Vec<dsl_analysis::Diagnostic> = raw
+          .into_iter()
+          .filter_map(|mut d| {
+            let Some(over) = cfg.rules.get(d.code) else { return Some(d) };
+            d.severity = match over.to_ascii_lowercase().as_str() {
+              "off" | "ignore" | "none" => return None,
+              "error" => dsl_analysis::Severity::Error,
+              "warning" | "warn" => dsl_analysis::Severity::Warning,
+              "info" | "information" => dsl_analysis::Severity::Info,
+              "hint" => dsl_analysis::Severity::Hint,
+              _ => d.severity,
+            };
+            Some(d)
+          })
+          .collect();
         for d in &diags {
           let sev_str = match d.severity {
             dsl_analysis::Severity::Error => {
