@@ -47,6 +47,11 @@ and the project adheres to [Semantic Versioning](https://semver.org).
 
 ### Changed
 
+- A README per crate. All eleven publish to crates.io, and every one of
+  them was showing the whole project README as its crate page -- so
+  `dsl-parse` on crates.io described the language server's editor
+  integrations rather than the parser. Each now describes itself, with
+  examples checked against the real API.
 - Repository tooling de-duplicated from the sibling project it was
   copied from. The issue templates asked for a `dmc --version` and
   pointed Documentation, Discussions, and Security at a different
