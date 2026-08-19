@@ -18,7 +18,7 @@ Email [ahmedayobbusiness@gmail.com](mailto:ahmedayobbusiness@gmail.com)
 with:
 
 - a description of the issue
-- the affected version (`cargo pkgid` or `pnpm list @gentleduck/md`)
+- the affected version (`duck-sqllsp version`)
 - a minimal reproducer if possible
 - your assessment of the impact
 
@@ -27,22 +27,55 @@ within 30 days for high severity issues.
 
 ## Threat surfaces
 
-dmc compiles content authored by repo contributors. The relevant
-attack surfaces:
+duck-sqllsp is a language server. It reads SQL you are editing, reads
+`.sql` files in your workspace, and — when you configure a connection —
+talks to a database. The relevant surfaces:
 
-- **Raw HTML in MDX**: dmc passes raw `<div>` blocks through
-  unsanitised. Sanitise downstream (rehype-sanitize via the sidecar,
-  or a server-side HTML sanitiser) if MDX comes from untrusted
-  authors.
-- **Sidecar Node process**: the optional `@gentleduck/md-sidecar`
-  spawns a Node child to run JS plugins. The plugin code runs with
-  the same privileges as the build process. Pin plugin versions and
-  audit them like any other build dep.
-- **Cache files**: `<output>/.cache/dmc/*.json` contain compiled
-  output. Treat them as build artifacts; do not import from cache
-  paths at runtime.
-- **NAPI bindings**: `@gentleduck/md` ships a native `.node` binary.
-  Use the published npm package; do not load arbitrary `.node` files.
+- **Connection credentials.** `.duck-sqllsp.toml` holds database URLs,
+  and a URL usually holds a password. The file is read from the project
+  directory, so it is easy to commit one by accident. Keep credentials
+  in a file you have gitignored, or in editor-level settings rather than
+  the project file. duck-sqllsp never transmits a connection string
+  anywhere except to the database it names.
 
-For more depth see
-[`dmc-docs/guides/security.md`](dmc-docs/guides/security.md).
+- **Introspection queries.** With an active connection the server runs
+  read-only catalog queries (`pg_catalog`, `information_schema`, or the
+  driver equivalent) on its own schedule — at startup, on save, and on
+  an explicit refresh. Point it at a role with no more than read access
+  to the schema you want completed. It does not need, and should not be
+  given, write privileges.
+
+- **Code lenses that execute SQL.** The `Run`, `EXPLAIN`, and
+  `EXPLAIN ANALYZE` lenses spawn a terminal running `psql`, `mysql`, or
+  `sqlite3` against the active connection with the statement under the
+  cursor. That statement executes for real, against a real database, and
+  `EXPLAIN ANALYZE` executes the query rather than just planning it.
+  These lenses are offered only to VS Code and its forks, and only on
+  an explicit click.
+
+- **The external formatter.** Formatting shells out to a `sql-formatter`
+  binary found on `PATH` (or in the nvim/mason, `~/.local/bin`, and asdf
+  shim directories). Whatever binary answers to that name is executed
+  with the buffer contents on stdin. On a machine with a writable
+  directory early in `PATH`, that is a hijack opportunity — the same one
+  every tool with an optional external dependency has. The formatter is
+  optional; without it, formatting falls back to a built-in pass.
+
+- **Workspace file reads.** The offline catalog is built by walking the
+  workspace root for `*.sql` files (bounded at 5000 files and 4 MiB
+  each, skipping hidden directories, `node_modules`, `target`, and
+  similar). If the workspace root resolves higher than you expect, that
+  walk covers more of your filesystem than you expect —
+  `duck-sqllsp doctor` prints the root it derived.
+
+- **SQL is analysed, never executed.** The lint engine, completion, and
+  hover are all static: they parse and inspect text. Rules that reason
+  about dynamic SQL (`EXECUTE`, `USING`, injection patterns) do so by
+  reading the statement, not by running it. The only paths that reach a
+  database are introspection and the code lenses above.
+
+## Dependency policy
+
+`cargo-deny` runs in CI over advisories, licenses, bans, and sources.
+Ignored advisories are listed in [`deny.toml`](deny.toml), each with the
+dependency path and the reason it cannot currently be fixed.

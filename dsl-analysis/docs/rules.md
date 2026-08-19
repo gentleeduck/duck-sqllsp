@@ -1818,7 +1818,7 @@ ORDER BY references a column that doesn't exist in any in-scope table or project
 
 ### `sql404` — GROUP BY references a column that doesn't exist
 
-GROUP BY references a column that doesn't exist. Mirrors [`order_by_unknown_column`](super::order_by_unknown_column) but bounded by HAVING / ORDER BY / LIMIT / OFFSET / FOR / FETCH / WINDOW. Projection aliases are accepted (PG allows them and we have a separate stylistic rule, sql337, for the portability concern). Items wrapped in ROLLUP/CUBE/GROUPING SETS or `(a, b)` grouping expressions fall through naturally because parse_simple_ident rejects anything with parens or commas inside an item.
+GROUP BY references a column that doesn't exist. Mirrors `order_by_unknown_column` but bounded by HAVING / ORDER BY / LIMIT / OFFSET / FOR / FETCH / WINDOW. Projection aliases are accepted (PG allows them and we have a separate stylistic rule, sql337, for the portability concern). Items wrapped in ROLLUP/CUBE/GROUPING SETS or `(a, b)` grouping expressions fall through naturally because parse_simple_ident rejects anything with parens or commas inside an item.
 
 <sub>`dsl-analysis/src/rules/group_by_unknown_column.rs`</sub>
 

@@ -106,6 +106,7 @@ wrapper is optional.
 - **[Configuration reference →](dsl-server/docs/configuration.md)** — every setting, its default, and what it changes.
 - **[Troubleshooting →](dsl-server/docs/troubleshooting.md)** — start with `duck-sqllsp doctor`.
 - **[Lint rule reference →](dsl-analysis/docs/rules.md)** — all 701 diagnostics by code, with what each one catches.
+- **[Editor setup →](dsl-server/docs/editors.md)** — VS Code, neovim (0.11+ and lspconfig), Helix, Emacs, Sublime.
 
 ## Workspace
 
@@ -124,6 +125,8 @@ wrapper is optional.
 | [`dsl-cli`](dsl-cli) | `duck-sqllsp` binary - subcommands + stdio LSP + signal handling |
 
 ## Editor integrations
+
+Any LSP client that can launch a binary works — `duck-sqllsp server` speaks stdio and needs nothing else. **[Setup for VS Code, neovim (0.11+ and lspconfig), Helix, Emacs, and Sublime →](dsl-server/docs/editors.md)**
 
 - **VS Code**: install `wildduck.duck-sqllsp-vscode`. Sidebar tree views for connections + schema. Commands: Add Connection, Set Active, Test Connection, Refresh Schema, Restart Server, Show Logs. Run / EXPLAIN / EXPLAIN ANALYZE / + LIMIT 100 code lenses wire through to a `duck-sqllsp` terminal running `psql` / `mysql` / `sqlite3` against the active connection.
 - **neovim**: stock `vim.lsp` + `nvim-cmp`. duck-sqllsp emits `$/progress` so statusline plugins surface "loading workspace..." while the .sql scan + DB introspect settle.
