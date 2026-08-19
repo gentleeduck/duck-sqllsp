@@ -74,3 +74,49 @@ fn rewrite_without_a_case_still_defaults_to_upper() {
   let explicit = rewrite_with_case(DDL, &CreateTableStyle::default(), KeywordCase::Upper);
   assert_eq!(out, explicit);
 }
+
+// ---------------------------------------------------------------------
+// tabWidth, same class of bug: the aligner emits the column body's
+// indentation itself, and hardcoded four spaces.
+// ---------------------------------------------------------------------
+
+fn indent_of_first_column(out: &str) -> usize {
+  out
+    .lines()
+    .find(|l| l.trim_start().starts_with("id "))
+    .map(|l| l.len() - l.trim_start().len())
+    .unwrap_or_else(|| panic!("no column row in:\n{out}"))
+}
+
+fn formatted_with_width(width: usize) -> String {
+  let style = FormatterStyle { tab_width: width, ..FormatterStyle::default() };
+  format(DDL, &style, &CreateTableStyle::default())
+}
+
+#[test]
+fn tab_width_sets_the_column_body_indent() {
+  assert_eq!(indent_of_first_column(&formatted_with_width(2)), 2);
+  assert_eq!(indent_of_first_column(&formatted_with_width(8)), 8);
+}
+
+#[test]
+fn the_default_width_is_unchanged() {
+  // Four spaces is what the aligner always produced, and the default
+  // value of `tabWidth` -- so nobody's output moves unless they asked.
+  assert_eq!(indent_of_first_column(&formatted_with_width(4)), 4);
+  assert_eq!(indent_of_first_column(&dsl_format::rewrite(DDL, &CreateTableStyle::default())), 4);
+}
+
+#[test]
+fn a_zero_width_falls_back_rather_than_collapsing() {
+  // Zero would put the columns hard against the paren margin.
+  assert_eq!(indent_of_first_column(&formatted_with_width(0)), 4);
+}
+
+#[test]
+fn width_and_case_apply_together() {
+  let style = FormatterStyle { tab_width: 2, keyword_case: "lower".into(), ..FormatterStyle::default() };
+  let out = format(DDL, &style, &CreateTableStyle::default());
+  assert_eq!(indent_of_first_column(&out), 2);
+  assert!(out.contains("not null"), "{out}");
+}

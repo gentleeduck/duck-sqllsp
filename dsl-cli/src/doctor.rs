@@ -101,8 +101,12 @@ fn check_formatter(r: &mut Report) {
     Some(path) => r.check(Status::Ok, "sql-formatter", &path),
     None => {
       r.check(Status::Warn, "sql-formatter", "not found on PATH");
-      r.detail("Formatting falls back to the built-in CREATE TABLE alignment pass only;");
-      r.detail("statement reflow, keyword casing, and expression wrapping are skipped.");
+      r.detail("Formatting falls back to the built-in passes. Still applied:");
+      r.detail("  tabWidth, keywordCase, singleLine, compactClauses, and every");
+      r.detail("  style.createTable option.");
+      r.detail("Silently inactive without the binary:");
+      r.detail("  dataTypeCase, functionCase, expressionWidth, denseOperators,");
+      r.detail("  linesBetweenQueries, newlineBeforeSemicolon, logicalOperatorNewline.");
       r.detail("Install with:  npm i -g sql-formatter");
     },
   }

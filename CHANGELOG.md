@@ -54,6 +54,15 @@ and the project adheres to [Semantic Versioning](https://semver.org).
 - CI now typechecks and bundles the VS Code extension. Nothing built it
   before, so its dependencies could break without any signal -- which
   became live the moment dependabot started watching them.
+- `formatter.tabWidth` had no effect on the `CREATE TABLE` column body,
+  which was hardcoded to four spaces. The default is four, so nobody's
+  output changes unless they had set something else -- in which case it
+  was being ignored.
+- The configuration reference now marks each formatter setting with
+  whether it works without the external `sql-formatter` binary, and
+  `duck-sqllsp doctor` lists both sets when the binary is missing. Seven
+  of the twelve genuinely need it; saying so beats leaving people to
+  discover it.
 - `formatter.keywordCase` had no effect unless the external
   `sql-formatter` binary was installed. The built-in alignment pass
   re-emits `NOT NULL` and `DEFAULT` rather than copying them, and

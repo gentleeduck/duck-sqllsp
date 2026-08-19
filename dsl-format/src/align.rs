@@ -59,7 +59,20 @@ pub fn rewrite(source: &str, style: &CreateTableStyle) -> String {
 
 /// [`rewrite`], honouring the configured keyword case.
 pub fn rewrite_with_case(source: &str, style: &CreateTableStyle, case: KeywordCase) -> String {
+  rewrite_styled(source, style, case, DEFAULT_INDENT)
+}
+
+/// Indent width the column body used before `tabWidth` was honoured.
+/// Also the default value of `tabWidth`, so output is unchanged for
+/// anyone who never set it.
+pub const DEFAULT_INDENT: usize = 4;
+
+/// [`rewrite`], honouring both the keyword case and the indent width.
+pub fn rewrite_styled(source: &str, style: &CreateTableStyle, case: KeywordCase, indent: usize) -> String {
   KEYWORD_CASE.with(|c| c.set(case));
+  // Zero would collapse the column body onto the paren margin; treat it
+  // as "unset" rather than producing something unreadable.
+  INDENT.with(|c| c.set(if indent == 0 { DEFAULT_INDENT } else { indent }));
   rewrite_inner(source, style)
 }
 
@@ -70,8 +83,17 @@ thread_local! {
   static KEYWORD_CASE: std::cell::Cell<KeywordCase> = const { std::cell::Cell::new(KeywordCase::Upper) };
 }
 
+thread_local! {
+  static INDENT: std::cell::Cell<usize> = const { std::cell::Cell::new(DEFAULT_INDENT) };
+}
+
 fn keyword_case() -> KeywordCase {
   KEYWORD_CASE.with(|c| c.get())
+}
+
+/// One indent level for the CREATE TABLE column body.
+fn indent() -> String {
+  " ".repeat(INDENT.with(|c| c.get()))
 }
 
 fn rewrite_inner(source: &str, style: &CreateTableStyle) -> String {
@@ -1104,13 +1126,13 @@ fn format_block(header: &str, body: &str, style: &CreateTableStyle) -> String {
     for it in &items {
       match it {
         Item::Comment(c) => {
-          rows.push((format!("    {}", collapse_one_line(c)), String::new()));
+          rows.push((format!("{}{}", indent(), collapse_one_line(c)), String::new()));
         },
         Item::Column(p) => {
           if !p.leading_comment.is_empty() {
-            rows.push((format!("    {}", p.leading_comment), String::new()));
+            rows.push((format!("{}{}", indent(), p.leading_comment), String::new()));
           }
-          let mut row = format!("    {:<nw$}{}{:<tw$}", p.name, gap, p.ty, nw = name_w, tw = type_w);
+          let mut row = format!("{}{:<nw$}{}{:<tw$}", indent(), p.name, gap, p.ty, nw = name_w, tw = type_w);
           if null_w > 0 {
             row.push_str(&inter_gap);
             row.push_str(&format!("{:>w$}", p.nullability, w = null_w));
@@ -1128,18 +1150,18 @@ fn format_block(header: &str, body: &str, style: &CreateTableStyle) -> String {
         },
         Item::Constraint(_) if style.constraints_at_end => {},
         Item::Constraint(c) => {
-          rows.push((format!("    {}", collapse_one_line(c)), String::new()));
+          rows.push((format!("{}{}", indent(), collapse_one_line(c)), String::new()));
         },
       }
     }
     if style.constraints_at_end && !constraints.is_empty() && emitted_columns {
       rows.push((String::new(), String::new()));
       for c in &constraints {
-        rows.push((format!("    {}", collapse_one_line(c)), String::new()));
+        rows.push((format!("{}{}", indent(), collapse_one_line(c)), String::new()));
       }
     } else if style.constraints_at_end && !constraints.is_empty() {
       for c in &constraints {
-        rows.push((format!("    {}", collapse_one_line(c)), String::new()));
+        rows.push((format!("{}{}", indent(), collapse_one_line(c)), String::new()));
       }
     }
     rows

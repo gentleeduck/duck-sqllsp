@@ -18,7 +18,7 @@ pub mod align;
 pub mod external;
 pub mod style;
 
-pub use align::{KeywordCase, rewrite, rewrite_with_case};
+pub use align::{KeywordCase, rewrite, rewrite_styled, rewrite_with_case};
 pub use external::run_sql_formatter;
 pub use style::{CreateTableStyle, FormatterStyle};
 
@@ -52,8 +52,12 @@ pub fn format(input: &str, fmt_style: &FormatterStyle, ct_style: &CreateTableSty
   // The aligner re-emits NOT NULL / DEFAULT rather than copying them,
   // so it needs the configured case. Without this, `keywordCase` had no
   // effect at all whenever `sql-formatter` was missing.
-  let after_align =
-    align::rewrite_with_case(&after_external, ct_style, align::KeywordCase::from_config(&fmt_style.keyword_case));
+  let after_align = align::rewrite_styled(
+    &after_external,
+    ct_style,
+    align::KeywordCase::from_config(&fmt_style.keyword_case),
+    fmt_style.tab_width,
+  );
   let after_tighten = tighten_call_parens(&after_align);
   let after_fn_set = collapse_function_set_clause(&after_tighten);
   let after_body_fmt = format_function_bodies(&after_fn_set, fmt_style);
