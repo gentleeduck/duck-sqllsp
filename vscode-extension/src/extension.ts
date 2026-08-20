@@ -25,15 +25,17 @@ let client: LanguageClient | undefined;
 let connectionsProvider: ConnectionsProvider | undefined;
 let schemaProvider: SchemaProvider | undefined;
 let statusItem: vscode.StatusBarItem | undefined;
-let outputChannel: vscode.OutputChannel | undefined;
-let traceChannel: vscode.OutputChannel | undefined;
+// vscode-languageclient 10 requires LogOutputChannel for both the
+// client output and trace channels.
+let outputChannel: vscode.LogOutputChannel | undefined;
+let traceChannel: vscode.LogOutputChannel | undefined;
 
 export function activate(context: ExtensionContext) {
   // Output channels are the first thing we set up so every later
   // step can log into them. Any throw past this point is logged +
   // surfaced as a notification so the user can see what's failing.
-  outputChannel = window.createOutputChannel("duck-sqllsp");
-  traceChannel = window.createOutputChannel("duck-sqllsp trace");
+  outputChannel = window.createOutputChannel("duck-sqllsp", { log: true });
+  traceChannel = window.createOutputChannel("duck-sqllsp trace", { log: true });
   outputChannel.appendLine(`[ext] duck-sqllsp activating (extension version ${context.extension.packageJSON?.version ?? "?"})`);
 
   // CRITICAL: register every command FIRST, before anything that
