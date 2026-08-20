@@ -54,6 +54,19 @@ and the project adheres to [Semantic Versioning](https://semver.org).
 - CI now typechecks and bundles the VS Code extension. Nothing built it
   before, so its dependencies could break without any signal -- which
   became live the moment dependabot started watching them.
+- **Linting a MySQL file reported errors on ordinary MySQL syntax.**
+  Nineteen rules exist to flag another dialect's syntax as invalid in
+  PostgreSQL; only five were skipped on a MySQL buffer. Backtick
+  identifiers, `LIMIT 10, 20`, `ON DUPLICATE KEY UPDATE`,
+  `REPLACE INTO`, `INSERT IGNORE`, `GROUP_CONCAT`, `REGEXP`,
+  `UNSIGNED`, `LOCK IN SHARE MODE`, and `ALTER TABLE ... CHANGE` were
+  all flagged as errors on the dialect they belong to. Thirteen added
+  to the skip list.
+- `duck-sqllsp lint` ignored `.duck-sqllsp.toml` entirely, so the
+  `[duck_sqllsp.rules]` severity overrides the docs describe applied
+  only inside the editor -- a rule silenced for the repository still
+  failed CI. It now reads the project config for both rule overrides
+  and `dialect`; an explicit `--dialect` still wins.
 - `style.createTable.groupIndexes` did nothing in either position. The
   pass that removes blank lines between consecutive `CREATE INDEX`
   statements ran after the pass that splits each one across two lines,

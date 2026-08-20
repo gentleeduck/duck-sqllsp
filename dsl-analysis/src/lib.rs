@@ -83,6 +83,19 @@ const MYSQL_PORT_CODES: &[&str] = &[
   "sql314", // AUTO_INCREMENT
   "sql315", // ENGINE=
   "sql316", // TINYINT / MEDIUMINT / LONGTEXT / DATETIME / BLOB
+  "sql593", // LIMIT offset, count
+  "sql594", // INSERT ... ON DUPLICATE KEY UPDATE
+  "sql595", // REPLACE INTO
+  "sql596", // MySQL-only functions (GROUP_CONCAT, DATE_FORMAT, ...)
+  "sql597", // REGEXP / RLIKE operators
+  "sql599", // UNSIGNED integer modifier
+  "sql600", // backtick-quoted identifiers
+  "sql622", // MySQL-only string functions (LCASE, UCASE, ...)
+  "sql626", // MySQL-only query modifiers / hints
+  "sql666", // INSERT IGNORE
+  "sql667", // INSERT ... SET a = 1
+  "sql669", // SELECT ... LOCK IN SHARE MODE
+  "sql672", // ALTER TABLE ... CHANGE / MODIFY COLUMN
 ];
 
 /// MSSQL/T-SQL port-detection codes. Skipped on MSSQL buffers (we
@@ -96,6 +109,17 @@ const ORACLE_PORT_CODES: &[&str] = &["sql323", "sql324", "sql325", "sql326"];
 /// any non-PG buffer since the rewrite suggestion is dialect-specific.
 const CROSS_DIALECT_CODES: &[&str] = &["sql319", "sql320"];
 
+/// A port-detection rule exists to say "this is another dialect's
+/// syntax, PostgreSQL rejects it". On a buffer that *is* that dialect
+/// the statement is correct and the rule is a false positive, so these
+/// are skipped.
+///
+/// The criterion is narrow on purpose: only rules whose entire subject
+/// is foreign syntax. `sql429` is deliberately absent -- it covers both
+/// `<=>` (valid MySQL) and `==` (invalid everywhere, MySQL included),
+/// so skipping it on MySQL would lose a real check. Splitting that one
+/// needs rule-level dialect awareness, which `LintRule::check` does not
+/// currently receive.
 fn skip_for_dialect(dialect: Dialect, code: &str) -> bool {
   match dialect {
     Dialect::Postgres => false,
