@@ -1,6 +1,8 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "node16",
+    "moduleResolution": "node16",
+    "types": ["node", "vscode"],
     "target": "ES2022",
     "outDir": "out",
     "rootDir": "src",
