@@ -131,7 +131,33 @@ fn main() -> anyhow::Result<()> {
     Cmd::Server { .. } => server::run(),
     Cmd::Doctor { path } => doctor::run(path),
     Cmd::Version => {
+      // The bug-report template asks people to paste this, so it should
+      // be worth pasting: what this build can do, not just its number.
       println!("duck-sqllsp {}", env!("CARGO_PKG_VERSION"));
+      println!();
+
+      let mut by_sev: std::collections::BTreeMap<&str, usize> = Default::default();
+      for rule in dsl_analysis::rules::all() {
+        let sev = match rule.default_severity() {
+          dsl_analysis::Severity::Error => "error",
+          dsl_analysis::Severity::Warning => "warning",
+          dsl_analysis::Severity::Info => "info",
+          dsl_analysis::Severity::Hint => "hint",
+        };
+        *by_sev.entry(sev).or_insert(0) += 1;
+      }
+      let total: usize = by_sev.values().sum();
+      let breakdown = by_sev.iter().map(|(s, n)| format!("{n} {s}")).collect::<Vec<_>>().join(", ");
+
+      println!("{:<12} postgresql, mysql, sqlite, mssql", "dialects");
+      println!("{:<12} {total} ({breakdown})", "lint rules");
+      println!("{:<12} libpg_query for postgres, sqlparser for the rest", "parser");
+      match dsl_format::external::locate_binary() {
+        Some(p) => println!("{:<12} {p}", "formatter"),
+        None => println!("{:<12} sql-formatter not on PATH (alignment pass only)", "formatter"),
+      }
+      println!();
+      println!("`duck-sqllsp doctor` checks this against a specific project.");
       Ok(())
     },
     Cmd::Rules { json, severity } => {

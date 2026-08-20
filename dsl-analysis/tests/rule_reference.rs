@@ -257,3 +257,65 @@ fn regenerate() {
   std::fs::write(docs_path(), render_docs(&rules)).expect("write rules.md");
   eprintln!("regenerated {} rules", rules.len());
 }
+
+/// Every documented rule count must match the registry.
+///
+/// The VS Code marketplace listing advertised "150+ analysis rules" for
+/// long enough that the real number passed 700 -- a claim off by nearly
+/// five times, in the first thing a prospective user reads. Nothing
+/// checked it, so nothing caught it.
+///
+/// Deliberately excludes CHANGELOG.md: historical entries cite the count
+/// at the time and should not be rewritten.
+#[test]
+fn documented_rule_counts_match_the_registry() {
+  let actual = dsl_analysis::rules::all().len();
+  let repo = Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("workspace root");
+
+  let docs = ["README.md", "vscode-extension/README.md", "dsl-analysis/docs/rules.md", "CONTRIBUTING.md"];
+
+  let mut checked = 0usize;
+  for rel in docs {
+    let path = repo.join(rel);
+    let Ok(text) = std::fs::read_to_string(&path) else { continue };
+    for (i, line) in text.lines().enumerate() {
+      for claim in rule_counts_in(line) {
+        assert_eq!(claim, actual, "{rel}:{} claims {claim} rules, registry has {actual}:\n  {}", i + 1, line.trim());
+        checked += 1;
+      }
+    }
+  }
+  assert!(checked > 0, "expected at least one documented rule count to verify");
+}
+
+/// Numbers written as "<n> rules" / "<n> lint rules" / "<n> analysis
+/// rules", with an optional trailing `+`. Three digits or more, so
+/// ordinary prose numbers are not mistaken for a count.
+fn rule_counts_in(line: &str) -> Vec<usize> {
+  let words: Vec<&str> = line.split_whitespace().collect();
+  let mut out = Vec::new();
+  for (i, w) in words.iter().enumerate() {
+    // Strip markdown emphasis and punctuation so `**701` and `(701`
+    // are still seen. Missing this made an earlier version of this test
+    // pass against the very "**150+ lint rules**" it was written for.
+    let w = w.trim_start_matches(['*', '_', '(', '[', '`', '~']);
+    let digits: String = w.chars().take_while(|c| c.is_ascii_digit()).collect();
+    if digits.len() < 3 {
+      continue;
+    }
+    // Allow "701", "701+", and "**701" from bold markdown.
+    let tail = &w[digits.len()..];
+    if !tail.is_empty() && tail != "+" {
+      continue;
+    }
+    let follows = words.get(i + 1).copied().unwrap_or("");
+    let follows2 = words.get(i + 2).copied().unwrap_or("");
+    let is_count = follows.starts_with("rule")
+      || ((follows == "lint" || follows == "analysis" || follows == "diagnostic") && follows2.starts_with("rule"))
+      || follows.starts_with("diagnostics");
+    if is_count {
+      out.push(digits.parse().unwrap());
+    }
+  }
+  out
+}
