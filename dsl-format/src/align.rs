@@ -11,7 +11,70 @@
 
 use crate::style::CreateTableStyle;
 
+/// Casing applied to the keywords this pass emits itself.
+///
+/// The aligner *normalises* `not null` and `default` -- it re-emits them
+/// rather than copying the user's text -- so it has to decide their
+/// case. It used to hardcode uppercase, which meant
+/// `formatter.keywordCase = "lower"` silently did nothing whenever the
+/// external `sql-formatter` was not installed, i.e. on the documented
+/// fallback path.
+///
+/// Only keywords this pass emits are affected. Trailing constraints
+/// (`primary key`, `check (...)`) are the user's own text, passed
+/// through untouched -- rewriting them would mean case-folding
+/// expressions, and identifiers inside a CHECK are case-sensitive.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum KeywordCase {
+  #[default]
+  Upper,
+  Lower,
+  /// Emit the keyword as the user wrote it.
+  Preserve,
+}
+
+impl KeywordCase {
+  /// Parse the `formatter.keywordCase` config value.
+  pub fn from_config(s: &str) -> Self {
+    match s.trim().to_ascii_lowercase().as_str() {
+      "lower" => Self::Lower,
+      "preserve" => Self::Preserve,
+      _ => Self::Upper,
+    }
+  }
+
+  /// `canonical` is the uppercase spelling; `as_written` is the user's.
+  fn apply(self, canonical: &str, as_written: &str) -> String {
+    match self {
+      Self::Upper => canonical.to_string(),
+      Self::Lower => canonical.to_ascii_lowercase(),
+      Self::Preserve => as_written.to_string(),
+    }
+  }
+}
+
 pub fn rewrite(source: &str, style: &CreateTableStyle) -> String {
+  rewrite_with_case(source, style, KeywordCase::Upper)
+}
+
+/// [`rewrite`], honouring the configured keyword case.
+pub fn rewrite_with_case(source: &str, style: &CreateTableStyle, case: KeywordCase) -> String {
+  KEYWORD_CASE.with(|c| c.set(case));
+  rewrite_inner(source, style)
+}
+
+// The case is read deep inside the column splitter; threading it
+// through every intermediate signature would touch a dozen functions
+// that do not otherwise care about it.
+thread_local! {
+  static KEYWORD_CASE: std::cell::Cell<KeywordCase> = const { std::cell::Cell::new(KeywordCase::Upper) };
+}
+
+fn keyword_case() -> KeywordCase {
+  KEYWORD_CASE.with(|c| c.get())
+}
+
+fn rewrite_inner(source: &str, style: &CreateTableStyle) -> String {
   let stage1 = if style.align_columns { rewrite_tables(source, style) } else { source.to_string() };
   let stage2 = break_function_headers(&stage1);
   let stage3 = break_trigger_headers(&stage2);
@@ -755,12 +818,12 @@ fn split_parts(entry: &str) -> ColParts {
   // but accept either order defensively.
   let upper_tail = remaining.to_ascii_uppercase();
   if upper_tail.starts_with("NOT NULL") {
-    parts.nullability = "NOT NULL".into();
+    parts.nullability = keyword_case().apply("NOT NULL", &remaining[..8]);
     remaining = remaining[8..].trim_start();
   } else if upper_tail.starts_with("NULL") && !upper_tail.starts_with("NULLS") {
     // Bare NULL is legal in column DDL ("explicit NULL"). Postgres
     // discards it but DataGrip-style output keeps it.
-    parts.nullability = "NULL".into();
+    parts.nullability = keyword_case().apply("NULL", &remaining[..4]);
     remaining = remaining[4..].trim_start();
   }
 
@@ -771,7 +834,7 @@ fn split_parts(entry: &str) -> ColParts {
     let after_kw = remaining[7..].trim_start();
     let expr_end = scan_default_expr(after_kw);
     let expr = after_kw[..expr_end].trim_end();
-    parts.default = format!("DEFAULT {expr}");
+    parts.default = format!("{} {expr}", keyword_case().apply("DEFAULT", &remaining[..7]));
     remaining = after_kw[expr_end..].trim_start();
   }
 
@@ -780,7 +843,7 @@ fn split_parts(entry: &str) -> ColParts {
   if parts.nullability.is_empty() {
     let up = remaining.to_ascii_uppercase();
     if up.starts_with("NOT NULL") {
-      parts.nullability = "NOT NULL".into();
+      parts.nullability = keyword_case().apply("NOT NULL", &remaining[..8]);
       remaining = remaining[8..].trim_start();
     }
   }
