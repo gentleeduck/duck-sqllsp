@@ -43,6 +43,11 @@ enum Cmd {
     /// Only list rules with this default severity (error/warning/info/hint).
     #[arg(long)]
     severity: Option<String>,
+    /// Only list rules whose code or summary contains this text
+    /// (case-insensitive). With 700+ rules, this is usually how you
+    /// find the one you saw in the editor.
+    #[arg(long)]
+    search: Option<String>,
   },
   /// Lint one or more .sql files; emit diagnostics to stdout.
   ///
@@ -97,7 +102,32 @@ enum Cmd {
   },
 }
 
+/// Die quietly when a pipe closes, the way every other CLI does.
+///
+/// Rust ignores SIGPIPE at startup, so `duck-sqllsp rules | head` does
+/// not stop at `head` -- it keeps writing until the failed write panics:
+///
+///     thread 'main' panicked at library/std/src/io/stdio.rs:
+///     failed printing to stdout: Broken pipe (os error 32)
+///
+/// Piping into `head`, `less`, or `grep -m1` is completely ordinary,
+/// especially for `rules` (700+ lines) and `introspect`. Restoring the
+/// default disposition turns that panic into a clean exit.
+#[cfg(unix)]
+fn restore_sigpipe() {
+  // SAFETY: setting a signal disposition to SIG_DFL before any threads
+  // are spawned. This is the documented way to undo Rust's startup
+  // override.
+  unsafe {
+    libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+  }
+}
+
+#[cfg(not(unix))]
+fn restore_sigpipe() {}
+
 fn main() -> anyhow::Result<()> {
+  restore_sigpipe();
   init_tracing();
   // Accept unknown flags gracefully so we never blow up on a transport
   // flag we didn't anticipate. clap's `Cli::parse` exits on unknown
@@ -160,8 +190,9 @@ fn main() -> anyhow::Result<()> {
       println!("`duck-sqllsp doctor` checks this against a specific project.");
       Ok(())
     },
-    Cmd::Rules { json, severity } => {
+    Cmd::Rules { json, severity, search } => {
       let filter = severity.as_deref().map(|s| s.to_ascii_lowercase());
+      let needle = search.as_deref().map(|s| s.to_ascii_lowercase());
       let mut rules: Vec<(String, &'static str)> = dsl_analysis::rules::all()
         .into_iter()
         .map(|r| {
@@ -176,6 +207,12 @@ fn main() -> anyhow::Result<()> {
           )
         })
         .filter(|(_, sev)| filter.as_deref().is_none_or(|f| *sev == f))
+        .filter(|(code, _)| {
+          needle.as_deref().is_none_or(|n| {
+            code.to_ascii_lowercase().contains(n)
+              || dsl_analysis::rules::title(code).is_some_and(|t| t.to_ascii_lowercase().contains(n))
+          })
+        })
         .collect();
       rules.sort_by(|a, b| a.0.cmp(&b.0));
       if json {
@@ -198,6 +235,10 @@ fn main() -> anyhow::Result<()> {
         // code alone rather than eliding the row.
         println!("{:6}  {:8}  {}", code, sev, dsl_analysis::rules::title(code).unwrap_or(""));
         *by_sev.entry(sev).or_insert(0) += 1;
+      }
+      if rules.is_empty() {
+        println!("no rules matched");
+        return Ok(());
       }
       println!();
       println!("total: {} rules", rules.len());

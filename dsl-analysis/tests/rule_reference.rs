@@ -168,10 +168,24 @@ fn render_docs(rules: &BTreeMap<String, (String, String, String)>) -> String {
      Silence or re-level any of these by code:\n\n\
      ```toml\n[duck_sqllsp.rules]\nsql015 = \"off\"      # off / ignore / none\n\
      sql001 = \"hint\"     # or error / warning / info\n```\n\n\
-     `duck-sqllsp rules` prints the same list from the command line, and\n\
-     `duck-sqllsp rules --json` emits it machine-readably.\n\n",
+     `duck-sqllsp rules` prints the same list from the command line.\n\
+     `duck-sqllsp rules --search partition` narrows it, and `--json`\n\
+     emits it machine-readably.\n\n",
   );
   s.push_str(&format!("{} rules.\n\n", rules.len()));
+
+  // Index first. The detail below runs to thousands of lines, and
+  // without a scannable list the only way to find a rule is to already
+  // know its code.
+  s.push_str("## Index\n\n| Code | Summary |\n| --- | --- |\n");
+  for code in numeric_order(rules) {
+    let (_, title, _) = &rules[code];
+    // Pipes would break the table; no summary currently contains one,
+    // but escaping is cheaper than finding out later.
+    s.push_str(&format!("| [`{code}`](#{}) | {} |\n", anchor(code, title), title.replace('|', "\\|")));
+  }
+  s.push_str("\n## Rules\n\n");
+
   for code in numeric_order(rules) {
     let (module, title, description) = &rules[code];
     s.push_str(&format!("### `{code}` — {title}\n\n"));
@@ -181,6 +195,21 @@ fn render_docs(rules: &BTreeMap<String, (String, String, String)>) -> String {
     s.push_str(&format!("<sub>`dsl-analysis/src/rules/{module}.rs`</sub>\n\n"));
   }
   s
+}
+
+/// GitHub's heading anchor: lowercase, punctuation dropped, spaces to
+/// hyphens. Matches the `### \`code\` — title` headings below.
+fn anchor(code: &str, title: &str) -> String {
+  let heading = format!("{code} — {title}");
+  let mut out = String::new();
+  for ch in heading.chars() {
+    if ch.is_alphanumeric() {
+      out.extend(ch.to_lowercase());
+    } else if ch == ' ' || ch == '-' || ch == '_' {
+      out.push('-');
+    }
+  }
+  out
 }
 
 fn titles_path() -> PathBuf {
@@ -256,6 +285,44 @@ fn regenerate() {
   std::fs::create_dir_all(docs_path().parent().unwrap()).expect("docs dir");
   std::fs::write(docs_path(), render_docs(&rules)).expect("write rules.md");
   eprintln!("regenerated {} rules", rules.len());
+}
+
+/// Every index link must point at a heading that exists.
+///
+/// The index is generated, but the anchor format is GitHub's, not
+/// ours -- so a change to the heading layout can silently orphan all
+/// 701 links while the file still looks fine.
+#[test]
+fn every_index_link_resolves_to_a_heading() {
+  let doc = std::fs::read_to_string(docs_path()).expect("docs/rules.md");
+  let headings: std::collections::BTreeSet<String> =
+    doc.lines().filter_map(|l| l.strip_prefix("### ")).map(github_anchor).collect();
+
+  let mut links = 0usize;
+  let mut broken = Vec::new();
+  for line in doc.lines() {
+    let Some(rest) = line.split_once("](#") else { continue };
+    let Some((target, _)) = rest.1.split_once(')') else { continue };
+    links += 1;
+    if !headings.contains(target) {
+      broken.push(target.to_string());
+    }
+  }
+  assert_eq!(links, headings.len(), "index should link every rule exactly once");
+  assert!(broken.is_empty(), "index links with no matching heading: {broken:?}");
+}
+
+/// GitHub's heading-anchor rules, mirroring `anchor` in the generator.
+fn github_anchor(heading: &str) -> String {
+  let mut out = String::new();
+  for ch in heading.chars() {
+    if ch.is_alphanumeric() {
+      out.extend(ch.to_lowercase());
+    } else if ch == ' ' || ch == '-' || ch == '_' {
+      out.push('-');
+    }
+  }
+  out
 }
 
 /// Every documented rule count must match the registry.

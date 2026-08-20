@@ -11,10 +11,719 @@ sql015 = "off"      # off / ignore / none
 sql001 = "hint"     # or error / warning / info
 ```
 
-`duck-sqllsp rules` prints the same list from the command line, and
-`duck-sqllsp rules --json` emits it machine-readably.
+`duck-sqllsp rules` prints the same list from the command line.
+`duck-sqllsp rules --search partition` narrows it, and `--json`
+emits it machine-readably.
 
 701 rules.
+
+## Index
+
+| Code | Summary |
+| --- | --- |
+| [`sql001`](#sql001--table-referenced-by-from--join--update--delete--insert-into-does-not-exist-in-the-catalog) | table referenced by FROM / JOIN / UPDATE / DELETE / INSERT INTO does not exist in the catalog |
+| [`sql002`](#sql002--column-reference-does-not-exist-in-any-in-scope-table) | column reference does not exist in any in-scope table |
+| [`sql003`](#sql003--unqualified-column-reference-exists-in-more-than-one-in-scope-table-the-user-must-qualify-it) | unqualified column reference exists in more than one in-scope table; the user must qualify it |
+| [`sql010`](#sql010--union--intersect--except-column-count-mismatch) | UNION / INTERSECT / EXCEPT column-count mismatch |
+| [`sql013`](#sql013--update-or-delete-without-a-where-clause) | UPDATE or DELETE without a WHERE clause |
+| [`sql014`](#sql014--implicit-cross-join) | implicit cross join |
+| [`sql015`](#sql015--comparison-with-null-using--or--or--always-yields-null-the-user-almost-always-meant-is-null) | comparison with NULL using `=` or `<>` (or `!=`). Always yields NULL; the user almost always meant `IS NULL`... |
+| [`sql016`](#sql016--insert-into-t-select--is-arity-fragile) | `INSERT INTO t SELECT *` is arity-fragile |
+| [`sql017`](#sql017--select-mixes-aggregates-with-bare-column-references-but-the-bare-columns-are-not-all-listed-in-group-by) | SELECT mixes aggregates with bare column references but the bare columns are not all listed in GROUP BY |
+| [`sql018`](#sql018--not-in-subquery-is-dangerous-when-the-subquery-can-return-null-postgres-treats-x-not-in-null-as) | `NOT IN (subquery)` is dangerous when the subquery can return NULL. Postgres treats `x NOT IN (NULL)` as... |
+| [`sql020`](#sql020--deprecated--non-recommended-function-call) | deprecated / non-recommended function call |
+| [`sql021`](#sql021--prefer-the-declared-alias-over-the-bare-table-name) | prefer the declared alias over the bare table name |
+| [`sql030`](#sql030--trigger-function-body-has-no-return) | trigger function body has no RETURN |
+| [`sql031`](#sql031--return-literal-type-doesnt-match-declared-returns-type-catches-the-easy-literal-return-mismatches) | `RETURN <literal>` type doesn't match declared `RETURNS <type>`. Catches the easy literal-return mismatches... |
+| [`sql032`](#sql032--bare-return-inside-a-function-that-declares-a-non-void-return-type) | bare `RETURN;` inside a function that declares a non-void return type |
+| [`sql036`](#sql036--raise-exception-or-noticewarningetc-format-string--placeholder-count-doesnt-match-the-supplied) | `RAISE EXCEPTION` (or NOTICE/WARNING/etc.) format string `%` placeholder count doesn't match the supplied... |
+| [`sql037`](#sql037--select) | `SELECT |
+| [`sql038`](#sql038--insert-into-t-a-b-values-1) | `INSERT INTO t (a, b) VALUES (1)` |
+| [`sql039`](#sql039--insert-into-t-col1-col2-values-lit1-lit2-literal-types-must-match-the-target-column-types) | `INSERT INTO t (col1, col2) VALUES (lit1, lit2)` literal types must match the target column types |
+| [`sql040`](#sql040--an-immutable-function-body-calls-a-known-volatile-built-in) | an `IMMUTABLE` function body calls a known `VOLATILE` built-in |
+| [`sql041`](#sql041--language-sql-function-body-references-new-or-old) | `LANGUAGE sql` function body references `NEW` or `OLD` |
+| [`sql042`](#sql042--update-table-set-col---where-col-is-not-in-the-target-tables-catalog-definition) | `UPDATE <table> SET <col> = ...` where `<col>` is not in the target table's catalog definition |
+| [`sql043`](#sql043--delete-from-tbl-without-where-inside-a-function-body) | `DELETE FROM <tbl>` without WHERE inside a function body |
+| [`sql044`](#sql044--exit--continue-used-outside-a-loop--while--for-block) | `EXIT` / `CONTINUE` used outside a LOOP / WHILE / FOR block |
+| [`sql045`](#sql045--unreachable-code-after-an-unconditional-return-or-raise-exception-postgres-wont-error-on-dead-code-but) | unreachable code after an unconditional `RETURN` or `RAISE EXCEPTION`. Postgres won't error on dead code but... |
+| [`sql046`](#sql046--create-table-without-a-primary-key-heap-tables-without-a-primary-key-cause-replication-orm-and-audit) | `CREATE TABLE` without a PRIMARY KEY. Heap tables without a primary key cause replication, ORM, and audit... |
+| [`sql048`](#sql048--insert-into-t-values--without-a-column-list-positional-insert-works-but-is-fragile) | `INSERT INTO t VALUES (...)` without a column list. Positional INSERT works but is fragile |
+| [`sql050`](#sql050--a-column-or-table-identifier-in-create-table-matches-a-pg-reserved-keyword-postgres-still-accepts-it-but) | a column or table identifier in CREATE TABLE matches a PG reserved keyword. Postgres still accepts it but... |
+| [`sql051`](#sql051--limit-without-order-by-produces-non-deterministic-rows) | `LIMIT` without `ORDER BY` produces non-deterministic rows |
+| [`sql052`](#sql052--like-plain-string) | `LIKE 'plain string'` |
+| [`sql054`](#sql054--where-x--true--where-x--false) | `WHERE x = true` / `WHERE x = false` |
+| [`sql055`](#sql055--where-single-condition) | `WHERE (single condition)` |
+| [`sql056`](#sql056--union-deduplicates-is-often-slower-than-union-all-and-used-by-mistake) | `UNION` (deduplicates) is often slower than `UNION ALL` and used by mistake |
+| [`sql058`](#sql058--case-when) | `CASE WHEN |
+| [`sql061`](#sql061--bare-null-inside-values--without-an-explicit-cast) | bare `NULL` inside `VALUES (...)` without an explicit cast |
+| [`sql062`](#sql062--savepoint-x-declared-but-never-released-or-rolled-back-to) | `SAVEPOINT x` declared but never `RELEASE`d (or rolled back to) |
+| [`sql064`](#sql064--) | ` |
+| [`sql065`](#sql065--group-by-1-2) | `GROUP BY 1, 2` |
+| [`sql068`](#sql068--begin--commit-pair-wrapping-a-single-statement) | BEGIN / COMMIT pair wrapping a single statement |
+| [`sql069`](#sql069--column-declared-not-null-but-default-null) | column declared `NOT NULL` but `DEFAULT NULL` |
+| [`sql072`](#sql072--select--for-update-without-a-where-clause-locks-every-row-of-the-target-table) | `SELECT ... FOR UPDATE` without a WHERE clause locks every row of the target table |
+| [`sql074`](#sql074--where-x-in-a-b-c--with--50-items) | `WHERE x IN (a, b, c, ...)` with > 50 items |
+| [`sql075`](#sql075--column-declared-as-time-with-time-zone-alias-timetz-pg-docs-recommend-against-timetz) | column declared as `TIME WITH TIME ZONE` (alias `TIMETZ`). PG docs recommend against TIMETZ |
+| [`sql076`](#sql076--limit--1--offset--1) | `LIMIT -1` / `OFFSET -1` |
+| [`sql081`](#sql081--order-by-random) | `ORDER BY random()` |
+| [`sql083`](#sql083--insert-into-t-id--referencing-the-primary-key-without-on-conflict) | `INSERT INTO t (id, ...)` referencing the primary key without `ON CONFLICT` |
+| [`sql084`](#sql084--count1-is-equivalent-to-count) | `COUNT(1)` is equivalent to `COUNT(*)` |
+| [`sql085`](#sql085--nullifx-x-always-returns-null) | `NULLIF(x, x)` always returns NULL |
+| [`sql087`](#sql087--x-between-high-and-low) | `x BETWEEN <high> AND <low>` |
+| [`sql088`](#sql088--like-foo) | `LIKE '%foo'` |
+| [`sql089`](#sql089--two-raise-exception-calls-back-to-back) | two `RAISE EXCEPTION` calls back-to-back |
+| [`sql090`](#sql090--pg-17-added-group-by-all-shorthand) | PG 17 added `GROUP BY ALL` shorthand |
+| [`sql091`](#sql091--comment-on--is-) | `COMMENT ON ... IS ''` |
+| [`sql093`](#sql093--select-distinct-count-from-t) | `SELECT DISTINCT count(...) FROM t` |
+| [`sql094`](#sql094--case-expressions-nested-more-than-3-deep) | `CASE` expressions nested more than 3 deep |
+| [`sql095`](#sql095--x-is-not-distinct-from-null-is-just-x-is-null-the-other-form-is-x-is-distinct-from-null--x-is-not) | `x IS NOT DISTINCT FROM NULL` is just `x IS NULL`; the other form is `x IS DISTINCT FROM NULL` ≡ `x IS NOT... |
+| [`sql096`](#sql096--insert-into-t-values-1-2-) | `INSERT INTO t VALUES (1, 2, );` |
+| [`sql097`](#sql097--select-col-from-nothing) | `SELECT col FROM nothing` |
+| [`sql098`](#sql098--more-than-one-where-clause-in-the-same-statement-outside-parenthesessubqueries-usually-a-copypaste) | more than one `WHERE` clause in the same statement (outside parentheses/subqueries). Usually a copy/paste... |
+| [`sql099`](#sql099--order-by-1-2) | `ORDER BY 1, 2` |
+| [`sql101`](#sql101--select-distinct-on-x--from-t-without-an-order-by-that-starts-with-x) | `SELECT DISTINCT ON (x) ... FROM t` without an `ORDER BY` that starts with `x` |
+| [`sql104`](#sql104--charn--charactern) | `CHAR(n)` / `CHARACTER(n)` |
+| [`sql105`](#sql105--truncate-t-without-cascade) | `TRUNCATE t` without `CASCADE` |
+| [`sql107`](#sql107--comparing-a-jsonb-column-to-a-text-literal-without-text--jsonb) | comparing a `jsonb` column to a text literal without `::text` / `::jsonb` |
+| [`sql109`](#sql109--lengthtext-col-returns-bytes-use-char-length-for-characters) | `length(text_col)` returns *bytes*. Use `char_length` for characters |
+| [`sql111`](#sql111--lock-table-outside-an-explicit-transaction-has-no-effect-beyond-the-single-statement) | `LOCK TABLE` outside an explicit transaction has no effect beyond the single statement |
+| [`sql112`](#sql112--generate-series-in-a-from-clause-without-an-alias-ends-up-named-generate-series-which-makes-queries) | `generate_series(...)` in a FROM clause without an alias ends up named `generate_series` which makes queries... |
+| [`sql113`](#sql113--timestamp-without-time-zone) | `TIMESTAMP` without time zone |
+| [`sql115`](#sql115--jsonb-setcol-path-val) | `jsonb_set(col, path, val)` |
+| [`sql116`](#sql116--bare-numeric--decimal) | bare `NUMERIC` / `DECIMAL` |
+| [`sql117`](#sql117--insert-into-t-col-values-true-where-col-is-boolean) | `INSERT INTO t (col) VALUES ('true')` where `col` is boolean |
+| [`sql118`](#sql118--select--into-foo-from-t-at-the-top-level-is-ddl) | `SELECT ... INTO foo FROM t` at the top level is **DDL** |
+| [`sql119`](#sql119--set-transaction-isolation-level--must-be-the-first-statement-after-begin) | `SET TRANSACTION ISOLATION LEVEL ...` must be the **first** statement after `BEGIN` |
+| [`sql120`](#sql120--select-distinct--group-by-) | `SELECT DISTINCT ... GROUP BY ...` |
+| [`sql121`](#sql121--comparing-a-text-expression-to-an-int-literal-in-where-common-bug) | comparing a text expression to an int literal in WHERE. Common bug |
+| [`sql122`](#sql122--like-inside-a-query-without-explicit-collate) | `LIKE` inside a query without explicit `COLLATE` |
+| [`sql123`](#sql123--n-t--inside-a-plain--string-pg-91-defaults-to-standard-conforming-strings--on) | `\n`, `\t`, `\\` inside a plain `'...'` string. PG 9.1+ defaults to `standard_conforming_strings = on` |
+| [`sql124`](#sql124--with-t-as-select) | `WITH t AS (SELECT |
+| [`sql125`](#sql125--explain-analyze-insertupdatedelete) | `EXPLAIN ANALYZE INSERT/UPDATE/DELETE` |
+| [`sql126`](#sql126--dml-inside-a-plpgsql-function-without-a-subsequent-get-diagnostics-rows--row-count) | DML inside a PL/pgSQL function without a subsequent `GET DIAGNOSTICS rows = ROW_COUNT` |
+| [`sql127`](#sql127--update-t-set--from-other-without-a-where-that-joins-t-and-other) | `UPDATE t SET ... FROM other` without a WHERE that joins `t` and `other` |
+| [`sql128`](#sql128--grant--to-public) | `GRANT ... TO PUBLIC` |
+| [`sql130`](#sql130--multiple-truncate-statements-in-one-transaction-pg-supports-truncate-a-b-c-directly) | multiple `TRUNCATE` statements in one transaction. PG supports `TRUNCATE a, b, c` directly |
+| [`sql131`](#sql131--raise-notice-value-is-s) | `RAISE NOTICE 'value is %s'` |
+| [`sql132`](#sql132--select--for-update-inside-the-recursive-arm-of-a-cte-is-forbidden-by-pg) | `SELECT ... FOR UPDATE` inside the recursive arm of a CTE is forbidden by PG |
+| [`sql133`](#sql133--grant--with-grant-option-lets-the-grantee-re-grant-the-privilege-chain-to-anyone-else) | `GRANT ... WITH GRANT OPTION` lets the grantee re-grant the privilege chain to anyone else |
+| [`sql134`](#sql134--vacuum-cannot-run-inside-an-explicit-transaction-block) | `VACUUM` cannot run inside an explicit transaction block |
+| [`sql135`](#sql135--set-role-x-inside-a-transaction-without-a-matching-reset-role) | `SET ROLE x` inside a transaction without a matching `RESET ROLE` |
+| [`sql136`](#sql136--copy-t-from-file-without-a-format-clause) | `COPY t FROM 'file'` without a `FORMAT` clause |
+| [`sql137`](#sql137--bare-listen-channel-in-a-session-that-never-unlistens) | bare `LISTEN <channel>` in a session that never `UNLISTEN`s |
+| [`sql138`](#sql138--select-distinct-coltext-from-t) | `SELECT DISTINCT (col)::text FROM t` |
+| [`sql139`](#sql139--unique-on-a-nullable-column-with-nulls-distinct-the-pg-default) | `UNIQUE` on a nullable column with `NULLS DISTINCT` (the PG default) |
+| [`sql140`](#sql140--create-trigger--after-insert--when-oldx-) | `CREATE TRIGGER ... AFTER INSERT ... WHEN (OLD.x ...)` |
+| [`sql141`](#sql141--alter-type-x-add-value-y-cannot-run-inside-an-explicit-transaction-block) | `ALTER TYPE x ADD VALUE 'y'` cannot run inside an explicit transaction block |
+| [`sql142`](#sql142--create-or-replace-function--immutable-whose-body-issues-ddl-create-alter-drop-truncate) | `CREATE [OR REPLACE] FUNCTION ... IMMUTABLE` whose body issues DDL (CREATE, ALTER, DROP, TRUNCATE) |
+| [`sql143`](#sql143--insertupdatedelete--returning--inside-a-plpgsql-block-without-into-vars-or-strict) | `INSERT/UPDATE/DELETE ... RETURNING ...` inside a PL/pgSQL block without `INTO <vars>` or `STRICT` |
+| [`sql144`](#sql144--create-trigger--after-delete--when-newx-) | `CREATE TRIGGER ... AFTER DELETE ... WHEN (NEW.x ...)` |
+| [`sql145`](#sql145--column-default-now-or-any-volatile-expression-freezes-the-value-at-insert-time-which-is-usually-fine) | column `DEFAULT now()` (or any volatile expression) freezes the value at insert time, which is usually fine |
+| [`sql146`](#sql146--varchar--character-varying-without-an-explicit-length-unbounded-varchar-is-effectively-text-but-with) | `VARCHAR` / `CHARACTER VARYING` without an explicit length. Unbounded VARCHAR is effectively TEXT but with... |
+| [`sql148`](#sql148--array-subscript-arr0-or-arr-1) | array subscript `arr[0]` or `arr[-1]` |
+| [`sql149`](#sql149--update-t-set-x--x) | `UPDATE t SET x = x` |
+| [`sql150`](#sql150--case-when) | `CASE WHEN |
+| [`sql151`](#sql151--select--from-t-generate-seriestcol-10) | `SELECT ... FROM t, generate_series(t.col, 10)` |
+| [`sql152`](#sql152--begin-for-a-transaction-that-needs-to-updatedelete-many-rows-without-an-explicit-lock-table-or-for) | `BEGIN` for a transaction that needs to UPDATE/DELETE many rows without an explicit `LOCK TABLE` or `FOR... |
+| [`sql153`](#sql153--now--1-created-at--30) | `now() + 1`, `created_at + 30` |
+| [`sql154`](#sql154--select-count-from-t-where--no-group-by-returns-one-row-even-when-the-where-matches-nothing) | `SELECT count(*) FROM t WHERE ...` (no GROUP BY) returns **one row** even when the WHERE matches nothing |
+| [`sql155`](#sql155--truncate-t-returning-) | `TRUNCATE t RETURNING ...` |
+| [`sql156`](#sql156--select--into-strict-var-inside-plpgsql-without-a-surrounding-exception-block-strict-raises) | `SELECT ... INTO STRICT var` inside PL/pgSQL without a surrounding EXCEPTION block. STRICT raises... |
+| [`sql157`](#sql157--raise-exception--using-errcode--my-var) | `RAISE EXCEPTION ... USING ERRCODE = my_var` |
+| [`sql158`](#sql158--perform-select-inside-plpgsql-where-the-select-calls-no-function-with-side-effects) | `PERFORM <select>` inside PL/pgSQL where the SELECT calls no function with side effects |
+| [`sql159`](#sql159--create-trigger--for-each-statement--new) | `CREATE TRIGGER ... FOR EACH STATEMENT ... NEW` |
+| [`sql160`](#sql160--pg-advisory-lock-session-level-without-a-matching-pg-advisory-unlock-in-the-same-source) | `pg_advisory_lock(...)` (session-level) without a matching `pg_advisory_unlock(...)` in the same source |
+| [`sql164`](#sql164--foo--1-or-a--1) | `'foo' \|\| 1` or `'a' + 1` |
+| [`sql166`](#sql166--rowx-with-a-single-element) | `ROW(x)` with a single element |
+| [`sql167`](#sql167--create-index) | `CREATE INDEX |
+| [`sql168`](#sql168--create-unique-index) | `CREATE UNIQUE INDEX |
+| [`sql169`](#sql169--alter-table-x-owner-to-some-role) | `ALTER TABLE x OWNER TO some_role` |
+| [`sql170`](#sql170--x--lit-inside-a-plpgsql-body-where-the-literal-kind-disagrees-with-xs-declared-type-catches-declare) | `x := <lit>` inside a PL/pgSQL body where the literal kind disagrees with x's declared type. Catches `DECLARE... |
+| [`sql171`](#sql171--update-t-set-col--literal-where-the-literal-kind-disagrees-with-the-columns-catalog-type) | `UPDATE t SET <col> = <literal>` where the literal kind disagrees with the column's catalog type |
+| [`sql172`](#sql172--col--literal-or------where-the-literal-kind-disagrees-with-the-columns) | `<col> = <literal>` (or `<>`, `>`, `<`, `>=`, `<=`) where the literal kind disagrees with the column's... |
+| [`sql173`](#sql173--workspace-create-table-diverges-from-the-live-catalog) | workspace CREATE TABLE diverges from the live catalog |
+| [`sql174`](#sql174--countcol-where-col-is-nullable) | `COUNT(col)` where `col` is nullable |
+| [`sql175`](#sql175--select--from-view-for-update) | `SELECT ... FROM <view> FOR UPDATE` |
+| [`sql176`](#sql176--where-col-is-null-where-the-catalog-says-col-is-not-null) | `WHERE col IS NULL` where the catalog says `col` is NOT NULL |
+| [`sql177`](#sql177--insert-into-t-a--values-null--where-a-is-not-null-and-has-no-default) | `INSERT INTO t (a, ...) VALUES (NULL, ...)` where `a` is NOT NULL and has no default |
+| [`sql178`](#sql178--writing-to-a-generated-always-column-pg-rejects-writes-to-identitystored-generated-columns--insert) | Writing to a `GENERATED ALWAYS` column. PG rejects writes to identity/stored generated columns: * `INSERT... |
+| [`sql179`](#sql179--savepoint-s-outside-a-transaction-errors-with-25p01-savepoint-can-only-be-used-in-transaction-blocks) | `SAVEPOINT s;` outside a transaction errors with 25P01 ("SAVEPOINT can only be used in transaction blocks") |
+| [`sql180`](#sql180--truncate-inside-a-trigger-function-body) | `TRUNCATE` inside a trigger function body |
+| [`sql181`](#sql181--insert-into-t-name-values-long-string-where-name-is-declared-varcharn-and-the-literal-exceeds-n) | `INSERT INTO t (name) VALUES ('long-string')` where `name` is declared `VARCHAR(n)` and the literal exceeds n |
+| [`sql182`](#sql182--insert-into-t-d-values-garbage-where-d-is-date--timestamp--timestamptz--time-and-the-string) | `INSERT INTO t (d) VALUES ('garbage')` where `d` is DATE / TIMESTAMP / TIMESTAMPTZ / TIME and the string... |
+| [`sql183`](#sql183--insert-into-t-id-values-not-a-uuid-where-id-is-uuid-pg-raises-22p02-at-runtime-accept-only-) | `INSERT INTO t (id) VALUES ('not-a-uuid')` where `id` is UUID. PG raises 22P02 at runtime. Accept only: *... |
+| [`sql184`](#sql184--integer-literal-larger-than-the-columns-declared-type-can-hold-smallint-max-32767-int-max-2147483647) | integer literal larger than the column's declared type can hold (`SMALLINT` max 32767, `INT` max 2147483647) |
+| [`sql185`](#sql185--references-othermissing-where-missing-isnt-a-column-on-other) | `REFERENCES other(missing)` where `missing` isn't a column on `other` |
+| [`sql186`](#sql186--alter-table-t-drop-column-id-where-another-catalog-table-has-a-fk-that-references-tid) | `ALTER TABLE t DROP COLUMN id` where another catalog table has a FK that references `t(id)` |
+| [`sql187`](#sql187--join-other-using-col) | `JOIN other USING (col)` |
+| [`sql188`](#sql188--comment-on-table-bogus-is--where-bogus-isnt-a-known-catalog-table) | `COMMENT ON TABLE bogus IS '...'` where bogus isn't a known catalog table |
+| [`sql189`](#sql189--alter-table-t-alter-column-c-type-new-type-where-cs-catalog-type-doesnt-auto-cast-to-new-type-and) | `ALTER TABLE t ALTER COLUMN c TYPE <new_type>` where `c`'s catalog type doesn't auto-cast to `<new_type>` and... |
+| [`sql190`](#sql190--insert-into-t---on-conflict-col--do--where-col--is-not-the-target-of-any-primary) | `INSERT INTO t (...) ... ON CONFLICT (col, ...) DO ...` where `(col, ...)` is not the target of any PRIMARY... |
+| [`sql191`](#sql191--rows-between-n-following-and-m-preceding-or-any-frame-where-the-start-bound-is-strictly-later-than-the) | `ROWS BETWEEN <n> FOLLOWING AND <m> PRECEDING` or any frame where the start bound is strictly later than the... |
+| [`sql192`](#sql192--select) | `SELECT |
+| [`sql193`](#sql193--generated-always-as-expr-stored-where-expr-calls-a-known-volatile-function-random--now-) | `GENERATED ALWAYS AS (expr) STORED` where `expr` calls a known-volatile function (random / now /... |
+| [`sql194`](#sql194--truncate-foo-no-cascade-when-another-table-has-an-fk-referencing-foo) | `TRUNCATE foo` (no CASCADE) when another table has an FK referencing `foo` |
+| [`sql195`](#sql195--castlit-as-type-or-littype-where-lit-cant-be-parsed-as-type) | `CAST('lit' AS <type>)` or `'lit'::<type>` where `lit` can't be parsed as `<type>` |
+| [`sql196`](#sql196--references-othercol-where-othercol-is-not-the-target-of-a-primary-key-or-unique-constraint--unique) | `REFERENCES other(col)` where `other.col` is not the target of a PRIMARY KEY or UNIQUE constraint / unique... |
+| [`sql197`](#sql197--array-lengthcol--unnestcol-cardinalitycol-array-to-stringcol-) | `array_length(col, ...)`, `unnest(col)`, `cardinality(col)`, `array_to_string(col, ...)`... |
+| [`sql198`](#sql198--inline-column-check-references-a-different-column) | inline column CHECK references a different column |
+| [`sql199`](#sql199--col-type-default-expr-where-expr-references-another-column-on-the-same-table) | `<col> <type> DEFAULT <expr>` where `<expr>` references another column on the same table |
+| [`sql200`](#sql200--join-lateral-select) | `JOIN LATERAL (SELECT |
+| [`sql201`](#sql201--create-function) | `CREATE FUNCTION |
+| [`sql202`](#sql202--plpgsql-trigger-function-body-references-old-inside-an-insert-trigger-or-new-inside-a-delete) | PL/pgSQL trigger function body references `OLD.*` inside an INSERT trigger or `NEW.*` inside a DELETE... |
+| [`sql203`](#sql203--raise-msg-inside-a-plpgsql-body-without-a-level-keyword-noticeinfologwarningexceptiondebug-pg) | `RAISE 'msg'` inside a PL/pgSQL body without a level keyword (NOTICE/INFO/LOG/WARNING/EXCEPTION/DEBUG). PG... |
+| [`sql204`](#sql204--update-users-u-set-othercol--) | `UPDATE users u SET other.col = ...` |
+| [`sql205`](#sql205--notify-channel-where-no-listen-channel-appears-in-the-same-buffer-dead-channel) | `NOTIFY <channel>` where no `LISTEN <channel>` appears in the same buffer. Dead channel |
+| [`sql206`](#sql206--insert-into-t-a-b-values-select-1-2) | `INSERT INTO t (a, b) VALUES ((SELECT 1, 2))` |
+| [`sql207`](#sql207--coalescex-with-a-single-argument-is-a-no-op) | `COALESCE(x)` with a single argument is a no-op |
+| [`sql208`](#sql208--extractfield-from-expr-where-field-is-not-in-the-pg-supported-list) | `EXTRACT(<field> FROM <expr>)` where `<field>` is not in the PG-supported list |
+| [`sql209`](#sql209--copy-t-to-filecsv-or-copy-t-from-filecsv) | `COPY t TO 'file.csv'` or `COPY t FROM 'file.csv'` |
+| [`sql210`](#sql210--reindex-concurrently-tableindex-pg-x) | `REINDEX [CONCURRENTLY] (TABLE\|INDEX) pg_<x>` |
+| [`sql211`](#sql211--bare-rollback--commit-with-no-preceding-begin--start-transaction-in-the-source) | bare `ROLLBACK;` / `COMMIT;` with no preceding BEGIN / START TRANSACTION in the source |
+| [`sql212`](#sql212--top-level-select--into-foo-from-bar) | top-level `SELECT * INTO foo FROM bar` |
+| [`sql213`](#sql213--create-index) | `CREATE INDEX |
+| [`sql214`](#sql214--create-index-concurrently-or-drop-index-concurrently-inside-an-explicit-transaction-block) | `CREATE INDEX CONCURRENTLY` (or `DROP INDEX CONCURRENTLY`) inside an explicit transaction block |
+| [`sql215`](#sql215--group-by-rollupa--cubea-with-a-single-grouping-column) | `GROUP BY ROLLUP(a)` / `CUBE(a)` with a single grouping column |
+| [`sql216`](#sql216--insert-into-t-values-12-123) | `INSERT INTO t VALUES (1,2), (1,2,3)` |
+| [`sql217`](#sql217--select--left-join--for-update) | `SELECT ... LEFT JOIN ... FOR UPDATE` |
+| [`sql218`](#sql218--case-when--then-1--when--then-foo--end) | `CASE WHEN ... THEN 1 ... WHEN ... THEN 'foo' ... END` |
+| [`sql219`](#sql219--commit--rollback-inside-a-plpgsql-function-body) | `COMMIT` / `ROLLBACK` inside a PL/pgSQL FUNCTION body |
+| [`sql220`](#sql220--with-recursive-t-as-single-select-) | `WITH RECURSIVE t(...) AS (<single SELECT>) ...` |
+| [`sql221`](#sql221--array1-foo) | `ARRAY[1, 'foo']` |
+| [`sql222`](#sql222--select--from-select--limit-n-for-update) | `SELECT * FROM (SELECT ... LIMIT N) FOR UPDATE` |
+| [`sql223`](#sql223--jsonb-setcol-key-val) | `jsonb_set(col, 'key', '"val"')` |
+| [`sql224`](#sql224--set-constraints-all-deferred-or-any-set-constraints-form-outside-an-explicit-transaction-block-the) | `SET CONSTRAINTS ALL DEFERRED` (or any SET CONSTRAINTS form) outside an explicit transaction block. The... |
+| [`sql225`](#sql225--comment-on--is-null-or-is--when-the-target-already-has-a-non-empty-catalog-comment-pg-accepts-this) | `COMMENT ON ... IS NULL` (or `IS ''`) when the target already has a non-empty catalog comment. PG accepts this |
+| [`sql226`](#sql226--drop-table-foo-cascade-or-drop-typeetc-cascade-when-the-catalog-shows-3-direct-dependents-fk) | `DROP TABLE foo CASCADE` (or DROP TYPE/etc CASCADE) when the catalog shows 3+ direct dependents (FK... |
+| [`sql227`](#sql227--exists-select--from-) | `EXISTS (SELECT * FROM ...)` |
+| [`sql228`](#sql228--x--any-select-1-2-from-) | `x = ANY (SELECT 1, 2 FROM ...)` |
+| [`sql229`](#sql229--with-foo-as-updateinsertdelete--select--from-foo-where-the-data-modifying-cte-has-no-returning) | `WITH foo AS (UPDATE/INSERT/DELETE ...) SELECT * FROM foo` where the data-modifying CTE has no RETURNING... |
+| [`sql230`](#sql230--create-index--using-gin-col-where-col-is-a-plain-scalar-textintetc) | `CREATE INDEX ... USING GIN (col)` where `col` is a plain scalar (text/int/etc) |
+| [`sql231`](#sql231--nulls-first--nulls-last-outside-an-order-by-clause) | `NULLS FIRST` / `NULLS LAST` outside an ORDER BY clause |
+| [`sql232`](#sql232--jsonb-col--foo-or--where-the-rhs-is-a-plain-text-literal-without-jsonb) | `<jsonb col> @> 'foo'` (or `<@`) where the RHS is a plain text literal without `::jsonb` |
+| [`sql233`](#sql233--create-materialized-view-mv) | `CREATE MATERIALIZED VIEW mv |
+| [`sql234`](#sql234--where-col-in-) | `WHERE col IN ()` |
+| [`sql235`](#sql235--pg-sleepn-inside-an-explicit-transaction-block) | `pg_sleep(n)` inside an explicit transaction block |
+| [`sql236`](#sql236--after-trigger-function-returns-newold-row) | `AFTER` trigger function returns NEW/OLD row |
+| [`sql237`](#sql237--a-shell-command-pg-dump-psql-pg-restore-createdb-dropdb-appears-as-the-first-token-of-a-statement-pg) | A shell command (pg_dump, psql, pg_restore, createdb, dropdb) appears as the first token of a statement. PG... |
+| [`sql238`](#sql238--arr--array-null-) | `<arr> = ARRAY[..., NULL, ...]` |
+| [`sql239`](#sql239--alter-table-t-drop-column-c-where-c-was-declared-in-a-create-table-t-) | `ALTER TABLE t DROP COLUMN c` where `c` was declared in a `CREATE TABLE t ( |
+| [`sql240`](#sql240--savepoint-s--savepoint-s) | `SAVEPOINT s; ... SAVEPOINT s;` |
+| [`sql241`](#sql241--create-or-replace-view-v-as-select--from-t) | `CREATE [OR REPLACE] VIEW v AS SELECT * FROM t` |
+| [`sql242`](#sql242--drop-schema-foo-no-cascade--restrict) | `DROP SCHEMA foo` (no CASCADE / RESTRICT) |
+| [`sql243`](#sql243--from-values-1-2-where-) | `FROM (VALUES (1, 2)) WHERE ...` |
+| [`sql244`](#sql244--check-true--check-11--check-1-constraint-is-trivially-satisfied) | `CHECK (TRUE)` / `CHECK (1=1)` / `CHECK (1)` constraint is trivially satisfied |
+| [`sql245`](#sql245--from-pg-class-bare-instead-of-from-pg-catalogpg-class) | `FROM pg_class` (bare) instead of `FROM pg_catalog.pg_class` |
+| [`sql246`](#sql246--insert) | `INSERT |
+| [`sql247`](#sql247--pg-advisory-lock1-or-pg-advisory-xact-lock1-with-a-hard-coded-literal-key-pg-advisory-locks-are) | `pg_advisory_lock(1)` (or `pg_advisory_xact_lock(1)`) with a hard-coded literal key. PG advisory locks are... |
+| [`sql248`](#sql248--alter-table-t-add-column-c-type-not-null-no-default-on-pg11-pg-rewrites-the-whole-table-to-fill-the) | `ALTER TABLE t ADD COLUMN c <type> NOT NULL` (no DEFAULT). On PG<11 PG rewrites the whole table to fill the... |
+| [`sql249`](#sql249--insert-into-t-default-values) | `INSERT INTO t DEFAULT VALUES` |
+| [`sql250`](#sql250--select-count-from-t-for-update) | `SELECT count(*) FROM t FOR UPDATE` |
+| [`sql251`](#sql251--select--from-t-order-by-1) | `SELECT * FROM t ORDER BY 1` |
+| [`sql252`](#sql252--select--from-select--order-by-x-sub) | `SELECT * FROM (SELECT ... ORDER BY x) sub` |
+| [`sql253`](#sql253--x-not-in-select-col-from-t-where-col-is-nullable) | `x NOT IN (SELECT col FROM t)` where `col` is nullable |
+| [`sql254`](#sql254--alter-table-t-set-tablespace-ts-rewrites-the-entire-table-on-disk-and-holds-accessexclusivelock-for-the) | `ALTER TABLE t SET TABLESPACE ts` rewrites the entire table on disk and holds AccessExclusiveLock for the... |
+| [`sql255`](#sql255--row-number-over---rank-over---lag-over--without-an-order-by-in-the-window-definition) | `ROW_NUMBER() OVER ()` / `RANK() OVER ()` / `LAG() OVER ()` without an ORDER BY in the window definition |
+| [`sql256`](#sql256--current-settingfoo) | `current_setting('foo')` |
+| [`sql257`](#sql257--do--begin-select-now-end-) | `DO $$ BEGIN SELECT now(); END $$;` |
+| [`sql258`](#sql258--set-local-foo--val-outside-an-explicit-transaction-block) | `SET LOCAL <foo> = <val>` outside an explicit transaction block |
+| [`sql259`](#sql259--set-role-foo-inside-a-create-function-body-almost-never-intentional) | `SET ROLE <foo>` inside a CREATE FUNCTION body. Almost never intentional |
+| [`sql260`](#sql260--drop-function-foo-without-an-argument-signature-on-pg14-this-works-when-theres-only-one-overload-but-it) | `DROP FUNCTION foo` without an argument signature. On PG14+ this works when there's only one overload, but it... |
+| [`sql261`](#sql261--merge-into-t-using-src-on--) | `MERGE INTO t USING src ON ... ;` |
+| [`sql262`](#sql262--create-extension-pg-stat-statements-without-if-not-exists) | `CREATE EXTENSION pg_stat_statements` (without IF NOT EXISTS) |
+| [`sql263`](#sql263--select--from-select-distinct-on-k--from-t-sub-without-an-order-by-inside-the-subquery-distinct-on) | `SELECT * FROM (SELECT DISTINCT ON (k) ... FROM t) sub` without an ORDER BY inside the subquery. DISTINCT ON... |
+| [`sql264`](#sql264--update-pg-class-set---delete-from-pg-class-and-other-direct-dml-against-pg-catalog-system-tables) | `UPDATE pg_class SET ...` / `DELETE FROM pg_class` and other direct DML against `pg_catalog` system tables |
+| [`sql265`](#sql265--create-table-t--c-timestamp-default-now-) | `CREATE TABLE t (..., c TIMESTAMP DEFAULT now(), ...)` |
+| [`sql266`](#sql266--jsonb-build-objectk1-v1-k2) | `jsonb_build_object(k1, v1, k2)` |
+| [`sql267`](#sql267--a--b--c-chained-comparison) | `a = b = c` chained comparison |
+| [`sql268`](#sql268--select--order-by-a-union-select-) | `(SELECT ... ORDER BY a) UNION (SELECT ...)` |
+| [`sql269`](#sql269--where-extractyear-from-ts--2024-or-where-date-partyear-ts--2024) | `WHERE EXTRACT(YEAR FROM ts) = 2024` or `WHERE date_part('year', ts) = 2024` |
+| [`sql270`](#sql270--formathello-world) | `format('hello world')` |
+| [`sql271`](#sql271--declare-c-cursor-with-hold-for--outside-an-explicit-transaction) | `DECLARE c CURSOR WITH HOLD FOR ...` outside an explicit transaction |
+| [`sql272`](#sql272--create-index) | `CREATE INDEX |
+| [`sql273`](#sql273--check-false--check-0-constraint-rejects-every-row) | `CHECK (FALSE)` / `CHECK (0)` constraint rejects every row |
+| [`sql274`](#sql274--select--into-temp-foo-from-bar-or-into-temporary-where-foo-is-also-a-real-catalog-table-pg-allows-it) | `SELECT ... INTO TEMP foo FROM bar` (or INTO TEMPORARY) where `foo` is also a real catalog table. PG allows it |
+| [`sql275`](#sql275--set-transaction--read-only--read-write--isolation-level-inside-a-create-function-body) | `SET TRANSACTION ...` (READ ONLY / READ WRITE / ISOLATION LEVEL) inside a CREATE FUNCTION body |
+| [`sql276`](#sql276--interval-1-day-style-no-quotes) | `INTERVAL 1 DAY` style (no quotes) |
+| [`sql277`](#sql277--comment-on-function-foo-is--without-argument-signature-same-hazard-as-drop-function) | `COMMENT ON FUNCTION foo IS '...'` without argument signature. Same hazard as DROP FUNCTION |
+| [`sql278`](#sql278--expr--0-literal-division-by-zero) | `<expr> / 0` literal division by zero |
+| [`sql279`](#sql279--comment-on-constraint-pk-users-is-) | `COMMENT ON CONSTRAINT pk_users IS '...'` |
+| [`sql280`](#sql280--alter-table-t-add-constraint-c-check--without-not-valid) | `ALTER TABLE t ADD CONSTRAINT c CHECK (...)` without `NOT VALID` |
+| [`sql281`](#sql281--alter-table-t-alter-column-c-set-not-null) | `ALTER TABLE t ALTER COLUMN c SET NOT NULL` |
+| [`sql282`](#sql282--where-11-and---where-true-and-) | `WHERE 1=1 AND ...` / `WHERE TRUE AND ...` |
+| [`sql283`](#sql283--analyze-or-analyze-t-inside-an-explicit-transaction) | `ANALYZE` (or `ANALYZE t`) inside an explicit transaction |
+| [`sql284`](#sql284--tg-op-tg-table-name-tg-relid-tg-name-tg-when-tg-level-tg-nargs-tg-argv-referenced) | `TG_OP`, `TG_TABLE_NAME`, `TG_RELID`, `TG_NAME`, `TG_WHEN`, `TG_LEVEL`, `TG_NARGS`, `TG_ARGV` referenced... |
+| [`sql285`](#sql285--drop-role-foo--drop-user-foo-without-a-preceding-reassign-owned-by-foo--drop-owned-by-foo) | `DROP ROLE foo` / `DROP USER foo` without a preceding `REASSIGN OWNED BY foo` + `DROP OWNED BY foo` |
+| [`sql286`](#sql286--alter-type-x-add-value-new-before-bogus-where-bogus-is-not-one-of-xs-enum-labels) | `ALTER TYPE x ADD VALUE 'new' BEFORE 'bogus'` where `bogus` is not one of `x`'s enum labels |
+| [`sql287`](#sql287--revoke--cascade-on-a-privilege-the-grantee-may-have-re-granted-cascade-recursively-revokes-from-every) | `REVOKE ... CASCADE` on a privilege the grantee may have re-granted. CASCADE recursively revokes from every... |
+| [`sql288`](#sql288--create-index-on-t-col) | `CREATE INDEX ON t (col)` |
+| [`sql289`](#sql289--create-table--inherits-parent) | `CREATE TABLE ... INHERITS (parent)` |
+| [`sql290`](#sql290--percentile-cont05--percentile-disc05--mode-without-the-required-within-group-order-by-) | `percentile_cont(0.5)` / `percentile_disc(0.5)` / `mode()` without the required `WITHIN GROUP (ORDER BY ...)`... |
+| [`sql291`](#sql291--grant-all-privileges-on--or-bare-grant-all) | `GRANT ALL PRIVILEGES ON ...` (or bare `GRANT ALL`) |
+| [`sql292`](#sql292--limit-0-returns-zero-rows) | `LIMIT 0` returns zero rows |
+| [`sql293`](#sql293--nullif1-foo) | `NULLIF(1, 'foo')` |
+| [`sql294`](#sql294--begin-or-start-transaction-when-an-earlier-begin-in-the-source-hasnt-been-commited--rollbacked) | `BEGIN;` (or `START TRANSACTION;`) when an earlier BEGIN in the source hasn't been COMMITed / ROLLBACKed |
+| [`sql295`](#sql295--copy--with-header-format-text) | `COPY ... WITH (HEADER, FORMAT TEXT)` |
+| [`sql296`](#sql296--reindex-table--index--schema--database-inside-an-open-transaction-pg-holds-accessexclusivelock-for) | `REINDEX` (TABLE / INDEX / SCHEMA / DATABASE) inside an open transaction. PG holds AccessExclusiveLock for... |
+| [`sql297`](#sql297--notify-chan-huge-literal) | `NOTIFY chan, '<huge literal>'` |
+| [`sql298`](#sql298--create-table--function--type--index--trigger--constraint-name-longer-than-63-bytes) | CREATE TABLE / FUNCTION / TYPE / INDEX / TRIGGER / CONSTRAINT name longer than 63 bytes |
+| [`sql299`](#sql299--primary-key-a-a--unique-a-a) | `PRIMARY KEY (a, a)` / `UNIQUE (a, a)` |
+| [`sql300`](#sql300--select-a-b-from-t) | `SELECT a, b, FROM t` |
+| [`sql301`](#sql301--copy--from-program-cmd--copy--to-program-cmd) | `COPY ... FROM PROGRAM 'cmd'` / `COPY ... TO PROGRAM 'cmd'` |
+| [`sql302`](#sql302--drop-table-foo-or-drop-indexviewtriggeretc-without-if-exists) | `DROP TABLE foo` (or DROP INDEX/VIEW/TRIGGER/etc) without `IF EXISTS` |
+| [`sql303`](#sql303--array-empty-constructor-without-a-type-cast) | `ARRAY[]` (empty constructor) without a `::type[]` cast |
+| [`sql304`](#sql304--create-table-foo--parent-id-references-fooid) | CREATE TABLE foo (..., parent_id REFERENCES foo(id)) |
+| [`sql305`](#sql305--from-information-schemaview) | `FROM information_schema.<view>` |
+| [`sql306`](#sql306--where-id-in-1-1-2) | `WHERE id IN (1, 1, 2)` |
+| [`sql307`](#sql307--update--limit-n--delete--limit-n) | `UPDATE ... LIMIT N` / `DELETE ... LIMIT N` |
+| [`sql308`](#sql308--timestamp7--time7--timestamptz7-etc) | `TIMESTAMP(7)` / `TIME(7)` / `TIMESTAMPTZ(7)` etc |
+| [`sql309`](#sql309--revoke-select-on-foo) | `REVOKE SELECT ON foo;` |
+| [`sql310`](#sql310--line-starts-with-letter) | line starts with `\<letter>` |
+| [`sql311`](#sql311--string-aggcol---array-aggcol--json-aggcol--jsonb-aggcol-without-an-order-by-clause) | `string_agg(col, ',')` / `array_agg(col)` / `json_agg(col)` / `jsonb_agg(col)` without an `ORDER BY` clause... |
+| [`sql312`](#sql312--column-declared-serial--bigserial--smallserial) | column declared `SERIAL` / `BIGSERIAL` / `SMALLSERIAL` |
+| [`sql313`](#sql313--create-table-t--comment-msg) | `CREATE TABLE t (...) COMMENT 'msg'` |
+| [`sql314`](#sql314--auto-increment) | `AUTO_INCREMENT` |
+| [`sql315`](#sql315--engineinnodb--enginemyisam--similar) | `ENGINE=InnoDB` / `ENGINE=MyISAM` / similar |
+| [`sql316`](#sql316--mysql-only-types-tinyint-mediumint-longtext-etc) | MySQL-only types (TINYINT, MEDIUMINT, LONGTEXT, etc) |
+| [`sql317`](#sql317--identifier-square-bracket-quoting) | `[identifier]` (square-bracket quoting) |
+| [`sql318`](#sql318--select-top-10-) | `SELECT TOP 10 ...` |
+| [`sql319`](#sql319--isnullx-y-mssqlmysql--nvlx-y-oracle--ifnullx-y-mysql) | `ISNULL(x, y)` (MSSQL/MySQL) / `NVL(x, y)` (Oracle) / `IFNULL(x, y)` (MySQL) |
+| [`sql320`](#sql320--getdate--sysdate--getutcdate) | `GETDATE()` / `SYSDATE` / `GETUTCDATE()` |
+| [`sql321`](#sql321--standalone-go) | standalone `GO` |
+| [`sql322`](#sql322--begin-tran) | `BEGIN TRAN` |
+| [`sql323`](#sql323--select--from-dual) | `SELECT ... FROM DUAL` |
+| [`sql324`](#sql324--rownum) | `ROWNUM` |
+| [`sql325`](#sql325--connect-by-prior-) | `CONNECT BY PRIOR ...` |
+| [`sql326`](#sql326--aid--bid) | `a.id = b.id(+)` |
+| [`sql327`](#sql327--create-table-foo--without-an-explicit-schema-qualifier-style-hint-every-create-table-in-a) | `CREATE TABLE foo (...)` without an explicit schema qualifier. Style hint: every CREATE TABLE in a... |
+| [`sql328`](#sql328--revoke-in-a-buffer-that-has-no-matching-grant) | REVOKE in a buffer that has no matching GRANT |
+| [`sql329`](#sql329--substringtext-from-number-without-a-matching-for-pg-returns-the-rest-of-the-string-from-the-start) | `substring(text FROM <number>)` without a matching `FOR`. PG returns the rest of the string from the start... |
+| [`sql331`](#sql331--drop-index-concurrently-inside-an-explicit-transaction) | `DROP INDEX CONCURRENTLY` inside an explicit transaction |
+| [`sql332`](#sql332--pg-terminate-backend--pg-cancel-backend-invoked-from-an-unprivileged-buffer) | `pg_terminate_backend(...)` / `pg_cancel_backend(...)` invoked from an unprivileged buffer |
+| [`sql333`](#sql333--on-update-cascade-on-a-column-referenced-as-a-primary-key-on-update-cascade-is-rarely-the-right-choice-on) | `ON UPDATE CASCADE` on a column referenced as a primary key. ON UPDATE CASCADE is rarely the right choice on... |
+| [`sql334`](#sql334--select-setseed-without-a-nearby-deterministic-guard) | `SELECT setseed(...)` without a nearby deterministic guard |
+| [`sql335`](#sql335--explicit-tablespace-name-clause-in-a-buffer-that-likely-runs-as-a-non-superuser-migration) | explicit `TABLESPACE <name>` clause in a buffer that likely runs as a non-superuser migration |
+| [`sql336`](#sql336--bytea-literal-xff-without-the-e-escape-string-prefix) | `bytea` literal `'\\xFF'` without the `E''` escape-string prefix |
+| [`sql337`](#sql337--group-by-references-a-select-list-alias-instead-of-the-original-column) | `GROUP BY` references a SELECT-list alias instead of the original column |
+| [`sql338`](#sql338--create-table-x-partition-of-parent-like-base-including-indexes--including-indexes-inside-a-partition) | `CREATE TABLE x PARTITION OF parent (LIKE base INCLUDING INDEXES ...)` INCLUDING INDEXES inside a PARTITION... |
+| [`sql339`](#sql339--truncate-inside-a-plpgsql-function-body-that-also-has-an-exception-block) | `TRUNCATE` inside a PL/pgSQL function body that also has an `EXCEPTION` block |
+| [`sql340`](#sql340--newid--expr-inside-a-before-insert-trigger-body) | `NEW.id := <expr>` inside a `BEFORE INSERT` trigger body |
+| [`sql341`](#sql341--insert-into-t-col-values-array-where-the-array-element-family-doesnt-match-the-target-columns) | `INSERT INTO t (col) VALUES (ARRAY[...])` where the array element family doesn't match the target column's... |
+| [`sql342`](#sql342--bool-andcol--bool-orcol--everycol-on-a-nullable-boolean-column) | `BOOL_AND(col)` / `BOOL_OR(col)` / `EVERY(col)` on a nullable boolean column |
+| [`sql343`](#sql343--percent-rank-over-order-by-col--cume-dist-over-order-by-col-where-col-is-a-non-numeric) | `percent_rank() OVER (ORDER BY <col>)` / `cume_dist() OVER (ORDER BY <col>)` where `<col>` is a non-numeric... |
+| [`sql344`](#sql344--order-by-col-using-op-where-the-columns-type-family-is-one-of-the-families-that-lacks-a-meaningful) | `ORDER BY <col> USING <op>` where the column's type family is one of the families that lacks a meaningful... |
+| [`sql345`](#sql345--alter-table-t-rename-column-old-to-new-while-some-create-view-v-as-select--in-the-same-buffer) | `ALTER TABLE t RENAME COLUMN old TO new` while some `CREATE VIEW v AS SELECT ...` in the same buffer... |
+| [`sql346`](#sql346--create-index) | `CREATE INDEX |
+| [`sql347`](#sql347--alter-table-t-enabledisable-trigger-) | `ALTER TABLE t ENABLE\|DISABLE TRIGGER ...` |
+| [`sql348`](#sql348--function-call-whose-name-isnt-in-the-live-catalog-the-built-in-dsl-knowledge-function-table-or-a) | function call whose name isn't in the live catalog, the built-in dsl-knowledge function table, or a... |
+| [`sql349`](#sql349--insert-into-t-col-list-lists-a-column-not-in-the-target-tables-catalog) | `INSERT INTO t (col_list)` lists a column not in the target table's catalog |
+| [`sql350`](#sql350--insertupdatedelete) | `INSERT/UPDATE/DELETE |
+| [`sql351`](#sql351--deleteupdate-from-t-where-bogus) | `DELETE/UPDATE FROM t WHERE bogus` |
+| [`sql402`](#sql402--duplicate-fromjoin-alias-in-a-single-select-example-select--from-users-a-orders-a) | duplicate FROM/JOIN alias in a single SELECT. Example: `SELECT * FROM users a, orders a` |
+| [`sql403`](#sql403--order-by-references-a-column-that-doesnt-exist-in-any-in-scope-table-or-projection-alias-pg-models-order-by) | ORDER BY references a column that doesn't exist in any in-scope table or projection alias. PG models ORDER BY... |
+| [`sql404`](#sql404--group-by-references-a-column-that-doesnt-exist) | GROUP BY references a column that doesn't exist |
+| [`sql405`](#sql405--having-references-a-column-that-doesnt-exist) | HAVING references a column that doesn't exist |
+| [`sql406`](#sql406--duplicate-column-in-an-insert-column-list-or-update-set-assignment-list---insert-into-t-a-b-a-values) | duplicate column in an INSERT column list or UPDATE SET assignment list. - `INSERT INTO t (a, b, a) VALUES... |
+| [`sql407`](#sql407--where-12--where-false--where-11) | `WHERE 1=2` / `WHERE FALSE` / `WHERE 1<>1` |
+| [`sql408`](#sql408--where-col--col-or-col-op-col-for-the-same-column-on-both-sides) | `WHERE col = col` (or `<col> OP <col>` for the same column on both sides) |
+| [`sql409`](#sql409--where-col-between-col-and--or-where-col-between--and-col) | `WHERE col BETWEEN col AND ...` or `WHERE col BETWEEN ... AND col` |
+| [`sql410`](#sql410--select-id-id-from-) | `SELECT id, id FROM ...` |
+| [`sql411`](#sql411--limit-1-offset-n-with-n--0-without-order-by-picks-a-deliberately-non-first-row-but-without-order-by) | `LIMIT 1 OFFSET N` (with N > 0) without ORDER BY picks a deliberately non-first row, but without ORDER BY... |
+| [`sql412`](#sql412--order-by-id-id--group-by-id-id) | `ORDER BY id, id` / `GROUP BY id, id` |
+| [`sql413`](#sql413--expr--null--null--expr) | `expr \|\| NULL` / `NULL \|\| expr` |
+| [`sql414`](#sql414--where-col-in-col--or--col-not-in-col-) | `WHERE col IN (col, ...)` or `... col NOT IN (col, ...)` |
+| [`sql415`](#sql415--colt-or-castcol-as-t-where-t-is-the-columns-catalog-data-type) | `col::T` or `CAST(col AS T)` where T is the column's catalog data type |
+| [`sql416`](#sql416--case-when--then-x--when--then-x-else-x-end) | `CASE WHEN ... THEN x ... WHEN ... THEN x ELSE x END` |
+| [`sql417`](#sql417--coalescea-a--or-coalescea-null-) | `COALESCE(a, a, ...)` or `COALESCE(a, NULL, ...)` |
+| [`sql418`](#sql418--select-distinct-pk-col-from-t) | `SELECT DISTINCT pk_col FROM t` |
+| [`sql419`](#sql419--nullifx-null-and-nullifnull-x-are-pointless) | `NULLIF(x, NULL)` and `NULLIF(NULL, x)` are pointless |
+| [`sql420`](#sql420--where-col--anyarraycol-) | `WHERE col = ANY(ARRAY[col, ...])` |
+| [`sql421`](#sql421--where-age--0-and-age--0) | `WHERE age > 0 AND age > 0` |
+| [`sql422`](#sql422--where-x-and-not-x) | `WHERE X AND NOT X` |
+| [`sql423`](#sql423--col--prefix-or--prefix-where-the-regex-is-just-an-anchored-literal-prefix-could-be-rewritten) | `col ~ '^prefix'` (or `~* '^prefix'`) where the regex is just an anchored literal prefix could be rewritten... |
+| [`sql424`](#sql424--where-count--1) | `WHERE count(*) > 1` |
+| [`sql425`](#sql425--window-function-in-where--having--join-on) | window function in WHERE / HAVING / JOIN ON |
+| [`sql426`](#sql426--select-distinct-id-from-users-order-by-age) | `SELECT DISTINCT id FROM users ORDER BY age` |
+| [`sql427`](#sql427--where-datets--2024-01-01--where-tsdate----where-castts-as-date--) | `WHERE date(ts) = '2024-01-01'` / `WHERE ts::date = ...` / `WHERE CAST(ts AS date) = ...` |
+| [`sql428`](#sql428--max--sum--avg-etc) | `MAX(*) / SUM(*) / AVG(*)` etc |
+| [`sql429`](#sql429--where-col--1-c-style-and-where-col--1-mysql-null-safe-equal) | `WHERE col == 1` (C-style) and `WHERE col <=> 1` (MySQL null-safe equal) |
+| [`sql430`](#sql430--select--col-from-t) | `SELECT *, col FROM t` |
+| [`sql431`](#sql431--select) | `SELECT |
+| [`sql432`](#sql432--case-when-p-then-a-when-p-then-b-end) | `CASE WHEN p THEN a WHEN p THEN b END` |
+| [`sql433`](#sql433--order-by-null--order-by-true--order-by-foo) | `ORDER BY NULL` / `ORDER BY TRUE` / `ORDER BY 'foo'` |
+| [`sql434`](#sql434--where-col-is-not-null-and-col--5) | `WHERE col IS NOT NULL AND col = 5` |
+| [`sql435`](#sql435--where-col-is-null-and-col--5-or-any-strict-op-or-col-is-not-null) | `WHERE col IS NULL AND col = 5` (or any strict op, or `col IS NOT NULL`) |
+| [`sql436`](#sql436--sumrow-number-over-) | `sum(row_number() OVER (...))` |
+| [`sql437`](#sql437--where-null-in-1-2-3) | `WHERE NULL IN (1, 2, 3)` |
+| [`sql438`](#sql438--id-int-generated-always-as-identity-default-0) | `id int GENERATED ALWAYS AS IDENTITY DEFAULT 0` |
+| [`sql439`](#sql439--date-2024-13-01--timestamp-2024-02-30) | `DATE '2024-13-01'` / `TIMESTAMP '2024-02-30'` |
+| [`sql440`](#sql440--interval-2-mans) | `INTERVAL '2 mans'` |
+| [`sql441`](#sql441--where-exists-select-1-from-other-table) | `WHERE EXISTS (SELECT 1 FROM other_table)` |
+| [`sql442`](#sql442--regexp-replaces-pattern-replacement) | `regexp_replace(s, pattern, replacement)` |
+| [`sql443`](#sql443--substrings-start--3) | `substring(s, start, -3)` |
+| [`sql444`](#sql444--generate-series1-10-0) | `generate_series(1, 10, 0)` |
+| [`sql445`](#sql445--array-positionarr-null) | `array_position(arr, NULL)` |
+| [`sql446`](#sql446--position-in-s--strposs-) | `position('' in s)` / `strpos(s, '')` |
+| [`sql447`](#sql447--powerx-0-always-returns-1-and-powerx-1-always-returns-x) | `power(x, 0)` always returns 1 and `power(x, 1)` always returns x |
+| [`sql448`](#sql448--lpadhi--3-0) | `lpad('hi', -3, '0')` |
+| [`sql449`](#sql449--jsonb-build-objectk-1-k-2) | `jsonb_build_object('k', 1, 'k', 2)` |
+| [`sql450`](#sql450--numericp-s-or-decimalp-s-with-s--p) | `NUMERIC(p, s)` (or `DECIMAL(p, s)`) with `s > p` |
+| [`sql451`](#sql451--varchar0--char0--character0--character-varying0) | `VARCHAR(0)` / `CHAR(0)` / `CHARACTER(0)` / `CHARACTER VARYING(0)` |
+| [`sql452`](#sql452--repeats-0-or-repeats--3) | `repeat(s, 0)` or `repeat(s, -3)` |
+| [`sql453`](#sql453--array-lengtharr) | `array_length(arr)` |
+| [`sql454`](#sql454--to-timestamps-hhmm) | `to_timestamp(s, 'HH:MM')` |
+| [`sql455`](#sql455--where-x-or-not-x) | `WHERE X OR NOT X` |
+| [`sql456`](#sql456--where-smallint-col--100000) | `WHERE smallint_col = 100000` |
+| [`sql457`](#sql457--select-a-b-from-t-group-by-3) | `SELECT a, b FROM t GROUP BY 3` |
+| [`sql458`](#sql458--sumbool-col--avgbool-col) | `SUM(bool_col)` / `AVG(bool_col)` |
+| [`sql459`](#sql459--countcol-where-col-is-declared-not-null) | `COUNT(col)` where `col` is declared NOT NULL |
+| [`sql460`](#sql460--select-id-from-t-having-id--5) | `SELECT id FROM t HAVING id > 5` |
+| [`sql461`](#sql461--array-removenull-1--array-positionnull-1--cardinalitynull) | `array_remove(NULL, 1)` / `array_position(NULL, 1)` / `cardinality(NULL)` |
+| [`sql462`](#sql462--x--null-or-----) | `x + NULL` (or `-`, `*`, `/`, `%`) |
+| [`sql463`](#sql463--if-tg-op--inserted-then-) | `IF TG_OP = 'inserted' THEN ...` |
+| [`sql464`](#sql464--x-is-distinct-from-x) | `x IS DISTINCT FROM x` |
+| [`sql465`](#sql465--concat-ws-a-b-c) | `concat_ws('', a, b, c)` |
+| [`sql466`](#sql466---offset-0) | `... OFFSET 0` |
+| [`sql467`](#sql467--replaces--x--split-parts--n) | `replace(s, '', x)` / `split_part(s, '', n)` |
+| [`sql468`](#sql468--greatestnull-null--leastnull-null-null) | `GREATEST(NULL, NULL)` / `LEAST(NULL, NULL, NULL)` |
+| [`sql469`](#sql469--not-col-is-null-and-not-col-is-null) | `NOT (col IS NULL)` and `NOT col IS NULL` |
+| [`sql470`](#sql470--not-col-in---not-col-like---not-col-between-) | `NOT (col IN (...))` / `NOT (col LIKE ...)` / `NOT (col BETWEEN ...)` |
+| [`sql471`](#sql471--where-x-in-select-distinct-y-from-t) | `WHERE x IN (SELECT DISTINCT y FROM t)` |
+| [`sql472`](#sql472--extractdow-from-1-dayinterval) | `EXTRACT(dow FROM '1 day'::interval)` |
+| [`sql473`](#sql473--col--anyarrayint) | `col = ANY(ARRAY[]::int[])` |
+| [`sql474`](#sql474--where-a--a-tautology-where-2--2-tautology-where-a--b-contradiction) | `WHERE 'a' = 'a'` (tautology), `WHERE 2 = 2` (tautology), `WHERE 'a' = 'b'` (contradiction) |
+| [`sql475`](#sql475--insert-into-t-select--from-t) | `INSERT INTO t SELECT ... FROM t` |
+| [`sql476`](#sql476--case-col-when-null-then-) | `CASE col WHEN NULL THEN ...` |
+| [`sql477`](#sql477--col--jsonb--col--jsonb--col--arrayint) | `col @> '{}'::jsonb` / `col @> '[]'::jsonb` / `col @> ARRAY[]::int[]` |
+| [`sql478`](#sql478--col--jsonb--col--jsonb--col--arrayint) | `col <@ '{}'::jsonb` / `col <@ '[]'::jsonb` / `col <@ ARRAY[]::int[]` |
+| [`sql479`](#sql479--substrings-0-n--substrings-from-0-for-n--substrs-0-n) | `substring(s, 0, n)` / `substring(s FROM 0 FOR n)` / `substr(s, 0, n)` |
+| [`sql480`](#sql480--group-by-null--group-by-true--group-by-foo) | `GROUP BY NULL` / `GROUP BY TRUE` / `GROUP BY 'foo'` |
+| [`sql481`](#sql481--positionneedle-in---strpos-needle) | `position(<needle> in '')` / `strpos('', <needle>)` |
+| [`sql482`](#sql482--having-constant) | `HAVING <constant>` |
+| [`sql483`](#sql483--split-parts-delim-0) | `split_part(<s>, <delim>, 0)` |
+| [`sql484`](#sql484--over-partition-by-constant-) | `OVER (PARTITION BY <constant> ...)` |
+| [`sql485`](#sql485--regexp-split-to-arrays--regexp-split-to-tables--regexp-matchs--regexp-matchess-) | `regexp_split_to_array(s, '')`, `regexp_split_to_table(s, '')`, `regexp_match(s, '')`, `regexp_matches(s, '')` |
+| [`sql486`](#sql486--select-distinct---select-distinct-t) | `SELECT DISTINCT *` / `SELECT DISTINCT t.*` |
+| [`sql487`](#sql487--array-lengtharr-0-array-lowerarr-0-array-upperarr-0-or-any-negative-dimension) | `array_length(arr, 0)`, `array_lower(arr, 0)`, `array_upper(arr, 0)`, or any negative dimension |
+| [`sql488`](#sql488--jsonb-path-existsqueryquery-arrayquery-firstmatchcol-path) | `jsonb_path_exists/query/query_array/query_first/match(col, '<path>')` |
+| [`sql489`](#sql489--where-col--0--n-col---0--n-col--1--n-col--1--n-and-the-commutative-0--col-1--col) | `WHERE col + 0 = N`, `col - 0 = N`, `col * 1 = N`, `col / 1 = N` (and the commutative `0 + col`, `1 * col`) |
+| [`sql490`](#sql490--col------col) | `col \|\| ''` / `'' \|\| col` |
+| [`sql491`](#sql491--having-1--1-tautology--having-1--2-contradiction--having-a--b) | `HAVING 1 = 1` (tautology) / `HAVING 1 = 2` (contradiction) / `HAVING 'a' = 'b'` |
+| [`sql492`](#sql492--col-not-in--null-) | `col NOT IN (..., NULL, ...)` |
+| [`sql493`](#sql493--coalescenot-null-col-) | `COALESCE(<not-null-col>, ...)` |
+| [`sql494`](#sql494--jsonb-settarget--value--jsonb-set-lax--jsonb-insert-with-an-empty-path-array) | `jsonb_set(target, '{}', value)` / `jsonb_set_lax` / `jsonb_insert` with an empty path array |
+| [`sql495`](#sql495--where-col--allarray-literal) | `WHERE col = ALL(<array-literal>)` |
+| [`sql496`](#sql496--update-t-set-col--default-where-col-has-no-default-definition) | `UPDATE t SET col = DEFAULT` where `col` has no DEFAULT definition |
+| [`sql497`](#sql497--array-aggdistinct-a-order-by-b-and-similar) | `array_agg(DISTINCT a ORDER BY b)` and similar |
+| [`sql498`](#sql498--where-col-similar-to-pattern) | `WHERE col SIMILAR TO 'pattern'` |
+| [`sql499`](#sql499--where-tsvector-col--plain-text) | `WHERE tsvector_col @@ 'plain text'` |
+| [`sql500`](#sql500--date-col1---date-col2) | `date_col1 - date_col2` |
+| [`sql501`](#sql501--order-by-not-null-col-nulls-firstlast) | `ORDER BY not_null_col NULLS FIRST\|LAST` |
+| [`sql502`](#sql502--where-timestamptz-col-op-timestamp-lit) | `WHERE timestamptz_col <op> TIMESTAMP 'lit'` |
+| [`sql503`](#sql503--where-non-jsonb-col--key----) | `WHERE non_jsonb_col ? 'key'` / `?\|` / `?&` |
+| [`sql504`](#sql504--int-col--int-literal) | `<int_col> / <int_literal>` |
+| [`sql505`](#sql505--text-col---key-------) | `<text_col> -> 'key'` / `->>` / `#>` / `#>>` |
+| [`sql506`](#sql506--arraynull--arraynull-null-) | `ARRAY[NULL]` / `ARRAY[NULL, NULL, ...]` |
+| [`sql507`](#sql507--execute-sql--var) | `EXECUTE '<sql>' \|\| <var>` |
+| [`sql508`](#sql508--where-col-like-col--ilike--not-like--not-ilike-and-the-posix-regex-equivalents-------) | `WHERE col LIKE col` / `ILIKE` / `NOT LIKE` / `NOT ILIKE` and the POSIX-regex equivalents `~ / ~* / !~ / !~*` |
+| [`sql509`](#sql509--explicit-pg-temptable-or-pg-temp-ntable-reference-temporary-tables-live-in-a-per-backend) | explicit `pg_temp.<table>` (or `pg_temp_<N>.<table>`) reference. Temporary tables live in a per-backend... |
+| [`sql510`](#sql510--where-col-similar-to-col--not-similar-to-col) | `WHERE col SIMILAR TO col` / `NOT SIMILAR TO col` |
+| [`sql511`](#sql511--where-col--col--col--col--col--col) | `WHERE col @> col` / `col <@ col` / `col && col` |
+| [`sql512`](#sql512--table-level-pk--unique--fk-source-constraint-references-a-column-that-isnt-declared-on-this-table-pg) | table-level PK / UNIQUE / FK source constraint references a column that isn't declared on this table. PG... |
+| [`sql513`](#sql513--function-call-arg-count-validation) | function call arg-count validation |
+| [`sql514`](#sql514--empty-expression-parentheses-where-an-expression-is-required-catches-the-post-refactor-pattern-where-a) | empty expression parentheses where an expression is required. Catches the post-refactor pattern where a... |
+| [`sql515`](#sql515--where-col-in-1--where-col-not-in-1) | `WHERE col IN (1)` / `WHERE col NOT IN (1)` |
+| [`sql516`](#sql516--update-t-set-col--col) | `UPDATE t SET col = col` |
+| [`sql517`](#sql517--join--on-1--1) | `JOIN ... ON 1 = 1` |
+| [`sql518`](#sql518--case-when-cond-then-true-else-false-end) | `CASE WHEN cond THEN TRUE ELSE FALSE END` |
+| [`sql519`](#sql519--where-a--1-or-a--2-or-a--3) | `WHERE a = 1 OR a = 2 OR a = 3` |
+| [`sql520`](#sql520--where-lowercol--abc--where-uppercol-like-abc) | `WHERE lower(col) = 'ABC'` / `WHERE upper(col) LIKE 'abc%'` |
+| [`sql521`](#sql521--col--anyarray1--col--allarrayx) | `col = ANY(ARRAY[1])` / `col <> ALL(ARRAY['x'])` |
+| [`sql522`](#sql522--a-left-join-b-on--where-bcol--x) | `a LEFT JOIN b ON ... WHERE b.col = 'x'` |
+| [`sql523`](#sql523--where-col-is-null-or-col-is-not-null) | `WHERE col IS NULL OR col IS NOT NULL` |
+| [`sql524`](#sql524--col-like-) | `col LIKE '%'` |
+| [`sql525`](#sql525--exists-select--limit-1) | `EXISTS (SELECT ... LIMIT 1)` |
+| [`sql526`](#sql526--where-col--1-and-col--2) | `WHERE col = 1 AND col = 2` |
+| [`sql527`](#sql527--where-col--5-and-col--3) | `WHERE col > 5 AND col < 3` |
+| [`sql528`](#sql528--replaces-x-x) | `REPLACE(s, x, x)` |
+| [`sql529`](#sql529--having-count--0) | `HAVING COUNT(*) > 0` |
+| [`sql530`](#sql530--coalescecoalescea-b-c) | `COALESCE(COALESCE(a, b), c)` |
+| [`sql531`](#sql531--select-name-as-name) | `SELECT name AS name` |
+| [`sql532`](#sql532--select) | `SELECT |
+| [`sql533`](#sql533--col-between-5-and-5) | `col BETWEEN 5 AND 5` |
+| [`sql534`](#sql534--greatestx-x--leasta-b-a) | `GREATEST(x, x)` / `LEAST(a, b, a)` |
+| [`sql535`](#sql535--where-a--1-and-a--2-and-a--3) | `WHERE a <> 1 AND a <> 2 AND a <> 3` |
+| [`sql536`](#sql536--insert--on-conflict--do-update-set-col--col) | `INSERT ... ON CONFLICT ... DO UPDATE SET col = col` |
+| [`sql537`](#sql537--not-a--b) | `NOT (a = b)` |
+| [`sql538`](#sql538--roundx-0--truncx-0) | `ROUND(x, 0)` / `TRUNC(x, 0)` |
+| [`sql539`](#sql539--select-distinctcol-other--or-countdistinctcol) | `SELECT DISTINCT(col), other ...` (or `COUNT(DISTINCT(col))`) |
+| [`sql540`](#sql540--where-lengths--0--lengths--0) | `WHERE length(s) = 0` / `length(s) > 0` |
+| [`sql541`](#sql541--a-boolean-literal-operand-that-forces-the-whole-condition-to-a-constant) | a boolean literal operand that forces the whole condition to a constant |
+| [`sql542`](#sql542--nowdate--current-timestampdate) | `now()::date` / `current_timestamp::date` |
+| [`sql543`](#sql543--group-by-count--group-by-sumx) | `GROUP BY count(*)` / `GROUP BY sum(x)` |
+| [`sql544`](#sql544--where-col--5-and-col--5) | `WHERE col >= 5 AND col <= 5` |
+| [`sql545`](#sql545--where-extractmonth-from-x--13--extractdow-from-x--7) | `WHERE EXTRACT(MONTH FROM x) = 13` / `EXTRACT(DOW FROM x) = 7` |
+| [`sql546`](#sql546--where-x--7--7) | `WHERE x % 7 = 7` |
+| [`sql547`](#sql547--where-array-lengtharr-1--0) | `WHERE array_length(arr, 1) = 0` |
+| [`sql548`](#sql548--col--allarray1-2-3) | `col <> ALL(ARRAY[1, 2, 3])` |
+| [`sql549`](#sql549--from-users-as-users--join-orders-orders) | `FROM users AS users` / `JOIN orders orders` |
+| [`sql550`](#sql550--where-x--5-and-x--3) | `WHERE x > 5 AND x > 3` |
+| [`sql551`](#sql551--redundantly-nested-functions-whose-outer-call-subsumes-the-inner-one--upperlowerx--lowerupperx) | redundantly nested functions whose outer call subsumes the inner one: * `upper(lower(x))` / `lower(upper(x))`... |
+| [`sql552`](#sql552--where-absx--0--cardinalityarr---1) | `WHERE abs(x) < 0` / `cardinality(arr) = -1` |
+| [`sql553`](#sql553--create-table-t-col-int-default-null) | `CREATE TABLE t (col int DEFAULT NULL)` |
+| [`sql554`](#sql554--the-operator-spellings-of-like) | the operator spellings of LIKE |
+| [`sql555`](#sql555--where-active-is-true--where-active-is-false) | `WHERE active IS TRUE` / `WHERE active IS FALSE` |
+| [`sql556`](#sql556--col--anyarray1-2-3) | `col = ANY(ARRAY[1, 2, 3])` |
+| [`sql557`](#sql557--create-table-t-id-int-id-text) | `CREATE TABLE t (id int, id text)` |
+| [`sql558`](#sql558--a-create-table-with-more-than-one-primary-key-definition-eg) | a `CREATE TABLE` with more than one PRIMARY KEY definition (e.g |
+| [`sql559`](#sql559--create-index-idx-on-t-a-b-a) | `CREATE INDEX idx ON t (a, b, a)` |
+| [`sql560`](#sql560--foreign-key-a-b-references-t-c) | `FOREIGN KEY (a, b) REFERENCES t (c)` |
+| [`sql561`](#sql561--select--limit-all) | `SELECT ... LIMIT ALL` |
+| [`sql562`](#sql562--col-int-default-select-maxid-from-t) | `col int DEFAULT (SELECT max(id) FROM t)` |
+| [`sql563`](#sql563--col--anyarray1-2-1) | `col = ANY(ARRAY[1, 2, 1])` |
+| [`sql564`](#sql564--create-table-t-a-int-null-not-null) | `CREATE TABLE t (a int NULL NOT NULL)` |
+| [`sql565`](#sql565--col---col-always-0-and-col--col-always-1-or-a-division-by-zero-error-when-col-is-0-subtracting) | `col - col` (always 0) and `col / col` (always 1, or a division-by-zero error when `col` is 0). Subtracting... |
+| [`sql566`](#sql566--where-x--x--1) | `WHERE x = x + 1` |
+| [`sql567`](#sql567--common-built-in-functions-called-with-too-few-arguments) | common built-in functions called with too few arguments |
+| [`sql568`](#sql568--col--abc) | `col ~ 'abc'` |
+| [`sql569`](#sql569--exists-select--order-by-) | `EXISTS (SELECT ... ORDER BY ...)` |
+| [`sql570`](#sql570--exists-select-distinct-) | `EXISTS (SELECT DISTINCT ...)` |
+| [`sql571`](#sql571--create-role-app-password-hunter2) | `CREATE ROLE app PASSWORD 'hunter2'` |
+| [`sql572`](#sql572--create-role-deploy-superuser--alter-role-app-superuser) | `CREATE ROLE deploy SUPERUSER` / `ALTER ROLE app SUPERUSER` |
+| [`sql573`](#sql573--create-role-etl-bypassrls--alter-role-app-bypassrls) | `CREATE ROLE etl BYPASSRLS` / `ALTER ROLE app BYPASSRLS` |
+| [`sql574`](#sql574--alter-table-t-disable-row-level-security) | `ALTER TABLE t DISABLE ROW LEVEL SECURITY` |
+| [`sql575`](#sql575--create-policy-p-on-t-using-true-or-with-check-true) | `CREATE POLICY p ON t USING (true)` (or `WITH CHECK (true)`) |
+| [`sql576`](#sql576--alter-table-t-disable-trigger-all) | `ALTER TABLE t DISABLE TRIGGER ALL` |
+| [`sql577`](#sql577--create-view-v-as-select--order-by-x) | `CREATE VIEW v AS SELECT ... ORDER BY x` |
+| [`sql578`](#sql578--create-rule-) | `CREATE RULE ...` |
+| [`sql579`](#sql579---with-autovacuum-enabled--false--alter-table-t-set-autovacuum-enabled--off) | `... WITH (autovacuum_enabled = false)` / `ALTER TABLE t SET (autovacuum_enabled = off)` |
+| [`sql580`](#sql580--create-unlogged-table--or-alter-table--set-unlogged) | `CREATE UNLOGGED TABLE ...` (or `ALTER TABLE ... SET UNLOGGED`) |
+| [`sql581`](#sql581--a-json-column-type-or-json-cast-jsonb-is-almost-always-the-better-choice-its-stored-decomposed) | a `json` column type (or `::json` cast). `jsonb` is almost always the better choice: it's stored decomposed... |
+| [`sql582`](#sql582--the-money-column-type) | the `money` column type |
+| [`sql583`](#sql583--exists-select--group-by-x-with-no-having) | `EXISTS (SELECT ... GROUP BY x)` with no HAVING |
+| [`sql584`](#sql584--the-internal-pg-catalog-type-aliases-int4-int8-float8-serial4--in-ddl) | the internal `pg_catalog` type aliases (`int4`, `int8`, `float8`, `serial4`, ...) in DDL |
+| [`sql585`](#sql585--a-cluster-command-it-physically-rewrites-the-whole-table-in-index-order-under-an-access-exclusive-lock) | a `CLUSTER` command. It physically rewrites the whole table in index order under an ACCESS EXCLUSIVE lock... |
+| [`sql586`](#sql586--vacuum-full-rewrites-the-entire-table-and-its-indexes-into-new-files-under-an-access-exclusive-lock) | `VACUUM FULL` rewrites the entire table (and its indexes) into new files under an ACCESS EXCLUSIVE lock... |
+| [`sql587`](#sql587--alter-table-t-add-column-c-uuid-default-gen-random-uuid) | `ALTER TABLE t ADD COLUMN c uuid DEFAULT gen_random_uuid()` |
+| [`sql588`](#sql588--alter-table-t-add-primary-key---add-unique-) | `ALTER TABLE t ADD PRIMARY KEY (...)` / `ADD UNIQUE (...)` |
+| [`sql589`](#sql589--alter-table-t-add-constraint-fk-foreign-key-a-references-b-c-without-not-valid) | `ALTER TABLE t ADD CONSTRAINT fk FOREIGN KEY (a) REFERENCES b (c)` without `NOT VALID` |
+| [`sql590`](#sql590--a-reindex-without-concurrently) | a `REINDEX` without `CONCURRENTLY` |
+| [`sql591`](#sql591--values-1-2-3-4-5) | `VALUES (1, 2), (3, 4, 5)` |
+| [`sql592`](#sql592--where-1--where-0) | `WHERE 1` / `WHERE 0` |
+| [`sql593`](#sql593--limit-10-20) | `LIMIT 10, 20` |
+| [`sql594`](#sql594--insert--on-duplicate-key-update-) | `INSERT ... ON DUPLICATE KEY UPDATE ...` |
+| [`sql595`](#sql595--replace-into-t-) | `REPLACE INTO t ...` |
+| [`sql596`](#sql596--mysql-only-functions-that-dont-exist-in-postgresql) | MySQL-only functions that don't exist in PostgreSQL |
+| [`sql597`](#sql597--col-regexp-pat--col-rlike-pat) | `col REGEXP 'pat'` / `col RLIKE 'pat'` |
+| [`sql598`](#sql598--use-mydb) | `USE mydb` |
+| [`sql599`](#sql599--int-unsigned--bigint-unsigned) | `int unsigned` / `bigint unsigned` |
+| [`sql600`](#sql600---col-) | `` `col` `` |
+| [`sql601`](#sql601--varchar2n--nvarchar2n) | `VARCHAR2(n)` / `NVARCHAR2(n)` |
+| [`sql602`](#sql602--decodeexpr-search-result----default) | `DECODE(expr, search, result [, ...] [, default])` |
+| [`sql603`](#sql603---minus-) | `... MINUS ...` |
+| [`sql604`](#sql604--clob--nclob) | `CLOB` / `NCLOB` |
+| [`sql605`](#sql605--an-inline-foreign-key-column-declared-not-null-but-with-an-on-delete-set-null--on-update-set-null) | an inline foreign-key column declared `NOT NULL` but with an `ON DELETE SET NULL` / `ON UPDATE SET NULL`... |
+| [`sql606`](#sql606--a-check-constraint-whose-expression-contains-a-subquery-eg) | a `CHECK` constraint whose expression contains a subquery (e.g |
+| [`sql607`](#sql607--a-lengthprecision-modifier-on-a-type-that-doesnt-accept-one) | a length/precision modifier on a type that doesn't accept one |
+| [`sql608`](#sql608--create-unique-index) | `CREATE UNIQUE INDEX |
+| [`sql609`](#sql609--select-distinct--for-update) | `SELECT DISTINCT ... FOR UPDATE` |
+| [`sql610`](#sql610--select--over---for-update) | `SELECT ... OVER (...) ... FOR UPDATE` |
+| [`sql611`](#sql611--update--order-by--delete--order-by) | `UPDATE ... ORDER BY` / `DELETE ... ORDER BY` |
+| [`sql612`](#sql612--an-aggregate-function-in-a-returning-list) | an aggregate function in a `RETURNING` list |
+| [`sql613`](#sql613--col--generated-always-as-expr-without-the-stored-keyword-or-written--virtual-postgresql-only) | `col ... GENERATED ALWAYS AS (expr)` without the `STORED` keyword (or written `... VIRTUAL`). PostgreSQL only... |
+| [`sql614`](#sql614--a-mysql-style-inline-key---index--definition-inside-create-table-postgresql-doesnt-allow) | a MySQL-style inline `KEY ...` / `INDEX ...` definition inside `CREATE TABLE`. PostgreSQL doesn't allow... |
+| [`sql615`](#sql615--the-with-oids-table-option) | the `WITH OIDS` table option |
+| [`sql616`](#sql616--a-mysql-character-set---charset-clause-per-column-or-per-table-postgresql-has-no-per-column-or) | a MySQL `CHARACTER SET ...` / `CHARSET=...` clause (per-column or per-table). PostgreSQL has no per-column or... |
+| [`sql617`](#sql617--natural-join-and-natural-leftrightfull-join-a-natural-join-implicitly-joins-on-every-pair-of) | `NATURAL JOIN` (and `NATURAL LEFT/RIGHT/FULL JOIN`). A natural join implicitly joins on *every* pair of... |
+| [`sql618`](#sql618--fetch-first-n-rows-with-ties-without-an-order-by) | `FETCH FIRST n ROWS WITH TIES` without an `ORDER BY` |
+| [`sql619`](#sql619--date-truncunit--where-unit-is-a-string-literal-that-isnt-one-of-postgresqls-recognised) | `date_trunc('<unit>', ...)` where `<unit>` is a string literal that isn't one of PostgreSQL's recognised... |
+| [`sql620`](#sql620--mysql--sql-server-date-arithmetic-functions-that-dont-exist-in-postgresql) | MySQL / SQL Server date arithmetic functions that don't exist in PostgreSQL |
+| [`sql621`](#sql621--the-mysql-ifcond-then-else-function) | the MySQL `IF(cond, then, else)` function |
+| [`sql622`](#sql622--mysql-only-string-functions-that-dont-exist-in-postgresql) | MySQL-only string functions that don't exist in PostgreSQL |
+| [`sql623`](#sql623--a-mysql-inline-enumab-column-type) | a MySQL inline `ENUM('a','b',...)` column type |
+| [`sql624`](#sql624--the-mysql-column-attribute-on-update-current-timestamp-auto-touch-a-timestamp-column-on-every-row-update) | the MySQL column attribute `ON UPDATE CURRENT_TIMESTAMP` (auto-touch a timestamp column on every row update) |
+| [`sql625`](#sql625--the-mysql-zerofill-column-attribute-left-pads-a-numeric-column-with-zeros-on-display-and-implies) | the MySQL `ZEROFILL` column attribute (left-pads a numeric column with zeros on display, and implies... |
+| [`sql626`](#sql626--mysql-only-query-modifiers--hints-that-have-no-postgresql-equivalent-and-are-syntax-errors-in-pg) | MySQL-only query modifiers / hints that have no PostgreSQL equivalent and are syntax errors in PG |
+| [`sql627`](#sql627--the-mysql-infix-operators-xor-logical-exclusive-or-and-div-integer-division) | the MySQL infix operators `XOR` (logical exclusive-or) and `DIV` (integer division) |
+| [`sql628`](#sql628--scalar-functions-from-oracle--sql-server--mysql-that-dont-exist-in-postgresql) | scalar functions from Oracle / SQL Server / MySQL that don't exist in PostgreSQL |
+| [`sql629`](#sql629--sql-server-t-sql-data-types-that-dont-exist-in-postgresql) | SQL Server (T-SQL) data types that don't exist in PostgreSQL |
+| [`sql630`](#sql630--sql-server-t-sql-identity--guid-functions-that-dont-exist-in-postgresql) | SQL Server (T-SQL) identity / GUID functions that don't exist in PostgreSQL |
+| [`sql631`](#sql631--last-value--nth-value-over-a-window-that-has-an-order-by-but-no-explicit-frame-clause-the) | `last_value(...)` / `nth_value(...)` over a window that has an `ORDER BY` but no explicit frame clause. The... |
+| [`sql632`](#sql632--the-server-side-large-object-file-functions-lo-importpath-and-lo-exportoid-path-they-readwrite) | the server-side large-object file functions `lo_import('path')` and `lo_export(oid, 'path')`. They read/write... |
+| [`sql633`](#sql633--server-side-filesystem-functions-pg-read-file-pg-read-binary-file-pg-ls-dir-and-pg-stat-file) | server-side filesystem functions `pg_read_file`, `pg_read_binary_file`, `pg_ls_dir`, and `pg_stat_file` |
+| [`sql634`](#sql634--gen-saltmd5--des--xdes-from-pgcrypto-these-algorithms-are-weak-for-password-hashing) | `gen_salt('md5' \| 'des' \| 'xdes')` from pgcrypto. These algorithms are weak for password hashing |
+| [`sql635`](#sql635--a-pragma--statement) | a `PRAGMA ...` statement |
+| [`sql636`](#sql636--the-sqlite-autoincrement-keyword-one-word-eg) | the SQLite `AUTOINCREMENT` keyword (one word, e.g |
+| [`sql637`](#sql637--the-sqlite-glob-operator-case-sensitive-unix-glob-pattern-match-eg) | the SQLite `GLOB` operator (case-sensitive, Unix-glob pattern match, e.g |
+| [`sql638`](#sql638--sqlite-only-functions-that-dont-exist-in-postgresql) | SQLite-only functions that don't exist in PostgreSQL |
+| [`sql639`](#sql639--more-cross-dialect-string-functions-absent-from-postgresql) | more cross-dialect string functions absent from PostgreSQL |
+| [`sql640`](#sql640--mysql-date-part-functions-with-no-postgresql-equivalent) | MySQL date-part functions with no PostgreSQL equivalent |
+| [`sql641`](#sql641--a-default-of-the-special-relative-datetime-strings-now-today-tomorrow-or-yesterday) | a `DEFAULT` of the special relative date/time strings `'now'`, `'today'`, `'tomorrow'`, or `'yesterday'`.... |
+| [`sql642`](#sql642--mysql-file-io-syntax) | MySQL file-I/O syntax |
+| [`sql643`](#sql643--oracle-scalar-functions-absent-from-postgresql) | Oracle scalar functions absent from PostgreSQL |
+| [`sql644`](#sql644--mysql-date-arithmetic-functions-absent-from-postgresql) | MySQL date-arithmetic functions absent from PostgreSQL |
+| [`sql645`](#sql645--a-set-returning-function-generate-series-unnest-jsonb-array-elements-regexp-split-to-table) | a set-returning function (`generate_series`, `unnest`, `jsonb_array_elements`, `regexp_split_to_table`... |
+| [`sql646`](#sql646--countdistinct--or-any-aggregate-with-distinct--postgresql-doesnt-support-distinct--inside-an) | `count(DISTINCT *)` (or any aggregate with `DISTINCT *`). PostgreSQL doesn't support `DISTINCT *` inside an... |
+| [`sql647`](#sql647--col-in-select-a-b) | `<col> IN (SELECT a, b, |
+| [`sql648`](#sql648--tablesample-system-p--tablesample-bernoulli-p-where-the-literal-sampling-percentage-p-is-outside-0) | `TABLESAMPLE SYSTEM (p)` / `TABLESAMPLE BERNOULLI (p)` where the literal sampling percentage `p` is outside `0 |
+| [`sql649`](#sql649--insert--on-conflict-do-update--with-no-conflict-target-do-update-needs-to-know-which-unique) | `INSERT ... ON CONFLICT DO UPDATE ...` with no conflict target. `DO UPDATE` needs to know *which* unique... |
+| [`sql650`](#sql650--a-row-constructor-comparison-with-unequal-arity-eg) | a row-constructor comparison with unequal arity, e.g |
+| [`sql651`](#sql651--a-set-returning-function-generate-series-unnest-jsonb-array-elements--in-a-group-by) | a set-returning function (`generate_series`, `unnest`, `jsonb_array_elements`, ...) in a `GROUP BY`... |
+| [`sql652`](#sql652--two-common-table-expressions-in-the-same-with-clause-share-a-name-eg) | two common-table expressions in the same `WITH` clause share a name, e.g |
+| [`sql653`](#sql653--an-aggregate-function-inside-a-check-constraint-eg) | an aggregate function inside a `CHECK` constraint, e.g |
+| [`sql654`](#sql654--an-aggregate-function-in-a-create-index-expression-eg) | an aggregate function in a `CREATE INDEX` expression, e.g |
+| [`sql655`](#sql655--a-multi-column-update-assignment-whose-column-list-and-value-list-have-different-lengths-eg) | a multi-column UPDATE assignment whose column list and value list have different lengths, e.g |
+| [`sql656`](#sql656--a-truncate-statement-with-a-where-clause-truncate-removes-all-rows-of-a-table-and-accepts-no-row-filter) | a `TRUNCATE` statement with a `WHERE` clause. TRUNCATE removes *all* rows of a table and accepts no row filter |
+| [`sql657`](#sql657--an-order-by-that-appears-after-limit--offset--fetch-at-the-top-level-of-a-query) | an `ORDER BY` that appears after `LIMIT` / `OFFSET` / `FETCH` at the top level of a query |
+| [`sql658`](#sql658--both-a-limit-clause-and-a-fetch-firstnext--rows-clause-in-the-same-query-level-theyre-two-spellings) | both a `LIMIT` clause and a `FETCH FIRST/NEXT ... ROWS` clause in the same query level. They're two spellings... |
+| [`sql659`](#sql659--a-where-clause-that-appears-after-group-by-at-the-top-level-of-a-query-sql-fixes-the-order-as--where) | a `WHERE` clause that appears after `GROUP BY` at the top level of a query. SQL fixes the order as `... WHERE... |
+| [`sql660`](#sql660--a-cross-join-with-an-on-or-using-clause) | a `CROSS JOIN` with an `ON` or `USING` clause |
+| [`sql661`](#sql661--a-window-only-function-row-number-rank-dense-rank-lag-lead-ntile-first-value-) | a window-only function (`row_number`, `rank`, `dense_rank`, `lag`, `lead`, `ntile`, `first_value`, ...)... |
+| [`sql662`](#sql662--select-distinct-on-expr-without-parentheses-around-the-expression-list) | `SELECT DISTINCT ON <expr>` without parentheses around the expression list |
+| [`sql663`](#sql663--an-order-by--limit--offset--fetch-clause-that-appears-before-a-set-operation-union-) | an `ORDER BY` / `LIMIT` / `OFFSET` / `FETCH` clause that appears before a set operation (`UNION` /... |
+| [`sql664`](#sql664--a-having-clause-that-appears-before-group-by-at-the-top-level) | a `HAVING` clause that appears before `GROUP BY` at the top level |
+| [`sql665`](#sql665--an-update-whose-where-clause-comes-before-set-eg) | an `UPDATE` whose `WHERE` clause comes before `SET`, e.g |
+| [`sql666`](#sql666--insert-ignore-into-) | `INSERT IGNORE INTO ...` |
+| [`sql667`](#sql667--mysqls-insert-into-t-set-a--1-b--2-assignment-list-syntax) | MySQL's `INSERT INTO t SET a = 1, b = 2` assignment-list syntax |
+| [`sql668`](#sql668--a-delete-whose-first-token-isnt-from-eg) | a `DELETE` whose first token isn't `FROM`, e.g |
+| [`sql669`](#sql669--mysqls-select) | MySQL's `SELECT |
+| [`sql670`](#sql670--a-mysql-show-tables--show-databases--show-columns--show-create-table-) | a MySQL `SHOW TABLES` / `SHOW DATABASES` / `SHOW COLUMNS` / `SHOW CREATE TABLE` / |
+| [`sql671`](#sql671--a-describe-t--desc-t-statement-mysql--oracle-table-introspection) | a `DESCRIBE t` / `DESC t` statement (MySQL / Oracle table introspection) |
+| [`sql672`](#sql672--mysqls-alter-table) | MySQL's `ALTER TABLE |
+| [`sql673`](#sql673--x-between-null-and-y--x-between-y-and-null) | `x BETWEEN NULL AND y` / `x BETWEEN y AND NULL` |
+| [`sql674`](#sql674--a-ranking-window-function-with-an-explicit-frame-clause-eg-row-number-over-order-by-x-rows-between) | a ranking window function with an explicit frame clause, e.g. `ROW_NUMBER() OVER (ORDER BY x ROWS BETWEEN... |
+| [`sql675`](#sql675--select-distinct--union-select-) | `SELECT DISTINCT ... UNION SELECT ...` |
+| [`sql676`](#sql676--countdistinct-1--countdistinct-x) | `COUNT(DISTINCT 1)` / `COUNT(DISTINCT 'x')` |
+| [`sql677`](#sql677--x--1--modx-1) | `x % 1` / `MOD(x, 1)` |
+| [`sql678`](#sql678--the-mysql-zero-date-literal-0000-00-00-or-0000-00-00-000000-mysql-accepts-it-as-a-placeholder) | the MySQL "zero date" literal `'0000-00-00'` (or `'0000-00-00 00:00:00'`). MySQL accepts it as a placeholder... |
+| [`sql679`](#sql679--lefts-0--rights-0) | `left(s, 0)` / `right(s, 0)` |
+| [`sql680`](#sql680--substrings-from-n-for-0--substrs-n-0) | `substring(s FROM n FOR 0)` / `substr(s, n, 0)` |
+| [`sql681`](#sql681--x--0--0--x) | `x * 0` / `0 * x` |
+| [`sql682`](#sql682--coalescecount-0) | `COALESCE(COUNT(...), 0)` |
+| [`sql683`](#sql683--case-when-true-then---case-when-false-then-) | `CASE WHEN TRUE THEN ...` / `CASE WHEN FALSE THEN ...` |
+| [`sql684`](#sql684--greatesta-null-b--leastx-null) | `GREATEST(a, NULL, b)` / `LEAST(x, NULL)` |
+| [`sql685`](#sql685--power1-x-always-returns-1) | `power(1, x)` always returns 1 |
+| [`sql686`](#sql686--not-not-x--not-not-x) | `NOT NOT x` / `NOT (NOT x)` |
+| [`sql687`](#sql687--coalescex-) | `COALESCE('x', ...)` |
+| [`sql688`](#sql688--concat-wsnull-a-b) | `concat_ws(NULL, a, b)` |
+| [`sql689`](#sql689--col--col) | `col % col` |
+| [`sql690`](#sql690--sqrt-1) | `sqrt(-1)` |
+| [`sql691`](#sql691--mindistinct-x--maxdistinct-x) | `min(DISTINCT x)` / `max(DISTINCT x)` |
+| [`sql692`](#sql692--ln0--ln-1--log0--log-5) | `ln(0)` / `ln(-1)` / `log(0)` / `log(-5)` |
+| [`sql693`](#sql693--log1-x) | `log(1, x)` |
+| [`sql694`](#sql694--acos2--asin-3) | `acos(2)` / `asin(-3)` |
+| [`sql695`](#sql695--an-aggregate-call-nested-directly-inside-another-aggregate-eg) | an aggregate call nested directly inside another aggregate, e.g |
+| [`sql696`](#sql696--countcoalescex-0) | `count(coalesce(x, 0))` |
+| [`sql697`](#sql697--degreesradiansx--radiansdegreesx) | `degrees(radians(x))` / `radians(degrees(x))` |
+| [`sql698`](#sql698--chr0) | `chr(0)` |
+| [`sql699`](#sql699--lpads-0--rpads-0) | `lpad(s, 0)` / `rpad(s, 0)` |
+| [`sql700`](#sql700--setseed2) | `setseed(2)` |
+| [`sql701`](#sql701--nullifa-b--nullif1-2) | `NULLIF('a', 'b')` / `NULLIF(1, 2)` |
+| [`sql702`](#sql702--coalescex-0-is-null) | `COALESCE(x, 0) IS NULL` |
+| [`sql703`](#sql703--ntile0--ntile-2) | `ntile(0)` / `ntile(-2)` |
+| [`sql704`](#sql704--nth-valuex-0--nth-valuex--1) | `nth_value(x, 0)` / `nth_value(x, -1)` |
+| [`sql705`](#sql705--width-bucketx-lo-hi-0) | `width_bucket(x, lo, hi, 0)` |
+| [`sql706`](#sql706--array-to-stringarr-null) | `array_to_string(arr, NULL)` |
+| [`sql707`](#sql707--lagx-0--leadx-0) | `lag(x, 0)` / `lead(x, 0)` |
+| [`sql708`](#sql708--lpads-n-null--rpads-n-null) | `lpad(s, n, NULL)` / `rpad(s, n, NULL)` |
+| [`sql709`](#sql709--jsonb-typeofx--int) | `jsonb_typeof(x) = 'int'` |
+| [`sql710`](#sql710--coalescex-0-is-not-null) | `COALESCE(x, 0) IS NOT NULL` |
+| [`sql711`](#sql711--make-date2024-13-1) | `make_date(2024, 13, 1)` |
+| [`sql712`](#sql712--make-time25-0-0) | `make_time(25, 0, 0)` |
+| [`sql713`](#sql713--x--0--0--x) | `x & 0` / `0 & x` |
+| [`sql714`](#sql714--col--col--col--col) | `col & col` / `col \| col` |
+| [`sql715`](#sql715--starts-withx-) | `starts_with(x, '')` |
+| [`sql716`](#sql716--translates--to) | `translate(s, '', to)` |
+| [`sql717`](#sql717--to-charx-) | `to_char(x, '')` |
+| [`sql718`](#sql718--repeats-1) | `repeat(s, 1)` |
+| [`sql719`](#sql719--create-sequence--increment-0-or-increment-by-0-also-in-alter-sequence) | `CREATE SEQUENCE ... INCREMENT 0` (or `INCREMENT BY 0`, also in `ALTER SEQUENCE`) |
+| [`sql720`](#sql720--power0--1) | `power(0, -1)` |
+| [`sql721`](#sql721--make-timestamp2024-13-1-0-0-0) | `make_timestamp(2024, 13, 1, 0, 0, 0)` |
+| [`sql722`](#sql722--factorial-1) | `factorial(-1)` |
+| [`sql723`](#sql723--array-cata---array-catarray-a) | `array_cat(a, '{}')` / `array_cat(ARRAY[], a)` |
+| [`sql724`](#sql724--numeric2000--decimal0-0) | `NUMERIC(2000)` / `DECIMAL(0, 0)` |
+| [`sql725`](#sql725--random--1--random--0) | `random() >= 1` / `random() < 0` |
+| [`sql726`](#sql726--ascii) | `ascii('')` |
+| [`sql727`](#sql727--explnx--lnexpx) | `exp(ln(x))` / `ln(exp(x))` |
+| [`sql728`](#sql728--x--0--0--x) | `x \| 0` / `0 \| x` |
+| [`sql729`](#sql729--x--0--x--0) | `x << 0` / `x >> 0` |
+| [`sql730`](#sql730--chr2000000--chr-1) | `chr(2000000)` / `chr(-1)` |
+| [`sql731`](#sql731--ln1--log1) | `ln(1)` / `log(1)` |
+| [`sql732`](#sql732--acosh0--atanh1) | `acosh(0)` / `atanh(1)` |
+| [`sql733`](#sql733--a-string-literal-containing-password) | a string literal containing `password=...` |
+| [`sql734`](#sql734--x-ilike-plain) | `x ILIKE 'plain'` |
+| [`sql735`](#sql735--exists-select-count-from-) | `EXISTS (SELECT count(*) FROM ...)` |
+| [`sql736`](#sql736--width-bucketx-5-5-10) | `width_bucket(x, 5, 5, 10)` |
+| [`sql737`](#sql737--date-bin0-seconds-ts-origin) | `date_bin('0 seconds', ts, origin)` |
+| [`sql738`](#sql738--comparing-a-never-negative-function-against-a-negative-value-or--0-so-the-predicate-never-matches) | comparing a never-negative function against a negative value (or `< 0`), so the predicate never matches |
+| [`sql739`](#sql739--xintint--a--btexttext) | `x::int::int` / `(a \|\| b)::text::text` |
+| [`sql740`](#sql740--not-true--not-false) | `NOT TRUE` / `NOT FALSE` |
+| [`sql741`](#sql741--x---1--modx--1) | `x % -1` / `MOD(x, -1)` |
+| [`sql742`](#sql742--array-removearr-null) | `array_remove(arr, NULL)` |
+| [`sql743`](#sql743--array-replacearr-x-x) | `array_replace(arr, x, x)` |
+| [`sql744`](#sql744--array-positionarr-x--0) | `array_position(arr, x) = 0` |
+| [`sql745`](#sql745--date-partyearr-ts) | `date_part('yearr', ts)` |
+| [`sql746`](#sql746--int4range5-1--numrange10-2) | `int4range(5, 1)` / `numrange(10, 2)` |
+| [`sql747`](#sql747--percentile-cont15-within-group-) | `percentile_cont(1.5) WITHIN GROUP (...)` |
+| [`sql748`](#sql748--encodedata-base32) | `encode(data, 'base32')` |
+| [`sql749`](#sql749--daterange2024-01-01-2023-01-01) | `daterange('2024-01-01', '2023-01-01')` |
+| [`sql750`](#sql750--b1021) | `B'1021'` |
+| [`sql751`](#sql751--x1g) | `X'1G'` |
+| [`sql752`](#sql752--like-a-escape-) | `LIKE 'a%' ESCAPE '\\!'` |
+| [`sql753`](#sql753--setweighttsv-e) | `setweight(tsv, 'E')` |
+| [`sql754`](#sql754--to-tsqueryquick-brown-fox) | `to_tsquery('quick brown fox')` |
+| [`sql755`](#sql755--countdistinct-a-b) | `count(DISTINCT a, b)` |
+| [`sql756`](#sql756--string-aggx--jsonb-object-aggk) | `string_agg(x)` / `jsonb_object_agg(k)` |
+| [`sql757`](#sql757--a-partitioned-tables-primary-key-does-not-include-every-partition-key-column-postgresql-requires-every) | a partitioned table's PRIMARY KEY does not include every partition key column. PostgreSQL requires every... |
+| [`sql758`](#sql758--for-values-from-x-to-y-where-the-lower-partition-bound-is-not-strictly-less-than-the-upper-bound) | `FOR VALUES FROM (x) TO (y)` where the lower partition bound is not strictly less than the upper bound.... |
+| [`sql759`](#sql759--partition-by-rangelisthash-some-volatile-fncol) | `PARTITION BY RANGE/LIST/HASH (some_volatile_fn(col))` |
+| [`sql760`](#sql760--partition-by-rangelisthash-a-a) | `PARTITION BY RANGE/LIST/HASH (a, a)` |
+| [`sql761`](#sql761--alter-table--detach-partition--concurrently-inside-an-explicit-transaction-like-drop-index) | `ALTER TABLE ... DETACH PARTITION ... CONCURRENTLY` inside an explicit transaction. Like `DROP INDEX... |
+| [`sql762`](#sql762--for-values-with-modulus-m-remainder-r-where-the-remainder-is-not-less-than-the-modulus) | `FOR VALUES WITH (MODULUS m, REMAINDER r)` where the remainder is not less than the modulus |
+| [`sql763`](#sql763--json-existsdoc-literal-where-the-literal-path-string-does-not-start-with-) | `JSON_EXISTS(doc, 'literal')` where the literal path string does not start with `$` |
+| [`sql764`](#sql764--json-value) | `JSON_VALUE( |
+| [`sql765`](#sql765--json-query-with-wrapper--omit-quotes) | `JSON_QUERY(... WITH WRAPPER ... OMIT QUOTES)` |
+| [`sql766`](#sql766--json-table-columns-a--a-) | `JSON_TABLE(... COLUMNS (a ..., a ...))` |
+| [`sql767`](#sql767--col-is-json-where-the-catalog-already-types-col-as-json-or-jsonb) | `col IS JSON` where the catalog already types `col` as `json` or `jsonb` |
+| [`sql768`](#sql768--expr-is-json-object-and-same-expr-is-json-array-or-any-two-different-is-json-kinds-directly-anded) | `<expr> IS JSON OBJECT AND <same expr> IS JSON ARRAY` (or any two different IS JSON kinds directly ANDed... |
+| [`sql769`](#sql769--cycle) | `CYCLE |
+| [`sql770`](#sql770--the-recursive-term-references-the-cte-itself-more-than-once) | the recursive term references the CTE itself more than once |
+| [`sql771`](#sql771--the-recursive-term-contains-an-aggregate-function-call) | the recursive term contains an aggregate function call |
+| [`sql772`](#sql772--the-recursive-term-contains-a-top-level-order-by-limit-or-distinct) | the recursive term contains a top-level ORDER BY, LIMIT, or DISTINCT |
+| [`sql773`](#sql773--the-recursive-terms-self-reference-sits-on-the-nullable-side-of-an-outer-join) | the recursive term's self-reference sits on the nullable side of an outer join |
+| [`sql774`](#sql774--exclude-using-am-col-with-op-col-with-op) | `EXCLUDE USING <am> (col WITH op, col WITH op)` |
+| [`sql775`](#sql775--exclude-using-btreehashbringin-) | `EXCLUDE USING btree/hash/brin/gin (...)` |
+| [`sql776`](#sql776--exclude-using-gist-col-with--on-a-single-column-with-only-the--operator) | `EXCLUDE USING gist (col WITH =)` on a single column with only the `=` operator |
+| [`sql777`](#sql777--create-domain--check-expr-where-expr-never-references-value) | `CREATE DOMAIN ... CHECK (expr)` where `expr` never references `VALUE` |
+| [`sql778`](#sql778--create-domain--check-value-op-literal-default-literal-where-the-default-literal-plainly-fails) | `CREATE DOMAIN ... CHECK (VALUE <op> <literal>) DEFAULT <literal>` where the DEFAULT literal plainly fails... |
+| [`sql779`](#sql779--create-type--as-a-int-a-text) | `CREATE TYPE ... AS (a int, a text)` |
+| [`sql780`](#sql780--jsonb-path-existsdoc-a--1--2) | `jsonb_path_exists(doc, '$.a ? (1 == 2)')` |
+| [`sql781`](#sql781--jsonb-array-lengtha1jsonb) | `jsonb_array_length('{"a":1}'::jsonb)` |
+| [`sql782`](#sql782--a1jsonb---0) | `'{"a":1}'::jsonb - 0` |
+| [`sql783`](#sql783--jsonb-build-objectnull-1-) | `jsonb_build_object(NULL, 1, ...)` |
+| [`sql784`](#sql784--grouping-sets-ab-ab) | `GROUPING SETS ((a,b), (a,b))` |
+| [`sql785`](#sql785--groupingx-where-x-does-not-appear-anywhere-in-the-statements-group-by-clause) | `GROUPING(x)` where `x` does not appear anywhere in the statement's GROUP BY clause |
+| [`sql786`](#sql786--rollup-a-a--cube-a-a) | `ROLLUP (a, a)` / `CUBE (a, a)` |
+| [`sql787`](#sql787--a-parenthesized-select--subquery-correlated-to-the-outer-query-references-a-qualified-column-whose) | a parenthesized `(SELECT ...)` subquery, correlated to the outer query (references a qualified column whose... |
+| [`sql788`](#sql788--a-lateral--subquery-references-a-table-alias-thats-introduced-later-in-the-same-fromjoin-list) | a `LATERAL (...)` subquery references a table alias that's introduced later in the same FROM/JOIN list |
+| [`sql789`](#sql789--a-full-outer-join-b-on--where-bcol--x) | `a FULL [OUTER] JOIN b ON ... WHERE b.col = 'x'` |
+| [`sql790`](#sql790--col-type-not-null-unique-nulls-not-distinct) | `col type NOT NULL UNIQUE NULLS NOT DISTINCT` |
+| [`sql791`](#sql791--create-statistics-name-ndistinct-or-dependencies-with-fewer-than-2-columnsexpressions-in-the-on) | `CREATE STATISTICS name (ndistinct)` (or `dependencies`) with fewer than 2 columns/expressions in the `ON`... |
+| [`sql792`](#sql792--create-statistics--on-a-a-from-t) | `CREATE STATISTICS ... ON a, a FROM t` |
+| [`sql793`](#sql793--an-unconditional-when-matched-then-clause-appears-before-another-when-matched-and--then-clause-in) | an unconditional `WHEN MATCHED THEN` clause appears before another `WHEN MATCHED [AND ...] THEN` clause in... |
+| [`sql794`](#sql794--when-not-matched-then-insert--values-targetcol-) | `WHEN NOT MATCHED THEN INSERT ... VALUES (target.col, ...)` |
+| [`sql795`](#sql795--create-publication--for-tables-in-schema-s-s) | `CREATE PUBLICATION ... FOR TABLES IN SCHEMA s, s` |
+| [`sql796`](#sql796--create-subscription--with-create-slot--false-with-no-slot-name) | `CREATE SUBSCRIPTION ... WITH (create_slot = false)` with no `slot_name` |
+| [`sql797`](#sql797--create-publication--for-table-a-a) | `CREATE PUBLICATION ... FOR TABLE a, a` |
+| [`sql798`](#sql798--a-bare-loop--end-loop-not-forwhile-whose-body-contains-no-exit-return-or-raise-anywhere) | a bare `LOOP ... END LOOP` (not FOR/WHILE) whose body contains no `EXIT`, `RETURN`, or `RAISE` anywhere |
+| [`sql799`](#sql799--a-for-i-in--loop-variable-name-shadows-a-column-that-exists-somewhere-in-the-connected-catalog) | a `FOR i IN ...` loop variable name shadows a column that exists somewhere in the connected catalog |
+| [`sql800`](#sql800--exception-when-others-then-with-an-empty-or-null-only-body) | `EXCEPTION WHEN OTHERS THEN` with an empty or `NULL;`-only body |
+| [`sql801`](#sql801--execute-dynamic-sql-using-a-b-where-the-highest-n-placeholder-referenced-in-the-dynamic-sql-text) | `EXECUTE <dynamic sql> USING a, b` where the highest `$N` placeholder referenced in the dynamic SQL text... |
+| [`sql802`](#sql802--execute-literal-select-into-a-b-where-the-statically-known-select-list-column-count-doesnt-match-the) | `EXECUTE '<literal SELECT>' INTO a, b` where the statically-known SELECT-list column count doesn't match the... |
+| [`sql803`](#sql803--raise-notice-appears-inside-a-loop-body-bare-loop-for--loop-or-while--loop) | `RAISE NOTICE` appears inside a loop body (bare `LOOP`, `FOR ... LOOP`, or `WHILE ... LOOP`) |
+| [`sql804`](#sql804--a-plpgsql-declare-x-type-variable-thats-never-referenced-anywhere-after-begin) | a PL/pgSQL `DECLARE x type;` variable that's never referenced anywhere after `BEGIN` |
+
+## Rules
 
 ### `sql001` — table referenced by FROM / JOIN / UPDATE / DELETE / INSERT INTO does not exist in the catalog
 
