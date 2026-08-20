@@ -41,12 +41,33 @@ jobs:
     environment: crates-io
     runs-on: ubuntu-latest
     steps:
+      # Without a registry token `cargo publish` fails with "please
+      # provide a non-empty token", which failed this workflow on every
+      # single push to master. A red Release run then says nothing about
+      # whether releasing actually works -- it is red either way. Skip
+      # with a notice instead, and let a real failure mean something.
+      #
+      # The secret goes through `env` rather than into the command
+      # string, so it is never interpolated into a shell argument.
+      - id: guard
+        env:
+          REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$REGISTRY_TOKEN" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Publish skipped::CARGO_REGISTRY_TOKEN is not set, so nothing was published to crates.io. Set the repository secret to enable releases."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v7
+        if: steps.guard.outputs.configured == 'true'
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.guard.outputs.configured == 'true'
       - uses: MarcoIeni/release-plz-action@v0.5
+        if: steps.guard.outputs.configured == 'true'
         with:
           command: release
         env:
