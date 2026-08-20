@@ -54,6 +54,14 @@ and the project adheres to [Semantic Versioning](https://semver.org).
 - CI now typechecks and bundles the VS Code extension. Nothing built it
   before, so its dependencies could break without any signal -- which
   became live the moment dependabot started watching them.
+- `style.createTable.groupIndexes` did nothing in either position. The
+  pass that removes blank lines between consecutive `CREATE INDEX`
+  statements ran after the pass that splits each one across two lines,
+  so by then the blank line followed `ON ...;` rather than the
+  `CREATE INDEX` line it was looking for.
+- Breaking an index header onto a new line emitted `ON` in canonical
+  uppercase regardless of `keywordCase`, so `create index ... on ...`
+  came back with an uppercase `ON` beside a lowercase `create index`.
 - `formatter.tabWidth` had no effect on the `CREATE TABLE` column body,
   which was hardcoded to four spaces. The default is four, so nobody's
   output changes unless they had set something else -- in which case it
