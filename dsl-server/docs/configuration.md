@@ -115,25 +115,34 @@ external formatter.
 
 ### `style.formatter`
 
-Options handed to the external [`sql-formatter`](https://github.com/sql-formatter-org/sql-formatter)
-CLI (v15+). **If that binary isn't on `PATH`, formatting falls back to the
-built-in alignment pass only** — install it with `npm i -g sql-formatter`
-for full reflow.
+**Most of these are handed to the external
+[`sql-formatter`](https://github.com/sql-formatter-org/sql-formatter)
+CLI (v15+), and do nothing without it.** Install with
+`npm i -g sql-formatter`; `duck-sqllsp doctor` tells you whether it was
+found.
 
-| Key | Type | Default | Effect |
-|---|---|---|---|
-| `language` | string | `postgresql` | sql-formatter dialect. Left at the default, the open buffer's `dialect` drives it, so `mysql` backticks and `mssql` brackets tokenise correctly. |
-| `tabWidth` | integer | `4` | Indent width. Your editor's own tab setting overrides this per format request. |
-| `keywordCase` | `upper` / `lower` / `preserve` | `upper` | Keyword casing in formatted output. Applies on both paths: the external formatter re-cases everything it recognises, and the built-in alignment pass uses it for the `NOT NULL` / `DEFAULT` it re-emits. Trailing constraints (`primary key`, `check (...)`) keep the case you wrote, since re-casing them would mean rewriting expressions. |
-| `dataTypeCase` | same | `preserve` | Type-name casing. |
-| `functionCase` | same | `lower` | Function-name casing. |
-| `linesBetweenQueries` | integer | `1` | Blank lines between statements. |
-| `expressionWidth` | integer | `80` | Column at which long projections, `WHERE` conjunctions, and `VALUES` lists wrap. |
-| `denseOperators` | bool | `false` | Collapse spaces around `=`, `<>`, and friends. |
-| `newlineBeforeSemicolon` | bool | `false` | Put the trailing `;` on its own line. |
-| `logicalOperatorNewline` | `before` / `after` | `before` | Whether `AND` / `OR` lead the new line or trail the previous one. |
-| `singleLine` | bool | `false` | Collapse each DML statement onto one line. DDL is left alone so table layouts stay readable. |
-| `compactClauses` | bool | `false` | Middle ground: each top-level clause on its own line, but its body on the same line as the keyword. Ignored when `singleLine` is on. |
+The **Works offline** column below says whether a setting still applies
+when the binary is missing and only the built-in alignment pass runs:
+
+| | |
+|---|---|
+| **yes** | handled by the built-in passes |
+| **no** | needs `sql-formatter`; silently has no effect without it |
+
+| Key | Type | Default | Works offline | Effect |
+|---|---|---|---|---|
+| `language` | string | `postgresql` | no | sql-formatter dialect. Left at the default, the open buffer's `dialect` drives it, so `mysql` backticks and `mssql` brackets tokenise correctly. |
+| `tabWidth` | integer | `4` | yes | Indent width for the `CREATE TABLE` column body. Your editor's own tab setting overrides this per format request. The PL/pgSQL block indenter uses a fixed two spaces per level regardless. |
+| `keywordCase` | `upper` / `lower` / `preserve` | `upper` | yes | Keyword casing. The built-in pass applies it to the `NOT NULL` / `DEFAULT` it re-emits; trailing constraints (`primary key`, `check (...)`) keep the case you wrote, since re-casing them would mean rewriting expressions. |
+| `dataTypeCase` | same | `preserve` | no | Type-name casing. |
+| `functionCase` | same | `lower` | no | Function-name casing. |
+| `linesBetweenQueries` | integer | `1` | no | Blank lines between statements. |
+| `expressionWidth` | integer | `80` | no | Column at which long projections, `WHERE` conjunctions, and `VALUES` lists wrap. |
+| `denseOperators` | bool | `false` | no | Collapse spaces around `=`, `<>`, and friends. |
+| `newlineBeforeSemicolon` | bool | `false` | no | Put the trailing `;` on its own line. |
+| `logicalOperatorNewline` | `before` / `after` | `before` | no | Whether `AND` / `OR` lead the new line or trail the previous one. |
+| `singleLine` | bool | `false` | yes | Collapse each DML statement onto one line. DDL is left alone so table layouts stay readable. |
+| `compactClauses` | bool | `false` | yes | Middle ground: each top-level clause on its own line, but its body on the same line as the keyword. Ignored when `singleLine` is on. |
 
 ## A complete example
 
