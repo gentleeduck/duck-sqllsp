@@ -7,11 +7,9 @@ on:
       - '**/*.md'
       - '.github/**/*.md'
       - 'docs/**'
+  # No paths-ignore on PRs. master requires these checks, and a check that
+  # never runs never reports, so a docs-only PR could not be merged at all.
   pull_request:
-    paths-ignore:
-      - '**/*.md'
-      - '.github/**/*.md'
-      - 'docs/**'
 
 permissions:
   contents: read

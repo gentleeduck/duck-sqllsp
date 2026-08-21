@@ -12,7 +12,7 @@
   <a href="./LICENSE">MIT</a> -
   <a href="./CHANGELOG.md">Changelog</a> -
   <a href="./CONTRIBUTING.md">Contributing</a> -
-  <a href="./dsl-cli">Crate docs</a>
+  <a href="https://docs.rs/duck-sqllsp">Crate docs</a>
 </p>
 
 <p align="center">
@@ -27,7 +27,7 @@
 
 - **701 lint rules** (PG-first, dialect-aware) covering schema correctness, transaction safety, query smells, migration footguns, vendor mismatches (MySQL `ENGINE=`, Oracle `DUAL`/`CONNECT BY`, SQL Server `BEGIN TRANSACTION`, ...). Delivered by push (`publishDiagnostics`) or by LSP 3.17 pull (`textDocument/diagnostic`), whichever the client advertises -- never both, so nothing renders twice. Pull requests on an unchanged buffer answer `Unchanged` without re-running the engine.
 - **Context-aware completion** across ~50 phases: `CREATE INDEX ... USING` + opclass slot, `CREATE TRIGGER ... EXECUTE FUNCTION`, `CREATE POLICY ... FOR / TO`, `ALTER COLUMN TYPE`, `CALL <proc>`, PL/pgSQL local-variable scope, JOIN target resolution, etc.
-- **Document links**: psql `\i` / `\ir` / `\include` / `\include_relative` targets, `COPY ... FROM/TO '<file>'` data files, and URLs in comments are all clickable. File links are emitted only when the path actually resolves on disk — a `COPY` path interpreted by the *server* usually doesn't exist locally, and a link that reliably errors is worse than none.
+- **Document links**: psql `\i` / `\ir` / `\include` / `\include_relative` targets, `COPY ... FROM/TO '<file>'` data files, and URLs in comments are all clickable. File links are emitted only when the path actually resolves on disk - a `COPY` path interpreted by the *server* usually doesn't exist locally, and a link that reliably errors is worse than none.
 - **Incremental document sync**: the editor ships only the edited range, spliced into the rope in place. On a 240 KB migration file that's 200 bytes over 200 keystrokes instead of 48 MB, and ~4x less server-side work per edit (0.016 ms vs 0.070 ms).
 - **Deferred completion docs** via `completionItem/resolve`: the per-keystroke response ships labels and no markdown, and documentation is rendered only for the item you actually highlight. A `SELECT` projection completion drops from ~440 KB to ~209 KB on the wire, and stops rendering markdown for 2321 built-in entries (~617 KB, ~1 ms) that get thrown away.
 - **Rich hover cards** for tables (compact `CREATE TABLE` + indexes + triggers + policies + comment + `ALTER TABLE OWNER TO`), columns, functions, keywords, types, NULL three-valued logic notes.
@@ -103,10 +103,10 @@ url  = "postgres://user:pass@localhost:5432/mydb"
 Every key accepts `camelCase` or `snake_case`, and the `[duck_sqllsp]`
 wrapper is optional.
 
-- **[Configuration reference →](dsl-server/docs/configuration.md)** — every setting, its default, and what it changes.
-- **[Troubleshooting →](dsl-server/docs/troubleshooting.md)** — start with `duck-sqllsp doctor`.
-- **[Lint rule reference →](dsl-analysis/docs/rules.md)** — all 701 diagnostics by code, with what each one catches.
-- **[Editor setup →](dsl-server/docs/editors.md)** — VS Code, neovim (0.11+ and lspconfig), Helix, Emacs, Sublime.
+- **[Configuration reference →](dsl-server/docs/configuration.md)** - every setting, its default, and what it changes.
+- **[Troubleshooting →](dsl-server/docs/troubleshooting.md)** - start with `duck-sqllsp doctor`.
+- **[Lint rule reference →](dsl-analysis/docs/rules.md)** - all 701 diagnostics by code, with what each one catches.
+- **[Editor setup →](dsl-server/docs/editors.md)** - VS Code, neovim (0.11+ and lspconfig), Helix, Emacs, Sublime.
 
 ## Workspace
 
@@ -126,7 +126,7 @@ wrapper is optional.
 
 ## Editor integrations
 
-Any LSP client that can launch a binary works — `duck-sqllsp server` speaks stdio and needs nothing else. **[Setup for VS Code, neovim (0.11+ and lspconfig), Helix, Emacs, and Sublime →](dsl-server/docs/editors.md)**
+Any LSP client that can launch a binary works - `duck-sqllsp server` speaks stdio and needs nothing else. **[Setup for VS Code, neovim (0.11+ and lspconfig), Helix, Emacs, and Sublime →](dsl-server/docs/editors.md)**
 
 - **VS Code**: install `wildduck.duck-sqllsp-vscode`. Sidebar tree views for connections + schema. Commands: Add Connection, Set Active, Test Connection, Refresh Schema, Restart Server, Show Logs. Run / EXPLAIN / EXPLAIN ANALYZE / + LIMIT 100 code lenses wire through to a `duck-sqllsp` terminal running `psql` / `mysql` / `sqlite3` against the active connection.
 - **neovim**: stock `vim.lsp` + `nvim-cmp`. duck-sqllsp emits `$/progress` so statusline plugins surface "loading workspace..." while the .sql scan + DB introspect settle.
@@ -168,7 +168,7 @@ cargo clippy --workspace --all-features --release -- -D warnings
 [`@gentleduck/ui`](https://github.com/gentleeduck/duck-ui) -
 [`@gentleduck/iam`](https://github.com/gentleeduck/duck-iam) -
 [`@gentleduck/upload`](https://github.com/gentleeduck/duck-upload) -
-[`@gentleduck/md`](https://github.com/gentleeduck/duck-md)
+[`@gentleduck/md`](https://github.com/gentleeduck/duck-mc)
 
 ## Contributing
 

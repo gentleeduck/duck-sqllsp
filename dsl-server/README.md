@@ -15,11 +15,11 @@ sync.
 
 Documentation:
 
-- [Configuration reference](docs/configuration.md) — every setting, its
+- [Configuration reference](https://github.com/gentleeduck/duck-sqllsp/blob/master/dsl-server/docs/configuration.md) - every setting, its
   default, and what it changes.
-- [Editor setup](docs/editors.md) — VS Code, neovim, Helix, Emacs,
+- [Editor setup](https://github.com/gentleeduck/duck-sqllsp/blob/master/dsl-server/docs/editors.md) - VS Code, neovim, Helix, Emacs,
   Sublime, and the generic stdio contract.
-- [Troubleshooting](docs/troubleshooting.md) — start with
+- [Troubleshooting](https://github.com/gentleeduck/duck-sqllsp/blob/master/dsl-server/docs/troubleshooting.md) - start with
   `duck-sqllsp doctor`.
 
 Part of [duck-sqllsp](https://github.com/gentleeduck/duck-sqllsp), a

@@ -1,6 +1,10 @@
-# dsl-cli
+# duck-sqllsp
 
-The **`duck-sqllsp` binary**.
+The **`duck-sqllsp` binary** (crate directory `dsl-cli`).
+
+```sh
+cargo install duck-sqllsp
+```
 
 ```sh
 duck-sqllsp server                     # LSP over stdio (the default)
