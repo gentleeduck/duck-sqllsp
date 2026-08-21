@@ -7,6 +7,30 @@ and the project adheres to [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [2.0.0](https://github.com/gentleeduck/duck-sqllsp/releases/tag/dsl-conn-v2.0.0) - 2026-08-21
+
+### Added
+
+- *(conn)* cross-dialect catalog introspection parity
+
+### Fixed
+
+- *(cli)* accept --stdio so VS Code's vscode-languageclient can spawn the server
+
+### Other
+
+- give each crate its own README
+- format the workspace with rustfmt ([#23](https://github.com/gentleeduck/duck-sqllsp/pull/23))
+- massive edge-case suite across analysis, completion, hover
+- Table.owner + Constraint.inline + pg owner + n_live_tup
+- catalog row_estimate + sql345 RENAME COLUMN view dep + sql346 BRIN small + code-lens row-count
+- Column.json_keys (top-level keys for json/jsonb); dsl-completion: json_path_keys_at_with_catalog falls back to catalog json_keys
+- add Column.generated and surface GENERATED ALWAYS expr on column card
+- 2-space reformat pass across all crates
+- introspect pg_sequences + pg_extension on Postgres
+- add Catalog.roles (loaded from pg_roles); dsl-analysis sql169 owner_to_unknown_role flags ALTER TABLE OWNER TO <unknown role> with range on just the role token; dsl-hover constraint_id: swap _italic_ kind label to **bold** + isolate fenced sql code-block with explicit blank lines so nvim's markdown parser cleanly applies SQL syntax injection (fix for whole-card-italic-green rendering)
+- flatten crates/ to root, rewrite README + delete CLAUDE_CONTEXT to duck-sqllsp
+
 ### Added
 
 - **701 lint rules** (up from ~650): PL/pgSQL control flow and unused
