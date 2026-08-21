@@ -7,6 +7,12 @@ and the project adheres to [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [3.0.1](https://github.com/gentleeduck/duck-sqllsp/compare/dsl-analysis-v3.0.0...dsl-analysis-v3.0.1) - 2026-08-21
+
+### Other
+
+- fix the links that do not resolve
+
 ## [2.0.0](https://github.com/gentleeduck/duck-sqllsp/releases/tag/dsl-conn-v2.0.0) - 2026-08-21
 
 ### Added
