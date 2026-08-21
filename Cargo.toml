@@ -15,7 +15,7 @@ members = [
 ]
 
 [workspace.package]
-version = "2.0.0"
+version = "3.0.0"
 edition = "2024"
 rust-version = "1.90"
 license = "MIT"
@@ -29,16 +29,16 @@ categories = ["development-tools", "database"]
 
 [workspace.dependencies]
 # Workspace path entries
-dsl-knowledge  = { version = "2.0.0", path = "dsl-knowledge" }
-dsl-parse      = { version = "2.0.0", path = "dsl-parse" }
-dsl-resolve    = { version = "2.0.0", path = "dsl-resolve" }
-dsl-catalog    = { version = "2.0.0", path = "dsl-catalog" }
-dsl-conn       = { version = "2.0.0", path = "dsl-conn" }
-dsl-analysis   = { version = "2.0.0", path = "dsl-analysis" }
-dsl-completion = { version = "2.0.0", path = "dsl-completion" }
-dsl-hover      = { version = "2.0.0", path = "dsl-hover" }
-dsl-format     = { version = "2.0.0", path = "dsl-format" }
-dsl-server     = { version = "2.0.0", path = "dsl-server" }
+dsl-knowledge  = { version = "3.0.0", path = "dsl-knowledge" }
+dsl-parse      = { version = "3.0.0", path = "dsl-parse" }
+dsl-resolve    = { version = "3.0.0", path = "dsl-resolve" }
+dsl-catalog    = { version = "3.0.0", path = "dsl-catalog" }
+dsl-conn       = { version = "3.0.0", path = "dsl-conn" }
+dsl-analysis   = { version = "3.0.0", path = "dsl-analysis" }
+dsl-completion = { version = "3.0.0", path = "dsl-completion" }
+dsl-hover      = { version = "3.0.0", path = "dsl-hover" }
+dsl-format     = { version = "3.0.0", path = "dsl-format" }
+dsl-server     = { version = "3.0.0", path = "dsl-server" }
 
 # Async + LSP wire
 tokio          = { version = "1", features = ["full"] }

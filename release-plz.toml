@@ -10,4 +10,51 @@ publish_allow_dirty = false
 semver_check = true
 allow_dirty = false
 
-# Per-crate overrides go in [[package]] blocks below.
+# One version for the whole workspace. `version.workspace = true` keeps the
+# manifests in step; this keeps release-plz in step too, since on its own it
+# versions each crate by that crate's own commits and they drift apart.
+# `version_group` cannot be set in [workspace], so every member is listed.
+
+[[package]]
+name = "dsl-knowledge"
+version_group = "duck-sqllsp"
+
+[[package]]
+name = "dsl-parse"
+version_group = "duck-sqllsp"
+
+[[package]]
+name = "dsl-resolve"
+version_group = "duck-sqllsp"
+
+[[package]]
+name = "dsl-catalog"
+version_group = "duck-sqllsp"
+
+[[package]]
+name = "dsl-completion"
+version_group = "duck-sqllsp"
+
+[[package]]
+name = "dsl-hover"
+version_group = "duck-sqllsp"
+
+[[package]]
+name = "dsl-conn"
+version_group = "duck-sqllsp"
+
+[[package]]
+name = "dsl-analysis"
+version_group = "duck-sqllsp"
+
+[[package]]
+name = "dsl-format"
+version_group = "duck-sqllsp"
+
+[[package]]
+name = "dsl-server"
+version_group = "duck-sqllsp"
+
+[[package]]
+name = "duck-sqllsp"
+version_group = "duck-sqllsp"

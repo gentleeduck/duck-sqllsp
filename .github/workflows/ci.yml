@@ -85,6 +85,16 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: vscode-extension/package-lock.json
+      # The extension ships the server, so a mismatch means the marketplace
+      # build and the crate it drives are different releases.
+      - name: version matches the workspace
+        run: |
+          crate=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
+          ext=$(node -p "require('./vscode-extension/package.json').version")
+          if [ "$crate" != "$ext" ]; then
+            echo "::error::workspace is $crate but vscode-extension/package.json is $ext"
+            exit 1
+          fi
       - run: npm ci
         working-directory: vscode-extension
       - run: npm run compile
