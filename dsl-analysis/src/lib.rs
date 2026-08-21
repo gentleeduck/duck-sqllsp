@@ -105,6 +105,16 @@ const MSSQL_PORT_CODES: &[&str] = &["sql317", "sql318", "sql321", "sql322"];
 /// Oracle port-detection codes.
 const ORACLE_PORT_CODES: &[&str] = &["sql323", "sql324", "sql325", "sql326"];
 
+/// SQLite port-detection codes, plus the rules whose whole subject is a type
+/// name. SQLite has type affinity rather than types: `NVARCHAR(160)` is not a
+/// SQL Server type that leaked in, it is a perfectly ordinary column. And
+/// telling someone their SQLite schema should say `GENERATED ALWAYS AS
+/// IDENTITY` instead of `AUTOINCREMENT` is advice for a different database.
+const SQLITE_PORT_CODES: &[&str] = &[
+  "sql636", // AUTOINCREMENT
+  "sql629", // T-SQL data types
+];
+
 /// Cross-dialect codes (ISNULL/NVL/IFNULL, GETDATE/SYSDATE) -- skip on
 /// any non-PG buffer since the rewrite suggestion is dialect-specific.
 const CROSS_DIALECT_CODES: &[&str] = &["sql319", "sql320"];
@@ -125,7 +135,14 @@ fn skip_for_dialect(dialect: Dialect, code: &str) -> bool {
     Dialect::Postgres => false,
     Dialect::MySql => MYSQL_PORT_CODES.contains(&code) || CROSS_DIALECT_CODES.contains(&code),
     Dialect::MsSql => MSSQL_PORT_CODES.contains(&code) || CROSS_DIALECT_CODES.contains(&code),
-    Dialect::SQLite | Dialect::Generic => {
+    Dialect::SQLite => {
+      MYSQL_PORT_CODES.contains(&code)
+        || MSSQL_PORT_CODES.contains(&code)
+        || ORACLE_PORT_CODES.contains(&code)
+        || CROSS_DIALECT_CODES.contains(&code)
+        || SQLITE_PORT_CODES.contains(&code)
+    },
+    Dialect::Generic => {
       MYSQL_PORT_CODES.contains(&code)
         || MSSQL_PORT_CODES.contains(&code)
         || ORACLE_PORT_CODES.contains(&code)

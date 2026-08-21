@@ -78,3 +78,52 @@ fn ordinary_rules_still_fire_on_mysql() {
   let codes = codes_for("SELECT a FROM t WHERE x = NULL;", Dialect::MySql);
   assert!(codes.iter().any(|c| c == "sql015"), "`= NULL` is wrong in every dialect: {codes:?}");
 }
+
+/// `(code, idiomatic SQLite that the rule exists to flag on Postgres)`
+///
+/// SQLite is a first-class dialect too, and the same argument applies: a
+/// schema that is SQLite does not want to be told its `AUTOINCREMENT` should
+/// have been `GENERATED ALWAYS AS IDENTITY`, and it has type affinity rather
+/// than types, so `NVARCHAR(160)` is an ordinary column and not a T-SQL type
+/// that leaked in.
+const SQLITE_IDIOMS: &[(&str, &str)] = &[
+  ("sql636", "CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT);"),
+  ("sql629", "CREATE TABLE t (title NVARCHAR(160) NOT NULL);"),
+];
+
+#[test]
+fn sqlite_idioms_are_not_flagged_on_a_sqlite_buffer() {
+  let mut wrong = Vec::new();
+  for (code, sql) in SQLITE_IDIOMS {
+    if codes_for(sql, Dialect::SQLite).iter().any(|c| c == code) {
+      wrong.push(format!("{code} still fires on SQLite for: {sql}"));
+    }
+  }
+  assert!(wrong.is_empty(), "port-detection false positives on SQLite:\n{}", wrong.join("\n"));
+}
+
+#[test]
+fn the_same_sqlite_idioms_are_still_flagged_on_postgres() {
+  let mut missing = Vec::new();
+  for (code, sql) in SQLITE_IDIOMS {
+    if !codes_for(sql, Dialect::Postgres).iter().any(|c| c == code) {
+      missing.push(format!("{code} no longer fires on Postgres for: {sql}"));
+    }
+  }
+  assert!(missing.is_empty(), "port detection lost on Postgres:\n{}", missing.join("\n"));
+}
+
+/// Bracket-quoted identifiers are how sqlite stores the DDL for a table most
+/// tools created, so a SQLite buffer full of them has to lint clean.
+#[test]
+fn real_sqlite_ddl_lints_clean() {
+  let sql = "CREATE TABLE \"albums\"\n(\n    [AlbumId] INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,\n    [Title] NVARCHAR(160)  NOT NULL,\n    [ArtistId] INTEGER  NOT NULL,\n    FOREIGN KEY ([ArtistId]) REFERENCES \"artists\" ([ArtistId])\n);\n";
+  let codes = codes_for(sql, Dialect::SQLite);
+  assert!(codes.is_empty(), "the DDL sqlite itself stores should lint clean, got: {codes:?}");
+}
+
+#[test]
+fn ordinary_rules_still_fire_on_sqlite() {
+  let codes = codes_for("SELECT a FROM t WHERE x = NULL;", Dialect::SQLite);
+  assert!(codes.iter().any(|c| c == "sql015"), "`= NULL` is wrong in every dialect: {codes:?}");
+}
