@@ -24,22 +24,21 @@ impl LintRule for Rule {
     let mut i = 0;
     while i + 5 <= n {
       // Find `LIKE` or `ILIKE`.
-      let kw_len: usize;
       let here = &upper.as_bytes()[i..];
-      if here.starts_with(b"ILIKE")
+      let kw_len = if here.starts_with(b"ILIKE")
         && (i == 0 || !is_word(bytes[i - 1] as char))
         && (i + 5 == n || !is_word(bytes[i + 5] as char))
       {
-        kw_len = 5;
+        5
       } else if here.starts_with(b"LIKE")
         && (i == 0 || !is_word(bytes[i - 1] as char))
         && (i + 4 == n || !is_word(bytes[i + 4] as char))
       {
-        kw_len = 4;
+        4
       } else {
         i += 1;
         continue;
-      }
+      };
       let mut j = i + kw_len;
       while j < n && bytes[j].is_ascii_whitespace() {
         j += 1;

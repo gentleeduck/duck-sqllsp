@@ -101,6 +101,13 @@ enum Cmd {
     /// Database URL. When set, connects + dumps the live catalog.
     #[arg(long)]
     url: Option<String>,
+    /// SQL dialect: postgres, mysql, sqlite, mssql, generic.
+    ///
+    /// Defaults to the `dialect` in `.duck-sqllsp.toml`, then postgres.
+    /// Reading a SQLite schema as postgres yields nothing at all, because
+    /// `[bracketed]` identifiers are a syntax error there.
+    #[arg(long)]
+    dialect: Option<String>,
   },
 }
 
@@ -261,24 +268,7 @@ fn main() -> anyhow::Result<()> {
         .map(std::path::Path::new)
         .and_then(dsl_server::config::load_project_config)
         .unwrap_or_default();
-
-      let dialect_name = dialect.unwrap_or_else(|| match cfg.effective_dialect() {
-        dsl_server::config::Dialect::Postgresql => "postgres".into(),
-        dsl_server::config::Dialect::Mysql => "mysql".into(),
-        dsl_server::config::Dialect::Sqlite => "sqlite".into(),
-        dsl_server::config::Dialect::Mssql => "mssql".into(),
-      });
-      let dialect = match dialect_name.to_ascii_lowercase().as_str() {
-        "postgres" | "pg" => dsl_parse::Dialect::Postgres,
-        "mysql" => dsl_parse::Dialect::MySql,
-        "sqlite" => dsl_parse::Dialect::SQLite,
-        "mssql" | "tsql" | "sqlserver" => dsl_parse::Dialect::MsSql,
-        "generic" => dsl_parse::Dialect::Generic,
-        other => {
-          eprintln!("error: unknown dialect '{other}'; valid: postgres, mysql, sqlite, mssql, generic");
-          std::process::exit(2);
-        },
-      };
+      let dialect = resolve_dialect(dialect, &files);
       let json = matches!(format.as_str(), "json");
       let mut error_count = 0usize;
       let mut warning_count = 0usize;
@@ -435,7 +425,7 @@ fn main() -> anyhow::Result<()> {
       }
       Ok(())
     },
-    Cmd::Introspect { files, url } => {
+    Cmd::Introspect { files, url, dialect } => {
       if let Some(url) = url {
         // Live DB introspection: build driver, introspect, JSON-dump.
         let spec = dsl_conn::ConnectionSpec { name: "cli".into(), url };
@@ -472,17 +462,51 @@ fn main() -> anyhow::Result<()> {
         sequences: Vec::new(),
         extensions: Vec::new(),
       };
+      let dialect = resolve_dialect(dialect, &files);
       for path in &files {
         let Ok(source) = std::fs::read_to_string(path) else {
           eprintln!("error reading {path}");
           std::process::exit(2);
         };
-        let parsed = dsl_parse::parse(&source, dsl_parse::Dialect::Postgres);
+        let parsed = dsl_parse::parse(&source, dialect);
         let derived = dsl_completion::source_tables::from_source(&parsed, &source);
         acc = dsl_completion::source_tables::merge(&acc, &derived);
       }
       println!("{}", serde_json::to_string_pretty(&acc).map_err(|e| anyhow::anyhow!("json: {e}"))?);
       Ok(())
+    },
+  }
+}
+
+/// The dialect to parse in: the flag, else the project config, else postgres.
+///
+/// Shared by `lint` and `introspect` so the two cannot disagree about what a
+/// file is. Exits 2 on a name that is not a dialect, rather than silently
+/// falling back to postgres and reporting a file full of syntax errors.
+fn resolve_dialect(explicit: Option<String>, files: &[String]) -> dsl_parse::Dialect {
+  let cfg = files
+    .iter()
+    .find(|f| *f != "-")
+    .map(std::path::Path::new)
+    .and_then(dsl_server::config::load_project_config)
+    .unwrap_or_default();
+
+  let name = explicit.unwrap_or_else(|| match cfg.effective_dialect() {
+    dsl_server::config::Dialect::Postgresql => "postgres".into(),
+    dsl_server::config::Dialect::Mysql => "mysql".into(),
+    dsl_server::config::Dialect::Sqlite => "sqlite".into(),
+    dsl_server::config::Dialect::Mssql => "mssql".into(),
+  });
+
+  match name.to_ascii_lowercase().as_str() {
+    "postgres" | "postgresql" | "pg" => dsl_parse::Dialect::Postgres,
+    "mysql" | "mariadb" => dsl_parse::Dialect::MySql,
+    "sqlite" => dsl_parse::Dialect::SQLite,
+    "mssql" | "tsql" | "sqlserver" => dsl_parse::Dialect::MsSql,
+    "generic" => dsl_parse::Dialect::Generic,
+    other => {
+      eprintln!("error: unknown dialect '{other}'; valid: postgres, mysql, sqlite, mssql, generic");
+      std::process::exit(2);
     },
   }
 }

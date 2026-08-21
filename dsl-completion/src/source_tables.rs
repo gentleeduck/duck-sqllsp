@@ -514,6 +514,40 @@ fn read_qualified_ident(src: &str, pos: usize) -> Option<(Option<String>, String
   Some((None, first, after_first))
 }
 
+/// The closing delimiter for an identifier that opens with `open`.
+///
+/// Every dialect this server parses quotes identifiers, and only Postgres
+/// uses `"`. SQLite accepts all three, and it is the one that matters here:
+/// the DDL sqlite stores for a table created by most tools is bracketed.
+fn ident_close(open: u8) -> Option<u8> {
+  match open {
+    b'"' => Some(b'"'),
+    b'[' => Some(b']'),
+    b'`' => Some(b'`'),
+    _ => None,
+  }
+}
+
+/// Strip one layer of identifier quoting, whichever dialect wrote it.
+///
+/// Only when the whole string is one quoted identifier. `"a" = "b"` opens and
+/// closes with a quote without being quoted, and stripping its ends would
+/// hand back `a" = "b` as though it were a column name.
+pub(crate) fn unquote_ident(raw: &str) -> &str {
+  let bytes = raw.as_bytes();
+  let (Some(&first), Some(&last)) = (bytes.first(), bytes.last()) else {
+    return raw;
+  };
+  if bytes.len() >= 2 && ident_close(first) == Some(last) && !bytes[1..bytes.len() - 1].contains(&last) {
+    // `get` rather than a slice: the ends are ASCII quotes here, but the rule
+    // in this file is that byte arithmetic never indexes a `&str` directly.
+    if let Some(inner) = raw.get(1..raw.len() - 1) {
+      return inner;
+    }
+  }
+  raw
+}
+
 fn read_ident_simple(src: &str, pos: usize) -> Option<(String, usize)> {
   let bytes = src.as_bytes();
   let n = bytes.len();
@@ -524,10 +558,10 @@ fn read_ident_simple(src: &str, pos: usize) -> Option<(String, usize)> {
   if i >= n {
     return None;
   }
-  if bytes[i] == b'"' {
+  if let Some(close) = ident_close(bytes[i]) {
     let start = i + 1;
     let mut j = start;
-    while j < n && bytes[j] != b'"' {
+    while j < n && bytes[j] != close {
       j += 1;
     }
     if j >= n {
@@ -1720,7 +1754,7 @@ fn parse_constraints(body: &str) -> Vec<Constraint> {
       continue;
     }
     // Inline column form: `<col> <type> ... [PRIMARY KEY] [REFERENCES ...]`
-    let col = trimmed.split_whitespace().next().unwrap_or("").trim_matches('"').to_string();
+    let col = unquote_ident(trimmed.split_whitespace().next().unwrap_or("")).to_string();
     if col.is_empty() {
       continue;
     }
@@ -1767,7 +1801,7 @@ fn paren_csv(s: &str) -> Option<Vec<String>> {
     return None;
   }
   Some(
-    s[open + 1..close].split(',').map(|c| c.trim().trim_matches('"').to_string()).filter(|c| !c.is_empty()).collect(),
+    s.get(open + 1..close)?.split(',').map(|c| unquote_ident(c.trim()).to_string()).filter(|c| !c.is_empty()).collect(),
   )
 }
 
@@ -1776,13 +1810,19 @@ fn parse_references(s: &str) -> Option<ConstraintRef> {
   let upper = s.to_ascii_uppercase();
   let at = upper.find("REFERENCES")?;
   let rest = s[at + "REFERENCES".len()..].trim_start();
-  let name_end =
-    rest.find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"').unwrap_or(rest.len());
-  let raw = rest[..name_end].trim_matches('"');
-  let (schema, table) = if let Some(dot) = raw.find('.') {
-    (raw[..dot].trim_matches('"').to_string(), raw[dot + 1..].trim_matches('"').to_string())
-  } else {
-    ("public".into(), raw.to_string())
+  let name_end = rest
+    .find(|c: char| !c.is_ascii_alphanumeric() && c != '_' && c != '.' && c != '"' && c != '[' && c != ']' && c != '`')
+    .unwrap_or(rest.len());
+  // Unquote each part rather than the whole: `[dbo].[users]` opens and closes
+  // with brackets, so stripping the outside first would leave `dbo].[users`.
+  let raw = rest.get(..name_end).unwrap_or("");
+  let unquoted = unquote_ident(raw);
+  // A dot only separates when it is not inside the quoting: `[my.table]` is one
+  // table whose name has a dot in it, not `my` dot `table`.
+  let dot = if unquoted == raw { raw.find('.') } else { None };
+  let (schema, table) = match dot {
+    Some(at) => (unquote_ident(&raw[..at]).to_string(), unquote_ident(&raw[at + 1..]).to_string()),
+    None => ("public".into(), unquoted.to_string()),
   };
   let cols = paren_csv(&rest[name_end..]).unwrap_or_default();
   Some(ConstraintRef { schema, table, columns: cols })
@@ -2765,5 +2805,76 @@ mod tests {
   #[test]
   fn scan_views_ignores_create_table() {
     assert!(scan_views("CREATE TABLE t (id int);").is_empty());
+  }
+
+  #[test]
+  fn unquote_ident_handles_every_dialects_quoting() {
+    assert_eq!(unquote_ident("plain"), "plain");
+    assert_eq!(unquote_ident("\"quoted\""), "quoted");
+    assert_eq!(unquote_ident("[bracketed]"), "bracketed");
+    assert_eq!(unquote_ident("`backticked`"), "backticked");
+    // Not a matched pair, so it is left exactly as it came in.
+    assert_eq!(unquote_ident("[half"), "[half");
+    assert_eq!(unquote_ident("\"a\" = \"b\""), "\"a\" = \"b\"");
+    assert_eq!(unquote_ident(""), "");
+    assert_eq!(unquote_ident("\""), "\"");
+  }
+
+  /// The DDL sqlite stores for a table most tools created. Read as postgres
+  /// this is a syntax error and yields nothing; read as sqlite the brackets
+  /// have to come off, or the table's own constraints reference columns it
+  /// does not appear to have.
+  #[test]
+  fn bracket_quoted_sqlite_ddl_yields_columns_and_constraints() {
+    let src = "\
+CREATE TABLE \"albums\"\n\
+(\n\
+    [AlbumId] INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,\n\
+    [Title] NVARCHAR(160)  NOT NULL,\n\
+    [ArtistId] INTEGER  NOT NULL,\n\
+    FOREIGN KEY ([ArtistId]) REFERENCES \"artists\" ([ArtistId])\n\
+);\n";
+    let parsed = dsl_parse::parse(src, Dialect::SQLite);
+    let cat = from_source(&parsed, src);
+    let table = cat
+      .schemas
+      .iter()
+      .flat_map(|s| s.tables.iter())
+      .find(|t| t.name.eq_ignore_ascii_case("albums"))
+      .expect("albums table");
+
+    let columns: Vec<&str> = table.columns.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(columns, vec!["AlbumId", "Title", "ArtistId"], "brackets are not part of the name");
+
+    // Inline constraints go through their own path, so the brackets have to
+    // come off there too or only half the table resolves.
+    let pk = table.constraints.iter().find(|c| c.kind == ConstraintKind::PrimaryKey).expect("the primary key");
+    assert_eq!(pk.columns, vec!["AlbumId".to_string()]);
+    assert_eq!(pk.name, "pk_AlbumId");
+
+    let fk = table.constraints.iter().find(|c| c.kind == ConstraintKind::ForeignKey).expect("the foreign key");
+    assert_eq!(fk.columns, vec!["ArtistId".to_string()]);
+    let reference = fk.references.as_ref().expect("the foreign key names a target");
+    assert_eq!(reference.table, "artists");
+    assert_eq!(reference.columns, vec!["ArtistId".to_string()]);
+  }
+
+  #[test]
+  fn a_dot_inside_quoting_is_part_of_the_name() {
+    let one = parse_references("REFERENCES [my.table] ([id])").expect("a reference");
+    assert_eq!((one.schema.as_str(), one.table.as_str()), ("public", "my.table"));
+
+    let qualified = parse_references("REFERENCES [dbo].[users] ([id])").expect("a reference");
+    assert_eq!((qualified.schema.as_str(), qualified.table.as_str()), ("dbo", "users"));
+  }
+
+  #[test]
+  fn backtick_quoted_mysql_ddl_yields_columns() {
+    let src = "CREATE TABLE `orders` (\n  `id` INT NOT NULL,\n  `total` DECIMAL(10,2)\n);\n";
+    let parsed = dsl_parse::parse(src, Dialect::MySql);
+    let cat = from_source(&parsed, src);
+    let table = cat.schemas.iter().flat_map(|s| s.tables.iter()).find(|t| t.name == "orders").expect("orders table");
+
+    assert_eq!(table.columns.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), vec!["id", "total"]);
   }
 }
