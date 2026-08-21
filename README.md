@@ -121,6 +121,9 @@ problems, so it doubles as a CI check.
 Drop a `.duck-sqllsp.toml` at your project root. Every key accepts `camelCase`
 or `snake_case`, and the `[duck_sqllsp]` wrapper is optional.
 
+Connection URLs carry a password, so keep real ones out of the file you commit:
+point the example at a local throwaway database, or gitignore the config.
+
 ```toml
 [duck_sqllsp]
 activeConnection   = "local"
@@ -192,8 +195,8 @@ Every crate is published and usable on its own.
   comments and dollar-quoted bodies, so every diagnostic range maps back exactly.
 - **Catalog snapshots** are cloned out of a `parking_lot::RwLock` before any
   `.await`, so no guard ever crosses an await point.
-- **`PR_SET_PDEATHSIG`** plus SIGTERM / SIGINT / SIGHUP handling, so the binary
-  always dies with its editor.
+- **`PR_SET_PDEATHSIG`** on Linux, plus SIGTERM / SIGINT / SIGHUP handling on
+  Unix, so the binary dies with its editor rather than lingering.
 
 ## Contributing
 
