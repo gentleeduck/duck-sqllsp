@@ -539,7 +539,11 @@ pub(crate) fn unquote_ident(raw: &str) -> &str {
     return raw;
   };
   if bytes.len() >= 2 && ident_close(first) == Some(last) && !bytes[1..bytes.len() - 1].contains(&last) {
-    return &raw[1..raw.len() - 1];
+    // `get` rather than a slice: the ends are ASCII quotes here, but the rule
+    // in this file is that byte arithmetic never indexes a `&str` directly.
+    if let Some(inner) = raw.get(1..raw.len() - 1) {
+      return inner;
+    }
   }
   raw
 }
@@ -1796,7 +1800,9 @@ fn paren_csv(s: &str) -> Option<Vec<String>> {
   if close >= s.len() {
     return None;
   }
-  Some(s[open + 1..close].split(',').map(|c| unquote_ident(c.trim()).to_string()).filter(|c| !c.is_empty()).collect())
+  Some(
+    s.get(open + 1..close)?.split(',').map(|c| unquote_ident(c.trim()).to_string()).filter(|c| !c.is_empty()).collect(),
+  )
 }
 
 /// `REFERENCES <tbl>(<col>)` or `REFERENCES <schema>.<tbl>(<col>)`.
@@ -1809,11 +1815,14 @@ fn parse_references(s: &str) -> Option<ConstraintRef> {
     .unwrap_or(rest.len());
   // Unquote each part rather than the whole: `[dbo].[users]` opens and closes
   // with brackets, so stripping the outside first would leave `dbo].[users`.
-  let raw = &rest[..name_end];
-  let (schema, table) = if let Some(dot) = raw.find('.') {
-    (unquote_ident(&raw[..dot]).to_string(), unquote_ident(&raw[dot + 1..]).to_string())
-  } else {
-    ("public".into(), unquote_ident(raw).to_string())
+  let raw = rest.get(..name_end).unwrap_or("");
+  let unquoted = unquote_ident(raw);
+  // A dot only separates when it is not inside the quoting: `[my.table]` is one
+  // table whose name has a dot in it, not `my` dot `table`.
+  let dot = if unquoted == raw { raw.find('.') } else { None };
+  let (schema, table) = match dot {
+    Some(at) => (unquote_ident(&raw[..at]).to_string(), unquote_ident(&raw[at + 1..]).to_string()),
+    None => ("public".into(), unquoted.to_string()),
   };
   let cols = paren_csv(&rest[name_end..]).unwrap_or_default();
   Some(ConstraintRef { schema, table, columns: cols })
@@ -2848,6 +2857,15 @@ CREATE TABLE \"albums\"\n\
     let reference = fk.references.as_ref().expect("the foreign key names a target");
     assert_eq!(reference.table, "artists");
     assert_eq!(reference.columns, vec!["ArtistId".to_string()]);
+  }
+
+  #[test]
+  fn a_dot_inside_quoting_is_part_of_the_name() {
+    let one = parse_references("REFERENCES [my.table] ([id])").expect("a reference");
+    assert_eq!((one.schema.as_str(), one.table.as_str()), ("public", "my.table"));
+
+    let qualified = parse_references("REFERENCES [dbo].[users] ([id])").expect("a reference");
+    assert_eq!((qualified.schema.as_str(), qualified.table.as_str()), ("dbo", "users"));
   }
 
   #[test]
