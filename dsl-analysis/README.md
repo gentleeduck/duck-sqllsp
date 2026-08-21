@@ -3,7 +3,7 @@
 **SQL lint engine** for duck-sqllsp.
 
 701 diagnostics covering schema correctness, transaction safety, query
-smells, migration footguns, and vendor mismatches — each with a range
+smells, migration footguns, and vendor mismatches - each with a range
 aimed at the offending token rather than the whole statement.
 
 ```rust
@@ -14,7 +14,7 @@ let diagnostics = dsl_analysis::run(sql, &file, &scopes, &catalog);
 
 Every rule is one module in `src/rules/`, opening with a
 `//! sqlNNN: <summary> -- <detail>` doc comment that is the single source
-of truth for the [rule reference](docs/rules.md) — regenerate it with
+of truth for the [rule reference](https://github.com/gentleeduck/duck-sqllsp/blob/master/dsl-analysis/docs/rules.md) - regenerate it with
 `cargo test -p dsl-analysis --test rule_reference -- --ignored`.
 
 Rules that need a schema stay quiet without one, so an offline buffer

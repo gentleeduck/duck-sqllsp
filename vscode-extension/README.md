@@ -25,7 +25,8 @@ Works offline -- buffer-derived catalog covers tables / functions / sequences / 
 
 Either:
 
-- Cargo: `cargo install --git https://github.com/gentleeduck/duck-sqllsp duck-sqllsp` (then ensure `~/.cargo/bin` is on PATH).
+- Cargo: `cargo install duck-sqllsp` (then ensure `~/.cargo/bin` is on PATH).
+- Unreleased builds: `cargo install --git https://github.com/gentleeduck/duck-sqllsp duck-sqllsp`.
 - Manual: build the workspace and drop the `duck-sqllsp` binary somewhere on PATH.
 
 The extension shells out to `duck-sqllsp server`. Adjust `duckSqllsp.serverPath` if the binary isn't on PATH.
