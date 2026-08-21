@@ -11,24 +11,32 @@ duck-sqllsp server
 `--node-ipc`, and `--socket=...` are accepted and ignored, because some
 clients append them unconditionally.
 
-**Root markers** — getting this right matters more than it looks: the
+**Root markers** - getting this right matters more than it looks: the
 workspace root decides which `.sql` files are scanned into the offline
 catalog, and therefore what completion knows about your schema. See
 [troubleshooting](troubleshooting.md#no-completions-for-my-own-tables).
 
 If your client sends no root at all, the server derives one by walking up
 from the first file you open looking for `.duck-sqllsp.toml`,
-`.duck-sqllsp.json`, `.git`, `Cargo.toml`, or `package.json` — and falls
+`.duck-sqllsp.json`, `.git`, `Cargo.toml`, or `package.json` - and falls
 back to that file's own directory. Configuring the root in your client is
 better than relying on that.
 
-**File types** — `.sql`, `.pgsql`, `.psql`.
+**File types** - `.sql`, `.pgsql`, `.psql`.
 
 ---
 
 ## VS Code
 
-Install `wildduck.duck-sqllsp-vscode`. Nothing else to configure.
+Not on the marketplace yet. Download the `.vsix` from the
+[latest release](https://github.com/gentleeduck/duck-sqllsp/releases) and
+install it:
+
+```sh
+code --install-extension duck-sqllsp-vscode-3.0.0.vsix
+```
+
+Nothing else to configure.
 
 It adds sidebar trees for connections and schema, and these commands:
 
@@ -44,7 +52,7 @@ It adds sidebar trees for connections and schema, and these commands:
 
 Run / EXPLAIN / EXPLAIN ANALYZE / + LIMIT 100 code lenses open a terminal
 running `psql`, `mysql`, or `sqlite3` against the active connection.
-Those lenses are shown only in VS Code and its forks — other clients have
+Those lenses are shown only in VS Code and its forks - other clients have
 no handler for the commands, so rather than offer a lens that errors on
 click, the server omits them.
 
@@ -96,7 +104,7 @@ lspconfig.duck_sqllsp.setup({})
 ```
 
 To pass configuration from Lua instead of a project file, use either key
-— the server reads both, so it only matters when it arrives:
+- the server reads both, so it only matters when it arrives:
 
 ```lua
 -- sent once at startup, as initializationOptions
@@ -167,7 +175,7 @@ In `LSP.sublime-settings`:
 ## Zed
 
 Zed can only attach a language server to a language through an
-extension — its `lsp` settings key configures servers that an extension
+extension - its `lsp` settings key configures servers that an extension
 has already registered, so there is no settings-only snippet that will
 work. No duck-sqllsp Zed extension exists yet.
 
@@ -181,7 +189,7 @@ The server needs nothing beyond stdio. A minimal client config is:
 
 Configuration can arrive as `initializationOptions` at startup, via
 `workspace/didChangeConfiguration`, or from a `.duck-sqllsp.toml` in the
-project — see the [configuration reference](configuration.md).
+project - see the [configuration reference](configuration.md).
 
 ---
 
@@ -199,10 +207,10 @@ connection health.
 
 Then, in the editor:
 
-1. Open a `.sql` file and type `SEL` — completion should offer `SELECT`.
-2. Type `SELECT a FROM t WHERE x = NULL;` — a warning should appear on
+1. Open a `.sql` file and type `SEL` - completion should offer `SELECT`.
+2. Type `SELECT a FROM t WHERE x = NULL;` - a warning should appear on
    the `= NULL` (that's `sql015`).
-3. Hover a keyword — a documentation card should appear.
+3. Hover a keyword - a documentation card should appear.
 
 If step 1 works but your own tables never appear, the workspace root is
 almost certainly wrong; `doctor` prints what it resolved to.
