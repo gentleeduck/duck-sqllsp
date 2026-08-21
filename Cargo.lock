@@ -417,7 +417,7 @@ checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "dsl-analysis"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "dsl-catalog",
  "dsl-knowledge",
@@ -429,7 +429,7 @@ dependencies = [
 
 [[package]]
 name = "dsl-catalog"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "directories",
  "indexmap",
@@ -441,7 +441,7 @@ dependencies = [
 
 [[package]]
 name = "dsl-completion"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "dsl-catalog",
  "dsl-knowledge",
@@ -453,7 +453,7 @@ dependencies = [
 
 [[package]]
 name = "dsl-conn"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "async-trait",
  "dsl-catalog",
@@ -465,14 +465,14 @@ dependencies = [
 
 [[package]]
 name = "dsl-format"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "dsl-hover"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "dsl-catalog",
  "dsl-completion",
@@ -484,7 +484,7 @@ dependencies = [
 
 [[package]]
 name = "dsl-knowledge"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "once_cell",
  "serde",
@@ -492,7 +492,7 @@ dependencies = [
 
 [[package]]
 name = "dsl-parse"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "pg_query",
  "serde",
@@ -504,7 +504,7 @@ dependencies = [
 
 [[package]]
 name = "dsl-resolve"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "dsl-parse",
  "indexmap",
@@ -513,7 +513,7 @@ dependencies = [
 
 [[package]]
 name = "dsl-server"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -543,7 +543,7 @@ dependencies = [
 
 [[package]]
 name = "duck-sqllsp"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "anyhow",
  "clap",
