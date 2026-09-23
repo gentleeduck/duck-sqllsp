@@ -14,11 +14,19 @@ pub fn statement(s: sp::Statement, raw: &str) -> StatementKind {
   match s {
     S::Query(q) => query(*q, raw),
     S::Insert(ins) => StatementKind::Insert(InsertStmt {
-      table: object_name(&ins.table_name),
-      columns: ins.columns.iter().map(|c| c.value.clone()).collect(),
+      table: match &ins.table {
+        sp::TableObject::TableName(name) => object_name(name),
+        _ => TableRef::default(),
+      },
+      columns: ins.columns.iter().map(|c| split_object_name(c).1).collect(),
     }),
-    S::Update { table, assignments, selection, from, .. } => {
-      let from_tables: Vec<_> = from.iter().map(|t| table_factor(&t.relation)).collect();
+    S::Update(sp::Update { table, assignments, selection, from, .. }) => {
+      let from_tables: Vec<_> = match &from {
+        Some(sp::UpdateTableFromKind::BeforeSet(v) | sp::UpdateTableFromKind::AfterSet(v)) => {
+          v.iter().map(|t| table_factor(&t.relation)).collect()
+        },
+        None => Vec::new(),
+      };
       StatementKind::Update(UpdateStmt {
         table: table_factor(&table.relation),
         assignments: assignments
@@ -46,7 +54,7 @@ pub fn statement(s: sp::Statement, raw: &str) -> StatementKind {
       if_not_exists: ct.if_not_exists,
       columns: ct.columns.iter().map(column_def).collect(),
     }),
-    S::AlterTable { name, .. } => StatementKind::AlterTable(AlterTableStmt { table: object_name(&name) }),
+    S::AlterTable(at) => StatementKind::AlterTable(AlterTableStmt { table: object_name(&at.name) }),
     S::Drop { object_type: sp::ObjectType::Table, if_exists, names, .. } => {
       StatementKind::DropTable(DropTableStmt { if_exists, tables: names.iter().map(object_name).collect() })
     },
@@ -96,6 +104,9 @@ fn projection(p: &sp::SelectItem, raw: &str) -> Projection {
     sp::SelectItem::ExprWithAlias { expr: e, alias } => {
       Projection::Expr { expr: expr(e, raw), alias: Some(alias.value.clone()) }
     },
+    sp::SelectItem::ExprWithAliases { expr: e, aliases } => {
+      Projection::Expr { expr: expr(e, raw), alias: aliases.first().map(|a| a.value.clone()) }
+    },
   }
 }
 
@@ -105,7 +116,7 @@ fn join_kind(op: &sp::JoinOperator) -> JoinKind {
     sp::JoinOperator::LeftOuter(_) => JoinKind::Left,
     sp::JoinOperator::RightOuter(_) => JoinKind::Right,
     sp::JoinOperator::FullOuter(_) => JoinKind::Full,
-    sp::JoinOperator::CrossJoin => JoinKind::Cross,
+    sp::JoinOperator::CrossJoin(_) => JoinKind::Cross,
     _ => JoinKind::Inner,
   }
 }
@@ -176,15 +187,14 @@ fn object_name(name: &sp::ObjectName) -> TableRef {
 }
 
 fn split_object_name(name: &sp::ObjectName) -> (Option<String>, String) {
-  let parts: Vec<&str> = name.0.iter().map(|i| i.value.as_str()).collect();
+  let parts: Vec<String> =
+    name.0.iter().map(|i| i.as_ident().map(|id| id.value.clone()).unwrap_or_else(|| i.to_string())).collect();
   if parts.len() == 2 { (Some(parts[0].to_string()), parts[1].to_string()) } else { (None, parts.join(".")) }
 }
 
 fn column_def(c: &sp::ColumnDef) -> ColumnDef {
-  let not_null = c
-    .options
-    .iter()
-    .any(|o| matches!(o.option, sp::ColumnOption::NotNull | sp::ColumnOption::Unique { is_primary: true, .. }));
+  let not_null =
+    c.options.iter().any(|o| matches!(o.option, sp::ColumnOption::NotNull | sp::ColumnOption::PrimaryKey(_)));
   let default = c.options.iter().find_map(|o| match &o.option {
     sp::ColumnOption::Default(e) => Some(e.to_string()),
     _ => None,
