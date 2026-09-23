@@ -7,6 +7,12 @@ and the project adheres to [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [3.0.1](https://github.com/gentleeduck/duck-sqllsp/compare/dsl-parse-v3.0.0...dsl-parse-v3.0.1) - 2026-09-23
+
+### Other
+
+- *(deps)* bump sqlparser from 0.52.0 to 0.63.0 ([#77](https://github.com/gentleeduck/duck-sqllsp/pull/77))
+
 ## [2.0.0](https://github.com/gentleeduck/duck-sqllsp/releases/tag/dsl-conn-v2.0.0) - 2026-08-21
 
 ### Added
